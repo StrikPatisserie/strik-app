@@ -14,7 +14,7 @@ function load(file, imports = {}, expose = '') {
 }
 const pricing = load('app/lib/business-folder-pricing.ts');
 const catalog = load('app/kerst-voor-bedrijven/christmasProducts.ts', { '@/app/lib/business-folder-pricing': pricing });
-const sint = load('app/sint-voor-bedrijven/SintB2BConcept.tsx', { '@/app/lib/business-folder-pricing': pricing });
+const sint = load('app/sint-voor-bedrijven/sintProducts.ts', { '@/app/lib/business-folder-pricing': pricing });
 
 test('Christmas prices agree with the supplied retail prices and all image paths exist on a case-sensitive host', () => {
   assert.deepEqual(Array.from(catalog.christmasProducts, p => p.retailPriceIncl), [15.95, 7.5, 14.95, 8.95, 14.95, 7.95, 9.95, 13.95, 6.95, 4.95, 6.95]);

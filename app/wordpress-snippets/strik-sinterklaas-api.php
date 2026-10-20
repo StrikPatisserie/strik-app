@@ -698,7 +698,7 @@ function strik_sinterklaas_sanitize_b2b_order($order, $existing = array()) {
     if (!is_array($order)) return null;
 
     $customer_name = isset($order['customerName']) ? strik_sinterklaas_text($order['customerName'], 180) : '';
-    $order_text = isset($order['orderText']) ? strik_sinterklaas_textarea($order['orderText'], 5000) : '';
+    $order_text = isset($order['orderText']) ? strik_sinterklaas_textarea($order['orderText'], !empty($existing['folderQuote']) ? 50000 : 5000) : '';
     $delivery_window_type = isset($order['deliveryWindowType']) ? strik_sinterklaas_text($order['deliveryWindowType'], 20) : 'date';
     if (!in_array($delivery_window_type, array('date', 'range', 'week'), true)) $delivery_window_type = 'date';
     $delivery_date = isset($order['deliveryDate']) ? strik_sinterklaas_date($order['deliveryDate']) : '';
@@ -770,6 +770,9 @@ function strik_sinterklaas_sanitize_b2b_order($order, $existing = array()) {
         'reminderEmailError' => isset($order['reminderEmailError']) ? strik_sinterklaas_text($order['reminderEmailError'], 240) : '',
         'confirmationEmailedAt' => isset($order['confirmationEmailedAt']) ? strik_sinterklaas_text($order['confirmationEmailedAt'], 80) : '',
         'confirmationEmailError' => isset($order['confirmationEmailError']) ? strik_sinterklaas_text($order['confirmationEmailError'], 240) : '',
+        // The original website request and its mail receipt belong to the server.
+        // An edit from management must neither erase nor forge this history.
+        'folderQuote' => isset($existing['folderQuote']) ? $existing['folderQuote'] : null,
         'createdAt' => isset($existing['createdAt']) ? $existing['createdAt'] : $now,
         'updatedAt' => $now,
     );
@@ -929,6 +932,129 @@ function strik_sinterklaas_letter_patch($request) {
 }
 }
 
+if (!function_exists('strik_business_b2b_locked')) {
+function strik_business_b2b_locked($callback) {
+    global $wpdb;
+    // Serialize read/modify/write of the shared B2B option, including retries,
+    // management edits and reminders. MySQL releases the lock on disconnect.
+    $name = 'strik_b2b_' . md5($wpdb->prefix);
+    if ((string) $wpdb->get_var($wpdb->prepare('SELECT GET_LOCK(%s, 5)', $name)) !== '1') {
+        return new WP_Error('quote_busy', 'De aanvraag wordt al verwerkt. Probeer opnieuw.', array('status' => 409));
+    }
+    try { return call_user_func($callback); }
+    finally { $wpdb->get_var($wpdb->prepare('SELECT RELEASE_LOCK(%s)', $name)); }
+}
+function strik_business_quote_response($order) {
+    $meta = $order['folderQuote'];
+    return rest_ensure_response(array('ok' => !empty($meta['mailSentAt']) && !empty($meta['b2bStoredAt']), 'saved' => !empty($meta['b2bStoredAt']), 'mailSent' => !empty($meta['mailSentAt']), 'reference' => $meta['reference']));
+}
+function strik_business_quote_html($order) {
+    $meta = $order['folderQuote'];
+    $season = $order['season'] === 'kerst' ? 'Kerst' : 'Sinterklaas';
+    $url = 'https://app.strik-patisserie.nl/' . ($order['season'] === 'kerst' ? 'kerst' : 'sinterklaas') . '/b2b';
+    return '<!doctype html><html lang="nl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>'
+        . '<body style="margin:0;background:#edf3ed;font-family:Arial,sans-serif;color:#293e30"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:24px 12px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:680px;background:#fffdf8;border-radius:24px;overflow:hidden">'
+        . '<tr><td style="background:#244b37;padding:28px;color:white"><div style="color:#e9cc89;font-size:12px;font-weight:bold;letter-spacing:3px">STRIK PATISSERIE</div><h1 style="font-size:27px;margin:16px 0 8px">Nieuwe offerteaanvraag ' . esc_html($season) . '</h1><strong>' . esc_html($order['customerName']) . '</strong><br><span style="font-size:13px">Referentie: ' . esc_html($meta['reference']) . '</span></td></tr>'
+        . '<tr><td style="padding:28px"><p style="padding:16px;background:#f0f5ee;border-radius:12px;font-size:14px;line-height:1.5"><strong>Opgeslagen bij B2B · status Aanvraag</strong><br>Dit is een vrijblijvende aanvraag. Controleer de inhoud en stem prijs, beschikbaarheid en levering af met de klant.</p>'
+        . '<div style="font-size:15px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere">' . esc_html($meta['quoteText']) . '</div>'
+        . '<p style="margin-top:28px"><a href="' . esc_url($url) . '" style="display:inline-block;background:#244b37;color:white;padding:14px 22px;border-radius:24px;font-weight:bold;text-decoration:none">Open B2B-aanvragen &rarr;</a></p>'
+        . '<p style="font-size:12px;color:#647367">Reageer op deze mail om contact op te nemen met de aanvrager. De klant ziet de ontvangstbevestiging in de folder.</p></td></tr></table></td></tr></table></body></html>';
+}
+function strik_business_quote_contact($order) {
+    $campaigns = get_option(STRIK_SINTERKLAAS_MAILING_OPTION_NAME, array());
+    $book = strik_business_mailing_contacts(is_array($campaigns) ? $campaigns : array());
+    $previous_customers = $book['customers'];
+    $email = strtolower($order['customerEmail']);
+    $meta = $order['folderQuote'];
+    $consent = !empty($meta['snapshot']['consent']);
+    $note = 'Folderaanvraag ' . ($order['season'] === 'kerst' ? 'Kerst' : 'Sint') . ' ontvangen: ' . $meta['reference'];
+    $ci = -1; $ri = -1;
+    foreach ($book['customers'] as $customer_index => $customer) {
+        foreach ($customer['recipients'] as $recipient_index => $recipient) {
+            if (strtolower($recipient['email']) === $email) { $ci = $customer_index; $ri = $recipient_index; break 2; }
+        }
+    }
+    if ($ci < 0) {
+        foreach ($book['customers'] as $index => $customer) if (strtolower($customer['company']) === strtolower($order['customerName'])) { $ci = $index; break; }
+        if ($ci < 0) {
+            $ci = count($book['customers']);
+            $book['customers'][] = array('id' => 'folderlead-' . md5($email), 'company' => $order['customerName'], 'notes' => '', 'recipients' => array());
+        }
+        $ri = count($book['customers'][$ci]['recipients']);
+        $book['customers'][$ci]['recipients'][] = array('id' => 'folderadres-' . md5($email), 'contactName' => $order['contactName'], 'email' => $email, 'doNotEmail' => true, 'sent' => array(), 'interests' => array(), 'consentAt' => '', 'consentSource' => '');
+    }
+    $customer = &$book['customers'][$ci];
+    if (strpos($customer['notes'], $note) === false) $customer['notes'] = strik_sinterklaas_textarea($note . ($customer['notes'] !== '' ? ' · ' . $customer['notes'] : ''), 1600);
+    if ($consent) {
+        $customer['recipients'][$ri]['doNotEmail'] = false;
+        $customer['recipients'][$ri]['interests'] = array('sint', 'kerst');
+        $customer['recipients'][$ri]['consentAt'] = $meta['receivedAt'];
+        $customer['recipients'][$ri]['consentSource'] = '/' . $order['season'] . '-voor-bedrijven';
+    }
+    unset($customer);
+    if ($book['customers'] !== $previous_customers) {
+        $book['revision']++;
+        update_option('strik_business_mailing_contacts_v1', $book, false);
+    }
+}
+function strik_business_folder_quote($request) {
+    $input = $request->get_json_params();
+    if (!is_array($input) || empty($input['order']) || empty($input['snapshot']) || empty($input['quoteText']) || !preg_match('/^[a-f0-9-]{36}$/', isset($input['requestId']) ? $input['requestId'] : '') || !preg_match('/^[a-f0-9]{64}$/', isset($input['payloadHash']) ? $input['payloadHash'] : '')) return new WP_Error('invalid_quote', 'Ongeldige aanvraag.', array('status' => 400));
+    return strik_business_b2b_locked(function () use ($input) {
+        $orders = strik_sinterklaas_get_orders(STRIK_SINTERKLAAS_B2B_OPTION_NAME);
+        $id = 'folder-' . $input['requestId'];
+        $key = strik_sinterklaas_order_key($id);
+        // A separate immutable receipt survives even a later deliberate deletion
+        // from B2B. A network retry must never re-create a deleted inquiry.
+        $receipt_key = 'strik_folder_quote_' . str_replace('-', '', $input['requestId']);
+        $receipt = get_option($receipt_key, null);
+        if (is_array($receipt)) {
+            if (!hash_equals($receipt['folderQuote']['payloadHash'], $input['payloadHash'])) return new WP_Error('quote_changed', 'Deze aanvraag is gewijzigd.', array('status' => 409));
+            if (!empty($receipt['folderQuote']['mailSentAt']) || $receipt['folderQuote']['mailState'] === 'sending') return strik_business_quote_response($receipt);
+            $order = $receipt;
+        } else {
+            $meta = array('requestId' => $input['requestId'], 'reference' => strik_sinterklaas_text($input['reference'], 40), 'payloadHash' => $input['payloadHash'], 'receivedAt' => wp_date(DATE_ATOM), 'snapshot' => $input['snapshot'], 'quoteText' => strik_sinterklaas_textarea($input['quoteText'], 50000), 'b2bStoredAt' => '', 'mailState' => 'pending', 'mailSentAt' => '', 'mailError' => '');
+            $order = strik_sinterklaas_sanitize_b2b_order(array_merge($input['order'], array('id' => $id, 'status' => 'aanvraag', 'entered' => false, 'productionScheduled' => false, 'productionDone' => false, 'packed' => false, 'delivered' => false)), array('folderQuote' => $meta));
+            if (!$order || $order['customerEmail'] === '' || !in_array($order['season'], array('sint', 'kerst'), true)) return new WP_Error('invalid_quote', 'Controleer de aanvraaggegevens.', array('status' => 400));
+            if (count($orders) >= STRIK_SINTERKLAAS_MAX_ORDERS) return new WP_Error('quote_capacity', 'De aanvraag kan nu niet worden opgeslagen.', array('status' => 503));
+            $rate_key = 'strik_quote_rate_' . md5(strtolower($order['customerEmail']));
+            $attempts = (int) get_transient($rate_key);
+            if ($attempts >= 10) return new WP_Error('quote_rate_limit', 'Te veel aanvragen. Probeer later opnieuw.', array('status' => 429));
+            set_transient($rate_key, $attempts + 1, HOUR_IN_SECONDS);
+            update_option($receipt_key, $order, false);
+            if (get_option($receipt_key, null) !== $order) return new WP_Error('quote_storage', 'Opslaan is niet gelukt.', array('status' => 503));
+            $orders[$key] = $order;
+            strik_sinterklaas_save_orders(STRIK_SINTERKLAAS_B2B_OPTION_NAME, $orders);
+            $saved_orders = strik_sinterklaas_get_orders(STRIK_SINTERKLAAS_B2B_OPTION_NAME);
+            if (!isset($saved_orders[$key]) || $saved_orders[$key] !== $order) return strik_business_quote_response($order);
+        }
+        // Restore a missed first B2B write, but preserve subsequent management edits.
+        if (!isset($orders[$key])) {
+            if (!empty($order['folderQuote']['b2bStoredAt'])) return strik_business_quote_response($order);
+            $orders[$key] = $order;
+            strik_sinterklaas_save_orders(STRIK_SINTERKLAAS_B2B_OPTION_NAME, $orders);
+        }
+        $stored = strik_sinterklaas_get_orders(STRIK_SINTERKLAAS_B2B_OPTION_NAME);
+        if (!isset($stored[$key])) return strik_business_quote_response($order);
+        $order['folderQuote']['b2bStoredAt'] = wp_date(DATE_ATOM);
+        strik_business_quote_contact($order);
+        $order['folderQuote']['mailState'] = 'sending';
+        update_option($receipt_key, $order, false);
+        if (get_option($receipt_key, null) !== $order) return strik_business_quote_response($order);
+        $sent = wp_mail('info@strik-patisserie.nl', 'OFFERTAANVRAAG ' . strtoupper($order['season']) . ' - ' . $order['customerName'] . ' - ' . $order['folderQuote']['reference'], strik_business_quote_html($order), array('Content-Type: text/html; charset=UTF-8', 'From: Strik Patisserie <info@strik-patisserie.nl>', 'Reply-To: ' . $order['customerEmail']));
+        $order['folderQuote']['mailState'] = $sent ? 'sent' : 'failed';
+        $order['folderQuote']['mailSentAt'] = $sent ? wp_date(DATE_ATOM) : '';
+        $order['folderQuote']['mailError'] = $sent ? '' : 'Aanvraag opgeslagen; interne e-mailmelding nog niet verstuurd.';
+        update_option($receipt_key, $order, false);
+        if (isset($orders[$key])) {
+            $orders[$key]['folderQuote'] = $order['folderQuote'];
+            strik_sinterklaas_save_orders(STRIK_SINTERKLAAS_B2B_OPTION_NAME, $orders);
+        }
+        return strik_business_quote_response($order);
+    });
+}
+}
+
 if (!function_exists('strik_sinterklaas_b2b_get')) {
 function strik_sinterklaas_b2b_get($request) {
     strik_sinterklaas_maybe_send_b2b_reminders();
@@ -945,6 +1071,9 @@ function strik_sinterklaas_b2b_get($request) {
 
 if (!function_exists('strik_sinterklaas_b2b_save')) {
 function strik_sinterklaas_b2b_save($request) {
+    return strik_business_b2b_locked(function () use ($request) { return strik_sinterklaas_b2b_save_unlocked($request); });
+}
+function strik_sinterklaas_b2b_save_unlocked($request) {
     $params = $request->get_json_params();
     if (!is_array($params)) {
         return new WP_Error('strik_sinterklaas_invalid_json', 'Geen geldige B2B-bestelling ontvangen.', array('status' => 400));
@@ -1067,6 +1196,9 @@ function strik_sinterklaas_letter_delete($request) {
 
 if (!function_exists('strik_sinterklaas_b2b_delete')) {
 function strik_sinterklaas_b2b_delete($request) {
+    return strik_business_b2b_locked(function () use ($request) { return strik_sinterklaas_b2b_delete_unlocked($request); });
+}
+function strik_sinterklaas_b2b_delete_unlocked($request) {
     $id = strik_sinterklaas_request_id($request);
     $params = $request->get_json_params();
     $reason = is_array($params) && isset($params['reason']) ? strik_sinterklaas_text($params['reason'], 40) : '';
@@ -1178,6 +1310,10 @@ function strik_sinterklaas_create_b2b_reminder_body($order) {
 
 if (!function_exists('strik_sinterklaas_maybe_send_b2b_reminders')) {
 function strik_sinterklaas_maybe_send_b2b_reminders() {
+    if (get_transient('strik_sinterklaas_b2b_reminder_check')) return;
+    return strik_business_b2b_locked('strik_sinterklaas_maybe_send_b2b_reminders_unlocked');
+}
+function strik_sinterklaas_maybe_send_b2b_reminders_unlocked() {
     if (get_transient('strik_sinterklaas_b2b_reminder_check')) {
         return;
     }
@@ -1472,6 +1608,11 @@ function strik_sinterklaas_mailing_send($request) {
 }
 
 add_action('rest_api_init', function () {
+    register_rest_route('strik/v1', '/business-folder-quote', array(
+        'methods' => WP_REST_Server::CREATABLE,
+        'callback' => 'strik_business_folder_quote',
+        'permission_callback' => 'strik_sinterklaas_permission',
+    ));
     register_rest_route('strik/v1', '/sinterklaas-mailing', array(
         array('methods' => WP_REST_Server::READABLE, 'callback' => 'strik_sinterklaas_mailing_get', 'permission_callback' => 'strik_sinterklaas_permission'),
         array('methods' => WP_REST_Server::CREATABLE, 'callback' => 'strik_sinterklaas_mailing_save', 'permission_callback' => 'strik_sinterklaas_permission'),

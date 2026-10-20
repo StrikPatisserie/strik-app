@@ -55,6 +55,8 @@ export default function KerstB2BConcept() {
   const [saving, setSaving] = useState(false);
   const [savedSignature, setSavedSignature] = useState("");
   const [saveError, setSaveError] = useState("");
+  const [reference, setReference] = useState("");
+  const pendingRequest = useRef<{ signature: string; id: string } | null>(null);
   const vatLabel = includeVat ? "incl. btw" : "excl. btw";
   const packagePrice = christmasPackage(contents, packageCount, includeVat);
   const packageIncl = christmasPackage(contents, packageCount, true);
@@ -68,8 +70,9 @@ export default function KerstB2BConcept() {
   const totalExcl = roundMoney(singleTotal(false) + packageExcl.total);
   const total = includeVat ? totalIncl : totalExcl;
   const hasSelection = selectedSingles.length > 0 || packagePrice.lines.length > 0;
-  const contactSignature = JSON.stringify([contact.company.trim(), contact.contactName.trim(), contact.email.trim().toLowerCase(), contact.consent]);
-  const contactSaved = savedSignature === contactSignature;
+  const quotePayload = { season: "kerst", company: contact.company, contactName: contact.contactName, email: contact.email, phone: contact.phone, wishes: contact.wishes, consent: contact.consent, website: contact.website, delivery: { method: contact.delivery, address: contact.address, momentType: "date", date: contact.date }, selection: { singles, contents, packageCount, vegan } };
+  const quoteSignature = JSON.stringify(quotePayload);
+  const quoteSubmitted = savedSignature === quoteSignature;
   const suggestions = christmasProducts.filter((product) => christmasUnitPrice(product, recipientCount, includeVat) <= budget);
   const examplePackages: { name: string; contents: Record<string, number> }[] = [
     { name: "Een klein gebaar", contents: { "stol-klein": 1, kerstkoekjes: 1 } },
@@ -103,22 +106,23 @@ export default function KerstB2BConcept() {
     "Graag ontvang ik jullie bevestiging van beschikbaarheid, verpakking, definitieve prijs en levermoment. Dit is een aanvraag, nog geen bestelling.", "",
     "Met vriendelijke groet,", contact.contactName.trim() || contact.company.trim(),
   ].join("\r\n");
-  const mailHref = `mailto:info@strik-patisserie.nl?subject=${encodeURIComponent(`Offerteaanvraag Kerst 2026 - ${contact.company.trim()}`)}&body=${encodeURIComponent(offerText)}`;
 
-  async function prepareQuote(event: FormEvent<HTMLFormElement>) {
+  async function submitQuote(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!hasSelection || saving) return;
+    if (!hasSelection || saving || quoteSubmitted) return;
     if (!contact.company.trim() || !contact.contactName.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email.trim())) {
       setSaveError("Vul je bedrijfsnaam, contactpersoon en een geldig e-mailadres in.");
       return;
     }
     setSaving(true); setSaveError("");
     try {
-      const response = await fetch("/api/business-folder-signup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "quote", season: "kerst", company: contact.company, contactName: contact.contactName, email: contact.email, consent: contact.consent, website: contact.website }) });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || "Contactgegevens opslaan is niet gelukt.");
-      setSavedSignature(contactSignature);
-    } catch (error) { setSaveError(error instanceof Error ? error.message : "Contactgegevens opslaan is niet gelukt."); }
+      if (pendingRequest.current?.signature !== quoteSignature) pendingRequest.current = { signature: quoteSignature, id: crypto.randomUUID() };
+      const response = await fetch("/api/business-folder-quote", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...quotePayload, requestId: pendingRequest.current.id }) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok || !data.reference) throw new Error(data.message || "De ontvangst van je aanvraag is nog niet bevestigd. Probeer opnieuw.");
+      setReference(data.reference);
+      setSavedSignature(quoteSignature);
+    } catch (error) { setSaveError(error instanceof Error && !(error instanceof TypeError) ? error.message : "De ontvangst van je aanvraag is nog niet bevestigd. Probeer opnieuw."); }
     finally { setSaving(false); }
   }
 
@@ -219,16 +223,16 @@ export default function KerstB2BConcept() {
         {packagePrice.lines.length > 0 && <div><span><strong>{packageCount} × kerstpakket op maat</strong>{packagePrice.lines.map(({ product, quantity: amount }) => <small key={product.id}>Per pakket: {amount} × {productName(product.id, product.name)}{product.id === "kerstchocolade" ? ` (${amount * 100} g)` : ""}</small>)}<small>{money(packagePrice.perPackage)} per pakket · verpakking in overleg</small></span><strong>{money(packagePrice.total)}</strong></div>}
       </div>
       <div className={styles.quoteTotal}><span>Producttotaal · {vatLabel}</span><strong>{money(total)}</strong></div><p className={styles.smallNote}>{money(totalIncl)} incl. btw / {money(totalExcl)} excl. btw. Eventuele extra verpakking en bezorging apart af te stemmen.</p>
-      {!hasSelection ? <p role="status" className={styles.empty}>Je aanvraag is leeg. Kies eerst een cadeau of stel een pakket samen.</p> : <form onSubmit={prepareQuote} className={styles.quoteForm}>
+      {!hasSelection ? <p role="status" className={styles.empty}>Je aanvraag is leeg. Kies eerst een cadeau of stel een pakket samen.</p> : <form onSubmit={submitQuote} className={styles.quoteForm}>
         <div className={styles.formGrid}><label>Bedrijf<input required autoComplete="organization" maxLength={180} value={contact.company} onChange={(event) => setContact({ ...contact, company: event.target.value })} /></label><label>Contactpersoon<input required autoComplete="name" maxLength={160} value={contact.contactName} onChange={(event) => setContact({ ...contact, contactName: event.target.value })} /></label><label>E-mailadres<input required type="email" autoComplete="email" maxLength={254} value={contact.email} onChange={(event) => setContact({ ...contact, email: event.target.value })} /></label><label>Telefoon · optioneel<input type="tel" autoComplete="tel" value={contact.phone} onChange={(event) => setContact({ ...contact, phone: event.target.value })} /></label><label>Gewenste datum · of in overleg<input type="date" value={contact.date} onChange={(event) => setContact({ ...contact, date: event.target.value })} /></label><label>Afhalen of bezorgen<select value={contact.delivery} onChange={(event) => setContact({ ...contact, delivery: event.target.value })}><option value="pickup">Afhalen bij Strik</option><option value="delivery">Bezorgen · prijs op aanvraag</option></select></label></div>
         {contact.delivery === "delivery" && <label>Afleveradres<input autoComplete="street-address" value={contact.address} onChange={(event) => setContact({ ...contact, address: event.target.value })} /></label>}
         <label>Wensen · verpakking, logo of kaartje<textarea rows={3} maxLength={2000} value={contact.wishes} onChange={(event) => setContact({ ...contact, wishes: event.target.value })} placeholder="Vertel ons wat jullie cadeau bijzonder maakt." /></label>
         <label className={styles.honeypot} aria-hidden="true">Website<input tabIndex={-1} autoComplete="off" value={contact.website} onChange={(event) => setContact({ ...contact, website: event.target.value })} /></label>
         <label className={styles.consent}><input type="checkbox" checked={contact.consent} onChange={(event) => setContact({ ...contact, consent: event.target.checked })} /><span>Houd mij ook op de hoogte van de zakelijke Sint- en kerstfolders. Optioneel; afmelden kan altijd.</span></label>
-        <details className={styles.mailPreview}><summary>Bekijk eerst de e-mailtekst</summary><pre>{offerText}</pre></details>
-        {saveError && <div role="alert" className={styles.error}>{saveError} <a href={mailHref}>Open je aanvraag rechtstreeks in je e-mailapp →</a></div>}
-        {contactSaved ? <><p role="status" className={styles.ready}>Klaar! Open je e-mailapp en verstuur daar je aanvraag.</p><a href={mailHref} className={styles.primary}>Open aanvraag in mijn e-mailapp →</a></> : <button type="submit" className={styles.primary} disabled={saving}>{saving ? "Contactgegevens opslaan…" : "Contact opslaan en e-mail klaarzetten →"}</button>}
-        <p className={styles.smallNote}>Je verstuurt de aanvraag zelf vanuit je e-mailapp. Een aanvraag is vrijblijvend en nog geen bestelling.</p>
+        <details className={styles.mailPreview}><summary>Bekijk je volledige aanvraag</summary><pre>{offerText}</pre></details>
+        {saveError && <div role="alert" className={styles.error}>{saveError}</div>}
+        {quoteSubmitted ? <p role="status" className={styles.ready}>Aanvraag ontvangen! Je referentie is {reference}. We nemen contact met je op om de offerte af te stemmen.</p> : <button type="submit" className={styles.primary} disabled={saving}>{saving ? "Aanvraag versturen…" : saveError ? "Opnieuw proberen →" : "Offerteaanvraag versturen →"}</button>}
+        <p className={styles.smallNote}>Je aanvraag komt rechtstreeks bij Strik binnen. Een aanvraag is vrijblijvend en nog geen bestelling.</p>
       </form>}
     </FolderDialog>}
     <BusinessFolderSeasonIntro />

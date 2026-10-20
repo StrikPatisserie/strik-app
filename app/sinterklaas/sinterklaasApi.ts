@@ -223,6 +223,7 @@ function normalizeB2BOrder(value: unknown): SinterklaasB2BOrder | null {
     reminderEmailError: textFrom(value.reminderEmailError),
     confirmationEmailedAt: textFrom(value.confirmationEmailedAt),
     confirmationEmailError: textFrom(value.confirmationEmailError),
+    ...(isRecord(value.folderQuote) ? { folderQuote: { reference: textFrom(value.folderQuote.reference), receivedAt: textFrom(value.folderQuote.receivedAt), mailSentAt: textFrom(value.folderQuote.mailSentAt), mailState: textFrom(value.folderQuote.mailState), quoteText: textFrom(value.folderQuote.quoteText) } } : {}),
     createdAt: textFrom(value.createdAt),
     updatedAt: textFrom(value.updatedAt),
   };

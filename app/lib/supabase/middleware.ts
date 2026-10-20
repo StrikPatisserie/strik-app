@@ -28,6 +28,7 @@ const PUBLIC_PATHS = new Set([
 const PUBLIC_API_PATHS = new Set([
   "/api/app-version",
   "/api/business-folder-signup",
+  "/api/business-folder-quote",
   "/api/lettershop/checkout",
   "/api/lettershop/mail-retry",
   "/api/bakkerij-logistiek",

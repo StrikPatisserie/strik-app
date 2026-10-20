@@ -54,6 +54,7 @@ export type ChocolateLetterOrder = {
 };
 
 export type SinterklaasB2BOrder = {
+  folderQuote?: { reference: string; receivedAt: string; mailSentAt: string; mailState: string; quoteText: string };
   id: string;
   year: string;
   season: "sint" | "kerst" | "sint-kerst";

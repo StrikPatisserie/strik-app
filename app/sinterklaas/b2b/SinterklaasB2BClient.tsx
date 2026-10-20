@@ -28,7 +28,7 @@ import {
   pricedProduct,
   tierFor,
   type Product,
-} from "../../sint-voor-bedrijven/SintB2BConcept";
+} from "../../sint-voor-bedrijven/sintProducts";
 
 const CUSTOM_PRODUCT_ID = "anders";
 const PRODUCT_SECTION_HEADING = "PRODUCTEN EN PRIJS";
@@ -1165,7 +1165,13 @@ function B2BOrderForm({
       aria-busy={saving}
       className="grid gap-3 text-xs xl:grid-cols-[20rem_minmax(0,1fr)] xl:items-start"
     >
+
       <section className="overflow-hidden rounded-xl border border-[#d8d2ca] bg-[#f3f0ec] xl:col-start-1 xl:row-start-1">
+        {initialOrder?.folderQuote && <aside className="rounded-xl border border-[#bfd0bc] bg-[#eff5ec] p-3 text-[#31552a]">
+        <strong>Ontvangen via de folder · {initialOrder.folderQuote.reference}</strong>
+        <p className="mt-1">{initialOrder.folderQuote.mailSentAt ? "Interne e-mailmelding verstuurd." : "De aanvraag is opgeslagen. Controleer de interne e-mailmelding; de verzending is nog niet bevestigd."}</p>
+        <details className="mt-2"><summary className="cursor-pointer font-bold">Oorspronkelijke aanvraag bekijken</summary><pre className="mt-2 whitespace-pre-wrap break-words font-sans leading-relaxed">{initialOrder.folderQuote.quoteText}</pre></details>
+      </aside>}
         <div className="flex items-center justify-between bg-[#e5e0d9] px-3 py-2">
           <div className="text-sm font-bold text-[#4d463d]">Orderinformatie</div>
           <span className="text-[0.68rem] font-medium text-[#756d64]">klant & levering</span>
@@ -1710,6 +1716,7 @@ function B2BOrderRow({
                 {order.customerName}
               </h3>
               <span className="rounded-full bg-[#eef2ea] px-2 py-0.5 text-[0.62rem] font-bold text-[#24553d]">{seasonLabel(order.season)}</span>
+              {order.folderQuote && <span className="text-[0.62rem] font-bold text-[#557965]">Via folder · {order.folderQuote.reference}{!order.folderQuote.mailSentAt ? " · Controleer e-mailmelding" : ""}</span>}
               <span className={`rounded-full px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.12em] ${order.status === "akkoord" ? "bg-[#dcebd8] text-[#24551d]" : "bg-[#fff3c4] text-[#705000]"}`}>
                 {{ aanvraag: "Aanvraag", offerte: "Offerte", akkoord: "Akkoord", afgewezen: "Niet doorgegaan" }[order.status]}
               </span>

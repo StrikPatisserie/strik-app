@@ -25,14 +25,17 @@ function find(node, predicate) {
 function component(file, imports, globals) {
   const states = [];
   let cursor = 0;
-  const hooks = { ...React, useEffect() {}, useMemo(callback) { return callback(); }, useRef() { return { current: null }; },
+  let refCursor = 0;
+  const refs = [];
+  const hooks = { ...React, useEffect() {}, useMemo(callback) { return callback(); }, useRef(initial) { const index = refCursor++; return refs[index] ||= { current: initial }; },
     useState(initial) { const index = cursor++; if (!(index in states)) states[index] = typeof initial === 'function' ? initial() : initial; return [states[index], value => { states[index] = typeof value === 'function' ? value(states[index]) : value; }]; },
   };
-  const loaded = load(file, { ...imports, react: hooks }, globals);
-  return { render(props = {}) { cursor = 0; return loaded.default(props); } };
+  const loaded = load(file, { "./sintProducts": sintCatalog, ...imports, react: hooks }, { crypto: require("node:crypto").webcrypto, ...globals });
+  return { render(props = {}) { cursor = 0; refCursor = 0; return loaded.default(props); } };
 }
 const pricing = load('app/lib/business-folder-pricing.ts');
 const wrapping = load('app/lib/letter-pricing.ts');
+const sintCatalog = load('app/sint-voor-bedrijven/sintProducts.ts', { '@/app/lib/business-folder-pricing': pricing });
 const catalog = load('app/kerst-voor-bedrijven/christmasProducts.ts', { '@/app/lib/business-folder-pricing': pricing });
 
 test('letter gift wrapping is EUR 0.25 including VAT and is not reduced by product staffels', () => {
@@ -57,7 +60,7 @@ test('letter gift wrapping is EUR 0.25 including VAT and is not reduced by produ
   assert.match(offer, /338,75.*incl\. btw/);
 });
 
-function christmasQuote(response = { ok: true, json: async () => ({ ok: true }) }) {
+function christmasQuote(response = { ok: true, json: async () => ({ ok: true, reference: "KERST26-TEST" }) }) {
   const calls = [];
   const ui = component('app/kerst-voor-bedrijven/KerstB2BConcept.tsx', {
     './christmasProducts': catalog, '@/app/lib/business-folder-pricing': pricing,
@@ -84,7 +87,7 @@ function christmasQuote(response = { ok: true, json: async () => ({ ok: true }) 
   return { ...ui, calls, field, submit: () => find(ui.render(), node => node.type === 'form').props.onSubmit({ preventDefault() {} }) };
 }
 
-test('Christmas quote keeps mixed selections, quantities, VAT totals, delivery and wishes in the ready email', async () => {
+test('Christmas quote submits the complete mixed selection directly and confirms receipt', async () => {
   const quote = christmasQuote();
   const preview = find(quote.render(), node => node.type === 'pre').props.children;
   assert.match(preview, /25 × Bonbondoosje/);
@@ -96,29 +99,36 @@ test('Christmas quote keeps mixed selections, quantities, VAT totals, delivery a
   assert.match(preview, /Een kaartje per pakket/);
   await quote.submit();
   assert.equal(quote.calls.length, 1);
-  assert.equal(quote.calls[0].url, '/api/business-folder-signup');
+  assert.equal(quote.calls[0].url, '/api/business-folder-quote');
   assert.equal(quote.calls[0].body.season, 'kerst');
-  assert.equal(quote.calls[0].body.kind, 'quote');
+  assert.equal(quote.calls[0].body.selection.singles.bonbons, 25);
+  assert.equal(quote.calls[0].body.selection.contents.kerstchocolade, 3);
+  assert.equal(quote.calls[0].body.selection.packageCount, 25);
+  assert.equal(quote.calls[0].body.delivery.address, 'Voorbeeldstraat 1');
+  assert.equal(quote.calls[0].body.phone, '0612345678');
+  assert.equal(quote.calls[0].body.wishes, 'Een kaartje per pakket');
   assert.equal(quote.calls[0].body.consent, false);
-  const email = find(quote.render(), node => node.type === 'a' && node.props.children === 'Open aanvraag in mijn e-mailapp →');
-  const url = new URL(email.props.href);
-  assert.equal(url.pathname, 'info@strik-patisserie.nl');
-  assert.equal(url.searchParams.get('body'), preview);
-  assert.match(url.searchParams.get('subject'), /Kerst 2026 - Voorbeeld BV/);
-  quote.field('Bedrijf', 'Ander bedrijf');
-  assert.equal(find(quote.render(), node => node.type === 'a' && node.props.children === 'Open aanvraag in mijn e-mailapp →'), undefined, 'changed contact details must be saved again');
-});
-
-test('a failed contact save keeps the complete quote available in the email fallback', async () => {
-  const quote = christmasQuote({ ok: false, json: async () => ({ message: 'Tijdelijk niet beschikbaar' }) });
+  const status = find(quote.render(), node => node.props?.role === 'status');
+  assert.match(status.props.children.join(''), /Aanvraag ontvangen!.*KERST26-TEST/);
   await quote.submit();
-  const error = find(quote.render(), node => node.props?.role === 'alert');
-  assert.ok(error);
-  const fallback = find(error, node => node.type === 'a');
-  assert.match(new URL(fallback.props.href).searchParams.get('body'), /25 gelijke pakketten/);
+  assert.equal(quote.calls.length, 1, 'a successfully submitted request cannot be sent again');
+  quote.field('Telefoon · optioneel', '0699999999');
+  assert.equal(find(quote.render(), node => node.props?.role === 'status'), undefined, 'all quote details participate in the submission signature');
 });
 
-test('the signup endpoint saves Christmas contacts without mailing consent and reports storage failures', async () => {
+test('a failed quote remains editable and retry uses the same idempotency key', async () => {
+  const quote = christmasQuote({ ok: false, json: async () => ({ saved: true, message: 'Aanvraag opgeslagen; mail nog niet verstuurd.' }) });
+  await quote.submit();
+  assert.ok(find(quote.render(), node => node.props?.role === 'alert'));
+  assert.equal(find(quote.render(), node => node.props?.role === 'status'), undefined);
+  await quote.submit();
+  assert.equal(quote.calls[0].body.requestId, quote.calls[1].body.requestId);
+  quote.field('Wensen · verpakking, logo of kaartje', 'Gewijzigde wens');
+  await quote.submit();
+  assert.notEqual(quote.calls[0].body.requestId, quote.calls[2].body.requestId);
+});
+
+test('newsletter signup remains independent and legacy contact-only quotes ask to refresh', async () => {
   const saved = [], requests = [];
   let failStorage = false;
   const api = load('app/api/business-folder-signup/route.ts', {
@@ -128,16 +138,19 @@ test('the signup endpoint saves Christmas contacts without mailing consent and r
   }, { URL, process: { env: {} }, crypto: require('node:crypto').webcrypto, console: { error() {} },
     fetch: async (url, options) => { requests.push(options); return Response.json(options.method === 'POST' ? { ok: true } : { customers: [] }); },
   });
-  const input = { company: 'Voorbeeld BV', contactName: 'Testpersoon', email: 'TEST@example.invalid', kind: 'quote', season: 'kerst', consent: false };
+  const input = { company: 'Voorbeeld BV', contactName: 'Testpersoon', email: 'TEST@example.invalid', season: 'kerst', consent: true };
   const request = () => new Request('https://app.example.test/api/business-folder-signup', { method: 'POST', headers: { origin: 'https://app.example.test', 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
   const result = await api.POST(request());
   assert.equal(result.status, 200);
   assert.equal((await result.json()).ok, true);
   assert.equal(saved[0][1], 'test@example.invalid');
-  assert.equal(saved[0][2], false);
+  assert.equal(saved[0][2], true);
   const campaign = JSON.parse(requests.find(options => options.method === 'POST').body);
-  assert.match(campaign.customers[0].notes, /Offerteaanvraag Kerst/);
-  assert.equal(campaign.customers[0].recipients[0].doNotEmail, true);
+  assert.match(campaign.customers[0].notes, /Website-aanmelding Sint/);
+  assert.equal(campaign.customers[0].recipients[0].doNotEmail, false);
+  input.kind = 'quote';
+  assert.equal((await api.POST(request())).status, 410);
+  delete input.kind;
   failStorage = true;
   assert.equal((await api.POST(request())).status, 502);
 });

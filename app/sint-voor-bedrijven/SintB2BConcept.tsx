@@ -1,53 +1,19 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   BusinessFolderSeasonIntro,
   BusinessFolderSeasonNav,
   BusinessGiftFinderButton,
 } from "@/app/BusinessFolderSeasonControls";
-import {
-  BUSINESS_FOLDER_LOGO_PRICE_INCL,
-  BUSINESS_FOLDER_PRICE_TIERS,
-  businessFolderLogoPrice,
-  businessFolderRetailPrice,
-} from "@/app/lib/business-folder-pricing";
+import { BUSINESS_FOLDER_LOGO_PRICE_INCL } from "@/app/lib/business-folder-pricing";
+import { products, folderProducts, chocolateLetterProduct, shapeLetterProduct, chocolateLetterTiers, duoChoice, tierFor, productUnitPrice, defaultProductChoice, productChoiceLabel, pricedProduct, selectedDuoOptions, productLogoPrice, productSupportsLogo, productChoiceCandidates, type Product, type Allergen, type PriceTier } from "./sintProducts";
+export { products, folderProducts, tierFor, productUnitPrice, defaultProductChoice, productChoiceLabel, pricedProduct, productLogoPrice, productSupportsLogo, productChoiceCandidates, type Product, type PriceTier } from "./sintProducts";
 import B2BChocolateLetters, { describeB2BLetter, type B2BLetterLine } from "./B2BChocolateLetters";
 import B2BPriceSummary from "./B2BPriceSummary";
 import { letterGiftWrapPrice } from "@/app/lib/letter-pricing";
 
-export type PriceTier = { min: number; label: string; price?: number; discountPercent?: number };
-type ProductVariant = { label: string; retailPriceIncl: number; fixedSurchargeIncl?: number };
-type DuoImage = { options: [string, string]; src: string };
-type Allergen = "gluten" | "lactose" | "amandel" | "soja" | "ei";
-type ProductInfoSection = "shelfLife" | "allergens";
-export type Product = {
-  id: string;
-  name: string;
-  eyebrow?: string;
-  description: string;
-  image: string;
-  gallery?: { src: string; label: string }[];
-  optionImages?: Record<string, string>;
-  shelfLifeInfo: string[];
-  allergens: Allergen[];
-  tiers: PriceTier[];
-  retailPriceIncl?: number;
-  fixedSurchargeIncl?: number;
-  personalizationText?: string;
-  logoAvailable?: boolean;
-  logoBlockedChoices?: string[];
-  accent: string;
-  options?: string[];
-  variants?: ProductVariant[];
-  duoOptions?: ProductVariant[];
-  duoImages?: DuoImage[];
-  fixedOffer?: boolean;
-  customColorMinimum?: number;
-  defaultColors?: string;
-  vegan?: boolean;
-};
 type ProductSuggestion = {
   product: Product;
   choice: string;
@@ -58,18 +24,9 @@ type ProductSuggestion = {
   logoIncluded: boolean;
 };
 
-const NIJMEGEN_DELIVERY_FEE_LABEL = "€ 10–15";
-const FOOD_VAT_FACTOR = 1.09;
+type ProductInfoSection = "shelfLife" | "allergens";
 const roundCents = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
-const roundUpFiveCents = (value: number) => Math.ceil((value - Number.EPSILON) * 20) / 20;
-const DUO_SEPARATOR = "|||";
-const DUO_CHOCOLATE_KRUIDNOTEN = "Chocolade kruidnoten · ca. 250 g";
-const DUO_NATUREL_KRUIDNOTEN = "Naturel kruidnoten · ca. 200 g";
-const DUO_GEVULD_SPECULAAS = "Speculaasbites · ca. 200 g";
-const DUO_SINT_CHOCO = "Gesorteerde Sint-chocolade · ca. 200 g";
-const DUO_MARSEPEIN = "Marsepein aardappeltjes · ca. 275 g";
-const DUO_SPECULAASBROK = "Speculaasbrokstukken · ca. ⅔ brok";
-const DUO_BORSTPLAAT = "Roomborstplaat · ca. 8 rondjes";
+const NIJMEGEN_DELIVERY_FEE_LABEL = "€ 10–15";
 const CUSTOM_PACKAGE_MAIL_HREF = `mailto:info@strik-patisserie.nl?subject=${encodeURIComponent("Pakket op maat voor Sinterklaas 2026")}&body=${encodeURIComponent("Beste Strik Patisserie,\n\nIk ontvang graag informatie over een Sinterklaaspakket op maat.\n\nBedrijfsnaam:\nAantal cadeaus:\nBudget per persoon:\nGewenste inhoud of verpakking:\nGewenst levermoment:\nOverige wensen:\n\nMet vriendelijke groet,")}`;
 const ALLERGEN_LABELS: Record<Allergen, string> = {
   gluten: "Gluten",
@@ -78,7 +35,6 @@ const ALLERGEN_LABELS: Record<Allergen, string> = {
   soja: "Soja",
   ei: "Ei",
 };
-const chocolateLetterTiers: PriceTier[] = BUSINESS_FOLDER_PRICE_TIERS;
 type Delivery = "pickup" | "nijmegen" | "custom";
 type DeliveryMomentType = "date" | "week";
 
@@ -106,309 +62,11 @@ const DELIVERY_WEEK_OPTIONS = Array.from({ length: 14 }, (_, index) => {
   };
 });
 
-export const products: Product[] = [
-  {
-    id: "chocoladeletter",
-    name: "Chocolade spuitletters",
-    eyebrow: "Klassieker",
-    description: "Spuitletters A–Z in melk, puur of wit. Kies klein of groot.",
-    image: "/sinterklaas/Melk spuitletter 2026.png",
-    shelfLifeInfo: ["Chocolade · t.g.t. ca. 30 dagen"],
-    allergens: ["gluten", "lactose", "soja"],
-    accent: "#b9dddf",
-    retailPriceIncl: 8.95,
-    tiers: chocolateLetterTiers,
-  },
-  {
-    id: "chocolade-vormletter",
-    name: "Chocolade vormletter S",
-    description: "Grote vormletter S in melk, puur of wit.",
-    image: "/sinterklaas/vormletters S 2026.png",
-    shelfLifeInfo: ["Chocolade · t.g.t. ca. 30 dagen"],
-    allergens: ["gluten", "lactose", "soja"],
-    accent: "#b9dddf",
-    retailPriceIncl: 13.95,
-    tiers: chocolateLetterTiers,
-  },
-  {
-    id: "speculaasplak-gedicht",
-    name: "Speculaasplak (met gedicht)",
-    description: "Kies de speculaasplak met of zonder amandel. Voeg voor € 2 per stuk een persoonlijk gedicht via QR-code toe.",
-    image: "/sinterklaas/Speculaasplak met gedicht.png",
-    shelfLifeInfo: ["Massief speculaas · t.g.t. ca. 30 dagen"],
-    allergens: ["gluten", "lactose", "soja", "ei"],
-    accent: "#d79a6d",
-    retailPriceIncl: 4.95,
-    variants: [
-      { label: "Zonder amandel", retailPriceIncl: 4.95 },
-      { label: "Zonder amandel · met gedicht (+ € 2)", retailPriceIncl: 4.95, fixedSurchargeIncl: 2 },
-      { label: "Met amandel", retailPriceIncl: 7.95 },
-      { label: "Met amandel · met gedicht (+ € 2)", retailPriceIncl: 7.95, fixedSurchargeIncl: 2 },
-    ],
-    logoBlockedChoices: [
-      "Zonder amandel · met gedicht (+ € 2)",
-      "Met amandel · met gedicht (+ € 2)",
-    ],
-    personalizationText: "Bij de gedichtoptie lever je een gepersonaliseerd gedicht aan (PDF/JPEG); wij plaatsen het via een QR-code op de plak.",
-    tiers: chocolateLetterTiers,
-  },
-  {
-    id: "speculaas-kruidcake",
-    name: "Speculaas kruidcake",
-    eyebrow: "Vaste aanbieding",
-    description:
-      "Een rijk gekruide, smeuïge speculaas-kruidcake. Winkelprijs € 7,95 incl. btw; voor iedere afname geldt 15% korting. Eventuele logokosten worden apart berekend.",
-    image: "/sinterklaas/speculaas kruidcake.png",
-    shelfLifeInfo: ["Speculaas kruidcake · t.h.t. ca. 7 dagen"],
-    allergens: ["gluten", "lactose", "soja", "ei"],
-    accent: "#8f563d",
-    retailPriceIncl: 7.95,
-    fixedOffer: true,
-    tiers: [{ min: 1, label: "Vaste aanbieding", discountPercent: 15 }],
-  },
-  {
-    id: "klein-sintpakket",
-    name: "Klein Sintpakket",
-    description: "Kleine speculaaspop, kleine chocoladeletter en ca. 150 gram gevuld speculaas. Kies met of zonder amandel.",
-    image: "/sinterklaas/Pakketje 1 pop-gevuld-letter2.png",
-    shelfLifeInfo: [
-      "Speculaaspop · t.g.t. ca. 30 dagen",
-      "Chocoladeletter · t.g.t. ca. 30 dagen",
-      "Gevuld speculaas · t.h.t. ca. 21 dagen",
-    ],
-    allergens: ["gluten", "lactose", "amandel", "soja", "ei"],
-    accent: "#d79a6d",
-    retailPriceIncl: 18.35,
-    variants: [
-      { label: "Zonder amandel", retailPriceIncl: 18.35 },
-      { label: "Met amandel", retailPriceIncl: 19.7 },
-    ],
-    tiers: chocolateLetterTiers,
-  },
-  {
-    id: "speculaasbrok-met-letter",
-    name: "Speculaasbrok met letter",
-    description: "Speculaasbrok met een kleine of grote chocoladeletter. Kies de brok met of zonder amandel.",
-    image: "/sinterklaas/Pakketje 2 brok letter.jpg",
-    shelfLifeInfo: [
-      "Speculaasbrok · t.g.t. ca. 30 dagen",
-      "Chocoladeletter · t.g.t. ca. 30 dagen",
-    ],
-    allergens: ["gluten", "lactose", "amandel", "soja", "ei"],
-    accent: "#b9dddf",
-    retailPriceIncl: 13.9,
-    variants: [
-      { label: "Speculaasbrok zonder amandel · kleine spuitletter", retailPriceIncl: 13.9 },
-      { label: "Speculaasbrok met amandel · kleine spuitletter", retailPriceIncl: 16.9 },
-      { label: "Speculaasbrok zonder amandel · grote spuitletter", retailPriceIncl: 18.9 },
-      { label: "Speculaasbrok met amandel · grote spuitletter", retailPriceIncl: 21.9 },
-    ],
-    tiers: chocolateLetterTiers,
-  },
-  {
-    id: "gevuld-speculaasbites",
-    name: "Speculaas bites Snackbox",
-    eyebrow: "Nieuw",
-    description: "Ca. 400 gram gevuld speculaas (± 28 stukjes), feestelijk verpakt voor Sinterklaas.",
-    image: "/sinterklaas/popcorn bites2.png",
-    shelfLifeInfo: ["Speculaasbites · t.h.t. ca. 21 dagen"],
-    allergens: ["gluten", "lactose", "amandel", "ei"],
-    accent: "#d79a6d",
-    logoAvailable: false,
-    retailPriceIncl: 12.95,
-    tiers: chocolateLetterTiers,
-  },
-  {
-    id: "staaf",
-    name: "Amandelletter & gevulde staven",
-    description: "Kies een amandelletter of een gevulde staaf. De amandelletter is standaard een S; een andere letter maken we op aanvraag.",
-    image: "/sinterklaas/banketletter speculaasstaaf amandelstaaf.png",
-    shelfLifeInfo: [
-      "Amandelletter of amandelstaaf · t.h.t. 7 dagen",
-      "Gevulde speculaasstaaf · t.h.t. ca. 21 dagen",
-    ],
-    allergens: ["gluten", "lactose", "amandel", "ei"],
-    accent: "#f3c4ac",
-    retailPriceIncl: 12.95,
-    variants: [
-      { label: "Amandelletter · standaard S / andere letter op aanvraag", retailPriceIncl: 12.95 },
-      { label: "Gevulde amandelstaaf", retailPriceIncl: 7.95 },
-      { label: "Gevulde speculaasstaaf", retailPriceIncl: 7.95 },
-    ],
-    tiers: chocolateLetterTiers,
-  },
-  {
-    id: "stafwerk",
-    name: "Stafwerk pakket",
-    eyebrow: "Favoriet",
-    description: "Drie heerlijke stafjes van roomchocolade, marsepein en gevuld speculaas.",
-    image: "/sinterklaas/Stafwerk.png",
-    shelfLifeInfo: [
-      "Roomchocolade · t.g.t. ca. 30 dagen",
-      "Marsepein · t.g.t. ca. 30 dagen",
-      "Gevuld speculaas · t.h.t. ca. 21 dagen",
-    ],
-    allergens: ["gluten", "lactose", "amandel", "soja", "ei"],
-    accent: "#f7c8aa",
-    tiers: [
-      { min: 1, price: 16.95, label: "<15", discountPercent: 0 },
-      { min: 15, price: 16.15, label: "15–50", discountPercent: 5 },
-      { min: 51, price: 15.3, label: ">50", discountPercent: 10 },
-    ],
-  },
-  {
-    id: "staaf-stoomboot",
-    name: "Staaf Stoomboot",
-    eyebrow: "Nieuw",
-    description: "Een gevulde speculaasstaaf en een gevulde amandelstaaf in een feestelijke stoombootverpakking.",
-    image: "/sinterklaas/staaf stoomboot2.png",
-    shelfLifeInfo: [
-      "Amandelstaaf · t.h.t. 7 dagen",
-      "Gevulde speculaasstaaf · t.h.t. ca. 21 dagen",
-    ],
-    allergens: ["gluten", "lactose", "amandel", "ei"],
-    accent: "#d62d1d",
-    logoAvailable: false,
-    retailPriceIncl: 17.95,
-    tiers: chocolateLetterTiers,
-  },
-  {
-    id: "strik-duo",
-    name: "Strik DUO",
-    eyebrow: "Zelf samenstellen",
-    description: "Twee feestelijke zakjes in één kartonnen sleeve. Kies zelf twee verschillende of juist dezelfde lekkernijen.",
-    image: "/sinterklaas/Sint DUO choco kruinoten + gevuld speculaas.png",
-    shelfLifeInfo: [
-      "Chocolade en kruidnoten · t.g.t. ca. 30 dagen",
-      "Speculaasbites · t.h.t. ca. 21 dagen",
-      "Massief speculaas · t.g.t. ca. 30 dagen",
-      "Marsepein en roomborstplaat · t.g.t. ca. 30 dagen",
-    ],
-    allergens: ["gluten", "lactose", "amandel", "soja", "ei"],
-    gallery: [
-      { src: "/sinterklaas/Sint DUO choco kruinoten + gevuld speculaas.png", label: "Chocolade kruidnoten met speculaasbites" },
-      { src: "/sinterklaas/Sint DUO  marsepein aard + speculaasbrok.png", label: "Marsepein aardappeltjes met speculaasbrok" },
-      { src: "/sinterklaas/Sint DUO  kruinoten + borstplaat.png", label: "Naturel kruidnoten met roomborstplaat" },
-    ],
-    duoOptions: [
-      { label: DUO_CHOCOLATE_KRUIDNOTEN, retailPriceIncl: 4.95 },
-      { label: DUO_NATUREL_KRUIDNOTEN, retailPriceIncl: 3.5 },
-      { label: DUO_GEVULD_SPECULAAS, retailPriceIncl: 5.9 },
-      { label: DUO_SINT_CHOCO, retailPriceIncl: 13.9 },
-      { label: DUO_MARSEPEIN, retailPriceIncl: 10.9 },
-      { label: DUO_SPECULAASBROK, retailPriceIncl: 3.3 },
-      { label: DUO_BORSTPLAAT, retailPriceIncl: 7.9 },
-    ],
-    duoImages: [
-      { options: [DUO_CHOCOLATE_KRUIDNOTEN, DUO_GEVULD_SPECULAAS], src: "/sinterklaas/Sint DUO choco kruinoten + gevuld speculaas.png" },
-      { options: [DUO_MARSEPEIN, DUO_SPECULAASBROK], src: "/sinterklaas/Sint DUO  marsepein aard + speculaasbrok.png" },
-      { options: [DUO_NATUREL_KRUIDNOTEN, DUO_BORSTPLAAT], src: "/sinterklaas/Sint DUO  kruinoten + borstplaat.png" },
-    ],
-    accent: "#d62d1d",
-    logoAvailable: false,
-    retailPriceIncl: 10.85,
-    tiers: chocolateLetterTiers,
-  },
-  {
-    id: "marsepein-letter",
-    name: "Marsepein letter",
-    description: "Een handgevormde marsepeinletter: glutenvrij, lactosevrij en vegan. Standaard rood/beige; eigen kleuren zijn mogelijk vanaf 5 stuks.",
-    image: "/sinterklaas/marsepein letter.png",
-    shelfLifeInfo: ["Marsepein · t.h.t. ca. 1 maand"],
-    allergens: ["amandel"],
-    accent: "#728f28",
-    logoAvailable: false,
-    retailPriceIncl: 6.5,
-    variants: [
-      { label: "Ca. 150 gram", retailPriceIncl: 6.5 },
-      { label: "Ca. 300 gram", retailPriceIncl: 12 },
-    ],
-    customColorMinimum: 5,
-    defaultColors: "rood/beige",
-    vegan: true,
-    tiers: chocolateLetterTiers,
-  },
-];
-const chocolateLetterProduct = products[0];
-const shapeLetterProduct = products[1];
-const folderProductOrder = [
-  "staaf-stoomboot",
-  "strik-duo",
-  "klein-sintpakket",
-  "speculaasbrok-met-letter",
-  "gevuld-speculaasbites",
-  "stafwerk",
-  "speculaas-kruidcake",
-  "staaf",
-  "speculaasplak-gedicht",
-  "marsepein-letter",
-];
-export const folderProducts = [...products.slice(2)].sort(
-  (first, second) => folderProductOrder.indexOf(first.id) - folderProductOrder.indexOf(second.id)
-);
-
 function money(value: number) {
   return new Intl.NumberFormat("nl-NL", {
     style: "currency",
     currency: "EUR",
   }).format(value);
-}
-
-export function tierFor(product: Product, quantity: number) {
-  return [...product.tiers].reverse().find((tier) => quantity >= tier.min) || product.tiers[0];
-}
-
-export function productUnitPrice(product: Product, tier: PriceTier, includeVat: boolean) {
-  if (product.retailPriceIncl !== undefined && tier.discountPercent !== undefined) {
-    return businessFolderRetailPrice(product.retailPriceIncl, tier.discountPercent, includeVat, product.fixedSurchargeIncl);
-  }
-  const priceEx = tier.price || 0;
-  return includeVat ? roundUpFiveCents(priceEx * FOOD_VAT_FACTOR) : roundCents(priceEx);
-}
-
-function selectedProductVariant(product: Product, choice?: string) {
-  return product.variants?.find((variant) => variant.label === choice) || product.variants?.[0];
-}
-
-function duoChoice(first: string, second: string) {
-  return `${first}${DUO_SEPARATOR}${second}`;
-}
-
-function selectedDuoOptions(product: Product, choice?: string) {
-  const options = product.duoOptions || [];
-  const requested = choice?.split(DUO_SEPARATOR) || [];
-  const first = options.find((option) => option.label === requested[0]) || options[0];
-  const second = options.find((option) => option.label === requested[1]) || options[2] || options[1] || options[0];
-  return [first, second] as const;
-}
-
-export function defaultProductChoice(product: Product) {
-  if (product.duoOptions?.length) {
-    const [first, second] = selectedDuoOptions(product);
-    return duoChoice(first.label, second.label);
-  }
-  return product.variants?.[0]?.label || product.options?.[0] || "";
-}
-
-export function productChoiceLabel(product: Product, choice?: string) {
-  if (product.duoOptions?.length) {
-    const [first, second] = selectedDuoOptions(product, choice);
-    return `${first.label} + ${second.label}`;
-  }
-  return choice || product.variants?.[0]?.label || product.options?.[0] || "Standaard";
-}
-
-export function pricedProduct(product: Product, choice?: string): Product {
-  if (product.duoOptions?.length) {
-    const [first, second] = selectedDuoOptions(product, choice);
-    return { ...product, retailPriceIncl: roundUpFiveCents(first.retailPriceIncl + second.retailPriceIncl) };
-  }
-  const variant = selectedProductVariant(product, choice);
-  return variant ? {
-    ...product,
-    retailPriceIncl: variant.retailPriceIncl,
-    fixedSurchargeIncl: variant.fixedSurchargeIncl,
-  } : product;
 }
 
 function productImage(product: Product, choice?: string) {
@@ -422,14 +80,6 @@ function productImage(product: Product, choice?: string) {
   return product.optionImages?.[choice || ""] || product.image;
 }
 
-export function productLogoPrice(includeVat: boolean) {
-  return businessFolderLogoPrice(includeVat);
-}
-
-export function productSupportsLogo(product: Product, choice?: string) {
-  return product.logoAvailable !== false && !product.logoBlockedChoices?.includes(choice || "");
-}
-
 function productPricingDescription(product: Product, tier: PriceTier) {
   if (product.fixedOffer) {
     return `vaste aanbieding · ${tier.discountPercent || 0}% korting`;
@@ -438,17 +88,6 @@ function productPricingDescription(product: Product, tier: PriceTier) {
   return `staffel ${tier.label}${
     tier.discountPercent ? ` · ${tier.discountPercent}% korting` : ""
   }`;
-}
-
-export function productChoiceCandidates(product: Product) {
-  if (product.duoOptions?.length) {
-    return product.duoOptions.flatMap((first, firstIndex) =>
-      product.duoOptions!.slice(firstIndex).map((second) => duoChoice(first.label, second.label))
-    );
-  }
-  if (product.variants?.length) return product.variants.map((variant) => variant.label);
-  if (product.options?.length) return product.options;
-  return [""];
 }
 
 function bestProductSuggestion(product: Product, quantity: number, includeVat: boolean, wantsLogo: boolean): ProductSuggestion | null {
@@ -517,6 +156,8 @@ export default function SintB2BConcept() {
   const [quoteSaving, setQuoteSaving] = useState(false);
   const [quoteSavedSignature, setQuoteSavedSignature] = useState("");
   const [quoteSaveError, setQuoteSaveError] = useState("");
+  const [quoteReference, setQuoteReference] = useState("");
+  const pendingQuoteRequest = useRef<{ signature: string; id: string } | null>(null);
   const [website, setWebsite] = useState("");
   const [phone, setPhone] = useState("");
   const [wishes, setWishes] = useState("");
@@ -609,21 +250,30 @@ export default function SintB2BConcept() {
       : "Gewenste leverweek: nog niet gekozen";
   const hasRequestedDeliveryMoment = deliveryMomentType === "date" ? Boolean(requestedDeliveryDate) : Boolean(selectedDeliveryWeek);
   const hasValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-  const canOpenEmail = Boolean(company.trim() && hasValidEmail && hasRequestedDeliveryMoment);
-  const quoteSignature = JSON.stringify([company.trim(), contact.trim(), email.trim().toLowerCase(), newsletterConsent]);
-  const quoteContactSaved = quoteSavedSignature === quoteSignature;
-  async function saveQuoteContact() {
-    if (!canOpenEmail || quoteSaving) return;
+  const canSubmitQuote = Boolean(company.trim() && hasValidEmail && hasRequestedDeliveryMoment);
+  const quotePayload = { season: "sint", company, contactName: contact, email, phone, wishes, consent: newsletterConsent, website,
+    delivery: { method: delivery, address: deliveryAddress, momentType: deliveryMomentType, date: requestedDeliveryDate, weekStart: requestedDeliveryWeek },
+    selection: { lines: selected.map(line => {
+      const letter = letterLines.find(letter => letter.id === line.key);
+      return { productId: line.product.id, quantity: line.quantity, choice: choices[line.product.id] || defaultProductChoice(line.product), customColors: customColors[line.product.id] || "", withLogo: line.withLogo, withGiftWrap: line.withGiftWrap, ...(letter ? { letter: { letter: letter.letter, size: letter.size, chocolate: letter.chocolate, exceptions: letter.specialRequests } } : {}) };
+    }) },
+  };
+  const quoteSignature = JSON.stringify(quotePayload);
+  const quoteSubmitted = quoteSavedSignature === quoteSignature;
+  async function submitQuote() {
+    if (!canSubmitQuote || !selected.length || quoteSaving || quoteSubmitted) return;
     setQuoteSaving(true); setQuoteSaveError("");
     try {
-      const response = await fetch("/api/business-folder-signup", {
+      if (pendingQuoteRequest.current?.signature !== quoteSignature) pendingQuoteRequest.current = { signature: quoteSignature, id: crypto.randomUUID() };
+      const response = await fetch("/api/business-folder-quote", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "quote", company, contactName: contact, email, consent: newsletterConsent, website }),
+        body: JSON.stringify({ ...quotePayload, requestId: pendingQuoteRequest.current.id }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || "Contactgegevens opslaan is niet gelukt.");
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok || !data.reference) throw new Error(data.message || "De ontvangst van je aanvraag is nog niet bevestigd. Probeer opnieuw.");
+      setQuoteReference(data.reference);
       setQuoteSavedSignature(quoteSignature);
-    } catch (err) { setQuoteSaveError(err instanceof Error ? err.message : "Contactgegevens opslaan is niet gelukt."); }
+    } catch (err) { setQuoteSaveError(err instanceof Error && !(err instanceof TypeError) ? err.message : "De ontvangst van je aanvraag is nog niet bevestigd. Probeer opnieuw."); }
     finally { setQuoteSaving(false); }
   }
   const missingQuoteDetails = [
@@ -837,11 +487,11 @@ export default function SintB2BConcept() {
         <div className="mt-6 grid gap-3 sm:grid-cols-2"><input aria-label="Bedrijfsnaam" value={company} onChange={(event) => setCompany(event.target.value)} placeholder="Bedrijfsnaam" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><input aria-label="Contactpersoon" value={contact} onChange={(event) => setContact(event.target.value)} placeholder="Contactpersoon" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><input aria-label="E-mailadres" value={email} onChange={(event) => setEmail(event.target.value)} type="email" placeholder="E-mailadres" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><input aria-label="Telefoonnummer" value={phone} onChange={(event) => setPhone(event.target.value)} type="tel" placeholder="Telefoonnummer" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><textarea aria-label="Overige wensen" value={wishes} onChange={(event) => setWishes(event.target.value)} placeholder="Verpakking, personalisatie of andere wensen" className="min-h-28 rounded-xl border border-[#dfd0b7] bg-white p-4 font-bold sm:col-span-2"/></div>
         <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-[#eadbc3] bg-white p-4 text-sm font-bold text-[#60190f]"><input type="checkbox" checked={newsletterConsent} onChange={(event) => setNewsletterConsent(event.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-[#d62d1d]"/><span>Ja, ik ontvang graag toekomstige zakelijke Sinterklaas- en kerstfolders per e-mail, ook volgend jaar.<small className="mt-1 block font-normal">Optioneel. Je kunt je altijd afmelden.</small></span></label>
         <label aria-hidden="true" className="hidden">Website<input tabIndex={-1} autoComplete="off" value={website} onChange={(event) => setWebsite(event.target.value)} /></label>
-        <details className="mt-5 rounded-xl border border-[#eadbc3] bg-white p-4"><summary className="cursor-pointer text-sm font-black text-[#60190f]">Bekijk eerst de e-mailtekst</summary><pre className="mt-4 whitespace-pre-wrap break-words border-t border-[#eadbc3] pt-4 font-sans text-xs leading-relaxed text-[#5a4038]">{offerText}</pre></details>
-        {canOpenEmail && quoteContactSaved ? <a href={`mailto:info@strik-patisserie.nl?subject=${encodeURIComponent(`Offerteaanvraag Sinterklaas 2026 - ${company.trim()}`)}&body=${encodeURIComponent(offerText)}`} className="mt-5 block w-full rounded-full bg-[#d62d1d] px-6 py-4 text-center font-black text-white">Open aanvraag in mijn e-mailapp →</a> : <div className="mt-5"><button type="button" disabled={!canOpenEmail || quoteSaving} onClick={() => void saveQuoteContact()} className="w-full rounded-full bg-[#d62d1d] px-6 py-4 font-black text-white disabled:opacity-45">{quoteSaving ? "Contactgegevens opslaan…" : "Contact opslaan en e-mail klaarzetten →"}</button>{!canOpenEmail ? <p className="mt-2 text-center text-xs font-bold text-[#9a3d21]">Vul eerst {missingQuoteDetails} in.</p> : null}</div>}
+        <details className="mt-5 rounded-xl border border-[#eadbc3] bg-white p-4"><summary className="cursor-pointer text-sm font-black text-[#60190f]">Bekijk je volledige aanvraag</summary><pre className="mt-4 whitespace-pre-wrap break-words border-t border-[#eadbc3] pt-4 font-sans text-xs leading-relaxed text-[#5a4038]">{offerText}</pre></details>
+        {!quoteSubmitted && <div className="mt-5"><button type="button" disabled={!canSubmitQuote || quoteSaving} onClick={() => void submitQuote()} className="w-full rounded-full bg-[#d62d1d] px-6 py-4 font-black text-white disabled:opacity-45">{quoteSaving ? "Aanvraag versturen…" : quoteSaveError ? "Opnieuw proberen →" : "Offerteaanvraag versturen →"}</button>{!canSubmitQuote ? <p className="mt-2 text-center text-xs font-bold text-[#9a3d21]">Vul eerst {missingQuoteDetails} in.</p> : null}</div>}
         {quoteSaveError ? <p role="alert" className="mt-3 text-sm font-bold text-[#9a3d21]">{quoteSaveError}</p> : null}
-        {quoteContactSaved ? <p role="status" className="mt-3 text-sm font-bold text-[#557965]">Je contactgegevens zijn opgeslagen. Open nu je e-mailapp en verstuur de aanvraag.{newsletterConsent ? " Je bent ook aangemeld voor toekomstige Sint- en kerstfolders." : " Je bent hiermee niet aangemeld voor foldermails."}</p> : null}
-        <p className="mt-3 text-center text-xs font-bold text-[#8b7669]">Je e-mailapp opent met een overzichtelijke aanvraag. Je verstuurt hem zelf; er gaat niet automatisch iets weg. De overige producten en bezorgkosten zijn nog conceptprijzen.</p>
+        {quoteSubmitted ? <p role="status" className="mt-3 text-sm font-bold text-[#557965]">Aanvraag ontvangen! Je referentie is {quoteReference}. We nemen contact met je op om de offerte af te stemmen.</p> : null}
+        <p className="mt-3 text-center text-xs font-bold text-[#8b7669]">Je aanvraag komt rechtstreeks bij Strik binnen. Dit is nog geen bestelling; definitieve prijzen en bezorging stemmen we samen af.</p>
       </section></div>}
       {productInfo && <div className="fixed inset-0 z-[80] flex items-end justify-center bg-[#391008]/60 p-0 sm:items-center sm:p-5" onClick={() => setProductInfo(null)}>
         <section role="dialog" aria-modal="true" aria-labelledby="product-info-title" className="w-full max-w-sm rounded-t-[1.5rem] bg-[#fffaf0] p-4 shadow-2xl sm:rounded-[1.5rem] sm:p-5" onClick={(event) => event.stopPropagation()}>

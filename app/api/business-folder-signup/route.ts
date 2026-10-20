@@ -228,6 +228,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Vul een geldig e-mailadres in." }, { status: 400 });
   }
   const quote = input.kind === "quote";
+  if (quote) return NextResponse.json({ message: "De folder is vernieuwd. Vernieuw de pagina om je volledige offerteaanvraag rechtstreeks te versturen." }, { status: 410 });
   if (!consent && !quote) {
     return NextResponse.json(
       { message: "Geef toestemming om de foldermails te ontvangen." },

@@ -22,7 +22,7 @@ function sanitize_email($value) { return filter_var($value, FILTER_SANITIZE_EMAI
 function is_email($value) { return filter_var($value, FILTER_VALIDATE_EMAIL) !== false; }
 function sanitize_key($value) { return preg_replace('/[^a-z0-9_-]/', '', strtolower($value)); }
 function get_option($name, $default = array()) { global $options; return isset($options[$name]) ? $options[$name] : $default; }
-function update_option($name, $value, $autoload = false) { global $options; $options[$name] = $value; }
+function update_option($name, $value, $autoload = false) { global $options, $fail_option_key; if (isset($fail_option_key) && $fail_option_key === $name) return false; $options[$name] = $value; return true; }
 function rest_ensure_response($value) { return $value; }
 function wp_mail($to, $subject, $body, $headers) {
     global $mail_calls, $mail_results;

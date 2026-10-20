@@ -11,10 +11,10 @@ function load(file, imports = {}, expose = '', globals = {}) {
 }
 const pricing = load('app/lib/business-folder-pricing.ts');
 const catalog = load('app/kerst-voor-bedrijven/christmasProducts.ts', { '@/app/lib/business-folder-pricing': pricing });
-const sint = load('app/sint-voor-bedrijven/SintB2BConcept.tsx', { '@/app/lib/business-folder-pricing': pricing });
+const sint = load('app/sint-voor-bedrijven/sintProducts.ts', { '@/app/lib/business-folder-pricing': pricing });
 const seasons = load('app/lib/businessSeasons.ts');
 const b2b = load('app/sinterklaas/b2b/SinterklaasB2BClient.tsx', {
-  '../../sint-voor-bedrijven/SintB2BConcept': sint,
+  '../../sint-voor-bedrijven/sintProducts': sint,
   '../../kerst-voor-bedrijven/christmasProducts': catalog,
   '../../lib/business-folder-pricing': pricing,
 }, 'exports.formStateFromOrder = formStateFromOrder; exports.christmasCatalog = CHRISTMAS_CATALOG; exports.reprice = repriceProductLines; exports.serialize = serializeOrderText; exports.parse = parseOrderText;');
