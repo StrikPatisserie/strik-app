@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
 import { getRoutePrintBlockedReason, openRoutePrintWindow } from "./routePrintWindow";
+import { normalizeReceiptDelivery } from "./receiptDelivery";
 import {
   AREND_PRINT_SESSION_KEY,
   AREND_PRINT_SQUARES_PER_SHEET,
@@ -944,6 +945,7 @@ function applyReceiptOverrides(
         ...receipt,
         time: override.time || receipt.time,
         fulfillment: override.fulfillment || receipt.fulfillment,
+        deliveryWarning: override.fulfillment ? undefined : receipt.deliveryWarning,
         deliveryAddress: override.deliveryAddress || receipt.deliveryAddress,
         alternativeAddress:
           override.alternativeAddress || receipt.alternativeAddress,
@@ -2285,14 +2287,15 @@ function normalizeImportedReceiptLines(receipt: ReceiptSummary) {
 }
 
 function normalizeImportedReceipt(receipt: ReceiptSummary): ReceiptSummary {
+  if (receipt.originalNotes !== undefined) return normalizeReceiptDelivery(receipt);
   const lines = normalizeImportedReceiptLines(receipt);
   const customerNote = cleanReceiptDisplayNote(receipt.customerNote || "", lines);
 
-  return {
+  return normalizeReceiptDelivery({
     ...receipt,
     customerNote: customerNote || "Geen aparte opmerking.",
     lines,
-  };
+  });
 }
 
 function isAssortedPastryLine(line: ReceiptLine) {
@@ -5759,7 +5762,7 @@ function createReceiptPrintHtml(input: {
         <td>${escapeHtml(line.articleNumber || "")}</td>
         <td>
           <strong>${escapeHtml(line.description)}</strong>
-          ${line.note ? `<small>${escapeHtml(line.note)}</small>` : ""}
+          ${line.note ? `<small>${escapeHtmlLines(line.note)}</small>` : ""}
         </td>
         <td>${line.unitPrice !== undefined ? escapeHtml(formatReceiptMoney(line.unitPrice)) : ""}</td>
         <td>${total !== undefined ? escapeHtml(formatReceiptMoney(total)) : ""}</td>
@@ -5767,7 +5770,10 @@ function createReceiptPrintHtml(input: {
     })
     .join("");
   const notesHtml = notes.length
-    ? `<section class="notes">${notes.map((note) => `<p>${escapeHtml(note)}</p>`).join("")}</section>`
+    ? `<section class="notes">${notes.map((note) => `<p>${escapeHtmlLines(note)}</p>`).join("")}</section>`
+    : "";
+  const deliveryWarningHtml = receipt.deliveryWarning
+    ? `<p class="delivery-warning"><strong>! Controleer bezorgadres</strong><br>${escapeHtml(receipt.deliveryWarning.replace(/^Controleer bezorgadres:\s*/i, ""))}</p>`
     : "";
   const target = fulfillmentTargetFor(receipt);
 
@@ -5957,6 +5963,13 @@ function createReceiptPrintHtml(input: {
         padding: 7mm;
         text-align: center;
       }
+      .delivery-warning {
+        background: #fff4cd;
+        border: 2px solid #bf8c2d;
+        color: #704811;
+        padding: 4mm;
+        text-align: center;
+      }
       .fulfillment h2 {
         font-size: 20pt;
         line-height: 1.1;
@@ -5967,7 +5980,6 @@ function createReceiptPrintHtml(input: {
         font-weight: 900;
         line-height: 1.12;
         margin: 2mm 0 0;
-        text-transform: uppercase;
       }
       @media print {
         @page { margin: 8mm; size: A4 portrait; }
@@ -6050,6 +6062,7 @@ function createReceiptPrintHtml(input: {
           }</span>
         </div>
         ${notesHtml}
+        ${deliveryWarningHtml}
         <section class="fulfillment">
           <h2>${escapeHtml(fulfillmentSentenceFor(receipt))}</h2>
           ${target ? `<p>${escapeHtmlLines(target)}</p>` : ""}
@@ -6255,6 +6268,7 @@ function receiptStopBadges(receipt: ReceiptSummary) {
   const iceTubs = iceTubCountForReceipt(receipt);
 
   if (fulfillment === "afhalen") badges.push("afhaal");
+  if (receipt.deliveryWarning) badges.push("! controleer adres");
   if (receipt.tags.includes("vaste klant")) badges.push("vast");
   if (isIceReceiptSummary(receipt)) badges.push("ijs");
   if (iceTubs > 0) badges.push(`${iceTubs} ijs`);
@@ -14041,6 +14055,11 @@ function ReceiptRow({
         <p className="truncate text-[0.88rem] font-black leading-tight tracking-normal text-[#1a1815] sm:text-[0.94rem]">
           {receipt.customer}
         </p>
+        {receipt.deliveryWarning && (
+          <p className="mt-1 text-xs font-bold leading-snug text-[#925f0e]" title={receipt.deliveryWarning}>
+            ! Controleer bezorgadres
+          </p>
+        )}
         {time && (
           <p className="mt-0.5 truncate text-[0.68rem] font-medium leading-tight tracking-normal text-[#6b645b]">
             {time}
@@ -14299,7 +14318,6 @@ function cleanReceiptDisplayNote(value: string, lines: ReceiptLine[] = []) {
   });
 
   const withoutNoise = clean
-    .replace(/\b(?:\d{3,9}|[A-Z]{1,4}\d{3,9})(?:[.,][A-Z0-9]{1,8})?\b/gi, " ")
     .replace(
       /\b(?:\d+(?:[.,]\d+)?\s+)?(?:(?:strik's\s+)?(?:marsepeintaart|slagroomtaart|cremetaart)|petit\s+four)[^€]{4,180}\s+€\s*[\d.,:]+(?:\s+\d+(?:[.,]\d+)?\s+€\s*[\d.,:]+(?:\s+€\s*[\d.,:]+)*)?/gi,
       ""
@@ -14347,6 +14365,7 @@ function stripInternalRouteNotesFromDisplayNote(value: string) {
 }
 
 function visibleReceiptNotes(receipt: ReceiptSummary, lines: ReceiptLine[]) {
+  if (receipt.originalNotes !== undefined) return receipt.originalNotes ? [receipt.originalNotes] : [];
   return [receipt.customerNote]
     .map((note) =>
       note
@@ -14668,11 +14687,17 @@ function ReceiptFulfillmentBlock({
 
   return (
     <div className={`mt-5 border border-l-4 px-3 py-3 text-center ${panelTone}`}>
+      {receipt.deliveryWarning && (
+        <div role="status" className="mb-3 rounded-md border border-[#dfb251] bg-[#fff4cd] px-3 py-2 text-sm font-bold leading-snug text-[#704811]">
+          <strong className="block">! Controleer bezorgadres</strong>
+          {receipt.deliveryWarning.replace(/^Controleer bezorgadres:\s*/i, "")}
+        </div>
+      )}
       <p className="text-lg font-black leading-tight tracking-normal text-[#111] sm:text-xl">
         {fulfillmentSentenceFor(receipt)}
       </p>
       {target && (
-        <p className="mt-1 text-xl font-black uppercase leading-tight tracking-normal text-[#111] sm:text-2xl">
+        <p className="mt-1 whitespace-pre-line text-xl font-black leading-tight tracking-normal text-[#111] sm:text-2xl">
           {target}
         </p>
       )}
@@ -14839,7 +14864,7 @@ function ReceiptDetail({
                       <span>{line.description}</span>
                       {line.note && (
                         <span className="mt-0.5 block text-[0.64rem] font-normal leading-tight text-[#333]">
-                          {line.note}
+                          <span className="whitespace-pre-line">{line.note}</span>
                         </span>
                       )}
                     </td>
@@ -14871,7 +14896,7 @@ function ReceiptDetail({
               {visibleNotes.map((note, index) => (
                 <p
                   key={`${receipt.id}-note-${index}`}
-                  className="text-xs font-normal italic leading-snug tracking-normal text-[#333]"
+                  className="whitespace-pre-line text-xs font-normal italic leading-snug tracking-normal text-[#333]"
                 >
                   {note}
                 </p>

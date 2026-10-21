@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import { PDFParse } from "pdf-parse";
+import { normalizeReceiptDelivery } from "./receiptDelivery";
 import type {
   LogisticsBatch,
   LogisticsFulfillment,
@@ -152,10 +153,13 @@ function lineMatchesReceiptLine(
   if (
     (existingArticleNumber &&
       lineArticleNumber &&
-      existingArticleNumber !== lineArticleNumber) ||
+      existingArticleNumber !== lineArticleNumber &&
+      !(isDeliveryCostDescription(existing.description) &&
+        isDeliveryCostDescription(line.description) &&
+        [existingArticleNumber, lineArticleNumber].includes(deliveryCostArticleNumber))) ||
     existing.quantity !== line.quantity ||
     existingPrice !== linePrice ||
-    existingNote !== lineNote
+    (existingNote && lineNote && existingNote !== lineNote)
   ) {
     return false;
   }
@@ -209,7 +213,8 @@ function uniqueLinePush(
         key || lineMatchesReceiptLine(item, line)
   );
   if (existing) {
-    if (!existing.articleNumber && line.articleNumber) {
+    if (line.articleNumber && (!existing.articleNumber ||
+      (existing.articleNumber === deliveryCostArticleNumber && isDeliveryCostDescription(line.description)))) {
       existing.articleNumber = line.articleNumber;
     }
     if (!existing.note && line.note) {
@@ -362,7 +367,7 @@ function isFooterLine(line: string) {
   return (
     /^pagina\b/i.test(line) ||
     /^afdrukdatum\b/i.test(line) ||
-    /^route\b/i.test(line) ||
+    /^route\s*:?$/i.test(line) ||
     /^verdeler\b/i.test(line) ||
     /\bverdeler\b/i.test(line) ||
     /^volgnr\.?$/i.test(line) ||
@@ -1167,15 +1172,21 @@ function parseTrailingQuantityProductLine(
     return null;
   }
 
-  const quantityText = line
+  const quantityAndArticle = line
     .slice(lastPriceIndex + lastPriceMatch[0].length)
-    .trim();
-  if (!/^\d+(?:[.,]\d+)?$/.test(quantityText)) return null;
+    .trim()
+    .match(new RegExp(`^(\\d+(?:[.,]\\d+)?)(?:\\s+(${articleNumberPattern}))?$`, "i"));
+  if (!quantityAndArticle) return null;
+  const quantityText = quantityAndArticle[1];
   if (!isPlausibleReceiptQuantity(quantityText)) return null;
 
-  const article = extractArticleFromProductDescription(
+  const descriptionArticle = extractArticleFromProductDescription(
     line.slice(0, firstPriceIndex)
   );
+  const article = {
+    ...descriptionArticle,
+    ...(!descriptionArticle.articleNumber && quantityAndArticle[2] ? parseArticleToken(quantityAndArticle[2]) : {}),
+  };
   const description = article.description;
   if (!isUsableProductDescription(description)) return null;
   if (isProductOptionDescription(description)) return null;
@@ -1369,28 +1380,40 @@ function looksLikeSplitProductDescription(line: string) {
 function parsePriceQuantityLine(line: string) {
   const match = line.match(
     new RegExp(
-      `^(?:(${articleNumberPattern})\\s+)?€\\s*([\\d.,:]+)\\s+(\\d+(?:[.,]\\d+)?)$`,
+      `^(?:(${articleNumberPattern})\\s+)?€\\s*([\\d.,:]+)(?:\\s+reclame)?\\s+(\\d+(?:[.,]\\d+)?)(?:\\s+(${articleNumberPattern}))?$`,
       "i"
     )
   );
   if (!match) return null;
 
   return {
-    articleText: match[1] || "",
+    articleText: match[1] || match[4] || "",
     priceText: match[2],
     quantityText: match[3].replace(".", ","),
   };
 }
 
-function normalizeRemarksAndRecoverLines(remarks: string[]) {
-  const cleanRemarks: string[] = [];
-
-  for (const remark of remarks) {
-    const cleanRemark = cleanReceiptRemark(remark);
-    if (cleanRemark) uniquePush(cleanRemarks, cleanRemark);
+function joinWrappedProductRows(lines: string[]) {
+  const result: string[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    let joined = false;
+    if (!/€/.test(line) && /\b(?:taart|cheesecake|gebak|brood|cake|slof|vlaai|gateau|bombe|tompouce)\b/i.test(line)) {
+      for (let offset = 1; offset <= 3 && index + offset < lines.length; offset += 1) {
+        const price = parsePriceQuantityLine(lines[index + offset]);
+        if (price) {
+          const description = lines.slice(index, index + offset).join(" ");
+          result.push(`${description} € ${price.priceText}\t${price.quantityText}${price.articleText ? ` ${price.articleText}` : ""}`);
+          index += offset;
+          joined = true;
+          break;
+        }
+        if (/€/.test(lines[index + offset]) || isReceiptPaymentBlockLine(lines[index + offset])) break;
+      }
+    }
+    if (!joined) result.push(line);
   }
-
-  return cleanRemarks;
+  return result;
 }
 
 function shouldAppendProductContinuation(line: string) {
@@ -1453,23 +1476,20 @@ function applyPricedContinuation(
 
 function findDeliveryBlock(bodyLines: string[]) {
   const startIndex = bodyLines.findIndex((line) =>
-    /^levering\s*[:;]?$/i.test(line) || /^levering\s*[:;]\s+\S+/i.test(line)
+    /^(?:levering|afleveradres|bezorgadres|leveradres)\s*[:;]?$/i.test(line) ||
+    /^(?:levering|afleveradres|bezorgadres|leveradres)\s*[:;]\s+\S+/i.test(line)
   );
   if (startIndex < 0) return [];
 
   const block: string[] = [];
-  const firstLineMatch = bodyLines[startIndex].match(/^levering\s*[:;]\s+(.+)$/i);
+  const firstLineMatch = bodyLines[startIndex].match(/^(?:levering|afleveradres|bezorgadres|leveradres)\s*[:;]\s+(.+)$/i);
   if (firstLineMatch) {
-    const firstLine = cleanAlternativeAddressLine(firstLineMatch[1]);
-    if (firstLine && !isContactLine(firstLine)) uniquePush(block, firstLine);
+    uniquePush(block, firstLineMatch[1]);
   }
 
   for (const line of bodyLines.slice(startIndex + 1)) {
-    if (/^levering\s*[:;]?$/i.test(line) || isFooterLine(line)) break;
-    if (isContactLine(line) || isPhoneLine(line)) continue;
-
-    const addressLine = cleanAlternativeAddressLine(line);
-    if (addressLine) uniquePush(block, addressLine);
+    if (/^(?:levering|afleveradres|bezorgadres|leveradres)\s*[:;]?/i.test(line) || isFooterLine(line) || isFulfillmentLine(line) || pickupLocationFromLine(line)) break;
+    uniquePush(block, line);
   }
 
   return block;
@@ -1504,7 +1524,17 @@ function parsePage(pageText: string): ParsedPage | null {
   const productHeaderIndex = lines.findIndex((line) =>
     /\bartikelomschrijving\b/i.test(line)
   );
-  const bodyLines = productHeaderIndex >= 0 ? lines.slice(productHeaderIndex + 1) : [];
+  const bodyContent = productHeaderIndex >= 0 ? lines.slice(productHeaderIndex + 1) : [];
+  let footerIndex = bodyContent.findIndex((line) => /\bverdeler\b|^afdrukdatum\b|^pagina\s+\d+\s+van\b/i.test(line));
+  if (footerIndex >= 0) {
+    // A wrapped customer name belongs to the footer immediately before its column headings.
+    while (footerIndex > 0) {
+      const previous = normalizedLineDescription(bodyContent[footerIndex - 1]);
+      if (previous.length < 4 || !normalizedLineDescription(customer).includes(previous)) break;
+      footerIndex -= 1;
+    }
+  }
+  const bodyLines = joinWrappedProductRows(footerIndex < 0 ? bodyContent : bodyContent.slice(0, footerIndex));
   const deliveryBlock = findDeliveryBlock(bodyLines);
   const fulfillment = inferFulfillment(bodyLines);
   const pickupLocation = inferPickupLocation(bodyLines);
@@ -1523,15 +1553,16 @@ function parsePage(pageText: string): ParsedPage | null {
 
   for (const line of bodyLines) {
     if (isBoilerplateLine(line) || isFooterLine(line)) continue;
-    if (/^levering\s*[:;]/i.test(line)) continue;
+    if (/^(?:levering|afleveradres|bezorgadres|leveradres)\s*[:;]/i.test(line)) continue;
     if (deliveryBlock.includes(line)) continue;
 
     if (/^totaalprijs$/i.test(line) && parsedLines.length === 0) {
       continue;
     }
 
-    if (isReceiptPaymentBlockLine(line)) {
+    if (isReceiptPaymentBlockLine(line) && !isEmailLine(line)) {
       productSectionOpen = false;
+      currentLine = null;
       const totalMatch =
         line.match(/^€\s*([\d.,:]+)\s+totaalprijs\b/i) ||
         line.match(/^totaalprijs\s+€\s*([\d.,:]+)/i);
@@ -1577,6 +1608,17 @@ function parsePage(pageText: string): ParsedPage | null {
       }
     }
 
+    // A note underneath an administrative article is text, not an article code.
+    // In particular, preserve cost centres, references, names and their line breaks.
+    if (currentLine && lineIsInternalNoteLine(currentLine.description) &&
+        !parseProductLine(line) && !isAlternativeAddressStart(line)) {
+      const note = line.replace(new RegExp(`\\t${currentLine.quantity.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`), "").trim();
+      if (note && !/^\d+(?:[.,]\d+)?$/.test(note) && !currentLine.note?.split("\n").includes(note)) {
+        currentLine.note = currentLine.note ? `${currentLine.note}\n${note}` : note;
+      }
+      continue;
+    }
+
     if (productSectionOpen) {
       if (pendingSplitProductDescription) {
         const pricedSplitLine = parsePriceQuantityLine(line);
@@ -1613,9 +1655,6 @@ function parsePage(pageText: string): ParsedPage | null {
       if (productLine) {
         pendingSplitProductDescription = "";
         currentLine = uniqueLinePush(parsedLines, productLine);
-        if (lineIsInternalNoteLine(productLine.description)) {
-          uniquePush(remarks, productLine.description);
-        }
         continue;
       }
 
@@ -1667,22 +1706,14 @@ function parsePage(pageText: string): ParsedPage | null {
       }
     }
 
-    if (currentLine && lineIsInternalNoteLine(currentLine.description)) {
-      currentLine.note = currentLine.note ? `${currentLine.note} ${line}` : line;
-      uniquePush(remarks, line);
-      continue;
-    }
-
-    const cleanRemark = cleanReceiptRemark(line);
-    if (cleanRemark && !isAdministrativeRemarkLine(cleanRemark)) {
-      uniquePush(remarks, cleanRemark);
+    if (!isAdministrativeRemarkLine(line) || isEmailLine(line)) {
+      uniquePush(remarks, line.replace(/\t\d+(?:[.,]\d+)?$/, "").trim());
     }
   }
 
   const key = `${receiptNumber || customer}-${customer}`.toLowerCase();
-  const normalizedRemarks = normalizeRemarksAndRecoverLines(remarks);
   const alternativeAddressResult = splitAlternativeAddressFromRemarks(
-    normalizedRemarks,
+    remarks,
     fulfillment
   );
   const pageFulfillment =
@@ -1699,7 +1730,7 @@ function parsePage(pageText: string): ParsedPage | null {
     declaredPageTotal,
     topAddress,
     lines: parsedLines,
-    remarks: alternativeAddressResult.remarks,
+    remarks,
     timeLines,
     deliveryBlock,
     alternativeAddressLines: alternativeAddressResult.alternativeAddressLines,
@@ -1806,21 +1837,20 @@ function inferTags(draft: ReceiptDraft) {
 
 function createReceipt(draft: ReceiptDraft, index: number): LogisticsReceipt {
   const cleanRemarks = draft.remarks
-    .map(cleanReceiptRemark)
     .filter(
       (remark) =>
         remark &&
         !/^\d+(?:[.,]\d+)?$/.test(remark) &&
-        !isAdministrativeRemarkLine(remark)
+        (!isAdministrativeRemarkLine(remark) || isEmailLine(remark))
     );
   const originalAddress = draft.topAddress || "Adres controleren";
   const deliveryBlockAddress = draft.deliveryBlock.length
-    ? draft.deliveryBlock.join(", ")
+    ? draft.deliveryBlock.join("\n")
     : "";
   const remarkAlternativeAddress = draft.alternativeAddressLines.length
     ? draft.alternativeAddressLines.join(", ")
     : "";
-  const alternativeAddress = remarkAlternativeAddress || deliveryBlockAddress || undefined;
+  const alternativeAddress = deliveryBlockAddress || remarkAlternativeAddress || undefined;
   const deliveryAddress =
     draft.fulfillment === "afhalen" && draft.pickupLocation
       ? draft.pickupLocation
@@ -1839,7 +1869,7 @@ function createReceipt(draft: ReceiptDraft, index: number): LogisticsReceipt {
         ? "Interne winkelbon: niet meetellen in externe waarde."
         : "Geen aparte logistieke waarschuwing.";
 
-  return {
+  const receipt = normalizeReceiptDelivery({
     id: draft.receiptNumber || `CB-${String(index + 1).padStart(3, "0")}`,
     receiptNumber: draft.receiptNumber,
     time: inferTime([...draft.timeLines, ...draft.remarks, ...draft.deliveryBlock]),
@@ -1853,13 +1883,17 @@ function createReceipt(draft: ReceiptDraft, index: number): LogisticsReceipt {
     tags,
     value: draft.total,
     note: warning,
-    customerNote: cleanRemarks.length ? cleanRemarks.join(" ") : "Geen aparte opmerking.",
+    customerNote: cleanRemarks.length ? cleanRemarks.join("\n") : "Geen aparte opmerking.",
+    originalNotes: cleanRemarks.join("\n"),
     internalNote:
       draft.fulfillment || tags.length
         ? [draft.fulfillment, ...tags].filter(Boolean).join(" · ")
         : "Geen extra ochtendnotitie.",
     lines: draft.lines,
-  };
+  });
+  return receipt.deliveryWarning
+    ? { ...receipt, route: inferRoute(receipt.customer, receipt.address, receipt.deliveryAddress) }
+    : receipt;
 }
 
 function isExternalValueReceipt(receipt: LogisticsReceipt) {

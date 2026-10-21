@@ -1236,6 +1236,7 @@ function mergeReceipt(
   incoming: LogisticsBatch["receipts"][number]
 ) {
   const primary =
+    incoming.originalNotes !== undefined ||
     receiptQualityScore(incoming) >= receiptQualityScore(existing)
       ? incoming
       : existing;
@@ -1259,17 +1260,25 @@ function mergeReceipt(
         ? primary.address
         : fallback.address,
     deliveryAddress: primary.deliveryAddress || fallback.deliveryAddress,
-    alternativeAddress: primary.alternativeAddress || fallback.alternativeAddress,
+    alternativeAddress: primary.originalNotes !== undefined
+      ? primary.alternativeAddress
+      : primary.alternativeAddress || fallback.alternativeAddress,
     pickupLocation: primary.pickupLocation || fallback.pickupLocation,
     value: primary.value ?? fallback.value,
     note: primary.note || fallback.note,
     customerNote:
-      primary.customerNote && primary.customerNote !== "Geen aparte opmerking."
+      primary.originalNotes !== undefined ||
+      (primary.customerNote && primary.customerNote !== "Geen aparte opmerking.")
         ? primary.customerNote
         : fallback.customerNote,
+    originalNotes: incoming.originalNotes ?? primary.originalNotes ?? fallback.originalNotes,
+    deliveryWarning: primary.deliveryWarning,
     internalNote: primary.internalNote || fallback.internalNote,
     lines: primary.lines.length ? primary.lines : fallback.lines,
-    tags: Array.from(new Set([...fallback.tags, ...primary.tags])),
+    tags: Array.from(new Set([...fallback.tags, ...primary.tags])).filter((tag) =>
+      !(tag === "afhalen" && primary.fulfillment === "bezorgen") &&
+      !(tag === "bezorgen" && primary.fulfillment === "afhalen")
+    ),
   };
 }
 

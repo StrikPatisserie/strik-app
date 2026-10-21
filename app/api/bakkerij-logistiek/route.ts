@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { canAccessLogisticsRequest } from "@/app/lib/bakeryLogisticsAuth";
 import { withCatalogArticleNumbers } from "@/app/bakkerij/logistiek/catalogMatching";
+import { normalizeReceiptDelivery } from "@/app/bakkerij/logistiek/receiptDelivery";
 import {
   getLogisticsBatchForDate,
   getLogisticsAcquisitionCampaign,
@@ -101,7 +102,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({
-      batch: batch ? withCatalogArticleNumbers(batch) : null,
+      batch: batch ? withCatalogArticleNumbers({ ...batch, receipts: batch.receipts.map(normalizeReceiptDelivery) }) : null,
       webshopImages,
       receiptOverrides,
       dayFeedback,

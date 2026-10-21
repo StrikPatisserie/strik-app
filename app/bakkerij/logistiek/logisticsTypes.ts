@@ -93,6 +93,9 @@ export type LogisticsReceipt = {
   value?: number;
   note: string;
   customerNote: string;
+  /** Original note lines from the PDF, before interpretation or display cleanup. */
+  originalNotes?: string;
+  deliveryWarning?: string;
   internalNote: string;
   lines: LogisticsReceiptLine[];
 };
