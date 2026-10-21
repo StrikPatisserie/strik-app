@@ -19,14 +19,16 @@ const routes = [{ id: 'r1', vehicle: 'Bus A', title: 'Ronde 1', stops: [
   stop('shop:lent', 'Lent', 'Nijmegen'),
 ] }];
 
-test('the photo restores exactly 15 packages, using the existing addresses', () => {
+test('the two photos list exactly 23 packages, using the existing addresses', () => {
   const campaign = campaignModule.emptySinterklaasAcquisitionCampaign();
-  assert.equal(campaign.stops.length, 15);
-  assert.equal(new Set(campaign.stops.map(s => s.id)).size, 15);
+  assert.equal(campaign.stops.length, 23);
+  assert.equal(new Set(campaign.stops.map(s => s.id)).size, 23);
   assert.deepEqual(Array.from(campaign.stops, s => s.company).sort(), [
     'DFDS Logistics Nijmegen B.V.', 'Duynie Group', 'De Variabele Groep', 'KlokGroep', 'Dar N.V.',
     'Batenburg Installatietechniek', 'BCTN Nijmegen', 'HKS Metals Nijmegen', 'Technische Unie Nijmegen',
     'ANAC Nijmegen', 'Pluryn', 'HORNBACH Nijmegen', 'Holland Casino Nijmegen', 'Mercure Hotel Nijmegen Centre', 'ARN B.V.',
+    'Stichting De Waalboog', 'Synthon B.V.', 'Byondis B.V.', 'XPO Logistics Nijmegen', 'KION', 'GX Software',
+    'Royal SMIT Transformers B.V.', 'Lamers High Tech Systems',
   ].sort());
   for (const item of campaign.stops) assert(item.street && item.postalCode && item.city && item.attention);
   assert.equal(campaign.deliveries.length, 0);
@@ -37,7 +39,7 @@ test('remaining stock stays plannable after the old deadline and suggested stops
   assert.equal(dashboard.inPeriod('2026-10-20', campaign), false);
   for (const date of ['2026-10-21', '2026-10-28', '2026-11-10']) assert.equal(dashboard.inPeriod(date, campaign), true);
   const routed = structuredClone(routes), placed = new Set();
-  while (placed.size < 15) {
+  while (placed.size < 23) {
     const suggestions = dashboard.suggest(campaign, routed, '2026-10-28');
     assert(suggestions.length > 0, 'All remaining packages should eventually get a route suggestion');
     for (const item of suggestions) {
@@ -63,11 +65,17 @@ test('planning the remaining packages leaves original campaign history untouched
     }) }) },
   });
   assert.equal((await storage.getLogisticsAcquisitionCampaign()).deliveries.length, 0);
+  const existingStopId = campaignModule.sinterklaasAcquisitionStops.find(s => s.company === 'Duynie Group').id;
+  const existingDelivery = { stopId: existingStopId, date: '2026-10-21', routeId: 'r2', routeTitle: 'Ronde 2', vehicle: 'Bus B', deliveredAt: '2026-10-21T10:00:00Z' };
+  values.set(campaignModule.sinterklaasAcquisitionSettingKey, { campaignId: campaignModule.sinterklaasAcquisitionCampaignId, deliveries: [existingDelivery], updatedAt: existingDelivery.deliveredAt });
+  const expanded = await storage.getLogisticsAcquisitionCampaign();
+  assert.equal(expanded.stops.length, 23);
+  assert.equal(expanded.deliveries[0].stopId, existingStopId, 'Adding stock must retain the already planned package');
   const stopId = campaignModule.sinterklaasAcquisitionStops[0].id;
   const delivery = { stopId, date: '2026-10-28', routeId: 'r1', routeTitle: 'Ronde 1', vehicle: 'Bus A', deliveredAt: '2026-10-21T12:00:00Z' };
-  assert.equal((await storage.markLogisticsAcquisitionDelivered(delivery)).deliveries.length, 1);
+  assert.equal((await storage.markLogisticsAcquisitionDelivered(delivery)).deliveries.length, 2);
   assert.equal(values.get('bakery_logistics_acquisition_campaign'), original);
-  assert.equal((await storage.undoLogisticsAcquisitionDelivery(stopId)).deliveries.length, 0);
+  assert.equal((await storage.undoLogisticsAcquisitionDelivery(stopId)).deliveries.length, 1);
   assert.equal(values.get('bakery_logistics_acquisition_campaign'), original);
 });
 

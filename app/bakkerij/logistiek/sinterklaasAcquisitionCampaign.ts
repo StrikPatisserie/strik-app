@@ -87,6 +87,14 @@ const remainingCompanies = new Set([
   "Holland Casino Nijmegen",
   "Mercure Hotel Nijmegen Centre",
   "ARN B.V.",
+  "Stichting De Waalboog",
+  "Synthon B.V.",
+  "Byondis B.V.",
+  "XPO Logistics Nijmegen",
+  "KION",
+  "GX Software",
+  "Royal SMIT Transformers B.V.",
+  "Lamers High Tech Systems",
 ]);
 
 export const sinterklaasAcquisitionStops: LogisticsAcquisitionStop[] =
