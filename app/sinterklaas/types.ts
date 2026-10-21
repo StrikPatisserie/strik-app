@@ -54,6 +54,12 @@ export type ChocolateLetterOrder = {
 };
 
 export type SinterklaasB2BOrder = {
+  confirmationMail?: {
+    version: string;
+    backupVersion: string;
+    customer?: B2BConfirmationReceipt;
+    backup?: B2BConfirmationReceipt;
+  };
   folderQuote?: { reference: string; receivedAt: string; mailSentAt: string; mailState: string; quoteText: string };
   id: string;
   year: string;
@@ -102,6 +108,14 @@ export type SinterklaasB2BOrder = {
   confirmationEmailError: string;
   createdAt: string;
   updatedAt: string;
+};
+
+export type B2BConfirmationReceipt = {
+  version: string;
+  email: string;
+  state: string;
+  sentAt: string;
+  error: string;
 };
 
 export type B2BLetterLine = {

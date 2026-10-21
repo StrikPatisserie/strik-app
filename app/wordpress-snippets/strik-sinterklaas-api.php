@@ -776,8 +776,9 @@ function strik_sinterklaas_sanitize_b2b_order($order, $existing = array()) {
         'deliveredAt' => isset($order['deliveredAt']) ? strik_sinterklaas_text($order['deliveredAt'], 80) : '',
         'reminderEmailedAt' => (isset($existing['deliveryDate']) && $existing['deliveryDate'] !== $delivery_date) || (isset($existing['status']) && $existing['status'] !== 'akkoord' && $status === 'akkoord') ? '' : (isset($order['reminderEmailedAt']) ? strik_sinterklaas_text($order['reminderEmailedAt'], 80) : ''),
         'reminderEmailError' => isset($order['reminderEmailError']) ? strik_sinterklaas_text($order['reminderEmailError'], 240) : '',
-        'confirmationEmailedAt' => isset($order['confirmationEmailedAt']) ? strik_sinterklaas_text($order['confirmationEmailedAt'], 80) : '',
-        'confirmationEmailError' => isset($order['confirmationEmailError']) ? strik_sinterklaas_text($order['confirmationEmailError'], 240) : '',
+        'confirmationEmailedAt' => isset($existing['confirmationEmailedAt']) ? $existing['confirmationEmailedAt'] : '',
+        'confirmationEmailError' => isset($existing['confirmationEmailError']) ? $existing['confirmationEmailError'] : '',
+        'confirmationMail' => isset($existing['confirmationMail']) ? $existing['confirmationMail'] : array(),
         // The original website request and its mail receipt belong to the server.
         // An edit from management must neither erase nor forge this history.
         'folderQuote' => isset($existing['folderQuote']) ? $existing['folderQuote'] : null,
@@ -1125,6 +1126,143 @@ function strik_sinterklaas_b2b_get($request) {
 }
 }
 
+if (!function_exists('strik_business_b2b_confirmation_data')) {
+function strik_business_b2b_confirmation_data($order) {
+    $text = str_replace(array("\r\n", "\r"), "\n", $order['orderText']);
+    // A folder inquiry also contains its OLD contact, delivery and indicative
+    // total. A final confirmation must use the CURRENT saved fields instead.
+    $text = preg_replace('/^PRODUCTEN EN PRIJS\n/', '', $text);
+    $text = str_replace("OVERIGE ORDERAFSPRAKEN\n", '', $text);
+    $start = strpos($text, "BEDRIJF EN CONTACT\n");
+    if ($start !== false) {
+        $prefix = substr($text, 0, $start);
+        $folder = substr($text, $start);
+        if (preg_match('/\n(GEKOZEN SINTERKLAASPRODUCTEN|LOSSE KERSTCADEAUS|KERSTPAKKET OP MAAT)\n/', $folder, $match, PREG_OFFSET_CAPTURE)) {
+            $products = substr($folder, $match[0][1] + 1);
+            $end = strpos($products, "\nPRIJSINDICATIE\n");
+            $text = $prefix . ($end === false ? $products : substr($products, 0, $end));
+        } else $text = $prefix;
+    }
+    if (!empty($order['letterLines'])) {
+        // Letter quantities/specifications come from the editable letter rows.
+        // Remove their old duplicate description (and its old price) from the inquiry.
+        $text = preg_replace('/^\d+\s*×\s*Chocolade (?:spuitletters|vormletter S)[^\n]*(?:\n  [^\n]*)?/mu', '', $text);
+    }
+    if (in_array(trim($text), array('GEKOZEN SINTERKLAASPRODUCTEN', 'LOSSE KERSTCADEAUS', 'KERSTPAKKET OP MAAT'), true)) $text = '';
+    $window = isset($order['deliveryWindowType']) ? $order['deliveryWindowType'] : 'date';
+    $end = isset($order['deliveryDateEnd']) ? $order['deliveryDateEnd'] : '';
+    $week = isset($order['deliveryWeek']) ? $order['deliveryWeek'] : '';
+    // Support the existing lossless marker used by older app versions.
+    if (preg_match('/__STRIK_LEVERPERIODE__(range|week)\|([^|]*)\|([^|]*)$/', $order['sourceSheet'], $marker)) {
+        $window = $marker[1]; $end = $marker[2]; $week = $marker[3];
+    }
+    $format_date = function ($date) { return preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $date, $m) ? $m[3] . '-' . $m[2] . '-' . $m[1] : $date; };
+    $moment = $format_date($order['deliveryDate']);
+    if ($window === 'range' && $end !== '') $moment .= ' t/m ' . $format_date($end);
+    if ($window === 'week') $moment = 'Leverweek ' . $week . ($moment !== '' ? ' · vanaf ' . $moment : '');
+    $agreement = $order['priceAgreement'];
+    if (!empty($order['folderQuote']) && strpos($agreement, 'Prijsindicatie:') === 0) $agreement = '';
+    return array(
+        'season' => $order['season'], 'company' => $order['customerName'], 'contact' => $order['contactName'],
+        'email' => $order['customerEmail'], 'phone' => $order['phone'], 'products' => trim($text),
+        'letters' => $order['letterLines'], 'legacyLetters' => empty($order['letterLines']) ? $order['letterOrderText'] : '', 'moment' => $moment, 'method' => $order['deliveryMethod'],
+        'address' => $order['deliveryAddress'], 'total' => $order['totalExVat'], 'agreement' => $agreement,
+        'logo' => $order['logo'], 'packaging' => $order['packaging'], 'text' => $order['textInstructions'],
+    );
+}
+function strik_business_b2b_total_label($value) {
+    if ($value === '') return 'Volgens prijsafspraak';
+    $number = preg_replace('/[^0-9.,-]/', '', $value);
+    if (strpos($number, ',') !== false) $number = str_replace(',', '.', str_replace('.', '', $number));
+    return is_numeric($number) ? '€ ' . number_format((float) $number, 2, ',', '.') : $value;
+}
+function strik_business_b2b_prepare_confirmation($order) {
+    $meta = isset($order['confirmationMail']) && is_array($order['confirmationMail']) ? $order['confirmationMail'] : array();
+    $hash = hash('sha256', wp_json_encode(strik_business_b2b_confirmation_data($order)));
+    if (!isset($meta['contentHash']) || $meta['contentHash'] !== $hash) {
+        $meta['version'] = hash('sha256', (isset($meta['version']) ? $meta['version'] : '') . $hash);
+        $meta['contentHash'] = $hash;
+    }
+    $backup_hash = hash('sha256', wp_json_encode(array($hash, $order['importantNotes'], $order['invoiceInfo'], $order['productionDate'], $order['letterOrderText'])));
+    if (!isset($meta['backupContentHash']) || $meta['backupContentHash'] !== $backup_hash) {
+        $meta['backupVersion'] = hash('sha256', (isset($meta['backupVersion']) ? $meta['backupVersion'] : '') . $backup_hash);
+        $meta['backupContentHash'] = $backup_hash;
+    }
+    $order['confirmationMail'] = $meta;
+    return $order;
+}
+function strik_business_b2b_confirmation_html($order, $internal = false, $updated = false) {
+    $data = strik_business_b2b_confirmation_data($order);
+    $season = $order['season'] === 'kerst' ? 'Kerst' : ($order['season'] === 'sint-kerst' ? 'Sinterklaas & Kerst' : 'Sinterklaas');
+    $reference = !empty($order['folderQuote']['reference']) ? $order['folderQuote']['reference'] : 'B2B-' . strtoupper(substr(hash('sha256', $order['id']), 0, 10));
+    $paragraph = function ($text) { return nl2br(esc_html($text)); };
+    $heading = $updated ? 'Uw bestelling is aangepast' : 'Uw bestelling is bevestigd!';
+    if ($internal) $heading = $updated ? 'Gewijzigde definitieve bestelling' : 'Definitieve bestelling';
+    $html = '<!doctype html><html lang="nl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#edf3ed;font-family:Arial,sans-serif;color:#293e30"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:24px 12px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:680px;background:#fffdf8;border-radius:24px;overflow:hidden">'
+        . '<tr><td style="background:#244b37;padding:32px 28px;color:#ffffff"><div style="color:#e9cc89;font-size:12px;font-weight:bold;letter-spacing:3px">STRIK PATISSERIE</div><p style="font-size:12px;letter-spacing:1px;color:#e9cc89">' . esc_html($season) . ($internal ? ' · INTERNE BACK-UP' : ' · BESTELBEVESTIGING') . '</p><h1 style="font-size:28px;line-height:1.2;margin:16px 0">' . esc_html($heading) . '</h1><span style="font-size:13px">Referentie: ' . esc_html($reference) . '</span></td></tr><tr><td style="padding:28px;font-size:15px;line-height:1.55;word-break:break-word">';
+    $html .= $internal ? '<p><strong>' . esc_html($data['company']) . '</strong><br>Deze bestelling staat op definitief in de Strik Team app. Controleer Bake-it en de productieplanning.</p>' : '<p>Beste ' . esc_html($data['contact'] !== '' ? $data['contact'] : $data['company']) . ',</p><p>Bedankt voor uw bestelling bij Strik Patisserie. Hieronder vindt u de definitieve afspraken. Wij maken er met zorg iets feestelijks van.</p>';
+    $html .= '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f0f5ee;border-radius:14px"><tr><td style="padding:18px"><strong>Levering · ' . esc_html($data['moment']) . '</strong><br>' . esc_html($data['method'] !== '' ? $data['method'] : 'Afhalen of bezorgen volgens afspraak') . ($data['address'] !== '' ? '<br>' . $paragraph($data['address']) : '') . '</td></tr></table>';
+    $html .= '<h2 style="font-size:19px;margin:28px 0 12px">' . ($internal ? 'Bestelling' : 'Uw bestelling') . '</h2>';
+    if ($data['products'] !== '') $html .= strik_business_quote_details_html($data['products']);
+    if ($data['legacyLetters'] !== '') $html .= '<p>' . $paragraph($data['legacyLetters']) . '</p>';
+    if (count($data['letters'])) {
+        $html .= '<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse">';
+        foreach ($data['letters'] as $line) {
+            $html .= '<tr><td style="padding:11px 10px 11px 0;border-bottom:1px solid #e2e8df;font-weight:bold;vertical-align:top;white-space:nowrap">' . absint($line['quantity']) . '×</td><td style="padding:11px 0;border-bottom:1px solid #e2e8df"><strong>' . esc_html(($line['style'] === 'vorm' ? 'Vormletter ' : 'Spuitletter ') . $line['letter']) . '</strong> · ' . esc_html($line['chocolate'] . ' · ' . $line['size']) . (!empty($line['exceptions']) ? '<br><span style="font-size:13px">' . esc_html(implode(', ', $line['exceptions'])) . '</span>' : '') . '</td></tr>';
+        }
+        $html .= '</table>';
+    }
+    foreach (array('Logo' => $data['logo'], 'Verpakking' => $data['packaging'], 'Tekst of personalisatie' => $data['text']) as $label => $value) if ($value !== '') $html .= '<p><strong>' . esc_html($label) . '</strong><br>' . $paragraph($value) . '</p>';
+    $html .= '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:24px 0;background:#f0f5ee"><tr><td style="padding:18px"><span style="font-size:12px;letter-spacing:1px">AFGESPROKEN TOTAAL EXCL. BTW</span><p style="font-size:25px;font-weight:bold;margin:6px 0">' . esc_html(strik_business_b2b_total_label($data['total'])) . '</p>' . ($data['agreement'] !== '' ? '<span style="font-size:13px">' . $paragraph($data['agreement']) . '</span>' : '') . '</td></tr></table>';
+    $html .= '<h2 style="font-size:18px;margin:24px 0 10px">Contactgegevens</h2><p><strong>' . esc_html($data['company']) . '</strong><br>' . esc_html($data['contact']) . '<br>' . esc_html($data['email'] !== '' ? $data['email'] : 'Geen e-mailadres opgegeven') . ($data['phone'] !== '' ? '<br>' . esc_html($data['phone']) : '') . '</p>';
+    if ($internal) {
+        foreach (array('Interne opmerkingen' => $order['importantNotes'], 'Factuurgegevens' => $order['invoiceInfo'], 'Productiedatum' => $order['productionDate'], 'Oude letteromschrijving' => $order['letterOrderText']) as $label => $value) if ($value !== '') $html .= '<p style="padding-top:12px;border-top:1px solid #e2e8df"><strong>' . esc_html($label) . '</strong><br>' . $paragraph($value) . '</p>';
+        $url = 'https://app.strik-patisserie.nl/' . ($order['season'] === 'kerst' ? 'kerst' : 'sinterklaas') . '/b2b';
+        $html .= '<p><a style="display:inline-block;background:#244b37;color:#fff;padding:13px 20px;border-radius:24px;text-decoration:none;font-weight:bold" href="' . esc_url($url) . '">Open B2B-bestellingen &rarr;</a></p>';
+    } else $html .= '<p style="margin-top:28px">Vragen of een wijziging doorgeven? Antwoord gerust op deze e-mail. Vermeld daarbij uw referentie <strong>' . esc_html($reference) . '</strong>.</p><p><strong>Met feestelijke groet,<br>Team Strik Patisserie</strong></p>';
+    return $html . '</td></tr></table></td></tr></table></body></html>';
+}
+function strik_business_b2b_store_confirmed($order) {
+    $orders = strik_sinterklaas_get_orders(STRIK_SINTERKLAAS_B2B_OPTION_NAME);
+    $key = strik_sinterklaas_order_key($order['id']);
+    $orders[$key] = $order;
+    strik_sinterklaas_save_orders(STRIK_SINTERKLAAS_B2B_OPTION_NAME, $orders);
+    $stored = strik_sinterklaas_get_orders(STRIK_SINTERKLAAS_B2B_OPTION_NAME);
+    return isset($stored[$key]) && $stored[$key] === $order;
+}
+function strik_business_b2b_send_confirmation($order, $audience, $updated = false) {
+    $version = $order['confirmationMail'][$audience === 'customer' ? 'version' : 'backupVersion'];
+    $email = $audience === 'customer' ? $order['customerEmail'] : STRIK_SINTERKLAAS_RECIPIENT;
+    $key = 'strik_b2b_mail_' . hash('sha256', $order['id'] . '|' . $audience . '|' . $version);
+    $receipt = get_option($key, array());
+    if (empty($receipt['state']) || $receipt['state'] === 'failed') {
+        if (isset($receipt['updated'])) $updated = $receipt['updated'];
+        $receipt = array('version' => $version, 'email' => $email, 'state' => 'sending', 'sentAt' => '', 'error' => '', 'updated' => $updated);
+        update_option($key, $receipt, false);
+        if (get_option($key) !== $receipt) {
+            $receipt['state'] = 'failed'; $receipt['error'] = 'Verzending gestopt: de verzendregistratie kon niet worden opgeslagen. Probeer opnieuw.';
+        } else {
+            $season = $order['season'] === 'kerst' ? 'Kerst' : ($order['season'] === 'sint-kerst' ? 'Sint & Kerst' : 'Sinterklaas');
+            $headers = array('Content-Type: text/html; charset=UTF-8', $audience === 'backup' && is_email($order['customerEmail']) ? 'Reply-To: ' . $order['customerEmail'] : 'Reply-To: Strik Patisserie <info@strik-patisserie.nl>');
+            $subject = ($audience === 'customer' ? ($updated ? 'Gewijzigde bestelbevestiging' : 'Definitieve bestelbevestiging') : ($updated ? 'GEWIJZIGDE DEFINITIEVE B2B-BESTELLING' : 'DEFINITIEVE B2B-BESTELLING')) . ' ' . $season . ' - ' . $order['customerName'] . ' - ' . $order['deliveryDate'];
+            $sent = wp_mail($email, $subject, strik_business_b2b_confirmation_html($order, $audience === 'backup', $updated), $headers);
+            $receipt['state'] = $sent ? 'sent' : 'failed';
+            $receipt['sentAt'] = $sent ? wp_date(DATE_ATOM) : '';
+            $receipt['error'] = $sent ? '' : 'Bestelling opgeslagen, maar deze mail is niet verstuurd. Probeer opnieuw.';
+            update_option($key, $receipt, false);
+            if (get_option($key) !== $receipt) { $receipt['state'] = 'sending'; $receipt['sentAt'] = ''; }
+        }
+    }
+    if ($receipt['state'] === 'sending') $receipt['error'] = 'De verzendstatus is onzeker. Controleer eerst de mailbox; deze versie wordt niet automatisch nogmaals verstuurd.';
+    $order['confirmationMail'][$audience] = $receipt;
+    if ($audience === 'backup') {
+        $order['confirmationEmailedAt'] = $receipt['sentAt'];
+        $order['confirmationEmailError'] = $receipt['error'];
+    }
+    return $order;
+}
+}
+
 if (!function_exists('strik_sinterklaas_b2b_save')) {
 function strik_sinterklaas_b2b_save($request) {
     return strik_business_b2b_locked(function () use ($request) { return strik_sinterklaas_b2b_save_unlocked($request); });
@@ -1140,18 +1278,35 @@ function strik_sinterklaas_b2b_save_unlocked($request) {
     $existing = $id !== '' && isset($orders[strik_sinterklaas_order_key($id)])
         ? $orders[strik_sinterklaas_order_key($id)]
         : array();
+    if (!empty($params['previewCustomerConfirmation']) || !empty($params['sendCustomerConfirmation'])) {
+        if (empty($existing) || $existing['status'] !== 'akkoord' || !empty($existing['cancelled'])) return new WP_Error('confirmation_not_final', 'Alleen een actieve definitieve bestelling kan worden bevestigd.', array('status' => 409));
+        $order = strik_business_b2b_prepare_confirmation($existing);
+        if (!empty($params['previewCustomerConfirmation'])) {
+            $previous = isset($order['confirmationMail']['customer']) ? $order['confirmationMail']['customer'] : array();
+            $updated = isset($previous['version']) && $previous['version'] === $order['confirmationMail']['version'] ? !empty($previous['updated']) : !empty($previous['sentAt']);
+            return rest_ensure_response(array('order' => $order, 'html' => strik_business_b2b_confirmation_html($order, false, $updated)));
+        }
+        if (empty($params['confirmationVersion']) || !hash_equals($order['confirmationMail']['version'], (string) $params['confirmationVersion'])) return new WP_Error('confirmation_changed', 'De bestelling is intussen gewijzigd. Open het mailvoorbeeld opnieuw en controleer de nieuwe gegevens.', array('status' => 409));
+        if (!is_email($order['customerEmail'])) return new WP_Error('confirmation_missing_email', 'Vul eerst een geldig e-mailadres bij de bestelling in.', array('status' => 400));
+        if (!strik_business_b2b_store_confirmed($order)) return new WP_Error('confirmation_storage', 'Verzending gestopt: de bestelling kon niet worden opgeslagen.', array('status' => 503));
+        $updated = !empty($order['confirmationMail']['customer']['sentAt']);
+        $order = strik_business_b2b_send_confirmation($order, 'backup', $updated);
+        $order = strik_business_b2b_send_confirmation($order, 'customer', $updated);
+        if (!strik_business_b2b_store_confirmed($order)) return new WP_Error('confirmation_receipt_storage', 'De verzending is verwerkt, maar de status kon niet bij de bestelling worden opgeslagen. Probeer opnieuw; dezelfde versie wordt niet dubbel verstuurd.', array('status' => 503));
+        return rest_ensure_response($order);
+    }
     $order = strik_sinterklaas_sanitize_b2b_order(array_merge(is_array($existing) ? $existing : array(), $params), is_array($existing) ? $existing : array());
 
     if ($order === null) {
         return new WP_Error('strik_sinterklaas_invalid_b2b_order', 'Controleer klantnaam, bestelling, leverdatum en chocoladeletterregels (soort, formaat, letter en aantal).', array('status' => 400));
     }
 
-    $orders[strik_sinterklaas_order_key($order['id'])] = $order;
-    strik_sinterklaas_save_orders(STRIK_SINTERKLAAS_B2B_OPTION_NAME, $orders);
+    $order = strik_business_b2b_prepare_confirmation($order);
+    if (!strik_business_b2b_store_confirmed($order)) return new WP_Error('b2b_storage_failed', 'De bestelling kon niet worden opgeslagen. Er is geen mail verstuurd.', array('status' => 503));
 
     $became_confirmed = $order['status'] === 'akkoord'
         && (empty($existing) || (isset($existing['status']) && $existing['status'] !== 'akkoord'));
-    $mail_fields = array('customerName', 'contactName', 'customerEmail', 'phone', 'deliveryWindowType', 'deliveryDate', 'deliveryDateEnd', 'deliveryWeek', 'productionDate', 'department', 'orderText', 'letterOrderText', 'letterLines', 'logo', 'textInstructions', 'packaging', 'importantNotes', 'deliveryMethod', 'deliveryAddress', 'priceAgreement', 'totalExVat', 'invoiceInfo');
+    $mail_fields = array('season', 'customerName', 'contactName', 'customerEmail', 'phone', 'deliveryWindowType', 'deliveryDate', 'deliveryDateEnd', 'deliveryWeek', 'productionDate', 'department', 'orderText', 'letterOrderText', 'letterLines', 'logo', 'textInstructions', 'packaging', 'importantNotes', 'deliveryMethod', 'deliveryAddress', 'priceAgreement', 'totalExVat', 'invoiceInfo');
     $details_changed = false;
     if ($order['status'] === 'akkoord' && !empty($existing)) {
         foreach ($mail_fields as $field) {
@@ -1163,21 +1318,9 @@ function strik_sinterklaas_b2b_save_unlocked($request) {
     }
     $retry_requested = !empty($params['resendConfirmation']) && $order['status'] === 'akkoord';
     $skip_historical_import = empty($existing) && $order['source'] === 'excel';
-    if ($order['status'] === 'akkoord' && !$skip_historical_import && ($became_confirmed || $details_changed || $retry_requested)) {
-        $sent = wp_mail(
-            STRIK_SINTERKLAAS_RECIPIENT,
-            ($became_confirmed ? 'DEFINITIEVE B2B-BESTELLING' : 'GEWIJZIGDE B2B-BESTELLING') . ' - ' . $order['customerName'] . ' - ' . $order['deliveryDate'],
-            strik_sinterklaas_create_b2b_confirmation_body($order, $became_confirmed),
-            array('Content-Type: text/plain; charset=UTF-8')
-        );
-        if ($sent) {
-            $order['confirmationEmailedAt'] = wp_date(DATE_ATOM);
-            $order['confirmationEmailError'] = '';
-        } else {
-            $order['confirmationEmailError'] = 'Bestelling opgeslagen, maar de bevestigingsmail is niet verstuurd. Probeer opnieuw.';
-        }
-        $orders[strik_sinterklaas_order_key($order['id'])] = $order;
-        strik_sinterklaas_save_orders(STRIK_SINTERKLAAS_B2B_OPTION_NAME, $orders);
+    if ($order['status'] === 'akkoord' && empty($order['cancelled']) && !$skip_historical_import && ($became_confirmed || $details_changed || $retry_requested)) {
+        $order = strik_business_b2b_send_confirmation($order, 'backup', !$became_confirmed);
+        if (!strik_business_b2b_store_confirmed($order)) return new WP_Error('confirmation_receipt_storage', 'Bestelling opgeslagen; de mailstatus kon niet worden bijgewerkt. Probeer opnieuw; dezelfde versie wordt niet dubbel verstuurd.', array('status' => 503));
     }
 
     return rest_ensure_response($order);

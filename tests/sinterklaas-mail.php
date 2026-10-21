@@ -21,12 +21,14 @@ function sanitize_textarea_field($value) { return trim(strip_tags((string) $valu
 function sanitize_email($value) { return filter_var($value, FILTER_SANITIZE_EMAIL); }
 function is_email($value) { return filter_var($value, FILTER_VALIDATE_EMAIL) !== false; }
 function sanitize_key($value) { return preg_replace('/[^a-z0-9_-]/', '', strtolower($value)); }
+function wp_json_encode($value) { return json_encode($value); }
 function get_option($name, $default = array()) { global $options; return isset($options[$name]) ? $options[$name] : $default; }
 function update_option($name, $value, $autoload = false) { global $options, $fail_option_key; if (isset($fail_option_key) && $fail_option_key === $name) return false; $options[$name] = $value; return true; }
 function rest_ensure_response($value) { return $value; }
 function wp_mail($to, $subject, $body, $headers) {
-    global $mail_calls, $mail_results;
+    global $mail_calls, $mail_results, $mail_after_send;
     $mail_calls[] = compact('to', 'subject', 'body', 'headers');
+    if (isset($mail_after_send) && is_callable($mail_after_send)) $mail_after_send();
     return count($mail_results) ? array_shift($mail_results) : true;
 }
 require __DIR__ . '/../app/wordpress-snippets/strik-sinterklaas-api.php';

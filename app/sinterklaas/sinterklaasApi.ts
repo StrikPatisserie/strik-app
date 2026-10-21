@@ -223,6 +223,17 @@ function normalizeB2BOrder(value: unknown): SinterklaasB2BOrder | null {
     reminderEmailError: textFrom(value.reminderEmailError),
     confirmationEmailedAt: textFrom(value.confirmationEmailedAt),
     confirmationEmailError: textFrom(value.confirmationEmailError),
+    ...(isRecord(value.confirmationMail) ? { confirmationMail: {
+      version: textFrom(value.confirmationMail.version),
+      backupVersion: textFrom(value.confirmationMail.backupVersion),
+      ...Object.fromEntries((["customer", "backup"] as const).flatMap(audience => {
+        const receipt = (value.confirmationMail as Record<string, unknown>)[audience];
+        return isRecord(receipt) ? [[audience, {
+          version: textFrom(receipt.version), email: textFrom(receipt.email),
+          state: textFrom(receipt.state), sentAt: textFrom(receipt.sentAt), error: textFrom(receipt.error),
+        }]] : [];
+      })),
+    } } : {}),
     ...(isRecord(value.folderQuote) ? { folderQuote: { reference: textFrom(value.folderQuote.reference), receivedAt: textFrom(value.folderQuote.receivedAt), mailSentAt: textFrom(value.folderQuote.mailSentAt), mailState: textFrom(value.folderQuote.mailState), quoteText: textFrom(value.folderQuote.quoteText) } } : {}),
     createdAt: textFrom(value.createdAt),
     updatedAt: textFrom(value.updatedAt),
@@ -447,6 +458,27 @@ export async function retryB2BConfirmation(id: string) {
   const normalized = normalizeB2BOrder(data);
   if (!normalized) throw new Error("WordPress gaf geen geldige B2B-bestelling terug.");
   return normalized;
+}
+
+export async function previewB2BCustomerConfirmation(id: string) {
+  const data = await requestJson<unknown>(ENDPOINTS.b2b, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, previewCustomerConfirmation: true }),
+  }, "Het mailvoorbeeld kon niet worden geladen.");
+  if (!isRecord(data) || typeof data.html !== "string") throw new Error("Het mailvoorbeeld is nog niet beschikbaar.");
+  const order = normalizeB2BOrder(data.order);
+  if (!order?.confirmationMail?.version) throw new Error("De mailfunctie is nog niet beschikbaar. Vernieuw de pagina en probeer opnieuw.");
+  return { order, html: data.html };
+}
+
+export async function sendB2BCustomerConfirmation(id: string, confirmationVersion: string) {
+  const data = await requestJson<unknown>(ENDPOINTS.b2b, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, sendCustomerConfirmation: true, confirmationVersion }),
+  }, "De bevestiging kon nog niet worden verstuurd. Probeer opnieuw; dezelfde versie wordt niet dubbel verstuurd.");
+  const order = normalizeB2BOrder(data);
+  if (!order) throw new Error("WordPress gaf geen geldige bestelling terug.");
+  return order;
 }
 
 export async function deleteB2BOrder(id: string, reason: string, reasonNote: string) {
