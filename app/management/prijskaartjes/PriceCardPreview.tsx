@@ -46,7 +46,8 @@ function useFittedText<T extends HTMLElement>(singleLine: boolean, text: string,
       const fits =
         element.scrollWidth <= frame.clientWidth + 0.5 &&
         element.scrollHeight <= frame.clientHeight + 0.5 &&
-        (!maxLines || element.scrollHeight <= Number.parseFloat(getComputedStyle(element).lineHeight) * maxLines + 0.5);
+        // Count line boxes; glyphs can extend beyond them in scrollHeight.
+        (!maxLines || element.clientHeight <= Number.parseFloat(getComputedStyle(element).lineHeight) * maxLines + 1);
       if (fits) minimum = size;
       else maximum = size;
     }
