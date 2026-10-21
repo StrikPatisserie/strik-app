@@ -52,13 +52,15 @@
 .sectionHeading { display: flex; align-items: center; gap: 10px; padding: 17px 0 10px; }
 .page .sectionHeading h3 { color: var(--b2b-ink); font-size: 13px; font-weight: 600; }
 .sectionHeading span { font-size: 11px; color: var(--b2b-muted); }
-.table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; }
+.table { width: 100%; max-width: 680px; border-collapse: collapse; table-layout: fixed; font-size: 12px; }
 .table caption { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 .table th { padding: 9px 6px; color: var(--b2b-muted); font-size: 11px; font-weight: 400; text-align: right; }
 .table th:first-child { text-align: left; }
-.table .numberCol { width: 68px; }
-.table .stateCol { width: 76px; text-align: center; }
-.table .totalCol { width: 72px; background: #f3f5ef; color: var(--b2b-ink); font-weight: 500; }
+.table .letterCol { width: 180px; }
+.table .numberCol { width: 56px; }
+.table .stateCol { width: 68px; text-align: center; }
+.table .totalCol { width: 60px; background: #f3f5ef; color: var(--b2b-ink); font-weight: 500; }
+.table .sourceCol { padding-left: 14px; text-align: left; }
 .table td { padding: 9px 6px; border-top: 1px solid #edf0e9; text-align: right; font-variant-numeric: tabular-nums; }
 .table .groupRow th { padding: 9px 10px; border-top: 1px solid var(--b2b-border); background: #f7f8f4; text-align: left; color: var(--b2b-ink); font-size: 11px; font-weight: 500; }
 .flavour { --flavour: #a79888; display: inline-flex; align-items: center; gap: 7px; }
@@ -77,6 +79,13 @@
 .quantity { color: var(--b2b-muted); }
 .table .total { background: #f3f5ef; font-size: 16px; font-weight: 600; color: var(--b2b-ink); }
 .table .stateCell { text-align: center; padding-inline: 3px; }
+.table .sourceCell { text-align: left; padding-left: 14px; }
+.sourceBadges { display: flex; flex-wrap: wrap; gap: 4px; }
+.sourceBadge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 5px; border: 1px solid var(--b2b-border); border-radius: 4px; color: var(--b2b-ink); background: #fafbf7; font-size: 11px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.sourceBadge svg { width: 14px; height: 14px; flex-shrink: 0; }
+.sourceLegend { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 12px 0 0; color: var(--b2b-muted); font-size: 10px; }
+.sourceLegend > span { display: inline-flex; align-items: center; gap: 5px; }
+.sourceLegend svg { width: 14px; height: 14px; }
 .status { display: inline-flex; align-items: center; justify-content: center; gap: 4px; font-size: 10px; color: #8a642b; white-space: nowrap; }
 .status::before { content: ""; width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
 .status[data-complete="true"] { color: #42684b; }
@@ -135,6 +144,15 @@
   .table .numberCol { width: 39px; }
   .table .totalCol { width: 44px; }
   .table .stateCol { width: 51px; }
+  .table thead tr, .table tbody tr { display: grid; grid-template-columns: minmax(0,1fr) 39px 39px 44px 51px; }
+  .table .letterCol, .table .numberCol, .table .totalCol, .table .stateCol { width: auto; }
+  .table tbody tr { border-top: 1px solid #edf0e9; }
+  .table td { border-top: 0; align-content: center; }
+  .table .groupRow th { grid-column: 1/-1; }
+  .table .sourceCol { display: none; }
+  .table .sourceCell { grid-column: 1/-1; padding: 0 5px 8px; }
+  .sourceBadge { font-size: 10px; padding: 2px 5px; }
+  .sourceLegend { gap: 7px 12px; padding-inline: 5px; }
   .table .letterCell { padding-left: 5px; }
   .letterLine { gap: 3px 5px; }
   .letterLine > strong, .table .total { font-size: 15px; }

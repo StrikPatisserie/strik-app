@@ -1,5 +1,6 @@
 import { StrikShell } from "@/app/StrikUI";
 import ProductionPlanningHeader from "./ProductionPlanningHeader";
+import { addProductionOrderQuantity, productionOrderSource } from "./productionSources";
 import styles from "./ProductionPlanning.module.css";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 import ProductionPlanningClient, {
@@ -19,6 +20,7 @@ type Product = {
 };
 
 type OrderInfo = {
+  channel: "ONLINE" | "STORE" | "B2B";
   requested_date: string;
   fulfillment_status: string;
 };
@@ -166,7 +168,14 @@ function demoProductionBatches(): ProductionBatchSeed[] {
         { key: "k|puur|groot|spuit|lactosevrij|foto", label: "K · puur · groot · spuit · lactosevrij · foto", orders: 4, stock: 0, produced: 0 },
       ],
     },
-  ];
+  ].map((batch) => ({
+    ...batch,
+    rows: batch.rows.map((row) => {
+      const winkel = Math.floor(row.orders / 3);
+      const b2b = Math.floor(row.orders / 3);
+      return { ...row, orderSources: { winkel, b2b, online: row.orders - winkel - b2b } };
+    }),
+  }));
 }
 
 export default async function SinterklaasLettersProductiePage({
@@ -216,7 +225,7 @@ export default async function SinterklaasLettersProductiePage({
     batchesRequest,
     db
       .from("letter_production_allocations")
-      .select("id,batch_id,planned_quantity,letter_order_items(id,quantity,logo,notes,letter_products(letter,flavour,size,style),letter_orders(requested_date,fulfillment_status))"),
+      .select("id,batch_id,planned_quantity,letter_order_items(id,quantity,logo,notes,letter_products(letter,flavour,size,style),letter_orders(requested_date,fulfillment_status,channel))"),
     db
       .from("letter_stock_targets")
       .select("id,batch_id,planned_quantity,letter_products(letter,flavour,size,style)"),
@@ -225,7 +234,7 @@ export default async function SinterklaasLettersProductiePage({
       .select("allocation_id,stock_target_id,quantity"),
     db
       .from("letter_order_items")
-      .select("id,quantity,letter_orders(requested_date,fulfillment_status)"),
+      .select("id,quantity,letter_orders(requested_date,fulfillment_status,channel)"),
     db
       .from("letter_store_stock_order_items")
       .select("batch_id,location_code,quantity,letter_products(letter,flavour,size,style)"),
@@ -311,9 +320,9 @@ export default async function SinterklaasLettersProductiePage({
           stock: 0,
           produced: 0,
         };
-        current.orders += allocation.planned_quantity;
-        current.produced += producedForAllocation.get(allocation.id) || 0;
-        rows.set(identity.key, current);
+        const updated = addProductionOrderQuantity(current, productionOrderSource(item?.letter_orders?.channel), allocation.planned_quantity);
+        updated.produced += producedForAllocation.get(allocation.id) || 0;
+        rows.set(identity.key, updated);
       });
     currentTargets
       .filter((target) => target.batch_id === batch.id)

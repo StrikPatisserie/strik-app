@@ -3,19 +3,14 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { fetchB2BOrders, fetchLetterOrders } from "../../sinterklaasApi";
 import styles from "./ProductionPlanning.module.css";
+import ProductionSourceIcon from "./ProductionSourceIcon";
+import { addProductionOrderQuantity, aggregateProductionRows, productionOrderSource, productionSourceBreakdown, PRODUCTION_SOURCES, type ProductionOrderSource, type ProductionSeedRow } from "./productionSources";
+export type { ProductionSeedRow } from "./productionSources";
 import type {
   ChocolateLetterLine,
   ChocolateLetterOrder,
   SinterklaasB2BOrder,
 } from "../../types";
-
-export type ProductionSeedRow = {
-  key: string;
-  label: string;
-  orders: number;
-  stock: number;
-  produced: number;
-};
 
 export type StoreOrderRow = {
   key: string;
@@ -387,6 +382,9 @@ function ProductionTable({
 
   return (
     <div className={styles.tables}>
+      <div className={styles.sourceLegend} aria-label="Legenda herkomst">
+        {PRODUCTION_SOURCES.filter(({ id }) => id !== "onbekend").map(({ id, label }) => <span key={id}><ProductionSourceIcon source={id} />{label}</span>)}
+      </div>
       {productionSections(rows).map((section) => (
         <section key={section.key} className={styles.tableSection}>
           <div className={styles.sectionHeading}>
@@ -397,17 +395,18 @@ function ProductionTable({
             <caption>{section.label} · aantallen voor productie</caption>
             <thead>
               <tr>
-                <th scope="col">Letter</th>
+                <th scope="col" className={styles.letterCol}>Letter</th>
                 <th scope="col" className={styles.numberCol}>Besteld</th>
                 <th scope="col" className={styles.numberCol}>Winkel</th>
                 <th scope="col" className={styles.totalCol}>Totaal</th>
                 <th scope="col" className={styles.stateCol}>Status</th>
+                <th scope="col" className={styles.sourceCol}>Herkomst</th>
               </tr>
             </thead>
             {section.groups.map((group) => (
               <tbody key={`${section.key}-${group.key}`}>
                 <tr className={styles.groupRow}>
-                  <th colSpan={5} scope="rowgroup"><span className={styles.flavour} data-flavour={group.flavour}>{group.label}</span></th>
+                  <th colSpan={6} scope="rowgroup"><span className={styles.flavour} data-flavour={group.flavour}>{group.label}</span></th>
                 </tr>
                 {group.rows.map((row) => {
                   const planned = row.orders + row.stock;
@@ -435,6 +434,13 @@ function ProductionTable({
                             {isComplete ? "✓" : "○"}
                           </button>
                         ) : <span className={styles.status} data-complete={isComplete}>{isComplete ? "Gereed" : "Open"}</span>}
+                      </td>
+                      <td className={styles.sourceCell}>
+                        <div className={styles.sourceBadges}>
+                          {productionSourceBreakdown(row).map(({ id, label, quantity }) => <span key={id} className={styles.sourceBadge} role="img" aria-label={`${label}: ${quantity} ${quantity === 1 ? "letter" : "letters"}`} title={`${label}: ${quantity} ${quantity === 1 ? "letter" : "letters"}`}>
+                            <ProductionSourceIcon source={id} /><span aria-hidden="true">{quantity}</span>
+                          </span>)}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1711,7 +1717,7 @@ export default function ProductionPlanningClient({
     for (const batch of batches) {
       rowsByDate.set(
         batch.date,
-        new Map(batch.rows.map((row) => [row.key, { ...row }]))
+        new Map(batch.rows.map((row) => [row.key, { ...row, orderSources: { ...row.orderSources } }]))
       );
     }
 
@@ -1744,12 +1750,11 @@ export default function ProductionPlanningClient({
     });
 
     const unplanned: string[] = [];
-    const addOrderLine = (date: string, key: string, label: string, quantity: number) => {
+    const addOrderLine = (date: string, key: string, label: string, quantity: number, source: ProductionOrderSource) => {
       const rows = rowsByDate.get(date);
       if (!rows) return;
       const current = rows.get(key) || { key, label, orders: 0, stock: 0, produced: 0 };
-      current.orders += quantity;
-      rows.set(key, current);
+      rows.set(key, addProductionOrderQuantity(current, source, quantity));
     };
 
     legacyOrders
@@ -1762,7 +1767,7 @@ export default function ProductionPlanningClient({
         }
         order.lines.forEach((line) => {
           const identity = legacyLineIdentity(line);
-          addOrderLine(date, identity.key, identity.label, line.quantity);
+          addOrderLine(date, identity.key, identity.label, line.quantity, productionOrderSource(order.source));
         });
       });
 
@@ -1783,7 +1788,7 @@ export default function ProductionPlanningClient({
           const extras = [order.logo ? "logo" : "", ...line.exceptions].filter(Boolean);
           const label = [line.letter, line.chocolate, line.size, line.style, ...extras].join(" · ");
           const key = [line.letter, line.chocolate, line.size, line.style, ...extras].join("|").toLocaleLowerCase("nl-NL");
-          addOrderLine(date, key, label, line.quantity);
+          addOrderLine(date, key, label, line.quantity, "b2b");
         });
       });
 
@@ -1792,18 +1797,11 @@ export default function ProductionPlanningClient({
       storeOrders: storeOrdersByBatch[batch.id] || batch.storeOrders || [],
       rows: [...(rowsByDate.get(batch.date)?.values() || [])].sort(compareProductionRows),
     }));
-    const grandRows = new Map<string, WorkingRow>();
-    batchViews.forEach((batch) => batch.rows.forEach((row) => {
-      const current = grandRows.get(row.key) || { key: row.key, label: row.label, orders: 0, stock: 0, produced: 0 };
-      current.orders += row.orders;
-      current.stock += row.stock;
-      current.produced += row.produced;
-      grandRows.set(row.key, current);
-    }));
+    const grandRows = aggregateProductionRows(batchViews.flatMap((batch) => batch.rows));
 
     return {
       batches: batchViews,
-      grandRows: [...grandRows.values()].sort(compareProductionRows),
+      grandRows: grandRows.sort(compareProductionRows),
       unplanned,
     };
   }, [b2bOrders, batches, legacyOrders, producedRowsByBatch, stockRowsByBatch, storeOrdersByBatch]);
