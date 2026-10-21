@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { checkLeatConnection } from "@/app/management/leatInsightsServer";
+import { recipeStorageAuthHeaders } from "@/app/lib/recipeStorageAuth";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +38,9 @@ const checks: WordPressCheck[] = [
 
 function getCheckUrl(check: WordPressCheck) {
   const url = new URL(`${WORDPRESS_BASE_URL}${check.path}`);
-  url.searchParams.set("key", WORDPRESS_API_KEY);
+  url.searchParams.set("key", check.id === "recepturen"
+    ? process.env.WORDPRESS_RECEPTUREN_API_KEY || WORDPRESS_API_KEY
+    : WORDPRESS_API_KEY);
 
   Object.entries(check.params || {}).forEach(([key, value]) => {
     url.searchParams.set(key, value);
@@ -47,6 +50,7 @@ function getCheckUrl(check: WordPressCheck) {
 }
 
 function getMessage(status: number) {
+  if (status === 401) return "Opnieuw inloggen";
   if (status === 403) return "Geen toegang";
   if (status === 404) return "Route ontbreekt";
   if (status >= 500) return "Serverfout";
@@ -61,9 +65,9 @@ function wait(ms: number) {
 async function fetchCheckUrl(check: WordPressCheck) {
   const requestInit = {
     cache: "no-store",
-    headers: {
-      Accept: "application/json",
-    },
+    headers: check.id === "recepturen"
+      ? await recipeStorageAuthHeaders()
+      : { Accept: "application/json" },
   } as const;
 
   try {
