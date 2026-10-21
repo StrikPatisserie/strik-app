@@ -44,7 +44,7 @@ function entry(season = 'sint', initialOrder = null) {
   }
   return { render, calls, updated,
     field(name, value) { const input = field(name); assert.ok(input, `Field: ${name}`); input.props.onChange({ target: { value } }); },
-    button(name) { const button = nodes(render(), n => n.type === 'button' && label(n) === name)[0]; assert.ok(button, `Button: ${name}`); button.props.onClick?.(); },
+    button(name) { const button = nodes(render(), n => n.type === 'button' && label(n) === name)[0]; assert.ok(button, `Button: ${name}`); const event = { defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } }; button.props.onClick?.(event); return event; },
     step() { return nodes(render(), n => n.props?.['aria-current'] === 'step').map(label)[0]; },
     submit() { return nodes(render(), n => n.type === 'form')[0].props.onSubmit({ preventDefault() {}, currentTarget: { elements: [] } }); },
   };
@@ -55,7 +55,8 @@ test('Enter and step navigation never save before review, and missing customer s
   assert.ok(nodes(ui.render(), n => n.props?.role === 'alert').length);
   ui.field('Bedrijfsnaam / klantnaam *', 'Voorbeeld BV'); await ui.submit();
   assert.match(ui.step(), /Producten/); assert.equal(ui.calls.length, 0);
-  await ui.submit(); assert.match(ui.step(), /Controleren/); assert.equal(ui.calls.length, 0);
+  const event = ui.button('Bestelling controleren →'); assert.equal(event.defaultPrevented, true); assert.match(ui.step(), /Controleren/); assert.equal(ui.calls.length, 0);
+  assert.equal(nodes(ui.render(), n => n.type === 'button' && label(n) === 'Bestelling opslaan')[0].props.type, 'submit');
 });
 test('Christmas products, manual prices and customer details survive back/forward navigation and save in the correct season', async () => {
   const ui = entry('kerst');

@@ -555,7 +555,8 @@ function deliveryWindowLabel(order: Pick<SinterklaasB2BOrder, "deliveryWindowTyp
 }
 
 function compactDeliveryWindow(order: Pick<SinterklaasB2BOrder, "deliveryWindowType" | "deliveryDate" | "deliveryDateEnd" | "deliveryWeek">) {
-  if (order.deliveryWindowType === "week" || !order.deliveryDate) return deliveryWindowLabel(order);
+  if (!order.deliveryDate) return "In overleg";
+  if (order.deliveryWindowType === "week") return deliveryWindowLabel(order);
   const start = new Date(`${order.deliveryDate}T12:00:00`);
   if (order.deliveryWindowType === "range" && order.deliveryDateEnd) {
     const end = new Date(`${order.deliveryDateEnd}T12:00:00`);
@@ -1400,9 +1401,11 @@ function B2BOrderForm({
           <p>{step === 1 ? "* Vul minimaal de klantnaam in" : step === 2 ? "Voeg gekozen producten toe met de toevoegknop." : "Je kunt alles nog aanpassen."}</p>
           <div className={styles.bottomActions}>
             <button type="button" disabled={saving} className={styles.quiet} onClick={step === 1 ? onCancel : () => goToStep(step - 1)}>{step === 1 ? "Annuleren" : "Vorige stap"}</button>
-            <button type={step === 3 ? "submit" : "button"} disabled={saving || !draftReady} onClick={step < 3 ? () => goToStep(step + 1) : undefined} className={styles.primary}>
-              {saving ? "Opslaan…" : step === 1 ? "Verder naar producten →" : step === 2 ? "Bestelling controleren →" : initialOrder ? "Wijziging opslaan" : "Bestelling opslaan"}
-            </button>
+            {step === 3 ? <button key="save" type="submit" disabled={saving || !draftReady} className={styles.primary}>
+              {saving ? "Opslaan…" : initialOrder ? "Wijziging opslaan" : "Bestelling opslaan"}
+            </button> : <button key="next" type="button" disabled={saving || !draftReady} onClick={event => { event.preventDefault(); goToStep(step + 1); }} className={styles.primary}>
+              {step === 1 ? "Verder naar producten →" : "Bestelling controleren →"}
+            </button>}
           </div>
         </footer>
       </div>
@@ -1441,9 +1444,10 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
   const archived = order.id.startsWith("historie-");
   const warnings = orderWarnings(order);
   const confirmationNeedsAttention = order.status === "akkoord" && (!order.confirmationEmailedAt || Boolean(order.confirmationEmailError)) && Boolean(order.deliveryDate) && order.deliveryDate >= todayIso() && !archived;
+  const folderProductsText = order.orderText.match(/(?:GEKOZEN SINTERKLAASPRODUCTEN|LOSSE KERSTCADEAUS|KERSTPAKKET OP MAAT)\s+([\s\S]*?)(?:PRIJSINDICATIE|GEWENSTE LEVERING|WENSEN|$)/i)?.[1]?.trim();
   const orderSummary = parsedOrder.productLines.length > 0
     ? parsedOrder.productLines.map(line => `${line.quantity}× ${lineDescription(line)}`).join(" · ")
-    : order.letterLines.length > 0 ? `${b2bLetterTotal(order.letterLines)} chocoladeletters` : compactOrderText(order.orderText);
+    : order.letterLines.length > 0 ? `${b2bLetterTotal(order.letterLines)} chocoladeletters` : folderProductsText || compactOrderText(order.orderText);
   const statusLabel = order.cancelled ? "Geannuleerd" : { aanvraag: "Aanvraag", offerte: "Offerte", akkoord: "Definitief", afgewezen: "Niet doorgegaan" }[order.status];
   const extraLines = [
     order.logo && `Logo: ${order.logo}`, order.textInstructions && `Tekst: ${order.textInstructions}`,
@@ -1453,7 +1457,7 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
 
   return <article className={`${styles.order} ${order.cancelled ? styles.archived : ""}`}>
     <div className={styles.orderMain}>
-      <div className={styles.date}>{compactDeliveryWindow(order)}<small>{order.deliveryWindowType === "date" ? "Vaste datum" : order.deliveryWindowType === "week" ? "Leverweek" : "Gewenste periode"}</small>{dueSoon(order) && <small className={styles.warning}>Binnen 2 dagen</small>}</div>
+      <div className={styles.date}>{compactDeliveryWindow(order)}<small>{!order.deliveryDate ? "Nog af te spreken" : order.deliveryWindowType === "date" ? "Vaste datum" : order.deliveryWindowType === "week" ? "Leverweek" : "Gewenste periode"}</small>{dueSoon(order) && <small className={styles.warning}>Binnen 2 dagen</small>}</div>
       <div className={styles.customer}>
         <h3>{order.customerName}</h3>
         <p className={styles.orderProduct}>{orderSummary || "Bestelling nog invullen"}</p>
@@ -1747,6 +1751,7 @@ export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ sea
   const groupedOrders = groupByMonth(visibleOrders);
   const colors = businessSeasonColors[season];
   const finalCount = forecastOrders.filter(order => order.status === "akkoord").length;
+  const requestCount = forecastOrders.filter(order => order.status === "aanvraag").length;
   const quoteCount = forecastOrders.filter(order => order.status === "offerte").length;
   const pendingEntryCount = forecastOrders.filter(order => order.status === "akkoord" && !order.entered).length;
 
@@ -1765,7 +1770,7 @@ export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ sea
           <button type="button" className={styles.primary} onClick={openNewOrderDialog}>+ Nieuwe bestelling</button>
         </header>
         <div className={styles.meta}>
-          <span>Verwachte omzet <b>{money(expectedRevenue)}</b></span><span><b>{finalCount}</b> definitief</span><span><b>{quoteCount}</b> {quoteCount === 1 ? "offerte" : "offertes"}</span>
+          <span>Verwachte omzet <b>{money(expectedRevenue)}</b></span>{requestCount > 0 && <span><b>{requestCount}</b> {requestCount === 1 ? "aanvraag" : "aanvragen"}</span>}<span><b>{finalCount}</b> definitief</span><span><b>{quoteCount}</b> {quoteCount === 1 ? "offerte" : "offertes"}</span>
           {pendingEntryCount > 0 && <button type="button" className={styles.attentionLink} onClick={() => setStatusFilter("nog-invoeren")}>! {pendingEntryCount} nog invoeren</button>}
         </div>
         <div className={styles.tools}>
