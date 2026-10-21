@@ -68,6 +68,94 @@ function strik_lettershop_mail_lines($payload, $for_customer) {
 }
 }
 
+if (!function_exists('strik_lettershop_mail_origin')) {
+function strik_lettershop_mail_origin($payload) {
+    // The collection shop is not the source: online orders also collect there.
+    $store = strtoupper((string) ($payload['channel'] ?? 'ONLINE')) === 'STORE';
+    return array(
+        'label' => $store ? 'Winkelbestelling' : 'Lettershopbestelling',
+        'detail' => $store ? 'Aangenomen in de winkel' : 'Online besteld via de Lettershop',
+        'accent' => $store ? '#e8cf90' : '#c8e2d4',
+        'background' => $store ? '#faf3df' : '#edf6f0',
+    );
+}
+}
+
+if (!function_exists('strik_lettershop_mail_subject')) {
+function strik_lettershop_mail_subject($payload, $template) {
+    $number = sanitize_text_field((string) ($payload['order_number'] ?? ''));
+    if ($template === 'ORDER_CANCELLATION') return 'Chocoladeletterbestelling geannuleerd ' . $number;
+    if ($template === 'ONLINE_CONFIRMATION') return 'Bevestiging chocoladeletterbestelling ' . $number;
+    $origin = strik_lettershop_mail_origin($payload);
+    return $origin['label'] . ' chocoladeletters ' . $number . ' - ' . sanitize_text_field((string) ($payload['customer_name'] ?? ''));
+}
+}
+
+if (!function_exists('strik_lettershop_mail_html')) {
+function strik_lettershop_mail_html($payload, $for_customer = false) {
+    $origin = strik_lettershop_mail_origin($payload);
+    $number = esc_html((string) ($payload['order_number'] ?? ''));
+    $name = esc_html((string) ($payload['customer_name'] ?? ''));
+    $date = (string) ($payload['requested_date'] ?? '');
+    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) $date = date('d-m-Y', strtotime($date));
+    $shops = array(
+        'ziekerstraat' => 'Strik Centrum · Ziekerstraat 124',
+        'heyendaal' => 'Strik Brakkenstein · Heyendaalseweg 217',
+        'daalseweg' => 'Strik Nijmegen-Oost · Daalseweg 254',
+        'lent' => 'Strik Lent · Oranje Marieplein 11',
+    );
+    $pickup = (string) ($payload['pickup_location'] ?? '');
+    $shop = esc_html($shops[$pickup] ?? $pickup);
+    $title = $for_customer ? 'Uw chocoladeletters zijn besteld!' : $origin['label'] . '<br>Chocoladeletters';
+    $badge = $for_customer ? 'Bestelbevestiging' : $origin['label'] . ' · interne back-up';
+    $greeting = $for_customer
+        ? '<p style="margin:0 0 14px;font-size:16px;">Beste ' . $name . ',</p><p style="margin:0 0 22px;font-size:16px;line-height:1.55;">Bedankt voor uw bestelling bij Strik. Wij maken uw chocoladeletters met zorg voor u klaar.</p>'
+        : '<p style="margin:0 0 18px;font-size:16px;"><strong>Klant:</strong> ' . $name . '</p>';
+    $contacts = '';
+    if (!$for_customer) {
+        $email = sanitize_email((string) ($payload['customer_email'] ?? ''));
+        $email_html = $email !== '' ? '<a href="' . esc_attr('mailto:' . $email) . '" style="color:#244b37;">' . esc_html($email) . '</a>' : 'Niet opgegeven';
+        $phone = !empty($payload['phone']) ? esc_html((string) $payload['phone']) : 'Niet opgegeven';
+        $contacts = '<p style="margin:12px 0 7px;font-size:15px;"><strong>Telefoon:</strong> ' . $phone . '</p><p style="margin:0;font-size:15px;"><strong>E-mail:</strong> ' . $email_html . '</p>';
+        if (!empty($payload['entered_store']) && strtoupper((string) ($payload['channel'] ?? '')) === 'STORE') {
+            $entered = (string) $payload['entered_store'];
+            $contacts .= '<p style="margin:12px 0 0;font-size:15px;"><strong>Aangenomen in:</strong> ' . esc_html($shops[$entered] ?? $entered) . '</p>';
+        }
+    }
+    $items = '';
+    foreach ((array) ($payload['items'] ?? array()) as $item) {
+        if (!is_array($item)) continue;
+        $quantity = max(0, (int) ($item['quantity'] ?? 0));
+        $description = strtoupper((string) ($item['letter'] ?? '')) . ' · ' . (string) ($item['flavour'] ?? '') . ' · ' . (($item['style'] ?? '') === 'vorm' ? 'vormletter' : 'spuitletter') . ' · ' . (string) ($item['size'] ?? '');
+        if (!empty($item['logo'])) $description .= ' · met foto/logo';
+        $unit_cents = (int) ($item['unit_price_cents'] ?? 0) + (int) ($item['logo_price_cents'] ?? 0);
+        $price = isset($item['unit_price_cents']) ? '€ ' . number_format($unit_cents / 100, 2, ',', '.') . ' p.st.' : '';
+        $note = !$for_customer && !empty($item['notes']) ? '<div style="margin-top:5px;font-size:13px;line-height:1.5;color:#536b57;">' . nl2br(esc_html((string) $item['notes'])) . '</div>' : '';
+        $items .= '<tr><td style="padding:10px 0;border-bottom:1px solid #e6ece3;font-size:14px;"><strong>' . $quantity . '×</strong> ' . esc_html($description) . ($price ? '<div style="margin-top:5px;font-size:13px;color:#536b57;">' . esc_html($price) . '</div>' : '') . $note . '</td></tr>';
+    }
+    $wrap = '';
+    if (!empty($payload['gift_wrap'])) {
+        // Saved prices also describe older orders correctly; never reprice mail.
+        $wrap_cents = isset($payload['gift_wrap_price_cents']) ? max(0, (int) $payload['gift_wrap_price_cents']) : 100;
+        $wrap = '<p style="margin:16px 0 0;font-size:14px;line-height:1.5;"><strong>Cadeaupapier:</strong> alle letters ingepakt · € ' . esc_html(number_format($wrap_cents / 100, 2, ',', '.')) . ' per letter<br>Toeslag cadeaupapier: € ' . esc_html(number_format(((int) ($payload['gift_wrap_total_cents'] ?? 0)) / 100, 2, ',', '.')) . '</p>';
+    }
+    $notes = !empty($payload['notes']) ? '<h2 style="margin:20px 0 7px;font-size:17px;">Opmerkingen</h2><p style="margin:0;font-size:14px;line-height:1.55;">' . nl2br(esc_html((string) $payload['notes'])) . '</p>' : '';
+    $total = isset($payload['total_cents']) ? '<p style="margin:18px 0 0;font-size:18px;"><strong>Totaal inclusief 9% btw: € ' . esc_html(number_format(((int) $payload['total_cents']) / 100, 2, ',', '.')) . '</strong></p>' : '';
+    $closing = $for_customer
+        ? 'U betaalt bij het afhalen in de winkel. Neem dit ordernummer mee: <strong>' . $number . '</strong>.<br><br>Wilt u annuleren? Laat het ons uiterlijk 2 dagen voor het afhalen weten via info@strik-patisserie.nl en vermeld uw ordernummer. Haalt u de bestelling zonder annulering niet op, dan kunnen we het bestelbedrag alsnog in rekening brengen.<br><br>Vragen? Antwoord gerust op deze e-mail.<br><strong>Tot snel bij Strik!</strong>'
+        : 'Automatische interne back-up · ' . esc_html($origin['detail']) . '.<br>De bestelling staat ook in de Strik Team app.';
+    return '<!doctype html><html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:24px 12px;background:#edf4ec;font-family:Arial,Helvetica,sans-serif;color:#263b2b;">'
+        . '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;max-width:580px;margin:0 auto;border-collapse:collapse;"><tr><td style="padding:25px 28px;background:#244b37;color:#fff;border-radius:16px 16px 0 0;">'
+        . '<div style="font-size:12px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#e8cf90;">Strik Patisserie</div><p style="display:inline-block;margin:16px 0 0;padding:7px 10px;background:' . $origin['accent'] . ';border-radius:6px;color:#244b37;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">' . esc_html($badge) . '</p><h1 style="margin:14px 0 0;font-size:27px;line-height:1.2;color:#fff;">' . $title . '</h1></td></tr>'
+        . '<tr><td style="padding:12px 28px;background:' . $origin['background'] . ';border-left:5px solid ' . $origin['accent'] . ';font-size:13px;font-weight:700;color:#244b37;">' . esc_html($origin['detail']) . '</td></tr>'
+        . '<tr><td style="padding:25px 28px;background:#fffdf8;border-radius:0 0 16px 16px;">' . $greeting
+        . '<div style="padding:18px;background:#f1f7ef;border-radius:12px;"><p style="margin:0 0 10px;font-size:11px;font-weight:700;letter-spacing:2px;color:#547762;">ORDER ' . $number . '</p><p style="margin:0 0 7px;font-size:16px;"><strong>Afhalen:</strong> ' . esc_html($date) . '</p><p style="margin:0;font-size:15px;"><strong>Afhalen bij:</strong> ' . $shop . '</p>' . $contacts . '</div>'
+        . '<h2 style="margin:22px 0 7px;font-size:17px;">' . ($for_customer ? 'Uw bestelling' : 'Bestelling') . '</h2><table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;">' . $items . '</table>'
+        . $notes . $wrap . $total . '<p style="margin:24px 0 0;font-size:14px;line-height:1.55;color:#536b57;">' . $closing . '</p>'
+        . '</td></tr><tr><td style="padding:16px;text-align:center;font-size:12px;color:#65806a;">Met liefde gemaakt door Strik Patisserie</td></tr></table></body></html>';
+}
+}
+
 if (!function_exists('strik_lettershop_send_mail')) {
 function strik_lettershop_send_mail($request) {
     $params = $request->get_json_params();
@@ -93,12 +181,11 @@ function strik_lettershop_send_mail($request) {
     $for_customer = $template === 'ONLINE_CONFIRMATION';
     $recipient = ($for_customer || $template === 'ORDER_CANCELLATION') ? sanitize_email((string) ($payload['customer_email'] ?? '')) : 'info@strik-patisserie.nl';
     if (!is_email($recipient)) return new WP_Error('invalid_recipient', 'Ongeldig e-mailadres.', array('status' => 400));
-    $subject = $template === 'ORDER_CANCELLATION' ? 'Chocoladeletterbestelling geannuleerd ' . $number
-        : ($for_customer ? 'Bevestiging chocoladeletterbestelling ' : 'Back-up chocoladeletterbestelling ') . $number;
-    $headers = array('Content-Type: text/plain; charset=UTF-8', 'Reply-To: Strik Patisserie <info@strik-patisserie.nl>');
+    $subject = strik_lettershop_mail_subject($payload, $template);
+    $headers = array('Content-Type: ' . ($template === 'ORDER_CANCELLATION' ? 'text/plain' : 'text/html') . '; charset=UTF-8', 'Reply-To: Strik Patisserie <info@strik-patisserie.nl>');
     $body = $template === 'ORDER_CANCELLATION'
         ? "Beste " . sanitize_text_field((string) ($payload['customer_name'] ?? 'klant')) . ",\n\nJe chocoladeletterbestelling " . $number . " is geannuleerd. Je hoeft hiervoor niets te betalen of af te halen.\n\nHeb je vragen? Antwoord gerust op deze e-mail.\n\nStrik Patisserie"
-        : implode("\n", strik_lettershop_mail_lines($payload, $for_customer));
+        : strik_lettershop_mail_html($payload, $for_customer);
 
     $attachments = array();
     if (!$for_customer && !empty($params['attachments']) && is_array($params['attachments'])) {

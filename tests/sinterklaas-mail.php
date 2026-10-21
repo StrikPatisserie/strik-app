@@ -57,11 +57,13 @@ foreach ($mail_calls as $mail) {
 }
 $internal = $mail_calls[0]['body'];
 $customer = $mail_calls[1]['body'];
-foreach (array('Nieuwe chocoladeletterbestelling', '0612345678', 'customer@example.invalid', 'Bel eerst', 'Geen versiering', 'Testklant &amp; Co', '05-11-2026', 'Heyendaalseweg 217', '69,75', '20,00', '49,75', '5×') as $part) {
+foreach (array('Nieuwe winkelbestelling', 'Winkelbestelling · interne back-up', 'background:#faf3df', '0612345678', 'customer@example.invalid', 'Bel eerst', 'Geen versiering', 'Testklant &amp; Co', '05-11-2026', 'Heyendaalseweg 217', '69,75', '20,00', '49,75', '5×') as $part) {
     check(has($internal, $part), 'Internal mail includes ' . $part);
 }
 check(!has($internal, '<script>') && !has($internal, '<img src=x>') && has($internal, '&lt;script&gt;'), 'Notes are escaped as text.');
 check(has($customer, 'Uw chocoladeletters zijn besteld!') && !has($customer, 'Interne instructie') && !has($customer, 'Geen versiering'), 'Customer confirmation keeps its own content without internal notes.');
+check(strpos($mail_calls[0]['subject'], 'Winkelbestelling chocoladeletters CL26-001') === 0, 'Store origin is visible at the start of the internal subject.');
+check(!has($internal, 'Lettershopbestelling') && !has($customer, 'interne back-up'), 'The store and customer templates have the correct labels.');
 check($sent['bakeryEmailSentAt'] !== '' && $sent['customerConfirmationSentAt'] !== '', 'Both successful sends are recorded.');
 echo "PASS separate green internal and customer mails, complete contacts and escaped notes\n";
 
@@ -111,7 +113,7 @@ $saved = strik_sinterklaas_letter_save(new TestLetterRequest(array('id' => $save
 check(count($mail_calls) === 0, 'Production status changes do not send order mail.');
 reset_mails();
 $saved = strik_sinterklaas_letter_save(new TestLetterRequest(array('id' => $saved['id'], 'notes' => 'Nieuwe interne opmerking')));
-check(count($mail_calls) === 1 && $mail_calls[0]['to'] === STRIK_SINTERKLAAS_RECIPIENT && has($mail_calls[0]['body'], 'Gewijzigde chocoladeletterbestelling') && has($mail_calls[0]['body'], 'Nieuwe interne opmerking'), 'Changed internal notes send one green internal update only.');
+check(count($mail_calls) === 1 && $mail_calls[0]['to'] === STRIK_SINTERKLAAS_RECIPIENT && has($mail_calls[0]['body'], 'Gewijzigde winkelbestelling') && has($mail_calls[0]['body'], 'Nieuwe interne opmerking') && strpos($mail_calls[0]['subject'], 'Gewijzigde winkelbestelling') === 0, 'Changed internal notes send one green store update only.');
 reset_mails();
 $saved = strik_sinterklaas_letter_save(new TestLetterRequest(array('id' => $saved['id'], 'pickupDate' => '2026-11-06')));
 check(count($mail_calls) === 2 && has($mail_calls[1]['body'], 'Uw bestelling is aangepast'), 'Changed pickup details notify both parties separately.');
@@ -126,7 +128,10 @@ echo "PASS order save integration: updates, status changes and retries\n";
 // Optional local previews with fake customer details, never actual customer data.
 if (getenv('STRIK_MAIL_PREVIEW_DIR')) {
     $dir = rtrim(getenv('STRIK_MAIL_PREVIEW_DIR'), '/');
-    file_put_contents($dir . '/interne-bestelmail.html', $internal);
-    file_put_contents($dir . '/klantbevestiging.html', $customer);
+    $preview = fixture();
+    $preview['notes'] = "Graag feestelijk inpakken.\nKlant haalt de bestelling in de middag op.";
+    $preview['lines'][0]['notes'] = 'Geen versiering';
+    file_put_contents($dir . '/interne-bestelmail.html', strik_sinterklaas_letter_mail_html($preview, false, false, true));
+    file_put_contents($dir . '/klantbevestiging.html', strik_sinterklaas_letter_customer_mail_html($preview));
 }
 echo "All Sinterklaas mail tests passed; no real emails sent.\n";
