@@ -4,9 +4,13 @@ import type {
 } from "./logisticsTypes";
 
 export const sinterklaasAcquisitionCampaignId =
-  "sinterklaas-folder-bedrijven-2026";
-export const sinterklaasAcquisitionStartDate = "2026-10-08";
-export const sinterklaasAcquisitionEndDate = "2026-10-17";
+  "sinterklaas-pakketjes-resterend-2026-10-21";
+export const sinterklaasAcquisitionStartDate = "2026-10-21";
+// The remaining physical stock stays available until it has all been planned.
+export const sinterklaasAcquisitionEndDate: string = "";
+// Keep the original campaign's saved progress intact as an archive.
+export const sinterklaasAcquisitionSettingKey =
+  "bakery_logistics_acquisition_remaining_20261021";
 
 type CampaignStopSeed = Omit<LogisticsAcquisitionStop, "id" | "attention">;
 
@@ -66,8 +70,27 @@ function campaignStopId(company: string, postalCode: string) {
     .replace(/^-|-$/g, "");
 }
 
+// Stock count supplied on 21 October: one labelled package per company.
+const remainingCompanies = new Set([
+  "DFDS Logistics Nijmegen B.V.",
+  "Duynie Group",
+  "De Variabele Groep",
+  "KlokGroep",
+  "Dar N.V.",
+  "Batenburg Installatietechniek",
+  "BCTN Nijmegen",
+  "HKS Metals Nijmegen",
+  "Technische Unie Nijmegen",
+  "ANAC Nijmegen",
+  "Pluryn",
+  "HORNBACH Nijmegen",
+  "Holland Casino Nijmegen",
+  "Mercure Hotel Nijmegen Centre",
+  "ARN B.V.",
+]);
+
 export const sinterklaasAcquisitionStops: LogisticsAcquisitionStop[] =
-  stopSeeds.map((stop) => ({
+  stopSeeds.filter((stop) => remainingCompanies.has(stop.company)).map((stop) => ({
     ...stop,
     id: campaignStopId(stop.company, stop.postalCode),
     attention: "HR / Personeelszaken",
@@ -76,7 +99,7 @@ export const sinterklaasAcquisitionStops: LogisticsAcquisitionStop[] =
 export function emptySinterklaasAcquisitionCampaign(): LogisticsAcquisitionCampaign {
   return {
     id: sinterklaasAcquisitionCampaignId,
-    title: "Acquisitie Sinterklaasfolder",
+    title: "Brievenbuspakketjes Sinterklaas",
     startDate: sinterklaasAcquisitionStartDate,
     endDate: sinterklaasAcquisitionEndDate,
     stops: sinterklaasAcquisitionStops,

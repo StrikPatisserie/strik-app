@@ -4898,10 +4898,13 @@ function createBusRoutePrintHtml(input: {
                     </div>
                     ${
                       isAcquisitionStop
-                        ? '<span class="acquisition-label">ACQUISITIE · SINTERKLAASFOLDER</span>'
+                        ? '<span class="acquisition-label">BRIEVENBUSPAKKETJE · SINTERKLAASFOLDER</span>'
                         : ""
                     }
                     <p>${escapeHtml(detailParts.detail || "Adres controleren")}</p>
+                    ${isAcquisitionStop && /t\.a\.v\.\s*(.+)$/i.test(stop.detail)
+                      ? `<p><b>Afgeven bij:</b> ${escapeHtml(stop.detail.match(/t\.a\.v\.\s*(.+)$/i)![1])}</p>`
+                      : ""}
                     ${planningLine}
                     <div class="write-fields">
                       <span><b>Aankomst werkelijk</b></span>
@@ -6903,7 +6906,7 @@ function isAcquisitionCampaignDate(
   campaign: AcquisitionCampaignSummary | null
 ) {
   return Boolean(
-    campaign && date >= campaign.startDate && date <= campaign.endDate
+    campaign && date >= campaign.startDate && (!campaign.endDate || date <= campaign.endDate)
   );
 }
 
@@ -10617,8 +10620,8 @@ export default function BakkerijLogistiekDashboard() {
       learningLabel: suggestion.stop.company,
       learningTarget: `${suggestion.stop.street}, ${suggestion.stop.postalCode} ${suggestion.stop.city}`,
       learningKind: "check",
-      label: `Sinterklaasfolder · ${suggestion.stop.company}`,
-      detail: `ACQUISITIE · ${suggestion.stop.street}, ${suggestion.stop.postalCode} ${suggestion.stop.city} · t.a.v. ${suggestion.stop.attention}`,
+      label: `Brievenbuspakketje · ${suggestion.stop.company}`,
+      detail: `SINTERKLAASFOLDER · ${suggestion.stop.street}, ${suggestion.stop.postalCode} ${suggestion.stop.city} · t.a.v. ${suggestion.stop.attention}`,
       badges: ["acquisitie", "sinterklaasfolder"],
     };
     const nextRoutes = currentRoutes.map((route) => {
@@ -11690,16 +11693,16 @@ export default function BakkerijLogistiekDashboard() {
                   >
                     <GiftIcon />
                     <span className="sm:hidden">
-                      {acquisitionDeliveredCount}/{acquisitionTotalCount} bezorgd
+                      Nog {acquisitionRemainingCount} pakketjes
                     </span>
                     <span className="hidden sm:inline">
-                      Acquisitie Sinterklaasfolder · {acquisitionDeliveredCount}/
-                      {acquisitionTotalCount} bezorgd · nog {acquisitionRemainingCount}
+                      Brievenbuspakketjes Sint · {acquisitionDeliveredCount}/
+                      {acquisitionTotalCount} ingepland · nog {acquisitionRemainingCount}
                     </span>
                   </button>
                   <button
                     type="button"
-                    aria-label="Bekijk bezorgde en resterende acquisitieadressen"
+                    aria-label="Bekijk ingeplande en resterende brievenbuspakketjes"
                     title="Campagne-overzicht"
                     onClick={() => setAcquisitionOverviewOpen(true)}
                     className="flex w-8 items-center justify-center border-l border-[#dca37f] bg-white/45 text-xs font-black transition hover:bg-white/75"
@@ -12171,16 +12174,16 @@ function AcquisitionCampaignModal({
             </span>
             <div className="min-w-0">
               <p className="text-[0.62rem] font-black uppercase tracking-[0.15em] text-[#ffd9bc]">
-                Eigen bezorgroutes · t/m zaterdag 17 oktober
+                Eigen bezorgroutes · resterende voorraad vanaf 21 oktober
               </p>
               <h2
                 id="acquisition-campaign-title"
                 className="mt-0.5 text-xl font-black leading-tight"
               >
-                Acquisitie Sinterklaasfolder
+                {campaign.title}
               </h2>
               <p className="mt-1 text-xs font-bold text-[#ffe8d7]">
-                {deliveredStops.length}/{campaign.stops.length} bezorgd · nog {remainingStops.length} te gaan
+                {deliveredStops.length}/{campaign.stops.length} ingepland · nog {remainingStops.length} te gaan
               </p>
             </div>
           </div>
@@ -12197,7 +12200,7 @@ function AcquisitionCampaignModal({
         <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto p-3 sm:grid-cols-2 sm:p-4">
           <section className="min-w-0 rounded-2xl border border-[#bad2b8] bg-[#f0f7ed] p-3">
             <div className="flex items-center justify-between gap-2">
-              <h3 className="text-sm font-black text-[#284b32]">Bezorgd</h3>
+              <h3 className="text-sm font-black text-[#284b32]">In route gezet</h3>
               <span className="rounded-full bg-[#dbead7] px-2 py-1 text-[0.62rem] font-black text-[#284b32]">
                 {deliveredStops.length}
               </span>
@@ -12205,7 +12208,7 @@ function AcquisitionCampaignModal({
             <div className="mt-2 grid gap-1.5">
               {deliveredStops.length === 0 && (
                 <p className="rounded-xl bg-white/70 px-3 py-3 text-xs font-semibold italic text-[#62705d]">
-                  Nog niets bezorgd. Voeg de eerste suggestie toe aan een route.
+                  Nog niets ingepland. Voeg een pakketje via + In route toe aan een route.
                 </p>
               )}
               {deliveredStops.map((stop) => {
@@ -12232,7 +12235,7 @@ function AcquisitionCampaignModal({
 
           <section className="min-w-0 rounded-2xl border border-[#edc7a8] bg-[#fff3e2] p-3">
             <div className="flex items-center justify-between gap-2">
-              <h3 className="text-sm font-black text-[#713519]">Nog te gaan</h3>
+              <h3 className="text-sm font-black text-[#713519]">Nog in te plannen</h3>
               <span className="rounded-full bg-[#ffe1b8] px-2 py-1 text-[0.62rem] font-black text-[#713519]">
                 {remainingStops.length}
               </span>
@@ -12240,7 +12243,7 @@ function AcquisitionCampaignModal({
             <div className="mt-2 grid gap-1.5">
               {remainingStops.length === 0 && (
                 <p className="rounded-xl bg-white/75 px-3 py-3 text-xs font-black text-[#284b32]">
-                  Alles bezorgd — campagne compleet!
+                  Alle pakketjes staan in een route.
                 </p>
               )}
               {remainingStops.map((stop) => (
@@ -12984,7 +12987,7 @@ function RoutesPanel({
                   Extra stop · opvallend op de routeprint
                 </p>
                 <h3 className="text-sm font-black leading-tight">
-                  Sinterklaasfolders langs de route van vandaag
+                  Brievenbuspakketjes langs de route van vandaag
                 </h3>
               </div>
             </div>
@@ -13315,7 +13318,7 @@ function RoutesPanel({
                             <span className="flex items-center gap-1 whitespace-nowrap rounded-full border border-[#d96a3c] bg-[#8c3f25] px-1.5 py-1 text-[0.58rem] font-black tracking-normal text-white">
                               <GiftIcon />
                               <span className="sm:hidden">SINT</span>
-                              <span className="hidden sm:inline">SINT FOLDER</span>
+                              <span className="hidden sm:inline">SINT PAKKETJE</span>
                             </span>
                           ) : isLentEmballageStop(stop) ? (
                             <span

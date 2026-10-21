@@ -78,7 +78,7 @@ export async function POST(request: Request) {
     }
     if (
       date < sinterklaasAcquisitionStartDate ||
-      date > sinterklaasAcquisitionEndDate
+      (sinterklaasAcquisitionEndDate && date > sinterklaasAcquisitionEndDate)
     ) {
       return jsonError("Deze datum valt buiten de Sinterklaascampagne.");
     }

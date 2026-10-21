@@ -24,6 +24,7 @@ import type {
 import {
   emptySinterklaasAcquisitionCampaign,
   sinterklaasAcquisitionCampaignId,
+  sinterklaasAcquisitionSettingKey,
   sinterklaasAcquisitionStops,
 } from "@/app/bakkerij/logistiek/sinterklaasAcquisitionCampaign";
 import { createAdminClient } from "./supabase/admin";
@@ -40,7 +41,7 @@ const LOGISTICS_FIXED_CUSTOMERS_SETTING_KEY = "bakery_logistics_fixed_customers"
 const LOGISTICS_PREPARATION_PRODUCTS_SETTING_KEY =
   "bakery_logistics_preparation_products";
 const LOGISTICS_ACQUISITION_CAMPAIGN_SETTING_KEY =
-  "bakery_logistics_acquisition_campaign";
+  sinterklaasAcquisitionSettingKey;
 const MAX_STORED_BATCHES = 80;
 const MAX_STORED_WEBSHOP_IMAGES = 1200;
 const MAX_STORED_WEBSHOP_IMAGES_JSON_BYTES = 5_500_000;
