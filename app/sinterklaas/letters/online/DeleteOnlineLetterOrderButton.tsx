@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export default function DeleteOnlineLetterOrderButton({ orderId, orderNumber }: { orderId: string; orderNumber: string }) {
+export default function DeleteOnlineLetterOrderButton({ orderId, orderNumber, className }: { orderId: string; orderNumber: string; className?: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -36,7 +36,7 @@ export default function DeleteOnlineLetterOrderButton({ orderId, orderNumber }: 
     }
   }
 
-  return <div className="mt-3 border-t border-[#eee3d8] pt-3">
+  return <div className={className || "mt-3 border-t border-[#eee3d8] pt-3"}>
     <button type="button" disabled={busy} onClick={removeOrder} className="rounded-lg border border-red-200 px-3 py-2 text-xs font-bold text-red-700 disabled:opacity-50">{busy ? "Verwijderen…" : "Bestelling definitief verwijderen"}</button>
     {message && <p role="alert" className="mt-2 text-xs font-semibold text-red-700">{message}</p>}
   </div>;

@@ -1,5 +1,6 @@
-import { StrikPageHeader, StrikShell, strikIcons } from "../../../StrikUI";
+import { StrikShell } from "../../../StrikUI";
 import { requireCurrentProfile } from "@/app/lib/auth/session";
+import { hasFullAccess } from "@/app/lib/auth/access";
 import SinterklaasLettersClient from "../SinterklaasLettersClient";
 import { getLettershopPickupDateOptions } from "@/app/lettershop/getPickupDates";
 
@@ -23,13 +24,9 @@ export default async function SinterklaasLettersWinkelPage() {
   );
   return (
     <StrikShell wide>
-      <StrikPageHeader
-        title="Winkelbestellingen"
-        description="Letters bestellen voor afhalen in de winkel. Afrekenen gebeurt bij ophalen in Bake-it."
-        icon={strikIcons.sinterklaasLetter}
-      />
       <SinterklaasLettersClient
         mode="winkel"
+        showOnline={hasFullAccess(profile)}
         defaultShop={defaultShop}
         pickupDates={pickupDates}
         pickupDeadlines={pickupDeadlines}

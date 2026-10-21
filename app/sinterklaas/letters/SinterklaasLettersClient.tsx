@@ -21,6 +21,9 @@ import { b2bLetterTotal } from "../b2bLetterLines";
 import B2BLetterLineBadges from "../B2BLetterLineBadges";
 import { isFullyPaid, openAmountCents, paidAmountCents } from "../letterPayments";
 import StoreLetterShopForm from "./StoreLetterShopForm";
+import LetterOrderCard from "./LetterOrderCard";
+import { LetterOrdersColumns, LetterOrdersHeader } from "./LetterOrdersLayout";
+import listStyles from "./LetterOrders.module.css";
 
 type Mode = "winkel" | "productie" | "b2b";
 
@@ -480,6 +483,48 @@ function OrderRow({
   const doneAtLabel = order.productionDoneAt
     ? formatDateTime(order.productionDoneAt)
     : "";
+
+  if (roundedStyle) {
+    const remarks = [order.notes, ...order.lines.filter((line) => line.notes.trim()).map((line) => `${line.letter.toUpperCase()}: ${line.notes}`)].filter(Boolean).join(" · ");
+    const mailErrors = [order.bakeryEmailError && `Interne mail: ${order.bakeryEmailError}`, order.customerConfirmationError && `Klantbevestiging: ${order.customerConfirmationError}`, order.customerReminderError && `Ophaalherinnering: ${order.customerReminderError}`].filter(Boolean);
+    return <LetterOrderCard
+      date={formatDate(order.pickupDate)}
+      location={order.pickupLocation || order.shop || "Geen locatie"}
+      code={`${order.code} · ${totalPieces(order)} letters`}
+      customer={order.customerName}
+      summary={order.lines.map(lineLabel).join(" · ")}
+      status={statusLabel(order)}
+      tone={isPickedUp || order.status === "geannuleerd" ? "closed" : isDone ? "ready" : undefined}
+      statusNote={order.customerConfirmationSentAt ? "Bevestiging verstuurd" : undefined}
+      amount={formatMoney(order.totalCents)}
+      amountHint={order.status === "geannuleerd" ? undefined : openAmount > 0 ? `Nog ${formatMoney(openAmount)}` : paidAmount > 0 ? "Betaald" : "Bij afhalen"}
+      openAmount={openAmount > 0}
+      action={<button type="button" className={listStyles.rowButton} onClick={() => onEdit(order)}>Wijzig</button>}
+      warning={remarks || mailErrors.length ? <>{remarks && <p>Let op: {remarks}</p>}{mailErrors.map((message, index) => <p key={index}>{message}</p>)}</> : undefined}
+    >
+      <div className={listStyles.detailGrid}>
+        <div>
+          <h4>Bestelling · {totalPieces(order)} letters</h4>
+          <ul className={listStyles.lines}>{order.lines.map((line) => <li key={line.id}>{lineLabel(line)}{line.notes && <p className={listStyles.warning}>{line.notes}</p>}</li>)}</ul>
+          {order.giftWrap && <p>Cadeaupapier · alle letters ingepakt</p>}
+          {order.notes && <p><strong>Opmerking:</strong> {order.notes}</p>}
+        </div>
+        <div>
+          <h4>Contact & betaling</h4>
+          {order.customerEmail && <p><a href={`mailto:${order.customerEmail}`}>{order.customerEmail}</a></p>}
+          {order.phone && <p><a href={`tel:${order.phone}`}>{order.phone}</a></p>}
+          <p>Totaal {formatMoney(order.totalCents)} · betaald {formatMoney(paidAmount)} · open {formatMoney(openAmount)}</p>
+          <p className={listStyles.muted}>Afrekenen bij afhalen in Bake-it.</p>
+          {extraLines.map((line, index) => <p className={listStyles.muted} key={index}>{line}</p>)}
+          {isDone && <p className={listStyles.muted}>Productie klaar: {doneAtLabel || "datum onbekend"}</p>}
+        </div>
+      </div>
+      <div className={listStyles.detailActions}>
+        {order.status !== "geannuleerd" && <button type="button" className={isPickedUp ? listStyles.button : listStyles.primary} disabled={updatingId === order.id} onClick={() => onTogglePickedUp(order)}>{updatingId === order.id ? "Bezig…" : isPickedUp ? "Ophalen terugdraaien" : openAmount === 0 ? "Meegegeven" : "Open bedrag afrekenen & meegeven"}</button>}
+        <button type="button" className={`${listStyles.quiet} ${listStyles.danger}`} disabled={updatingId === `${order.id}-delete`} onClick={() => onDelete(order)}>{updatingId === `${order.id}-delete` ? "Bezig…" : "Bestelling verwijderen"}</button>
+      </div>
+    </LetterOrderCard>;
+  }
 
   return (
     <article
@@ -1138,11 +1183,13 @@ export default function SinterklaasLettersClient({
   defaultShop,
   pickupDates,
   pickupDeadlines,
+  showOnline = true,
 }: Readonly<{
   mode: Mode;
   defaultShop?: string;
   pickupDates?: string[];
   pickupDeadlines?: Record<string, string>;
+  showOnline?: boolean;
 }>) {
   const [year, setYear] = useState(() => currentYear());
   const [search, setSearch] = useState("");
@@ -1450,6 +1497,32 @@ export default function SinterklaasLettersClient({
   const groupedOrders = groupByMonth(visibleOrders);
   const isStoreMode = mode === "winkel";
 
+  if (isStoreMode) {
+    const outstanding = visibleOrders.filter((order) => !order.pickedUp && order.status !== "opgehaald" && order.status !== "geannuleerd").reduce((total, order) => total + openAmountCents(order), 0);
+    return <div className={listStyles.page}>
+      <LetterOrdersHeader channel="winkel" showOnline={showOnline} action={<button type="button" className={listStyles.primary} onClick={openNewOrderDialog}>+ Nieuwe winkelbestelling</button>} />
+      <div className={listStyles.meta}><span>Bestellingen <b>{visibleOrders.length}</b></span><span>Letters <b>{visibleOrders.reduce((total, order) => total + totalPieces(order), 0)}</b></span><span>Nog af te rekenen <b>{formatMoney(outstanding)}</b></span></div>
+      <div className={listStyles.tools}>
+        <input className={listStyles.search} aria-label="Zoek winkelbestellingen" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Zoek klant, ordernummer of letter…" />
+        <input className={listStyles.year} aria-label="Jaar winkelbestellingen" inputMode="numeric" value={year} onChange={(event) => setYear(event.target.value)} />
+        <button type="button" className={listStyles.button} onClick={() => void loadOrders(year, search)}>↻ Ververs</button>
+      </div>
+      <p className={listStyles.helper}>Met e-mailadres ontvangt de klant een bestelbevestiging en de dag vóór afhalen een herinnering.</p>
+      {error && <p role="alert" className={listStyles.error}>{error}</p>}
+      {notice && <p role="status" className={listStyles.notice}>{notice}</p>}
+      <div className={listStyles.list}>
+        <LetterOrdersColumns />
+        {loading ? <p className={listStyles.empty} role="status">Bestellingen laden…</p> : groupedOrders.map(([key, group]) => <section key={key} aria-label={monthLabel(key)}>
+          <div className={listStyles.month}><h2>{monthLabel(key)}</h2><span>{group.length} {group.length === 1 ? "bestelling" : "bestellingen"}</span></div>
+          {group.map((order) => <OrderRow key={order.id} order={order} onToggleDone={toggleProductionDone} onTogglePickedUp={togglePickedUp} onEdit={openEditOrderDialog} onDelete={(nextOrder) => void deleteOrder(nextOrder)} updatingId={updatingId} roundedStyle />)}
+        </section>)}
+        {!loading && !visibleOrders.length && <p className={listStyles.empty}>Nog geen winkelbestellingen gevonden.</p>}
+      </div>
+      <p className={listStyles.footer}><span>{visibleOrders.length} bestellingen zichtbaar</span><span>Gesorteerd op ophaaldatum · bedragen incl. btw</span></p>
+      {formOpen && <LetterOrderDialog order={editingOrder} mode={mode} defaultShop={defaultShop} pickupDates={pickupDates} pickupDeadlines={pickupDeadlines} onClose={closeOrderDialog} onSaved={handleSavedOrder} />}
+    </div>;
+  }
+
   return (
     <div className="space-y-4">
       {mode === "b2b" && (
@@ -1506,7 +1579,7 @@ export default function SinterklaasLettersClient({
             >
               +
             </span>
-            {mode === "winkel" ? "Nieuwe winkelbestelling" : mode === "b2b" ? "Nieuwe B2B-bestelling" : "Toevoegen"}
+            {mode === "b2b" ? "Nieuwe B2B-bestelling" : "Toevoegen"}
           </button>
         </div>
       </section>
