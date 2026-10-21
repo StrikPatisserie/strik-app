@@ -54,6 +54,8 @@
 .warning { margin: 9px 0 0 !important; font-size: 11px; color: #943b29; }
 .helper { margin: -7px 0 20px !important; color: var(--b2b-muted); font-size: 11px; }
 .page .year { width: 90px; }
+.scope { padding: 8px 11px; border: 1px solid var(--b2b-border); border-radius: 7px; color: var(--b2b-muted); font-size: 12px; }
+.scope b { color: var(--b2b-ink); font-weight: 500; }
 .page .detail .remove { display: inline-flex; margin: 0; padding: 0; border: 0; }
 .page .remove button { min-height: 37px; padding: 8px 13px; border: 1px solid var(--b2b-border); border-radius: 7px; background: transparent; color: #9a3412; font-size: 12px; font-weight: 500; }
 .page .remove p { margin-left: 10px; }

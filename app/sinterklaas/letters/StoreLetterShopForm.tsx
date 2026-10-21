@@ -8,6 +8,7 @@ import { LETTER_GIFT_WRAP_PRICE_CENTS } from "@/app/lib/letter-pricing";
 import { paidAmountCents as getPaidAmountCents } from "../letterPayments";
 import { saveLetterOrder, updateLetterOrder } from "../sinterklaasApi";
 import type { ChocolateLetterChocolate, ChocolateLetterLine, ChocolateLetterOrder, ChocolateLetterSize, ChocolateLetterStyle } from "../types";
+import { crossStoreLetterNotice, letterShopName, normalizeLetterShop, type LetterStoreScope } from "../letterStoreAccess";
 
 type SpecialRequest = NonNullable<ChocolateLetterLine["specialRequests"]>[number];
 type Product = { id: string; name: string; image: string; style: ChocolateLetterStyle; chocolate: ChocolateLetterChocolate };
@@ -86,9 +87,10 @@ function makeLine(product: Product, letter: string, size: ChocolateLetterSize, q
   };
 }
 
-export default function StoreLetterShopForm({ initialOrder, defaultShop = "", pickupDates, pickupDeadlines, onSaved, onCancel }: Readonly<{
+export default function StoreLetterShopForm({ initialOrder, defaultShop = "", storeScope = null, pickupDates, pickupDeadlines, onSaved, onCancel }: Readonly<{
   initialOrder?: ChocolateLetterOrder | null;
   defaultShop?: string;
+  storeScope?: LetterStoreScope;
   pickupDates: string[];
   pickupDeadlines: Record<string, string>;
   onSaved: (order: ChocolateLetterOrder) => void;
@@ -120,6 +122,7 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", pi
   const [error, setError] = useState("");
   const [draftId] = useState(() => `winkel-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
   const composerRef = useRef<HTMLDivElement>(null);
+  const otherStoreNotice = crossStoreLetterNotice(storeScope, shop);
 
   useEffect(() => {
     if (selected) composerRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -194,7 +197,7 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", pi
     if (lines.length === 0) return "Voeg eerst minimaal één letter toe.";
     if (name.trim().length < 2) return "Vul de naam van de klant in.";
     if (phone.trim().length < 6) return "Vul een telefoonnummer in.";
-    if (!pickupDate || !shop) return "Kies de afhaaldatum en de winkel.";
+    if (!pickupDate || !normalizeLetterShop(shop)) return "Kies de afhaaldatum en de winkel.";
     if (pickupDate !== initialOrder?.pickupDate && !availableDates.includes(pickupDate)) {
       return "Deze afhaaldatum is niet beschikbaar. Kies een datum uit de lijst.";
     }
@@ -300,7 +303,8 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", pi
             <button type="button" disabled={refreshingDates} onClick={() => void refreshAvailableDates().catch((refreshError) => setError(refreshError instanceof Error ? refreshError.message : "Datums verversen is mislukt."))} className="shrink-0 font-bold text-[#547762] underline disabled:opacity-50">{refreshingDates ? "Laden..." : "Ververs"}</button>
           </div>
         </div>
-        <label className="text-sm font-black">Afhaalwinkel *<select value={shop} onChange={(event) => setShop(event.target.value)} className={`${inputClass} mt-1`}><option value="">Kies winkel</option>{shop && !SHOPS.some((item) => item.value === shop) && <option value={shop}>{shop} (bestaand)</option>}{SHOPS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+        <label className="text-sm font-black">Afhaalwinkel *<select value={shop} onChange={(event) => { setShop(event.target.value); setReview(false); }} className={`${inputClass} mt-1`}><option value="">Kies winkel</option>{shop && !SHOPS.some((item) => item.value === shop) && <option value={shop}>{shop} (bestaand)</option>}{SHOPS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+        {otherStoreNotice && <p role="status" className="rounded-xl border border-[#e6d39a] bg-[#fff6df] p-3 text-sm font-semibold leading-relaxed text-[#79581c] sm:col-span-2">{otherStoreNotice}</p>}
         <label className="text-sm font-black sm:col-span-2">E-mailadres <span className="font-normal">(optioneel)</span><input value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" placeholder="klant@voorbeeld.nl" className={`${inputClass} mt-1`} /><span className="mt-1 block text-xs font-medium text-[#6b645b]">Met e-mailadres sturen we een mooie bestelbevestiging en de dag vóór afhalen een herinnering. Zonder e-mailadres sturen we niets naar de klant.</span></label>
       </div>
       <div className="mt-4 flex flex-wrap gap-3">
@@ -322,7 +326,22 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", pi
       </div>
     </section>
 
-    <section className="rounded-2xl border border-[#d1dfcb] bg-[#f8fbf5] p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#547762] text-sm font-black text-white">3</span><h3 className="text-lg font-black">Controleer en sla op</h3></div><strong className="text-xl">{money(totalCents)}</strong></div>{error && <p role="alert" className="mt-3 rounded-lg bg-[#fff1e9] p-3 text-sm font-bold text-[#a63f2b]">{error}</p>}{review ? <div className="mt-3 space-y-2 rounded-xl bg-white p-3 text-sm"><p><strong>{name}</strong> · {phone}{email ? ` · ${email}` : ""}</p><p>Afhalen: <strong>{friendlyDate(pickupDate)}</strong> · {shop}</p><ul className="border-y border-[#e4ded5] py-2">{lines.map((line) => <li key={line.id}><strong>{line.quantity}×</strong> {lineName(line)}{line.logo ? " · logo" : ""}{line.specialRequests?.length ? ` · ${line.specialRequests.join(", ")}` : ""}</li>)}</ul><p>{count} letters · {giftWrap ? "cadeaupapier" : "niet ingepakt"} · {paidAmount > 0 ? fullyPaid ? `volledig betaald (${money(paidAmount)})` : `${money(paidAmount)} betaald · ${money(openAmount)} open` : "betalen bij afhalen"}</p>{reopenProduction && <p className="rounded-lg bg-[#fff3dc] p-2 font-bold text-[#70460e]">De letters zijn gewijzigd; de productie wordt opnieuw opengezet.</p>}{recordedPaidAmountCents > 0 && openAmount > 0 && <p className="rounded-lg bg-[#fff3dc] p-2 font-bold text-[#70460e]">Alleen de bijbestelling van {money(openAmount)} blijft openstaan.</p>}<p className="text-xs text-[#6b645b]">Na opslaan staat de bestelling in de productielijst. Schrijf het ordernummer op de papieren bon en vink ‘ingevoerd’ aan.</p><button type="button" onClick={() => void save()} disabled={saving} className="mt-2 h-12 w-full rounded-xl bg-[#24551d] px-5 text-base font-black text-white disabled:opacity-60">{saving ? "Opslaan..." : initialOrder ? "Wijziging opslaan" : "Bestelling definitief opslaan"}</button><button type="button" onClick={() => setReview(false)} className="w-full py-2 text-sm font-bold text-[#547762] underline">Terug naar gegevens</button></div> : <button type="button" onClick={() => { const validationError = validate(); setError(validationError); if (!validationError) setReview(true); }} className="mt-3 h-12 w-full rounded-xl bg-[#547762] px-5 text-base font-black text-white">Bestelling controleren →</button>}</section>
+    <section className="rounded-2xl border border-[#d1dfcb] bg-[#f8fbf5] p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#547762] text-sm font-black text-white">3</span><h3 className="text-lg font-black">Controleer en sla op</h3></div><strong className="text-xl">{money(totalCents)}</strong></div>
+      {error && <p role="alert" className="mt-3 rounded-lg bg-[#fff1e9] p-3 text-sm font-bold text-[#a63f2b]">{error}</p>}
+      {review ? <div className="mt-3 space-y-2 rounded-xl bg-white p-3 text-sm">
+        <p><strong>{name}</strong> · {phone}{email ? ` · ${email}` : ""}</p>
+        <p>Afhalen: <strong>{friendlyDate(pickupDate)}</strong> · {shop}</p>
+        <ul className="border-y border-[#e4ded5] py-2">{lines.map((line) => <li key={line.id}><strong>{line.quantity}×</strong> {lineName(line)}{line.logo ? " · logo" : ""}{line.specialRequests?.length ? ` · ${line.specialRequests.join(", ")}` : ""}</li>)}</ul>
+        <p>{count} letters · {giftWrap ? "cadeaupapier" : "niet ingepakt"} · {paidAmount > 0 ? fullyPaid ? `volledig betaald (${money(paidAmount)})` : `${money(paidAmount)} betaald · ${money(openAmount)} open` : "betalen bij afhalen"}</p>
+        {reopenProduction && <p className="rounded-lg bg-[#fff3dc] p-2 font-bold text-[#70460e]">De letters zijn gewijzigd; de productie wordt opnieuw opengezet.</p>}
+        {recordedPaidAmountCents > 0 && openAmount > 0 && <p className="rounded-lg bg-[#fff3dc] p-2 font-bold text-[#70460e]">Alleen de bijbestelling van {money(openAmount)} blijft openstaan.</p>}
+        {otherStoreNotice && <p className="rounded-xl border border-[#e6d39a] bg-[#fff6df] p-3 font-semibold leading-relaxed text-[#79581c]">{otherStoreNotice}</p>}
+        <p className="text-xs text-[#6b645b]">Na opslaan staat de bestelling in de productielijst. Schrijf het ordernummer op de papieren bon en vink ‘ingevoerd’ aan.</p>
+        <button type="button" onClick={() => void save()} disabled={saving} className="mt-2 h-12 w-full rounded-xl bg-[#24551d] px-5 text-base font-black text-white disabled:opacity-60">{saving ? "Opslaan..." : otherStoreNotice ? `Opslaan voor ${letterShopName(normalizeLetterShop(shop))}` : initialOrder ? "Wijziging opslaan" : "Bestelling definitief opslaan"}</button>
+        <button type="button" onClick={() => setReview(false)} className="w-full py-2 text-sm font-bold text-[#547762] underline">Terug naar gegevens</button>
+      </div> : <button type="button" onClick={() => { const validationError = validate(); setError(validationError); if (!validationError) setReview(true); }} className="mt-3 h-12 w-full rounded-xl bg-[#547762] px-5 text-base font-black text-white">Bestelling controleren →</button>}
+    </section>
     <button type="button" onClick={onCancel} className="text-sm font-bold text-[#6b645b] underline">Sluiten zonder opslaan</button>
   </div>;
 }

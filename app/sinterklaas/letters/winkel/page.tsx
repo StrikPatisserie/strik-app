@@ -3,6 +3,7 @@ import { requireCurrentProfile } from "@/app/lib/auth/session";
 import { hasFullAccess } from "@/app/lib/auth/access";
 import SinterklaasLettersClient from "../SinterklaasLettersClient";
 import { getLettershopPickupDateOptions } from "@/app/lettershop/getPickupDates";
+import { getLetterStoreScope, letterShopName, normalizeLetterShop } from "../../letterStoreAccess";
 
 export const dynamic = "force-dynamic";
 
@@ -15,8 +16,9 @@ const SHOP_FROM_PROFILE: Record<string, string> = {
 
 export default async function SinterklaasLettersWinkelPage() {
   const profile = await requireCurrentProfile();
-  const profileStore = String(profile.store || "").trim().toLowerCase();
-  const defaultShop = SHOP_FROM_PROFILE[profileStore] || "";
+  const storeScope = getLetterStoreScope(profile);
+  const profileStore = storeScope?.[0] || normalizeLetterShop(profile.store);
+  const defaultShop = SHOP_FROM_PROFILE[profileStore] || letterShopName(profileStore);
   const pickupDateOptions = await getLettershopPickupDateOptions().catch(() => []);
   const pickupDates = pickupDateOptions.map((option) => option.date);
   const pickupDeadlines = Object.fromEntries(
@@ -26,7 +28,8 @@ export default async function SinterklaasLettersWinkelPage() {
     <StrikShell wide>
       <SinterklaasLettersClient
         mode="winkel"
-        showOnline={hasFullAccess(profile)}
+        showOnline={storeScope === null && hasFullAccess(profile)}
+        storeScope={storeScope}
         defaultShop={defaultShop}
         pickupDates={pickupDates}
         pickupDeadlines={pickupDeadlines}

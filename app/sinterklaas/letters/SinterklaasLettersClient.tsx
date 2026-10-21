@@ -24,6 +24,7 @@ import StoreLetterShopForm from "./StoreLetterShopForm";
 import LetterOrderCard from "./LetterOrderCard";
 import { LetterOrdersColumns, LetterOrdersHeader } from "./LetterOrdersLayout";
 import listStyles from "./LetterOrders.module.css";
+import { LETTER_ORDER_SHOPS, canViewStoreLetterOrder, letterOrderShop, letterShopName, type LetterStoreScope } from "../letterStoreAccess";
 
 type Mode = "winkel" | "productie" | "b2b";
 
@@ -997,6 +998,7 @@ function LetterOrderDialog({
   pickupDeadlines,
   onClose,
   onSaved,
+  storeScope = null,
 }: Readonly<{
   order: ChocolateLetterOrder | null;
   mode: Mode;
@@ -1005,6 +1007,7 @@ function LetterOrderDialog({
   pickupDeadlines?: Record<string, string>;
   onClose: () => void;
   onSaved: (order: ChocolateLetterOrder) => void;
+  storeScope?: LetterStoreScope;
 }>) {
   return (
     <div
@@ -1032,7 +1035,7 @@ function LetterOrderDialog({
           </button>
         </div>
 
-        {mode === "winkel" ? <StoreLetterShopForm key={order?.id || "new-store-order"} initialOrder={order} defaultShop={defaultShop} pickupDates={pickupDates || []} pickupDeadlines={pickupDeadlines || {}} onSaved={onSaved} onCancel={onClose} /> : <LetterOrderForm key={order?.id || "new-letter-order"} initialOrder={order} mode={mode} onSaved={onSaved} onCancel={onClose} />}
+        {mode === "winkel" ? <StoreLetterShopForm key={order?.id || "new-store-order"} initialOrder={order} defaultShop={defaultShop} storeScope={storeScope} pickupDates={pickupDates || []} pickupDeadlines={pickupDeadlines || {}} onSaved={onSaved} onCancel={onClose} /> : <LetterOrderForm key={order?.id || "new-letter-order"} initialOrder={order} mode={mode} onSaved={onSaved} onCancel={onClose} />}
       </div>
     </div>
   );
@@ -1184,15 +1187,18 @@ export default function SinterklaasLettersClient({
   pickupDates,
   pickupDeadlines,
   showOnline = true,
+  storeScope = null,
 }: Readonly<{
   mode: Mode;
   defaultShop?: string;
   pickupDates?: string[];
   pickupDeadlines?: Record<string, string>;
   showOnline?: boolean;
+  storeScope?: LetterStoreScope;
 }>) {
   const [year, setYear] = useState(() => currentYear());
   const [search, setSearch] = useState("");
+  const [selectedShop, setSelectedShop] = useState(storeScope?.length === 1 ? storeScope[0] : "");
   const [orders, setOrders] = useState<ChocolateLetterOrder[]>([]);
   const [b2bOrders, setB2BOrders] = useState<SinterklaasB2BOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1217,7 +1223,7 @@ export default function SinterklaasLettersClient({
         fetchLetterOrders(nextYear, nextSearch),
         mode === "productie" ? fetchB2BOrders(nextYear) : Promise.resolve([]),
       ]);
-      setOrders(letters);
+      setOrders(mode === "winkel" ? letters.filter((order) => canViewStoreLetterOrder(storeScope, order)) : letters);
       setB2BOrders(b2b);
     } catch (loadError) {
       setError(
@@ -1237,7 +1243,7 @@ export default function SinterklaasLettersClient({
 
   const visibleOrders = useMemo(() => {
     const sourceOrders = mode === "winkel"
-      ? orders.filter((order) => order.source === "winkel")
+      ? orders.filter((order) => order.source === "winkel" && canViewStoreLetterOrder(storeScope, order) && (!selectedShop || letterOrderShop(order) === selectedShop))
       : orders;
     const term = search.trim().toLocaleLowerCase("nl-NL");
     if (!term) return sourceOrders;
@@ -1258,7 +1264,7 @@ export default function SinterklaasLettersClient({
         .toLocaleLowerCase("nl-NL")
         .includes(term)
     );
-  }, [mode, orders, search]);
+  }, [mode, orders, search, selectedShop, storeScope]);
 
   const visibleB2BOrders = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("nl-NL");
@@ -1372,8 +1378,10 @@ export default function SinterklaasLettersClient({
   }
 
   function handleSavedOrder(order: ChocolateLetterOrder) {
-    setOrders((current) => updateOrderList(current, order));
-    setNotice(mode === "winkel" ? `Bestelling ${order.code} opgeslagen. Schrijf dit nummer op de papieren bon en vink ‘ingevoerd’ aan.` : "");
+    const canView = mode !== "winkel" || canViewStoreLetterOrder(storeScope, order);
+    setOrders((current) => canView ? updateOrderList(current, order) : current.filter((item) => item.id !== order.id));
+    const transferNotice = mode === "winkel" && !canView ? `Je kunt deze bestelling hier niet meer inzien of wijzigen. ${letterShopName(letterOrderShop(order))} en beheer kunnen de bestelling verder behandelen.` : "";
+    setNotice(mode === "winkel" ? `Bestelling ${order.code} opgeslagen voor ${letterShopName(letterOrderShop(order))}. Schrijf dit nummer op de papieren bon en vink ‘ingevoerd’ aan.${transferNotice ? ` ${transferNotice}` : ""}` : "");
     const mailErrors = [order.bakeryEmailError, order.customerConfirmationError].filter(Boolean);
     setError(mailErrors.length ? `Bestelling ${order.code} is opgeslagen, maar let op: ${mailErrors.join(" ")}` : "");
     closeOrderDialog();
@@ -1500,14 +1508,16 @@ export default function SinterklaasLettersClient({
   if (isStoreMode) {
     const outstanding = visibleOrders.filter((order) => !order.pickedUp && order.status !== "opgehaald" && order.status !== "geannuleerd").reduce((total, order) => total + openAmountCents(order), 0);
     return <div className={listStyles.page}>
-      <LetterOrdersHeader channel="winkel" showOnline={showOnline} action={<button type="button" className={listStyles.primary} onClick={openNewOrderDialog}>+ Nieuwe winkelbestelling</button>} />
+      <LetterOrdersHeader channel="winkel" showOnline={showOnline} action={<button type="button" className={listStyles.primary} disabled={storeScope !== null && !storeScope.length} onClick={openNewOrderDialog}>+ Nieuwe winkelbestelling</button>} />
       <div className={listStyles.meta}><span>Bestellingen <b>{visibleOrders.length}</b></span><span>Letters <b>{visibleOrders.reduce((total, order) => total + totalPieces(order), 0)}</b></span><span>Nog af te rekenen <b>{formatMoney(outstanding)}</b></span></div>
       <div className={listStyles.tools}>
         <input className={listStyles.search} aria-label="Zoek winkelbestellingen" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Zoek klant, ordernummer of letter…" />
+        {storeScope?.length === 1 ? <span className={listStyles.scope}>Afhaalwinkel: <b>{letterShopName(storeScope[0])}</b></span> : <select aria-label="Filter op afhaalwinkel" value={selectedShop} onChange={(event) => setSelectedShop(event.target.value)}><option value="">{storeScope === null ? "Alle winkels" : "Mijn winkels"}</option>{LETTER_ORDER_SHOPS.filter((shop) => storeScope === null || storeScope.includes(shop.id)).map((shop) => <option key={shop.id} value={shop.id}>{shop.name}</option>)}</select>}
         <input className={listStyles.year} aria-label="Jaar winkelbestellingen" inputMode="numeric" value={year} onChange={(event) => setYear(event.target.value)} />
         <button type="button" className={listStyles.button} onClick={() => void loadOrders(year, search)}>↻ Ververs</button>
       </div>
       <p className={listStyles.helper}>Met e-mailadres ontvangt de klant een bestelbevestiging en de dag vóór afhalen een herinnering.</p>
+      {storeScope !== null && !storeScope.length && <p role="alert" className={listStyles.error}>Aan dit account is nog geen winkel gekoppeld. Vraag beheer om dit in te stellen.</p>}
       {error && <p role="alert" className={listStyles.error}>{error}</p>}
       {notice && <p role="status" className={listStyles.notice}>{notice}</p>}
       <div className={listStyles.list}>
@@ -1519,7 +1529,7 @@ export default function SinterklaasLettersClient({
         {!loading && !visibleOrders.length && <p className={listStyles.empty}>Nog geen winkelbestellingen gevonden.</p>}
       </div>
       <p className={listStyles.footer}><span>{visibleOrders.length} {visibleOrders.length === 1 ? "bestelling" : "bestellingen"} zichtbaar</span><span>Gesorteerd op ophaaldatum · bedragen incl. btw</span></p>
-      {formOpen && <LetterOrderDialog order={editingOrder} mode={mode} defaultShop={defaultShop} pickupDates={pickupDates} pickupDeadlines={pickupDeadlines} onClose={closeOrderDialog} onSaved={handleSavedOrder} />}
+      {formOpen && <LetterOrderDialog order={editingOrder} mode={mode} defaultShop={letterShopName(selectedShop) || defaultShop} storeScope={storeScope} pickupDates={pickupDates} pickupDeadlines={pickupDeadlines} onClose={closeOrderDialog} onSaved={handleSavedOrder} />}
     </div>;
   }
 

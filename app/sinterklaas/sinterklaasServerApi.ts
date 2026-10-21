@@ -3,6 +3,8 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { canAccessPath, canAccessSinterklaas } from "../lib/auth/access";
 import { getCurrentProfile } from "../lib/auth/session";
+import { canViewStoreLetterOrder, getLetterStoreScope, letterOrderShop, letterShopName } from "./letterStoreAccess";
+import { randomUUID } from "node:crypto";
 
 const WORDPRESS_SINTERKLAAS_API_BASE =
   process.env.WORDPRESS_SINTERKLAAS_API_BASE ||
@@ -69,13 +71,14 @@ function createWordPressErrorResponse(endpoint: string, status: number) {
   );
 }
 
-async function ensureSinterklaasAccess(endpoint: string) {
+async function getAuthorizedSinterklaasProfile(endpoint: string) {
   const profile = await getCurrentProfile();
-  return canAccessSinterklaas(profile) || (["sinterklaas-mailing", "sinterklaas-b2b-orders"].includes(endpoint) && canAccessPath(profile, "/kerst"));
+  return canAccessSinterklaas(profile) || (["sinterklaas-mailing", "sinterklaas-b2b-orders"].includes(endpoint) && canAccessPath(profile, "/kerst")) ? profile : null;
 }
 
 export async function proxySinterklaasGet(request: Request, endpoint: string) {
-  if (!(await ensureSinterklaasAccess(endpoint))) {
+  const profile = await getAuthorizedSinterklaasProfile(endpoint);
+  if (!profile) {
     return jsonError("Geen toegang tot Sinterklaas.", 403);
   }
 
@@ -92,6 +95,16 @@ export async function proxySinterklaasGet(request: Request, endpoint: string) {
       return createWordPressErrorResponse(endpoint, response.status);
     }
 
+    if (endpoint === "sinterklaas-letter-orders") {
+      const scope = getLetterStoreScope(profile);
+      if (scope !== null) {
+        if (!data || typeof data !== "object" || !("orders" in data) || !Array.isArray(data.orders)) {
+          return jsonError("Winkelbestellingen konden niet worden gecontroleerd.", 502);
+        }
+        const orders = data.orders.filter((order) => order && typeof order === "object" && canViewStoreLetterOrder(scope, order));
+        return NextResponse.json({ orders, total: orders.length, generatedAt: "generatedAt" in data ? data.generatedAt : undefined });
+      }
+    }
     return NextResponse.json(data || { orders: [] });
   } catch {
     return NextResponse.json(
@@ -106,11 +119,13 @@ export async function proxySinterklaasMutation(
   endpoint: string,
   method: "POST" | "PATCH" | "DELETE"
 ) {
-  if (!(await ensureSinterklaasAccess(endpoint))) {
+  const profile = await getAuthorizedSinterklaasProfile(endpoint);
+  if (!profile) {
     return jsonError("Geen toegang tot Sinterklaas.", 403);
   }
 
   let body = "";
+  let mutationRequestUrl = request.url;
 
   try {
     body = await request.text();
@@ -119,7 +134,51 @@ export async function proxySinterklaasMutation(
   }
 
   try {
-    const response = await fetch(getWordPressUrl(endpoint, request.url), {
+    if (endpoint === "sinterklaas-letter-orders") {
+      const scope = getLetterStoreScope(profile);
+      if (scope !== null) {
+        if (!scope.length) return jsonError("Aan dit winkelaccount is nog geen winkel gekoppeld. Vraag beheer om dit in te stellen.", 403);
+        let params: Record<string, unknown>;
+        try { params = body ? JSON.parse(body) : {}; }
+        catch { return jsonError("Geen geldige bestelling ontvangen."); }
+        if (!params || typeof params !== "object" || Array.isArray(params)) return jsonError("Geen geldige bestelling ontvangen.");
+        const queryIds = new URL(request.url).searchParams.getAll("id");
+        if (queryIds.length > 1) return jsonError("Controleer het ordernummer.");
+        const queryId = queryIds[0] || "";
+        const bodyId = params.id ?? "";
+        if (typeof bodyId !== "string" || (queryId && bodyId && queryId.toLowerCase() !== bodyId.toLowerCase())) return jsonError("Controleer het ordernummer.");
+        const id = bodyId || queryId;
+        if (id && !/^[a-z0-9_-]{1,120}$/i.test(id)) return jsonError("Controleer het ordernummer.");
+        if (method !== "POST" && !id) return jsonError("Ordernummer ontbreekt.");
+
+        // Check ownership against all stored orders, independent of any year,
+        // search or shop filter supplied by the browser. POST is an upsert too.
+        const lookupUrl = new URL(request.url);
+        lookupUrl.search = "";
+        const lookup = await fetch(getWordPressUrl(endpoint, lookupUrl.toString()), { cache: "no-store", headers: { Accept: "application/json" } });
+        if (!lookup.ok) return createWordPressErrorResponse(endpoint, lookup.status);
+        const stored = await readWordPressResponse(lookup);
+        if (!stored || typeof stored !== "object" || !("orders" in stored) || !Array.isArray(stored.orders)) return jsonError("De bestelling kon niet worden gecontroleerd. Probeer opnieuw.", 502);
+        const existing = id ? stored.orders.find((order) => order && typeof order === "object" && typeof order.id === "string" && order.id.toLowerCase() === id.toLowerCase()) : undefined;
+        if ((existing && !canViewStoreLetterOrder(scope, existing)) || (!existing && method !== "POST")) return jsonError("Deze bestelling is niet beschikbaar voor deze winkel.", 403);
+        const targetUrl = new URL(request.url);
+        targetUrl.search = "";
+        if (id) targetUrl.searchParams.set("id", id);
+        mutationRequestUrl = targetUrl.toString();
+        if (method !== "DELETE") {
+          const destination = letterOrderShop({ ...(existing || {}), ...params });
+          if (!destination) return jsonError("Kies een geldige afhaalwinkel.");
+          params.source = "winkel";
+          params.id = existing?.id || id || `winkel-${randomUUID()}`;
+          params.shop = letterShopName(destination);
+          params.pickupLocation = params.shop;
+          body = JSON.stringify(params);
+        } else {
+          body = "";
+        }
+      }
+    }
+    const response = await fetch(getWordPressUrl(endpoint, mutationRequestUrl), {
       method,
       headers: {
         Accept: "application/json",
