@@ -1,14 +1,6 @@
-import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
+import { StrikShell } from "../../StrikUI";
 import SinterklaasB2BClient from "./SinterklaasB2BClient";
 
-export default function SinterklaasB2BPage() {
-  return (
-    <StrikShell extraWide>
-      <StrikPageHeader
-        title="B2B bestellingen · Sint"
-        icon={strikIcons.sinterklaasB2B}
-      />
-      <SinterklaasB2BClient />
-    </StrikShell>
-  );
+export default function B2BOrdersPage() {
+  return <StrikShell extraWide tone="default"><SinterklaasB2BClient /></StrikShell>;
 }

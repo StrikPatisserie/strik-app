@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import styles from "./B2BOrders.module.css";
 import B2BConfirmationDialog, { customerConfirmationSent, shouldOfferCustomerConfirmation } from "./B2BConfirmationDialog";
-import BusinessSeasonNav from "../../BusinessSeasonNav";
-import { businessSeasonColors, orderBelongsToSeason, seasonLabel, type BusinessSeason } from "../../lib/businessSeasons";
+import { businessSeasonColors, businessSeasons, orderBelongsToSeason, seasonLabel, type BusinessSeason } from "../../lib/businessSeasons";
 import { christmasProducts } from "../../kerst-voor-bedrijven/christmasProducts";
 import { BUSINESS_FOLDER_PRICE_TIERS } from "../../lib/business-folder-pricing";
 import {
@@ -553,6 +554,19 @@ function deliveryWindowLabel(order: Pick<SinterklaasB2BOrder, "deliveryWindowTyp
   return formatDate(order.deliveryDate);
 }
 
+function compactDeliveryWindow(order: Pick<SinterklaasB2BOrder, "deliveryWindowType" | "deliveryDate" | "deliveryDateEnd" | "deliveryWeek">) {
+  if (order.deliveryWindowType === "week" || !order.deliveryDate) return deliveryWindowLabel(order);
+  const start = new Date(`${order.deliveryDate}T12:00:00`);
+  if (order.deliveryWindowType === "range" && order.deliveryDateEnd) {
+    const end = new Date(`${order.deliveryDateEnd}T12:00:00`);
+    const short = (date: Date) => new Intl.DateTimeFormat("nl-NL", { day: "numeric", month: "short" }).format(date);
+    return order.deliveryDate.slice(0, 7) === order.deliveryDateEnd.slice(0, 7)
+      ? `${start.getDate()}–${short(end)}`
+      : `${short(start)} – ${short(end)}`;
+  }
+  return new Intl.DateTimeFormat("nl-NL", { weekday: "short", day: "numeric", month: "short" }).format(start);
+}
+
 function formatDateTime(value: string) {
   if (!value) return "";
 
@@ -838,11 +852,20 @@ function B2BOrderForm({
   const [productDraft, setProductDraft] = useState<B2BProductLine>(emptyProductDraft);
   const [letterDraft, setLetterDraft] = useState<LetterDraft>(emptyLetterDraft);
   const [addFeedback, setAddFeedback] = useState("");
+  const [step, setStep] = useState(1);
+  const [productTab, setProductTab] = useState(season === "kerst" || initialOrder?.department === "bakkerij" ? "products" : "letters");
+  const formRef = useRef<HTMLFormElement>(null);
 
   const draftKey = `strik-b2b-order-draft-v1-${initialOrder?.id || `new-${season}`}`;
   const [draftReady, setDraftReady] = useState(false);
   const [draftNotice, setDraftNotice] = useState("");
   const messageRef = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    const heading = formRef.current?.querySelector<HTMLElement>(`[data-form-step="${step}"] h2`);
+    heading?.focus({ preventScroll: true });
+    formRef.current?.scrollIntoView({ block: "start" });
+  }, [step]);
 
   useEffect(() => {
     try {
@@ -1055,6 +1078,7 @@ function B2BOrderForm({
 
   async function submitOrder(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (step < 3) { goToStep(step + 1); return; }
     setMessage("");
     if (saving) return;
     const invalid = Array.from(event.currentTarget.elements).find((element) =>
@@ -1063,6 +1087,8 @@ function B2BOrderForm({
     ) as HTMLInputElement | undefined;
     if (invalid) {
       invalid.closest("details")?.setAttribute("open", "");
+      const invalidStep = invalid.closest<HTMLElement>("[data-form-step]")?.dataset.formStep;
+      if (invalidStep) setStep(Number(invalidStep));
       const label = invalid.getAttribute("aria-label") || invalid.getAttribute("placeholder") || invalid.closest("label")?.textContent?.trim() || "invoerveld";
       setMessage(`Controleer ${label}: ${invalid.validationMessage}`);
       return;
@@ -1159,692 +1185,342 @@ function B2BOrderForm({
     }
   }
 
+  function goToStep(next: number) {
+    if (saving) return;
+    setMessage("");
+    if (next > 1) {
+      if (!form.customerName.trim()) { setStep(1); setMessage("Vul minimaal de klantnaam in."); return; }
+      const invalid = formRef.current?.querySelector<HTMLInputElement>('[data-form-step="1"] input:invalid');
+      if (invalid) { setStep(1); setMessage(`Controleer ${invalid.getAttribute("aria-label") || invalid.closest("label")?.textContent}: ${invalid.validationMessage}`); return; }
+      if (form.deliveryWindowType === "range" && (!form.deliveryDate || !form.deliveryDateEnd || form.deliveryDateEnd < form.deliveryDate)) { setStep(1); setMessage("Vul een geldige begin- en einddatum voor de leverperiode in."); return; }
+      if (form.deliveryWindowType === "week" && !form.deliveryWeek) { setStep(1); setMessage("Kies de gewenste leverweek."); return; }
+    }
+    setStep(next);
+  }
+
+  function textField(key: "customerName" | "contactName" | "customerEmail" | "phone" | "deliveryMethod" | "logo" | "packaging" | "textInstructions" | "priceAgreement", label: string, type = "text") {
+    return <label className={styles.field}>{label}<input aria-label={label} type={type} value={form[key]} onChange={event => setField(key, event.target.value)} /></label>;
+  }
+
+  const hasDelivery = /bezorg|lever/i.test(form.deliveryMethod);
+  const hasPickup = /afhal|afhaal|ophal/i.test(form.deliveryMethod);
+  const total = manualTotal ? moneyNumber(form.totalExVat) : calculatedTotalEx;
+  const steps = ["Klant & levering", "Producten", "Controleren"];
+
   return (
-    <form
-      onSubmit={submitOrder}
-      noValidate
-      aria-busy={saving}
-      className="grid gap-3 text-xs xl:grid-cols-[20rem_minmax(0,1fr)] xl:items-start"
-    >
-
-      <section className="overflow-hidden rounded-xl border border-[#d8d2ca] bg-[#f3f0ec] xl:col-start-1 xl:row-start-1">
-        {initialOrder?.folderQuote && <aside className="rounded-xl border border-[#bfd0bc] bg-[#eff5ec] p-3 text-[#31552a]">
-        <strong>Ontvangen via de folder · {initialOrder.folderQuote.reference}</strong>
-        <p className="mt-1">{initialOrder.folderQuote.mailSentAt ? "Interne e-mailmelding verstuurd." : "De aanvraag is opgeslagen. Controleer de interne e-mailmelding; de verzending is nog niet bevestigd."}</p>
-        <details className="mt-2"><summary className="cursor-pointer font-bold">Oorspronkelijke aanvraag bekijken</summary><pre className="mt-2 whitespace-pre-wrap break-words font-sans leading-relaxed">{initialOrder.folderQuote.quoteText}</pre></details>
-      </aside>}
-        <div className="flex items-center justify-between bg-[#e5e0d9] px-3 py-2">
-          <div className="text-sm font-bold text-[#4d463d]">Orderinformatie</div>
-          <span className="text-[0.68rem] font-medium text-[#756d64]">klant & levering</span>
-        </div>
-        <div className="grid gap-px bg-[#ddd7cf] p-px sm:grid-cols-2 xl:grid-cols-1">
-        <label className="grid bg-white px-3 py-2 sm:col-span-2 xl:col-span-1">
-          <span className="text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-[#8b8278]">Fase</span>
-          <select value={form.status} onChange={(event) => setField("status", event.target.value as B2BFormState["status"])} className="h-9 min-w-0 border-0 bg-white px-0 text-sm font-semibold outline-none">
-            <option value="aanvraag">Aanvraag · nog niet definitief</option>
-            <option value="offerte">Offerte verzonden · wacht op akkoord</option>
-            <option value="akkoord">Definitief · klant heeft akkoord gegeven</option>
-            <option value="afgewezen">Niet doorgegaan</option>
-          </select>
-        </label>
-        <input
-          value={form.customerName}
-          onChange={(event) => setField("customerName", event.target.value)}
-          placeholder="Klantnaam"
-          className="h-10 min-w-0 border-0 bg-white px-3 text-sm font-medium outline-none"
-        />
-        <input
-          value={form.contactName}
-          onChange={(event) => setField("contactName", event.target.value)}
-          placeholder="Contactpersoon"
-          className="h-10 min-w-0 border-0 bg-white px-3 text-sm font-medium outline-none"
-        />
-        <input
-          value={form.customerEmail}
-          onChange={(event) => setField("customerEmail", event.target.value)}
-          placeholder="E-mail"
-          type="email"
-          className="h-10 min-w-0 border-0 bg-white px-3 text-sm font-medium outline-none"
-        />
-        <input
-          value={form.phone}
-          onChange={(event) => setField("phone", event.target.value)}
-          placeholder="Telefoon"
-          className="h-10 min-w-0 border-0 bg-white px-3 text-sm font-medium outline-none"
-        />
-        <div className="grid gap-1.5 bg-white px-3 py-2 sm:col-span-2 xl:col-span-1">
-          <span className="text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-[#8b8278]">
-            Gewenste levering
-          </span>
-          <select
-            value={form.deliveryWindowType}
-            onChange={(event) => {
-              const deliveryWindowType = event.target
-                .value as B2BFormState["deliveryWindowType"];
-              setForm((current) => {
-                if (deliveryWindowType === "week") {
-                  const deliveryWeek =
-                    current.deliveryWeek || isoWeekFromDate(current.deliveryDate);
-                  const bounds = isoWeekBounds(deliveryWeek);
-                  return {
-                    ...current,
-                    deliveryWindowType,
-                    deliveryWeek,
-                    deliveryDate: bounds?.start || "",
-                    deliveryDateEnd: bounds?.end || "",
-                    productionDate: "",
-                  };
-                }
-                if (deliveryWindowType === "range") {
-                  return {
-                    ...current,
-                    deliveryWindowType,
-                    deliveryDateEnd:
-                      current.deliveryDateEnd || current.deliveryDate,
-                    deliveryWeek: "",
-                    productionDate: "",
-                  };
-                }
-                return {
-                  ...current,
-                  deliveryWindowType,
-                  deliveryDateEnd: "",
-                  deliveryWeek: "",
-                  productionDate: "",
-                };
-              });
-            }}
-            className="h-8 min-w-0 rounded-lg border border-[#e4ded5] bg-[#faf8f5] px-2 text-xs font-bold outline-none"
-          >
-            <option value="date">Vaste datum</option>
-            <option value="range">Tussen twee data</option>
-            <option value="week">Hele week</option>
-          </select>
-          {form.deliveryWindowType === "date" && (
-            <input
-              value={form.deliveryDate}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  deliveryDate: event.target.value,
-                  productionDate: "",
-                }))
-              }
-              type="date"
-              aria-label="Vaste leverdatum"
-              className="h-9 min-w-0 border-0 bg-white px-0 text-sm font-semibold outline-none"
-            />
-          )}
-          {form.deliveryWindowType === "range" && (
-            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1">
-              <input
-                value={form.deliveryDate}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    deliveryDate: event.target.value,
-                    productionDate: "",
-                  }))
-                }
-                type="date"
-                aria-label="Begin gewenste leverperiode"
-                className="h-9 min-w-0 border-0 bg-white px-0 text-xs font-semibold outline-none"
-              />
-              <span className="text-[0.65rem] font-bold text-[#8b8278]">t/m</span>
-              <input
-                value={form.deliveryDateEnd}
-                min={form.deliveryDate || undefined}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    deliveryDateEnd: event.target.value,
-                    productionDate: "",
-                  }))
-                }
-                type="date"
-                aria-label="Einde gewenste leverperiode"
-                className="h-9 min-w-0 border-0 bg-white px-0 text-xs font-semibold outline-none"
-              />
-            </div>
-          )}
-          {form.deliveryWindowType === "week" && (
-            <input
-              value={form.deliveryWeek}
-              onChange={(event) => {
-                const deliveryWeek = event.target.value;
-                const bounds = isoWeekBounds(deliveryWeek);
-                setForm((current) => ({
-                  ...current,
-                  deliveryWeek,
-                  deliveryDate: bounds?.start || "",
-                  deliveryDateEnd: bounds?.end || "",
-                  productionDate: "",
-                }));
-              }}
-              type="week"
-              aria-label="Gewenste leverweek"
-              className="h-9 min-w-0 border-0 bg-white px-0 text-sm font-semibold outline-none"
-            />
-          )}
-        </div>
-        <select
-          value={form.department}
-          onChange={(event) =>
-            setField(
-              "department",
-              event.target.value as SinterklaasB2BOrder["department"]
-            )
-          }
-          className="h-10 min-w-0 border-0 bg-white px-3 text-sm font-semibold outline-none"
-        >
-          {DEPARTMENTS.map((department) => (
-            <option key={department.id} value={department.id}>
-              {department.label}
-            </option>
-          ))}
-        </select>
-        <input
-          value={form.deliveryMethod}
-          onChange={(event) => setField("deliveryMethod", event.target.value)}
-          placeholder="Bezorgen / ophalen"
-          className="h-10 min-w-0 border-0 bg-white px-3 text-sm font-medium outline-none sm:col-span-2 xl:col-span-1"
-        />
-        </div>
-      </section>
-
-      <section className="overflow-hidden rounded-xl border border-[#b8cab5] bg-[#f7faf6] shadow-sm xl:col-start-2 xl:row-span-2 xl:row-start-1">
-        <div className="flex items-center justify-between bg-[#315d2a] px-3 py-2 text-white">
-          <div className="text-sm font-bold">Bestelling</div>
-          <span className="text-xs font-medium">{form.productLines.length} regels · {money(calculatedTotalEx)} ex btw</span>
-        </div>
-
-      {form.department !== "bakkerij" && (
-        <details open={form.letterLines.length > 0 || Boolean(form.letterOrderText) || undefined} className="border-b-2 border-[#5f8458] bg-white">
-          <summary className="flex cursor-pointer items-center justify-between bg-[#cfe5ca] px-3 py-2">
-            <div className="text-sm font-semibold text-[#24451f]">Chocoladeletters</div>
-            <span className="text-xs font-semibold text-[#365b30]">{b2bLetterTotal(form.letterLines)} stuks · uitklappen ▾</span>
-          </summary>
-
-          <div className="hidden grid-cols-[4.5rem_8rem_7rem_6rem_5rem_minmax(18rem,1fr)_8rem] border-y border-[#c9d8c6] bg-[#edf4eb] py-1.5 text-[0.62rem] font-semibold uppercase tracking-[0.06em] text-[#6b645b] xl:grid">
-            <span className="px-2">Letter</span>
-            <span className="px-2">Chocolade</span>
-            <span className="px-2">Soort</span>
-            <span className="px-2">Formaat</span>
-            <span className="px-2 text-right">Aantal</span>
-            <span className="px-2">Vrij van</span>
-            <span />
+    <form ref={formRef} onSubmit={submitOrder} noValidate aria-busy={saving} className={styles.form}>
+      <nav className={styles.steps} aria-label="Bestelling invoeren">
+        {steps.map((label, index) => <button type="button" key={label} className={styles.step} aria-current={step === index + 1 ? "step" : undefined} onClick={() => goToStep(index + 1)} disabled={saving}>
+          <span className={styles.stepNumber}>{step > index + 1 ? "✓" : index + 1}</span><span>{label}</span>
+        </button>)}
+      </nav>
+      <div className={styles.formGrid}>
+        <section data-form-step="1" hidden={step !== 1} className={styles.formPanel}>
+          <h2 tabIndex={-1}>Klant & levering</h2>
+          <p className={styles.panelIntro}>De gegevens en afspraken voor deze bestelling.</p>
+          {initialOrder?.folderQuote && <details className={styles.notice}>
+            <summary>Ontvangen via de folder · {initialOrder.folderQuote.reference}</summary>
+            <p>{initialOrder.folderQuote.mailSentAt ? "Interne e-mailmelding verstuurd." : "De aanvraag is opgeslagen; controleer de interne e-mailmelding."}</p>
+            <pre className="whitespace-pre-wrap break-words font-sans">{initialOrder.folderQuote.quoteText}</pre>
+          </details>}
+          <div className={styles.fieldGrid}>
+            {textField("customerName", "Bedrijfsnaam / klantnaam *")}
+            {textField("contactName", "Contactpersoon")}
+            {textField("customerEmail", "E-mailadres", "email")}
+            {textField("phone", "Telefoonnummer", "tel")}
           </div>
-
-          <div className="grid grid-cols-2 gap-2 bg-white p-3 sm:grid-cols-3 xl:grid-cols-[4.5rem_8rem_7rem_6rem_5rem_minmax(18rem,1fr)_8rem] xl:items-end xl:gap-0 xl:p-0">
-            <label className="grid gap-1 text-[0.65rem] font-semibold text-[#6b645b] xl:block">
-              <span className="xl:hidden">Letter</span>
-              <select aria-label="Letter" value={letterDraft.letter} onChange={(event) => updateLetterDraft({ letter: event.target.value })} className="!h-10 !w-full !min-w-0 !border-[#c9d8c6] !bg-white !px-2 !py-0 !text-sm font-semibold outline-none disabled:text-[#8b8278] xl:!h-9 xl:!rounded-none xl:!border-0 xl:!bg-transparent">
-                <option value="" disabled>Letter</option>
-                {(letterDraft.style === "vorm" ? B2B_VORM_LETTERS : B2B_SPUIT_LETTERS).map((letter) => <option key={letter} value={letter}>{letter}</option>)}
-              </select>
-            </label>
-            <label className="grid gap-1 text-[0.65rem] font-semibold text-[#6b645b] xl:block">
-              <span className="xl:hidden">Chocolade</span>
-              <select aria-label="Chocolade" value={letterDraft.chocolate} onChange={(event) => updateLetterDraft({ chocolate: event.target.value as B2BLetterLine["chocolate"] })} className="!h-10 !w-full !min-w-0 !border-[#c9d8c6] !bg-white !px-2 !py-0 !text-sm font-medium outline-none xl:!h-9 xl:!rounded-none xl:!border-0 xl:!bg-transparent">
-                <option value="" disabled>Smaak</option><option value="melk">Melk</option><option value="puur">Puur</option><option value="wit">Wit</option>
-              </select>
-            </label>
-            <label className="grid gap-1 text-[0.65rem] font-semibold text-[#6b645b] xl:block">
-              <span className="xl:hidden">Soort</span>
-              <select aria-label="Soort" value={letterDraft.style} onChange={(event) => updateLetterDraft({ style: event.target.value as B2BLetterLine["style"] })} className="!h-10 !w-full !min-w-0 !border-[#c9d8c6] !bg-white !px-2 !py-0 !text-sm font-medium outline-none xl:!h-9 xl:!rounded-none xl:!border-0 xl:!bg-transparent">
-                <option value="" disabled>Soort</option><option value="spuit">Spuit</option><option value="vorm">Vorm (S)</option>
-              </select>
-            </label>
-            <label className="grid gap-1 text-[0.65rem] font-semibold text-[#6b645b] xl:block">
-              <span className="xl:hidden">Formaat</span>
-              <select aria-label="Formaat" value={letterDraft.size} onChange={(event) => updateLetterDraft({ size: event.target.value as B2BLetterLine["size"] })} className="!h-10 !w-full !min-w-0 !border-[#c9d8c6] !bg-white !px-2 !py-0 !text-sm font-medium outline-none disabled:text-[#8b8278] xl:!h-9 xl:!rounded-none xl:!border-0 xl:!bg-transparent">
-                <option value="" disabled>Formaat</option><option value="groot">Groot</option>{letterDraft.style !== "vorm" && <option value="klein">Klein</option>}
-              </select>
-            </label>
-            <label className="grid gap-1 text-[0.65rem] font-semibold text-[#6b645b] xl:block">
-              <span className="xl:hidden">Aantal</span>
-              <input data-order-draft aria-label="Aantal" type="number" min="1" max="10000" placeholder="Aantal" value={letterDraft.quantity || ""} onChange={(event) => updateLetterDraft({ quantity: Number(event.target.value) })} className="!h-10 !w-full !min-w-0 !border-[#c9d8c6] !bg-white !px-2 !py-0 text-right !text-sm font-semibold outline-none xl:!h-9 xl:!rounded-none xl:!border-0 xl:!bg-transparent" />
-            </label>
-            <fieldset className="col-span-2 rounded-md border border-[#c9d8c6] px-2 py-2 sm:col-span-3 xl:col-span-1 xl:rounded-none xl:border-0 xl:px-2 xl:py-0">
-              <legend className="px-1 text-[0.65rem] font-semibold text-[#6b645b] xl:hidden">Vrij van</legend>
-              <div className="flex min-h-9 flex-wrap items-center gap-x-4 gap-y-2 text-xs font-medium text-[#5d554d]">
-                {B2B_LETTER_EXCEPTIONS.map(({ id, label }) => <label key={id} className="inline-flex items-center gap-1.5"><input className="h-4 w-4" type="checkbox" checked={letterDraft.exceptions.includes(id)} onChange={(event) => updateLetterDraft({ exceptions: event.target.checked ? [...letterDraft.exceptions, id] : letterDraft.exceptions.filter((value) => value !== id) })} />{label}</label>)}
-              </div>
-            </fieldset>
-            <div className="col-span-2 sm:col-span-3 xl:col-span-1 xl:px-2">
-              <button type="button" onClick={addLetterToOrder} className="h-10 w-full rounded-md bg-[#315d2a] px-3 text-xs font-semibold text-white xl:h-8">+ Letter toevoegen</button>
-            </div>
+          <hr className={styles.rule} />
+          <p className={styles.field}>Hoe ontvangt de klant de bestelling?</p>
+          <div className={styles.segments}>
+            <button type="button" aria-pressed={hasPickup} onClick={() => setField("deliveryMethod", "Afhalen bij Strik")}>Afhalen</button>
+            <button type="button" aria-pressed={hasDelivery} onClick={() => setField("deliveryMethod", "Bezorgen")}>Bezorgen</button>
           </div>
-
-          <div className="divide-y divide-[#e2e9df] border-t border-[#dbe6d8]">
-            {form.letterLines.map((line) => (
-              <div key={line.id} className="grid bg-[#eeefec] text-[#555b52] grid-cols-[minmax(0,1fr)_5rem_auto] items-center gap-2 px-3 py-2 text-xs xl:grid-cols-[4.5rem_8rem_7rem_6rem_5rem_minmax(18rem,1fr)_8rem] xl:gap-0 xl:px-0">
-                <span className="min-w-0 font-semibold xl:px-2">
-                  {line.letter}<span className="ml-1 text-[0.52rem] font-semibold text-[#697563]">✓ Toegevoegd</span>
-                  <span className="ml-1 font-medium capitalize text-[#6b645b] xl:hidden">· {line.chocolate} · {line.style} · {line.size}</span>
-                  {line.exceptions.length > 0 && <span className="mt-0.5 block truncate font-medium text-[#705000] xl:hidden">Vrij van: {line.exceptions.join(", ")}</span>}
-                </span>
-                <span className="hidden px-2 capitalize xl:block">{line.chocolate}</span>
-                <span className="hidden px-2 capitalize xl:block">{line.style}</span>
-                <span className="hidden px-2 capitalize xl:block">{line.size}</span>
-                <input aria-label={`Aantal ${line.letter}`} type="number" min="1" max="10000" value={line.quantity} onChange={(event) => updateLetterLine(line.id, { quantity: Math.max(1, Number(event.target.value) || 1) })} className="!h-9 !min-w-0 !border-[#c9d8c6] !bg-white !px-2 !py-0 text-right !text-xs font-semibold outline-none focus:!bg-[#f6faf4] xl:!rounded-none xl:!border-0 xl:!bg-transparent" />
-                <span className="hidden truncate px-2 text-[#705000] xl:block">{line.exceptions.length ? line.exceptions.join(", ") : "—"}</span>
-                <div className="text-right"><button type="button" aria-label="Letterregel verwijderen" onClick={() => setLetterLines(form.letterLines.filter((item) => item.id !== line.id))} className="h-9 rounded-md px-2 text-xs font-semibold text-[#9a3412] hover:bg-[#fff1e8]">Verwijder</button></div>
-              </div>
-            ))}
-            {form.letterLines.length === 0 && <p className="px-3 py-2 text-xs font-medium text-[#8b8278]">Nog geen letters toegevoegd.</p>}
-          </div>
-          {form.letterOrderText && <details className="border-t border-[#d7e3d4] px-3 py-2 text-xs"><summary className="cursor-pointer font-bold text-[#6b645b]">Oude vrije letteromschrijving</summary><p className="mt-1 whitespace-pre-wrap">{form.letterOrderText}</p></details>}
-        </details>
-      )}
-
-      <div className="bg-white">
-        <details open={form.productLines.some((line) => line.productId !== "chocoladeletter" && line.productId !== "chocolade-vormletter") || undefined}>
-        <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-1 bg-[#f3dfa2] px-3 py-2">
-          <div className="text-sm font-semibold text-[#5a4300]">{season === "kerst" ? "Kerstproducten en pakketten" : "Overige producten"}</div>
-          <span className="text-[0.68rem] font-medium text-[#705a18]">folderprijs automatisch · handmatig aanpasbaar · uitklappen ▾</span>
-        </summary>
-
-        <div className="grid grid-cols-2 gap-2 bg-[#fff9e9] p-3 lg:grid-cols-[minmax(14rem,1.5fr)_minmax(10rem,1fr)_5rem_7rem_auto_auto] lg:items-end">
-          <label className="col-span-2 grid gap-1 text-[0.65rem] font-semibold uppercase tracking-wide text-[#6b645b] lg:col-span-1">
-            Product
-            <select
-              value={productDraft.productId}
-              onChange={(event) => {
-                const productId = event.target.value;
-                const nextProduct = catalogProduct(productId);
-                updateProductDraft({
-                  productId,
-                  choice: "__unset__",
-                  description: nextProduct?.name || "",
-                  unitPriceEx: "",
-                  manualPrice: !nextProduct,
-                  withLogo: false,
+          <div className={styles.fieldGrid}>
+            {textField("deliveryMethod", "Leverafspraak / afhaallocatie")}
+            <label className={styles.field}>Levermoment
+              <select value={form.deliveryWindowType} onChange={event => {
+                const deliveryWindowType = event.target.value as B2BFormState["deliveryWindowType"];
+                setForm(current => {
+                  if (deliveryWindowType === "week") {
+                    const deliveryWeek = current.deliveryWeek || isoWeekFromDate(current.deliveryDate);
+                    const bounds = isoWeekBounds(deliveryWeek);
+                    return { ...current, deliveryWindowType, deliveryWeek, deliveryDate: bounds?.start || "", deliveryDateEnd: bounds?.end || "", productionDate: "" };
+                  }
+                  return { ...current, deliveryWindowType, deliveryDateEnd: deliveryWindowType === "range" ? current.deliveryDateEnd || current.deliveryDate : "", deliveryWeek: "", productionDate: "" };
                 });
-              }}
-              className="h-10 min-w-0 border border-[#d0b96e] bg-white px-2 text-sm font-semibold normal-case tracking-normal text-[#1a1815]"
-            >
-              <option value="" disabled>Product</option>
-              {MANUAL_PRODUCT_CATALOG.filter(item => initialOrder?.season === "sint-kerst" || item.id.startsWith("kerst-") === (season === "kerst")).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-              <option value={CUSTOM_PRODUCT_ID}>Anders / niet in folder</option>
-            </select>
-          </label>
-
-          {productDraft.productId === CUSTOM_PRODUCT_ID ? (
-            <label className="col-span-2 grid gap-1 text-[0.65rem] font-semibold uppercase tracking-wide text-[#6b645b] sm:col-span-1">
-              Omschrijving
-              <input value={productDraft.description} onChange={(event) => updateProductDraft({ description: event.target.value })} placeholder="Vrij product" className="h-10 min-w-0 border border-[#d0b96e] px-2 text-sm font-medium normal-case tracking-normal text-[#1a1815]" />
-            </label>
-          ) : (
-            <label className="col-span-2 grid gap-1 text-[0.65rem] font-semibold uppercase tracking-wide text-[#6b645b] sm:col-span-1">
-              Variant
-              <select disabled={!productDraft.productId} value={productDraft.choice} onChange={(event) => updateProductDraft({ choice: event.target.value })} className="h-10 min-w-0 border border-[#d0b96e] bg-white px-2 text-sm font-medium normal-case tracking-normal text-[#1a1815]">
-                <option value="__unset__" disabled>Variant</option>
-                {draftChoices.map((choice) => <option key={choice} value={choice}>{internalChoiceLabel(draftProduct!, choice)}</option>)}
+              }}>
+                <option value="date">Vaste datum</option><option value="range">Tussen twee data</option><option value="week">Hele week</option>
               </select>
             </label>
-          )}
+            {form.deliveryWindowType === "week" ? <label className={styles.field}>Gewenste leverweek
+              <input type="week" aria-label="Gewenste leverweek" value={form.deliveryWeek} onChange={event => {
+                const deliveryWeek = event.target.value, bounds = isoWeekBounds(deliveryWeek);
+                setForm(current => ({ ...current, deliveryWeek, deliveryDate: bounds?.start || "", deliveryDateEnd: bounds?.end || "", productionDate: "" }));
+              }} />
+            </label> : <label className={styles.field}>{form.deliveryWindowType === "range" ? "Van" : "Gewenste datum"}
+              <input type="date" aria-label={form.deliveryWindowType === "range" ? "Begin gewenste leverperiode" : "Vaste leverdatum"} value={form.deliveryDate} onChange={event => setForm(current => ({ ...current, deliveryDate: event.target.value, productionDate: "" }))} />
+            </label>}
+            {form.deliveryWindowType === "range" && <label className={styles.field}>Tot en met
+              <input type="date" aria-label="Einde gewenste leverperiode" min={form.deliveryDate || undefined} value={form.deliveryDateEnd} onChange={event => setForm(current => ({ ...current, deliveryDateEnd: event.target.value, productionDate: "" }))} />
+            </label>}
+            {(hasDelivery || form.deliveryAddress) && <label className={`${styles.field} ${styles.fullWidth}`}>Bezorgadres
+              <textarea rows={3} value={form.deliveryAddress} onChange={event => setField("deliveryAddress", event.target.value)} />
+            </label>}
+          </div>
+          <details className={styles.extra}>
+            <summary>Factuurgegevens {form.invoiceInfo && "· ingevuld"}</summary>
+            <div><label className={styles.field}>Factuuradres, referentie of inkoopnummer<textarea rows={3} value={form.invoiceInfo} onChange={event => setField("invoiceInfo", event.target.value)} /></label></div>
+          </details>
+        </section>
 
-          <label className="grid gap-1 text-[0.65rem] font-semibold uppercase tracking-wide text-[#6b645b]">
-            Aantal
-            <input data-order-draft type="number" min="1" max="10000" placeholder="Aantal" value={productDraft.quantity || ""} onChange={(event) => updateProductDraft({ quantity: Number(event.target.value) })} className="h-10 border border-[#d0b96e] px-2 text-right text-sm font-semibold" />
+        <section data-form-step="2" hidden={step !== 2} className={styles.formPanel}>
+          <h2 tabIndex={-1}>Wat gaat er in de bestelling?</h2>
+          <p className={styles.panelIntro}>Voeg letterregels of producten toe. De folderprijs wordt automatisch berekend.</p>
+          <label className={styles.field}>Afdeling
+            <select value={form.department} onChange={event => {
+              const department = event.target.value as B2BFormState["department"];
+              setField("department", department);
+              if (department === "bakkerij") setProductTab("products");
+            }}>{DEPARTMENTS.map(department => <option key={department.id} value={department.id}>{department.label}</option>)}</select>
           </label>
-          <label className="grid gap-1 text-[0.65rem] font-semibold uppercase tracking-wide text-[#6b645b]">
-            Prijs p.s. ex
-            <input data-order-draft type="number" min="0" step="0.01" placeholder="Prijs" value={productDraft.unitPriceEx} onChange={(event) => updateProductDraft({ unitPriceEx: event.target.value, manualPrice: true })} className="h-10 border border-[#d0b96e] px-2 text-right text-sm font-semibold" />
-          </label>
-          <label className={`flex h-10 items-center gap-2 self-end whitespace-nowrap text-xs font-bold ${draftProduct && productSupportsLogo(draftProduct, productDraft.choice) ? "" : "invisible"}`}>
-            <input className="h-4 w-4" type="checkbox" checked={productDraft.withLogo} onChange={(event) => updateProductDraft({ withLogo: event.target.checked })} /> Logo
-          </label>
-          <button type="button" onClick={addProductToOrder} className="h-10 self-end whitespace-nowrap rounded-md bg-[#9a7510] px-3 text-xs font-semibold text-white">+ Product toevoegen</button>
+          <div className={styles.productTabs}>
+            {form.department !== "bakkerij" && <button type="button" aria-pressed={productTab === "letters"} onClick={() => setProductTab("letters")}>Chocoladeletters</button>}
+            <button type="button" aria-pressed={productTab === "products" || form.department === "bakkerij"} onClick={() => setProductTab("products")}>{season === "kerst" ? "Kerstproducten & pakketten" : "Overige producten"}</button>
+          </div>
+          <div hidden={form.department === "bakkerij" || productTab !== "letters"}>
+            <div className={styles.productBuilder}>
+              <label className={styles.field}>Letter<select aria-label="Letter" value={letterDraft.letter} onChange={event => updateLetterDraft({ letter: event.target.value })}>
+                <option value="" disabled>Kies letter</option>{(letterDraft.style === "vorm" ? B2B_VORM_LETTERS : B2B_SPUIT_LETTERS).map(letter => <option key={letter} value={letter}>{letter}</option>)}
+              </select></label>
+              <label className={styles.field}>Chocolade<select aria-label="Chocolade" value={letterDraft.chocolate} onChange={event => updateLetterDraft({ chocolate: event.target.value as B2BLetterLine["chocolate"] })}>
+                <option value="" disabled>Kies smaak</option><option value="melk">Melk</option><option value="puur">Puur</option><option value="wit">Wit</option>
+              </select></label>
+              <label className={styles.field}>Soort<select aria-label="Soort" value={letterDraft.style} onChange={event => updateLetterDraft({ style: event.target.value as B2BLetterLine["style"] })}>
+                <option value="" disabled>Kies soort</option><option value="spuit">Spuit</option><option value="vorm">Vorm (S)</option>
+              </select></label>
+              <label className={styles.field}>Formaat<select aria-label="Formaat" value={letterDraft.size} onChange={event => updateLetterDraft({ size: event.target.value as B2BLetterLine["size"] })}>
+                <option value="" disabled>Kies formaat</option><option value="groot">Groot</option>{letterDraft.style !== "vorm" && <option value="klein">Klein</option>}
+              </select></label>
+              <label className={styles.field}>Aantal<input data-order-draft aria-label="Aantal letters" type="number" min="1" max="10000" value={letterDraft.quantity || ""} onChange={event => updateLetterDraft({ quantity: Number(event.target.value) })} /></label>
+              <fieldset className={styles.exceptions}><legend>Vrij van</legend><div>{B2B_LETTER_EXCEPTIONS.map(({ id, label }) => <label key={id}><input type="checkbox" checked={letterDraft.exceptions.includes(id)} onChange={event => updateLetterDraft({ exceptions: event.target.checked ? [...letterDraft.exceptions, id] : letterDraft.exceptions.filter(value => value !== id) })} />{label}</label>)}</div></fieldset>
+              <div className={styles.addLine}><button type="button" className={styles.button} onClick={addLetterToOrder}>+ Letter toevoegen</button></div>
+            </div>
+          </div>
+          <div hidden={form.department !== "bakkerij" && productTab !== "products"}>
+            <div className={styles.productBuilder}>
+              <label className={`${styles.field} ${styles.fullWidth}`}>Product<select value={productDraft.productId} onChange={event => {
+                const productId = event.target.value, nextProduct = catalogProduct(productId);
+                updateProductDraft({ productId, choice: "__unset__", description: nextProduct?.name || "", unitPriceEx: "", manualPrice: !nextProduct, withLogo: false });
+              }}>
+                <option value="" disabled>Kies product</option>
+                {MANUAL_PRODUCT_CATALOG.filter(item => initialOrder?.season === "sint-kerst" || item.id.startsWith("kerst-") === (season === "kerst")).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+                <option value={CUSTOM_PRODUCT_ID}>Anders / niet in folder</option>
+              </select></label>
+              {productDraft.productId === CUSTOM_PRODUCT_ID ? <label className={`${styles.field} ${styles.fullWidth}`}>Omschrijving<input value={productDraft.description} onChange={event => updateProductDraft({ description: event.target.value })} /></label> : <label className={`${styles.field} ${styles.fullWidth}`}>Variant<select disabled={!productDraft.productId} value={productDraft.choice} onChange={event => updateProductDraft({ choice: event.target.value })}>
+                <option value="__unset__" disabled>Kies variant</option>{draftChoices.map(choice => <option key={choice} value={choice}>{internalChoiceLabel(draftProduct!, choice)}</option>)}
+              </select></label>}
+              <label className={styles.field}>Aantal<input data-order-draft aria-label="Aantal producten" type="number" min="1" max="10000" value={productDraft.quantity || ""} onChange={event => updateProductDraft({ quantity: Number(event.target.value) })} /></label>
+              <label className={styles.field}>Prijs p.s. excl. btw<input data-order-draft type="number" min="0" step="0.01" value={productDraft.unitPriceEx} onChange={event => updateProductDraft({ unitPriceEx: event.target.value, manualPrice: true })} /></label>
+              {draftProduct && productSupportsLogo(draftProduct, productDraft.choice) && <label className={styles.field}><span><input type="checkbox" checked={productDraft.withLogo} onChange={event => updateProductDraft({ withLogo: event.target.checked })} /> Eigen logo</span></label>}
+              <div className={styles.addLine}><button type="button" className={styles.button} onClick={addProductToOrder}>+ Product toevoegen</button></div>
+            </div>
+          </div>
+          {addFeedback && <p role="status" className={addFeedback.startsWith("Toegevoegd") ? styles.notice : styles.error} style={{ marginTop: 16 }}>{addFeedback}</p>}
+          {form.letterLines.length > 0 && <div className={styles.lines}>
+            <h3 style={{ marginTop: 16 }}>Letterregels · {b2bLetterTotal(form.letterLines)} stuks</h3>
+            {form.letterLines.map(line => <div key={line.id} className={`${styles.line} ${styles.letterLine}`}>
+              <div><strong>{line.letter} · {line.chocolate} · {line.style} · {line.size}</strong>{line.exceptions.length > 0 && <small>Vrij van: {line.exceptions.join(", ")}</small>}</div>
+              <input aria-label={`Aantal ${line.letter}`} type="number" min="1" max="10000" value={line.quantity} onChange={event => updateLetterLine(line.id, { quantity: Math.max(1, Number(event.target.value) || 1) })} />
+              <button type="button" aria-label="Letterregel verwijderen" className={styles.danger} onClick={() => setLetterLines(form.letterLines.filter(item => item.id !== line.id))}>×</button>
+            </div>)}
+          </div>}
+          <div className={styles.lineLabels}><span>Bestelregels</span><span>Aantal</span><span>Prijs p.s.</span><span>Totaal</span><span /></div>
+          <div className={styles.lines} style={{ marginTop: 8 }}>
+            {form.productLines.map(line => {
+              const product = catalogProduct(line.productId), isLetterProduct = line.productId === "chocoladeletter" || line.productId === "chocolade-vormletter";
+              return <div key={line.id} className={styles.line}>
+                <div><strong>{lineDescription(line)}</strong>{isLetterProduct && <small>Via letterregels</small>}{product && productSupportsLogo(product, line.choice) && !isLetterProduct && <label><small><input type="checkbox" checked={line.withLogo} onChange={event => updateProductLine(line.id, { withLogo: event.target.checked })} /> Eigen logo</small></label>}</div>
+                {isLetterProduct ? <span style={{ textAlign: "right" }}>{line.quantity}×</span> : <label className={styles.lineField}><span>Aantal</span><input aria-label={`Aantal ${lineDescription(line)}`} type="number" min="1" max="10000" value={line.quantity} onChange={event => updateProductLine(line.id, { quantity: Math.max(1, Number(event.target.value) || 1) })} /></label>}
+                <label className={styles.lineField}><span>Prijs p.s.</span><input aria-label={`Prijs ${lineDescription(line)}`} type="number" min="0" step="0.01" value={line.unitPriceEx} onChange={event => updateProductLine(line.id, { unitPriceEx: event.target.value, manualPrice: true })} /></label>
+                <div className={styles.lineAmount}>{money(line.quantity * moneyNumber(line.unitPriceEx))}{line.manualPrice && product && <button type="button" onClick={() => updateProductLine(line.id, { manualPrice: false })} className={styles.danger} style={{ fontSize: 11, textDecoration: "underline" }}>folderprijs</button>}</div>
+                <button type="button" aria-label={`${lineDescription(line) || "Product"} verwijderen`} disabled={isLetterProduct} onClick={() => setProductLines(form.productLines.filter(item => item.id !== line.id))} className={styles.danger}>×</button>
+              </div>;
+            })}
+            {form.productLines.length === 0 && <p className={styles.empty}>Nog geen producten toegevoegd.</p>}
+          </div>
+          {form.letterOrderText && <details className={styles.extra}><summary>Oude vrije letteromschrijving</summary><p className="whitespace-pre-wrap">{form.letterOrderText}</p></details>}
+          <details className={styles.extra} open={Boolean(form.orderText.trim()) || undefined}>
+            <summary>Aanvullende orderafspraken{form.orderText.trim() ? " · ingevuld" : ""}</summary>
+            <div><label className={styles.field}>Afspraken bij deze bestelling<textarea rows={3} value={form.orderText} onChange={event => setField("orderText", event.target.value)} /></label></div>
+          </details>
+          <details className={styles.extra}>
+            <summary>Verpakking, logo of extra afspraken{extraDataCount ? ` · ${extraDataCount} ingevuld` : ""}</summary>
+            <div className={styles.fieldGrid}>
+              {textField("logo", "Logo-afspraak")}{textField("packaging", "Verpakking")}{textField("textInstructions", "Tekst op product / kaartje")}{textField("priceAgreement", "Prijsafspraak")}
+              <label className={`${styles.field} ${styles.fullWidth}`}>Interne opmerkingen<textarea rows={3} value={form.importantNotes} onChange={event => setField("importantNotes", event.target.value)} /><small>Deze opmerkingen blijven intern.</small></label>
+            </div>
+          </details>
+        </section>
+
+        <section data-form-step="3" hidden={step !== 3} className={styles.formPanel}>
+          <h2 tabIndex={-1}>Controleer de bestelling</h2>
+          <p className={styles.panelIntro}>Klant, inhoud en afspraken samen vóór het opslaan.</p>
+          {[
+            ["Klant", form.customerName], ["Contactpersoon", form.contactName], ["E-mailadres", form.customerEmail], ["Telefoon", form.phone],
+            ["Levering", form.deliveryMethod], ["Levermoment", deliveryWindowLabel(form)], ["Bezorgadres", form.deliveryAddress],
+            ["Fase", { aanvraag: "Aanvraag", offerte: "Offerte", akkoord: "Definitief · klant heeft akkoord gegeven", afgewezen: "Niet doorgegaan" }[form.status]],
+          ].filter(([, value]) => value).map(([label, value]) => <div key={label} className={styles.reviewRow}><span>{label}</span><span>{value}</span></div>)}
+          <div className={styles.lines}>
+            {form.productLines.map(line => <div className={styles.reviewRow} key={line.id}><span>{line.quantity}×</span><span>{lineDescription(line)}<br />{money(line.quantity * moneyNumber(line.unitPriceEx))} excl. btw</span></div>)}
+          </div>
+          {form.letterLines.length > 0 && <details className={styles.extra}><summary>Alle letterregels bekijken</summary><div><B2BLetterLineBadges lines={form.letterLines} /></div></details>}
+          {[["Aanvullende afspraken", form.orderText], ["Logo", form.logo], ["Verpakking", form.packaging], ["Tekst", form.textInstructions], ["Prijsafspraak", form.priceAgreement], ["Interne opmerkingen", form.importantNotes], ["Factuurgegevens", form.invoiceInfo]].filter(([, value]) => value).map(([label, value]) => <div key={label} className={styles.reviewRow}><span>{label}</span><span>{value}</span></div>)}
+          <p className={styles.reviewNote}>{form.status === "akkoord" ? "Na opslaan kun je de klant een definitieve bevestiging mailen. De interne back-up gaat automatisch naar info@strik-patisserie.nl." : "Deze bestelling is nog niet definitief. Je kunt de fase later aanpassen."}</p>
+        </section>
+
+        <aside className={styles.summary}>
+          <h2>Deze bestelling</h2>
+          <div className={styles.summaryPair}><small>Klant</small><strong>{form.customerName || "Nog in te vullen"}</strong></div>
+          <div className={styles.summaryPair}><small>Levering</small><strong>{form.deliveryMethod || "Nog af te spreken"}</strong><br />{deliveryWindowLabel(form)}</div>
+          <div className={styles.summaryPair}><small>Bestelregels</small>{form.productLines.length ? `${form.productLines.length} ${form.productLines.length === 1 ? "regel" : "regels"} · ${form.productLines.reduce((n, line) => n + line.quantity, 0)} producten` : "Nog geen producten"}</div>
+          <label className={styles.field}>Fase<select value={form.status} onChange={event => setField("status", event.target.value as B2BFormState["status"])}>
+            <option value="aanvraag">Aanvraag</option><option value="offerte">Offerte</option><option value="akkoord">Definitief · akkoord klant</option><option value="afgewezen">Niet doorgegaan</option>
+          </select><small>Staat los van productie en invoer.</small></label>
+          <div className={styles.total}>
+            <label className={styles.field}>Afgesproken totaal excl. btw<input aria-label="Afgesproken totaal excl. btw" value={displayedTotalEx} onChange={event => { setManualTotal(true); setField("totalExVat", event.target.value); }} placeholder="Automatisch" /></label>
+            {form.productLines.length > 0 && manualTotal && <button type="button" onClick={() => setManualTotal(false)}>Gebruik berekend totaal</button>}
+            <strong>{money(total)}</strong><small>{manualTotal ? "Handmatige prijsafspraak" : "Totaal excl. btw"}</small>
+          </div>
+        </aside>
+        <div className={styles.feedback}>
+          {draftNotice && <p role="status" className={styles.notice}>{draftNotice}</p>}
+          {message && <p ref={messageRef} tabIndex={-1} role="alert" className={styles.error}>{message} Je invoer blijft bewaard.</p>}
         </div>
-
-        <div className="divide-y divide-[#eadfbd] border-t border-[#d0b96e]">
-          {form.productLines.map((line) => {
-            const product = catalogProduct(line.productId);
-            const isLetterProduct = line.productId === "chocoladeletter" || line.productId === "chocolade-vormletter";
-            return (
-              <div key={line.id} className="grid bg-[#eeefec] text-[#555b52] grid-cols-[minmax(0,1fr)_4.5rem_5.5rem_5.5rem_2rem] items-center gap-2 px-3 py-2">
-                <div className="min-w-0 text-xs font-bold">
-                  <span className="font-semibold">{lineDescription(line)}</span><span className="ml-2 text-[0.6rem] font-semibold text-[#697563]">✓ Toegevoegd</span>
-                  {isLetterProduct && <span className="ml-1 text-[0.68rem] text-[#6b645b]">via letterregels</span>}
-                  {product && productSupportsLogo(product, line.choice) && !isLetterProduct && <label className="ml-2 inline-flex items-center gap-1 text-[0.68rem]"><input className="h-4 w-4" type="checkbox" checked={line.withLogo} onChange={(event) => updateProductLine(line.id, { withLogo: event.target.checked })} />Logo</label>}
-                </div>
-                {isLetterProduct ? (
-                  <span className="text-right text-xs font-semibold">{line.quantity}×</span>
-                ) : (
-                  <input aria-label={`Aantal ${lineDescription(line)}`} type="number" min="1" max="10000" value={line.quantity} onChange={(event) => updateProductLine(line.id, { quantity: Math.max(1, Number(event.target.value) || 1) })} className="h-9 border border-[#d0b96e] px-2 text-right text-xs font-semibold" />
-                )}
-                <input aria-label={`Prijs ${lineDescription(line)}`} type="number" min="0" step="0.01" value={line.unitPriceEx} onChange={(event) => updateProductLine(line.id, { unitPriceEx: event.target.value, manualPrice: true })} className="h-9 border border-[#d0b96e] px-2 text-right text-xs font-semibold" />
-                <div className="text-right text-xs font-semibold">
-                  {money(line.quantity * moneyNumber(line.unitPriceEx))}
-                  {line.manualPrice && product && <button type="button" onClick={() => updateProductLine(line.id, { manualPrice: false })} className="block w-full text-[0.62rem] font-semibold text-[#24551d] underline">folderprijs</button>}
-                </div>
-                <button type="button" aria-label={`${lineDescription(line) || "Product"} verwijderen`} disabled={isLetterProduct} onClick={() => setProductLines(form.productLines.filter((item) => item.id !== line.id))} className="h-9 text-base font-black text-[#9a3412] disabled:cursor-not-allowed disabled:text-[#c9c3bb]">×</button>
-              </div>
-            );
-          })}
-          {form.productLines.length === 0 && <p className="px-3 py-2 text-xs font-bold text-[#8b8278]">Nog geen producten toegevoegd.</p>}
-        </div>
-
-        </details>
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#d0b96e] bg-[#f3dfa2] px-3 py-2">
-          <label className="flex items-center gap-2 text-[0.65rem] font-semibold uppercase tracking-wide text-[#6b645b]">
-            Totaal ex btw
-            <input value={displayedTotalEx} onChange={(event) => { setManualTotal(true); setField("totalExVat", event.target.value); }} placeholder="0,00" className="h-10 w-28 border border-[#d0b96e] bg-white px-2 text-right text-sm font-semibold normal-case tracking-normal text-[#1a1815]" />
-            {form.productLines.length > 0 && manualTotal && <button type="button" onClick={() => setManualTotal(false)} className="text-[0.65rem] font-semibold normal-case tracking-normal text-[#24551d] underline">berekend: {money(calculatedTotalEx)}</button>}
-          </label>
-        </div>
-      </div>
-
-      {addFeedback && (
-        <p role="status" className={`border-t border-[#5f8458] px-3 py-2 text-xs font-semibold ${addFeedback.startsWith("Toegevoegd") ? "bg-[#d9ead5] text-[#24551d]" : "bg-[#fff1e8] text-[#9a3412]"}`}>
-          {addFeedback}
-        </p>
-      )}
-      </section>
-
-      <details open={Boolean(form.orderText.trim()) || undefined} className="rounded-xl border border-[#d8d2ca] bg-[#f3f0ec] xl:col-start-2">
-        <summary className="cursor-pointer rounded-xl bg-[#e5e0d9] px-3 py-2.5 text-sm font-semibold text-[#4d463d]">Aanvullende orderafspraken{form.orderText.trim() ? " · ingevuld" : ""}</summary>
-        <textarea value={form.orderText} onChange={(event) => setField("orderText", event.target.value)} placeholder="Aanvullende afspraken bij deze bestelling" rows={3} className="min-h-20 w-full rounded-b-xl border-t border-[#d8d2ca] bg-white px-3 py-2 text-sm font-medium text-[#1a1815]" />
-      </details>
-
-      <details className="overflow-hidden rounded-xl border border-[#d8d2ca] bg-[#f3f0ec] xl:col-start-1 xl:row-start-2">
-        <summary className="cursor-pointer bg-[#e5e0d9] px-3 py-2.5 text-sm font-semibold text-[#4d463d]">Extra gegevens{extraDataCount ? ` · ${extraDataCount} ingevuld` : ""}</summary>
-        <div className="grid gap-px border-t border-[#d8d2ca] bg-[#ddd7cf] p-px">
-          <input value={form.logo} onChange={(event) => setField("logo", event.target.value)} placeholder="Logo-afspraak" className="h-10 border-0 bg-white px-3 text-sm font-medium outline-none" />
-          <input value={form.packaging} onChange={(event) => setField("packaging", event.target.value)} placeholder="Verpakken" className="h-10 border-0 bg-white px-3 text-sm font-medium outline-none" />
-          <input value={form.textInstructions} onChange={(event) => setField("textInstructions", event.target.value)} placeholder="Tekst op product / kaartje" className="h-10 border-0 bg-white px-3 text-sm font-medium outline-none" />
-          <input value={form.priceAgreement} onChange={(event) => setField("priceAgreement", event.target.value)} placeholder="Prijsafspraak" className="h-10 border-0 bg-white px-3 text-sm font-medium outline-none" />
-          <textarea value={form.importantNotes} onChange={(event) => setField("importantNotes", event.target.value)} placeholder="Belangrijk" rows={3} className="border-0 bg-white px-3 py-2 text-sm font-medium outline-none" />
-          <textarea value={form.deliveryAddress} onChange={(event) => setField("deliveryAddress", event.target.value)} placeholder="Bezorgadres" rows={3} className="border-0 bg-white px-3 py-2 text-sm font-medium outline-none" />
-          <textarea value={form.invoiceInfo} onChange={(event) => setField("invoiceInfo", event.target.value)} placeholder="Factuurgegevens" rows={3} className="border-0 bg-white px-3 py-2 text-sm font-medium outline-none" />
-        </div>
-      </details>
-
-      <div className="sticky bottom-0 z-30 flex flex-wrap items-center justify-end gap-2 rounded-lg border border-[#d8d2ca] bg-[#f3f0ec]/95 p-2 backdrop-blur xl:col-span-2">
-        {form.productLines.length === 0 && !form.orderText.trim() && <p className="w-full text-xs font-semibold text-[#6b645b]">Nog geen bestelregels toegevoegd. Klap een productblok uit en kies + Letter toevoegen of + Product toevoegen.</p>}
-        {draftNotice && <p role="status" className="w-full text-xs font-semibold text-[#6b645b]">{draftNotice}</p>}
-        {message && <p ref={messageRef} tabIndex={-1} role="alert" className="w-full rounded-lg border border-[#efb5a5] bg-[#fff1e8] px-3 py-2 text-sm font-bold text-[#9a3412]">Niet opgeslagen: {message} Je invoer blijft in dit formulier staan.</p>}
-        <button
-          type="button"
-          onClick={onCancel}
-          className="h-10 rounded-md border border-[#cfc8bf] bg-white px-4 text-xs font-semibold text-[#4d463d]"
-        >
-          Sluiten
-        </button>
-        <button
-          type="submit"
-          disabled={saving || !draftReady}
-          className="h-10 rounded-md bg-[#315d2a] px-4 text-xs font-semibold text-white shadow-sm disabled:opacity-60"
-        >
-          {saving
-            ? "Opslaan..."
-            : initialOrder
-              ? "Wijziging opslaan"
-              : "B2B-bestelling opslaan"}
-        </button>
+        <footer className={styles.formBottom}>
+          <p>{step === 1 ? "* Vul minimaal de klantnaam in" : step === 2 ? "Voeg gekozen producten toe met de toevoegknop." : "Je kunt alles nog aanpassen."}</p>
+          <div className={styles.bottomActions}>
+            <button type="button" disabled={saving} className={styles.quiet} onClick={step === 1 ? onCancel : () => goToStep(step - 1)}>{step === 1 ? "Annuleren" : "Vorige stap"}</button>
+            <button type={step === 3 ? "submit" : "button"} disabled={saving || !draftReady} onClick={step < 3 ? () => goToStep(step + 1) : undefined} className={styles.primary}>
+              {saving ? "Opslaan…" : step === 1 ? "Verder naar producten →" : step === 2 ? "Bestelling controleren →" : initialOrder ? "Wijziging opslaan" : "Bestelling opslaan"}
+            </button>
+          </div>
+        </footer>
       </div>
     </form>
   );
 }
 
-function B2BOrderDialog({
-  order,
-  season,
-  onClose,
-  onSaved,
-}: Readonly<{
+function B2BOrderEditor({ order, season, onClose, onSaved }: Readonly<{
   order: SinterklaasB2BOrder | null;
   season: BusinessSeason;
   onClose: () => void;
   onSaved: (order: SinterklaasB2BOrder) => void;
 }>) {
-  return (
-    <div
-      className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-[#1a1815]/45 p-2 backdrop-blur-sm md:p-4"
-      role="dialog"
-      aria-modal="true"
-    >
-      <div className="w-full max-w-[96rem] rounded-2xl border border-[#bdb5ab] bg-[#f7f5f2] p-3 shadow-2xl md:p-4">
-        <div className="mb-3 flex items-center justify-between gap-3 border-b border-[#cfc8bf] pb-3">
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <p className="text-[0.68rem] font-black uppercase tracking-[0.12em] text-[#8b8278]">
-              {seasonLabel(order?.season || season)} B2B
-            </p>
-            <div className="text-lg font-bold text-[#1a1815]">
-              {order ? "Bestelling wijzigen" : "Bestelling toevoegen"}
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-[#cfc8bf] bg-white text-lg font-black text-[#1a1815]"
-            aria-label="Sluiten"
-          >
-            ×
-          </button>
-        </div>
-
-        <B2BOrderForm
-          key={order?.id || "new-order"}
-          initialOrder={order}
-          season={season}
-          onSaved={onSaved}
-          onCancel={onClose}
-        />
-      </div>
-    </div>
-  );
+  return <>
+    <header className={styles.header}>
+      <div><p className={styles.eyebrow}>{seasonLabel(order?.season || season)} · B2B</p><h1>{order ? "Bestelling wijzigen" : "Nieuwe bestelling"}</h1><p className={styles.subtitle}>Klant en levering, de producten en daarna de laatste controle.</p></div>
+      <button type="button" className={styles.quiet} onClick={onClose}>← Besteloverzicht</button>
+    </header>
+    <B2BOrderForm key={order?.id || "new-order"} initialOrder={order} season={season} onSaved={onSaved} onCancel={onClose} />
+  </>;
 }
 
-function B2BOrderRow({
-  order,
-  updatingId,
-  onToggle,
-  onEdit,
-  onDelete,
-  onRetryConfirmation,
-  onCustomerConfirmation,
-}: Readonly<{
+function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryConfirmation, onCustomerConfirmation }: Readonly<{
   order: SinterklaasB2BOrder;
   updatingId: string;
-  onToggle: (
-    order: SinterklaasB2BOrder,
-    key: "entered" | "productionScheduled" | "productionDone" | "letterProductionDone" | "packed" | "delivered" | "logoChecked" | "textChecked" | "packagingChecked"
-  ) => void;
+  onToggle: (order: SinterklaasB2BOrder, key: "entered" | "productionScheduled" | "productionDone" | "letterProductionDone" | "packed" | "delivered" | "logoChecked" | "textChecked" | "packagingChecked") => void;
   onEdit: (order: SinterklaasB2BOrder) => void;
   onDelete: (order: SinterklaasB2BOrder) => void;
   onRetryConfirmation: (order: SinterklaasB2BOrder) => void;
   onCustomerConfirmation: (order: SinterklaasB2BOrder) => void;
 }>) {
+  const [expanded, setExpanded] = useState(false);
   const parsedOrder = parseOrderText(order.orderText);
   const priceBreakdowns = linePriceBreakdowns(parsedOrder.productLines);
   const orderTotal = effectiveOrderTotal(order);
-  const deliveryLabel = /bezorg|lever/i.test(order.deliveryMethod)
-    ? "Bezorgen"
-    : /afhaal|ophal/i.test(order.deliveryMethod)
-      ? "Ophalen"
-      : "";
-  const extraLines = [
-    order.contactName && `Contact: ${order.contactName}`,
-    order.customerEmail && `E-mail: ${order.customerEmail}`,
-    order.phone && `Telefoon: ${order.phone}`,
-    order.logo && `Logo: ${order.logo}`,
-    order.textInstructions && `Tekst: ${order.textInstructions}`,
-    order.packaging && `Verpakken: ${order.packaging}`,
-    order.importantNotes && `Belangrijk: ${order.importantNotes}`,
-    order.deliveryAddress && `Adres: ${order.deliveryAddress}`,
-    order.priceAgreement && `Prijsafspraak: ${order.priceAgreement}`,
-    orderTotal > 0 && `Totaal ex btw: ${money(orderTotal)}`,
-    order.reminderEmailedAt &&
-      `Reminder gemaild: ${formatDateTime(order.reminderEmailedAt)}`,
-    order.confirmationEmailedAt &&
-      `Interne back-up gemaild: ${formatDateTime(order.confirmationEmailedAt)}`,
-    order.confirmationMail?.customer?.sentAt && `Klantbevestiging gemaild: ${formatDateTime(order.confirmationMail.customer.sentAt)}`,
-  ].filter(Boolean);
   const archived = order.id.startsWith("historie-");
   const warnings = orderWarnings(order);
   const confirmationNeedsAttention = order.status === "akkoord" && (!order.confirmationEmailedAt || Boolean(order.confirmationEmailError)) && Boolean(order.deliveryDate) && order.deliveryDate >= todayIso() && !archived;
-  const orderSummary = compactOrderText(order.orderText);
-  const seasonColors = order.season === "sint-kerst" ? undefined : businessSeasonColors[order.season];
+  const orderSummary = parsedOrder.productLines.length > 0
+    ? parsedOrder.productLines.map(line => `${line.quantity}× ${lineDescription(line)}`).join(" · ")
+    : order.letterLines.length > 0 ? `${b2bLetterTotal(order.letterLines)} chocoladeletters` : compactOrderText(order.orderText);
+  const statusLabel = order.cancelled ? "Geannuleerd" : { aanvraag: "Aanvraag", offerte: "Offerte", akkoord: "Definitief", afgewezen: "Niet doorgegaan" }[order.status];
+  const extraLines = [
+    order.logo && `Logo: ${order.logo}`, order.textInstructions && `Tekst: ${order.textInstructions}`,
+    order.packaging && `Verpakken: ${order.packaging}`, order.importantNotes && `Intern: ${order.importantNotes}`,
+    order.priceAgreement && `Prijsafspraak: ${order.priceAgreement}`, order.deliveryAddress && `Bezorgadres: ${order.deliveryAddress}`,
+  ].filter(Boolean);
 
-  return (
-    <article
-      className={`rounded-xl border px-3 py-2 shadow-sm ${
-        order.cancelled
-          ? "border-[#e4ded5] bg-[#f4f0ea] opacity-70"
-          : dueSoon(order)
-            ? "border-[#e5d28a] bg-[#fffdf4]"
-            : "border-[#e4ded5] bg-white"
-      }`}
-    >
-      <div className="grid gap-2 lg:grid-cols-[9.5rem_minmax(0,1fr)_10.5rem]">
-        <div className="border-l-4 border-[#c3d3bc] pl-2" style={{ borderColor: seasonColors?.border }}>
-          <p className="text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#8b8278]">
-            {order.deliveryWindowType === "date" ? "Leverdatum" : "Gewenste levering"}
-          </p>
-          <p className="text-base font-black leading-tight text-[#1a1815]">
-            {deliveryWindowLabel(order)}
-          </p>
-          {order.deliveryWindowType === "week" && order.deliveryDate && order.deliveryDateEnd && (
-            <p className="mt-0.5 text-[0.62rem] font-semibold text-[#8b8278]">
-              {formatDate(order.deliveryDate)} t/m {formatDate(order.deliveryDateEnd)}
-            </p>
-          )}
-        </div>
-
-        <div className="min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-              <h3 className="text-base font-black leading-tight text-[#1a1815]">
-                {order.customerName}
-              </h3>
-              <span className="rounded-full bg-[#eef2ea] px-2 py-0.5 text-[0.62rem] font-bold text-[#24553d]" style={{ backgroundColor: seasonColors?.pale, color: seasonColors?.accent }}>{seasonLabel(order.season)}</span>
-              {order.folderQuote && <span className="text-[0.62rem] font-bold text-[#557965]">Via folder · {order.folderQuote.reference}{!order.folderQuote.mailSentAt ? " · Controleer e-mailmelding" : ""}</span>}
-              <span className={`rounded-full px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.12em] ${order.status === "akkoord" ? "bg-[#dcebd8] text-[#24551d]" : "bg-[#fff3c4] text-[#705000]"}`}>
-                {{ aanvraag: "Aanvraag", offerte: "Offerte", akkoord: "Akkoord", afgewezen: "Niet doorgegaan" }[order.status]}
-              </span>
-              {deliveryLabel && (
-                <span className="rounded-full bg-[#dceaf4] px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#24506c]">
-                  {deliveryLabel}
-                </span>
-              )}
-              {dueSoon(order) && (
-                <span className="rounded-full bg-[#fff3c4] px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#705000]">
-                  Binnen 2 dagen
-                </span>
-              )}
-            </div>
-            {orderTotal > 0 && (
-              <div className="flex shrink-0 items-center gap-1">
-                <span className="rounded-full bg-[#a27a8e]/15 px-2 py-0.5 text-[0.68rem] font-black text-[#765267]">
-                  {money(orderTotal)} ex btw
-                </span>
-                {priceBreakdowns.length > 0 && (
-                  <details className="relative">
-                    <summary
-                      aria-label="Prijsspecificatie bekijken"
-                      title="Prijsspecificatie"
-                      className="flex h-6 w-6 cursor-pointer list-none items-center justify-center rounded-full border border-[#a27a8e]/40 bg-white text-[0.7rem] font-black text-[#765267] shadow-sm"
-                    >
-                      €
-                    </summary>
-                    <div className="absolute right-0 z-40 mt-1 w-[min(24rem,calc(100vw-2rem))] rounded-xl border border-[#ded4da] bg-white p-3 text-left shadow-xl">
-                      <p className="text-xs font-black text-[#4d3541]">Prijsspecificatie</p>
-                      <div className="mt-2 grid gap-2">
-                        {priceBreakdowns.map((price) => (
-                          <div key={price.line.id} className="border-t border-[#eee8df] pt-2 text-[0.7rem] leading-snug text-[#5d554d] first:border-t-0 first:pt-0">
-                            <p className="font-black text-[#1a1815]">{price.line.quantity}× {lineDescription(price.line)}</p>
-                            {price.automatic ? (
-                              <p>
-                                Staffel {money(price.basePrice)}
-                                {price.optionSurcharge > 0 ? ` + optie ${money(price.optionSurcharge)}` : ""}
-                                {price.logoSurcharge > 0 ? ` + logo ${money(price.logoSurcharge)}` : ""}
-                                {` = ${money(price.unitPrice)} p.s.`}
-                              </p>
-                            ) : (
-                              <p>Afgesproken stukprijs {money(price.unitPrice)}</p>
-                            )}
-                            <p className="font-bold text-[#4d3541]">Regeltotaal {money(price.line.quantity * price.unitPrice)}</p>
-                          </div>
-                        ))}
-                      </div>
-                      <p className="mt-2 border-t border-[#ded4da] pt-2 text-xs font-black text-[#4d3541]">
-                        Totaal {money(orderTotal)} ex btw
-                      </p>
-                    </div>
-                  </details>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs font-bold text-[#6b645b]">
-            {order.logo && <span aria-label="Logo nodig" title="Logo nodig">🖼️</span>}
-            {order.status === "akkoord" && <span className={`italic ${order.entered ? "text-[#24551d]" : "text-[#b42318]"}`}>{order.entered ? "Ingevoerd" : "Niet ingevoerd"}</span>}
-          </div>
-          <div className={`mt-1 grid gap-2 border-t border-[#eee8df] pt-1.5 ${order.department !== "bakkerij" || order.letterLines.length > 0 ? "xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]" : ""}`}>
-            <div className="min-w-0">
-              {orderSummary.length > 150 ? <details className="text-xs text-[#2e2a26]"><summary className="cursor-pointer font-bold">{orderSummary.slice(0, 150)}… <span className="text-[#24551d]">meer</span></summary><p className="mt-1 whitespace-pre-wrap border-l-2 border-[#c3d3bc] pl-2">{orderSummary}</p></details> : <p className="whitespace-pre-wrap text-xs font-bold leading-snug text-[#2e2a26]">{orderSummary}</p>}
-            </div>
-            {(order.department !== "bakkerij" || order.letterLines.length > 0) && <div className="min-w-0 border-t border-[#eee8df] pt-1.5 xl:border-l xl:border-t-0 xl:pl-2 xl:pt-0">
-              <p className="mb-1 text-[0.62rem] font-black uppercase tracking-wide text-[#24551d]">Bestelling · letters {order.letterLines.length > 0 ? `(${b2bLetterTotal(order.letterLines)})` : ""}</p>
-              {order.letterLines.length > 0 ? <><B2BLetterLineBadges lines={order.letterLines.slice(0, 4)} />{order.letterLines.length > 4 && <details className="mt-1 text-xs"><summary className="cursor-pointer font-black text-[#24551d]">+{order.letterLines.length - 4} letterregels</summary><div className="mt-1"><B2BLetterLineBadges lines={order.letterLines.slice(4)} /></div></details>}</> : <p className="text-xs font-bold text-[#9a3412]">Letterregels nog invullen</p>}
-            </div>}
-          </div>
-          {warnings.length > 0 && <p className="mt-1 text-xs font-black text-[#9a3412]">Let op: {warnings.join(" · ")}</p>}
-          {confirmationNeedsAttention && <p className="mt-1 text-xs font-black text-[#9a3412]">{order.confirmationEmailError || "Nog geen bevestigingsmail als back-up geregistreerd."}</p>}
-          {order.confirmationMail?.customer?.sentAt && <p className={`mt-1 text-xs font-bold ${customerConfirmationSent(order) ? "text-[#547762]" : "text-[#9a6a29]"}`}>{customerConfirmationSent(order) ? "✓ Klantbevestiging verstuurd" : "Bestelling bijgewerkt · klant nog niet opnieuw gemaild"}</p>}
-        </div>
-
-        <div className="flex flex-col items-start gap-1 lg:items-end">
-          <div className="flex flex-wrap items-start gap-1">
-          {archived ? (
-            <span className="rounded-full bg-[#f2eee8] px-3 py-1 text-xs font-black text-[#6b645b]">
-              Archief · alleen lezen
-            </span>
-          ) : <>
-          <button
-            type="button"
-            onClick={() => onEdit(order)}
-            className="h-8 border border-[#d6e5d8] bg-[#f6faf4] px-3 text-xs font-black text-[#24551d] shadow-sm"
-          >
-            Wijzig
-          </button>
-          <details className="relative">
-            <summary className="flex h-8 cursor-pointer items-center border border-[#e4ded5] bg-white px-3 text-xs font-black text-[#4d463d]">Acties ▾</summary>
-            <div className="absolute right-0 z-20 mt-1 grid min-w-56 gap-1 border border-[#e4ded5] bg-white p-2 shadow-lg">
-              {order.status === "akkoord" && ([
-                ["entered", "In Bake-it ingevoerd", true],
-                ["productionDone", order.department === "beide" || (order.department === "bakkerij" && order.letterLines.length > 0) ? "Overig geproduceerd" : "Geproduceerd", true],
-                ["letterProductionDone", "Letters geproduceerd", order.department === "beide" || (order.department === "bakkerij" && order.letterLines.length > 0)],
-                ["packed", "Ingepakt", true],
-                ["delivered", "Geleverd", true],
-                ["logoChecked", "Logo gecontroleerd", Boolean(order.logo)],
-                ["textChecked", "Tekst gecontroleerd", Boolean(order.textInstructions)],
-                ["packagingChecked", "Verpakking gecontroleerd", Boolean(order.packaging)],
-              ] as const).filter(([, , visible]) => visible).map(([key, label]) => <label key={key} className="flex cursor-pointer items-center gap-2 px-1 py-1 text-xs font-bold">
-                <input type="checkbox" checked={order[key]} disabled={updatingId === `${order.id}-${key}`} onChange={() => onToggle(order, key)} />{label}
-              </label>)}
-              {order.status === "akkoord" && !order.cancelled && <button type="button" onClick={() => onCustomerConfirmation(order)} className="border-t border-[#e4ded5] px-1 py-2 text-left text-xs font-black text-[#244b37]">{customerConfirmationSent(order) ? "Klantbevestiging bekijken" : "Klantbevestiging mailen…"}</button>}
-              {confirmationNeedsAttention && <button type="button" disabled={updatingId === `${order.id}-confirmation`} onClick={() => onRetryConfirmation(order)} className="border-t border-[#e4ded5] px-1 py-2 text-left text-xs font-black text-[#705000]">Back-up opnieuw proberen</button>}
-              <button type="button" disabled={updatingId === `${order.id}-delete`} onClick={() => onDelete(order)} className="border-t border-[#e4ded5] px-1 py-2 text-left text-xs font-black text-[#9a3412]">Verwijderen...</button>
-            </div>
-          </details>
-          </>}
-          </div>
-          {extraLines.length > 0 && <details className="relative w-full text-xs lg:text-right"><summary className="cursor-pointer font-black text-[#24551d]">Extra gegevens</summary><div className="absolute right-0 z-30 mt-1 max-h-72 w-[min(20rem,calc(100vw-2rem))] overflow-auto rounded-lg border border-[#e4ded5] bg-white p-2 text-left font-semibold leading-snug text-[#4d463d] shadow-lg"><p className="whitespace-pre-wrap">{extraLines.join("\n")}</p></div></details>}
-          {order.invoiceInfo && <details className="relative w-full text-xs lg:text-right"><summary className="cursor-pointer font-black text-[#24551d]">Factuurgegevens</summary><div className="absolute right-0 z-30 mt-1 max-h-72 w-[min(20rem,calc(100vw-2rem))] overflow-auto rounded-lg border border-[#e4ded5] bg-white p-2 text-left text-[#4d463d] shadow-lg"><p className="whitespace-pre-wrap">{order.invoiceInfo}</p></div></details>}
-        </div>
+  return <article className={`${styles.order} ${order.cancelled ? styles.archived : ""}`}>
+    <div className={styles.orderMain}>
+      <div className={styles.date}>{compactDeliveryWindow(order)}<small>{order.deliveryWindowType === "date" ? "Vaste datum" : order.deliveryWindowType === "week" ? "Leverweek" : "Gewenste periode"}</small>{dueSoon(order) && <small className={styles.warning}>Binnen 2 dagen</small>}</div>
+      <div className={styles.customer}>
+        <h3>{order.customerName}</h3>
+        <p className={styles.orderProduct}>{orderSummary || "Bestelling nog invullen"}</p>
+        <p className={styles.delivery}>{order.deliveryMethod || "Levering nog afspreken"}{order.season === "sint-kerst" ? " · Sint & Kerst" : ""}</p>
+        {(warnings.length > 0 || confirmationNeedsAttention) && <p className={styles.warning}>! {confirmationNeedsAttention ? "Controleer interne back-up" : warnings[0]}{warnings.length > 1 ? ` · +${warnings.length - 1}` : ""}</p>}
       </div>
-    </article>
-  );
+      <div>
+        <span className={styles.status} data-status={order.cancelled ? "geannuleerd" : order.status}>{statusLabel}</span>
+        {order.status === "akkoord" && !order.cancelled && <p className={styles.next} style={order.entered ? { color: "#52725c" } : undefined}>{order.entered ? "✓ Ingevoerd" : "! Nog invoeren"}</p>}
+        {order.confirmationMail?.customer?.sentAt && <p className={`${styles.next} ${customerConfirmationSent(order) ? styles.sent : ""}`}>{customerConfirmationSent(order) ? "✓ Klant gemaild" : "Mail bijwerken"}</p>}
+      </div>
+      <div className={styles.amount}>{order.totalExVat.trim() || priceBreakdowns.length > 0 ? money(orderTotal) : "—"}</div>
+      <div className={styles.rowActions}>
+        {!archived && <button type="button" onClick={() => onEdit(order)} className={styles.rowButton}>Wijzig</button>}
+        <button type="button" aria-label={`Details ${order.customerName}`} aria-expanded={expanded} onClick={() => setExpanded(!expanded)} className={styles.chevron}>{expanded ? "⌃" : "⌄"}</button>
+      </div>
+    </div>
+    {expanded && <div className={styles.detail}>
+      <div className={styles.detailGrid}>
+        <section>
+          <h3>Bestelling</h3>
+          {order.letterLines.length > 0 && <B2BLetterLineBadges lines={order.letterLines} />}
+          <p style={{ marginTop: order.letterLines.length ? 12 : 0 }}>{compactOrderText(order.orderText)}</p>
+          {order.letterOrderText && <details><summary>Vrije letteromschrijving</summary><div><p>{order.letterOrderText}</p></div></details>}
+          {extraLines.length > 0 && <details><summary>Extra afspraken</summary><div><p>{extraLines.join("\n")}</p></div></details>}
+          {priceBreakdowns.length > 0 && <details><summary>Prijsspecificatie · {money(orderTotal)} excl. btw</summary><div>
+            {priceBreakdowns.map(price => <div key={price.line.id} className={styles.priceLine}>
+              <strong>{price.line.quantity}× {lineDescription(price.line)}</strong>
+              <p>{price.automatic ? `Staffel ${money(price.basePrice)}${price.optionSurcharge > 0 ? ` + optie ${money(price.optionSurcharge)}` : ""}${price.logoSurcharge > 0 ? ` + logo ${money(price.logoSurcharge)}` : ""} = ${money(price.unitPrice)} p.s.` : `Afgesproken stukprijs ${money(price.unitPrice)}`}</p>
+              <p>{money(price.line.quantity * price.unitPrice)} excl. btw</p>
+            </div>)}
+          </div></details>}
+        </section>
+        <section>
+          <h3>Contact & afhandeling</h3>
+          <p className={styles.contact}>{[order.contactName, order.customerEmail, order.phone, order.deliveryAddress].filter(Boolean).join("\n") || "Geen aanvullende contactgegevens"}</p>
+          {order.folderQuote && <p className={styles.contact} style={{ marginTop: 10 }}>Via folder · {order.folderQuote.reference}{!order.folderQuote.mailSentAt ? " · Controleer e-mailmelding" : ""}</p>}
+          {warnings.length > 0 && <p className={styles.warning}>{warnings.join(" · ")}</p>}
+          {confirmationNeedsAttention && <p className={styles.warning}>{order.confirmationEmailError || "Interne back-up nog niet bevestigd."}</p>}
+          {order.confirmationEmailedAt && <p className={styles.contact} style={{ marginTop: 8 }}>Interne back-up: {formatDateTime(order.confirmationEmailedAt)}</p>}
+          {order.confirmationMail?.customer?.sentAt && <p className={styles.contact}>Klantbevestiging: {formatDateTime(order.confirmationMail.customer.sentAt)}</p>}
+          {order.reminderEmailedAt && <p className={styles.contact}>Reminder: {formatDateTime(order.reminderEmailedAt)}</p>}
+          {order.invoiceInfo && <details><summary>Factuurgegevens</summary><div><p>{order.invoiceInfo}</p></div></details>}
+          {archived ? <p className={styles.contact}>Archief · alleen lezen</p> : order.status === "akkoord" && <div className={styles.checks}>
+            {([
+              ["entered", "In Bake-it ingevoerd", true],
+              ["productionDone", order.department === "beide" || (order.department === "bakkerij" && order.letterLines.length > 0) ? "Overig geproduceerd" : "Geproduceerd", true],
+              ["letterProductionDone", "Letters geproduceerd", order.department === "beide" || (order.department === "bakkerij" && order.letterLines.length > 0)],
+              ["packed", "Ingepakt", true], ["delivered", "Geleverd", true], ["logoChecked", "Logo gecontroleerd", Boolean(order.logo)], ["textChecked", "Tekst gecontroleerd", Boolean(order.textInstructions)], ["packagingChecked", "Verpakking gecontroleerd", Boolean(order.packaging)],
+            ] as const).filter(([, , visible]) => visible).map(([key, label]) => <label key={key}><input type="checkbox" checked={order[key]} disabled={updatingId === `${order.id}-${key}`} onChange={() => onToggle(order, key)} />{label}</label>)}
+          </div>}
+        </section>
+      </div>
+      {!archived && <div className={styles.detailTools}>
+        <button type="button" className={styles.button} onClick={() => onEdit(order)}>Bestelling wijzigen</button>
+        {order.status === "akkoord" && !order.cancelled && <button type="button" className={styles.button} onClick={() => onCustomerConfirmation(order)}>{customerConfirmationSent(order) ? "Klantbevestiging bekijken" : "Klantbevestiging mailen…"}</button>}
+        {confirmationNeedsAttention && <button type="button" className={styles.button} disabled={updatingId === `${order.id}-confirmation`} onClick={() => onRetryConfirmation(order)}>Back-up opnieuw proberen</button>}
+        <button type="button" className={`${styles.quiet} ${styles.danger}`} disabled={updatingId === `${order.id}-delete`} onClick={() => onDelete(order)}>Verwijderen…</button>
+      </div>}
+    </div>}
+  </article>;
 }
 
 export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ season?: BusinessSeason }>) {
   const [year, setYear] = useState(() => currentYear());
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [orders, setOrders] = useState<SinterklaasB2BOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -1884,10 +1560,8 @@ export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ sea
 
   const visibleOrders = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("nl-NL");
-    if (!term) return orders;
-
     return orders.filter((order) =>
-      [
+      (!statusFilter || (statusFilter === "nog-invoeren" ? order.status === "akkoord" && !order.entered && !order.cancelled : order.status === statusFilter && !order.cancelled)) && (!term || [
         order.customerName,
         order.orderText,
         order.letterOrderText,
@@ -1901,9 +1575,9 @@ export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ sea
       ]
         .join(" ")
         .toLocaleLowerCase("nl-NL")
-        .includes(term)
+        .includes(term))
     );
-  }, [orders, search]);
+  }, [orders, search, statusFilter]);
   const forecastOrders = useMemo(
     () =>
       orders.filter(
@@ -2071,163 +1745,58 @@ export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ sea
   }
 
   const groupedOrders = groupByMonth(visibleOrders);
+  const colors = businessSeasonColors[season];
+  const finalCount = forecastOrders.filter(order => order.status === "akkoord").length;
+  const quoteCount = forecastOrders.filter(order => order.status === "offerte").length;
+  const pendingEntryCount = forecastOrders.filter(order => order.status === "akkoord" && !order.entered).length;
+
   return (
-    <div className="space-y-4">
-      <BusinessSeasonNav season={season} />
-      <section className="rounded-2xl border border-[#d7e2d3] bg-white/95 p-3 shadow-sm">
-        <div className="grid gap-2 lg:grid-cols-[minmax(14rem,1fr)_6.5rem_auto_auto_auto]">
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Zoek klant, datum, product"
-            className="h-9 rounded-lg border border-[#e4ded5] bg-[#faf8f5] px-3 text-sm font-semibold outline-none"
-          />
-          <select
-            aria-label="Besteljaar"
-            value={year}
-            onChange={(event) => setYear(event.target.value)}
-            className="h-9 rounded-lg border border-[#e4ded5] bg-[#faf8f5] px-3 text-xs font-black outline-none"
-          >
-            {Array.from(
-              { length: Number(currentYear()) - 2018 },
-              (_, index) => String(Number(currentYear()) - index)
-            ).map((optionYear) => (
-              <option key={optionYear} value={optionYear}>
-                {optionYear}
-              </option>
-            ))}
+    <><div className={styles.page} style={{ "--b2b-accent": colors.accent, "--b2b-pale": colors.pale, "--b2b-season-border": colors.border } as CSSProperties}>
+      <nav className={styles.topbar} aria-label="B2B seizoen">
+        <span className={styles.breadcrumb}>Zakelijk / Bestellingen</span>
+        <div className={styles.seasons}>{(["sint", "kerst"] as const).map(key => <Link key={key} href={businessSeasons[key].orders} aria-current={key === season ? "page" : undefined}>{businessSeasons[key].shortName}</Link>)}</div>
+        <Link className={styles.newsletter} href={businessSeasons[season].mailing}>Nieuwsbrief →</Link>
+      </nav>
+      {saveNotice && <p role="status" className={styles.notice}>{saveNotice}<button type="button" aria-label="Melding sluiten" onClick={() => setSaveNotice("")} style={{ marginLeft: "auto" }}>×</button></p>}
+      {error && <p role="alert" className={styles.error}>{error}</p>}
+      {formOpen ? <B2BOrderEditor order={editingOrder} season={season} onClose={closeOrderDialog} onSaved={handleSavedOrder} /> : <>
+        <header className={styles.header}>
+          <div><p className={styles.eyebrow}>{seasonLabel(season)} · {year}</p><h1>B2B-bestellingen</h1><p className={styles.subtitle}>Klant, levering en status in één oogopslag.</p></div>
+          <button type="button" className={styles.primary} onClick={openNewOrderDialog}>+ Nieuwe bestelling</button>
+        </header>
+        <div className={styles.meta}>
+          <span>Verwachte omzet <b>{money(expectedRevenue)}</b></span><span><b>{finalCount}</b> definitief</span><span><b>{quoteCount}</b> {quoteCount === 1 ? "offerte" : "offertes"}</span>
+          {pendingEntryCount > 0 && <button type="button" className={styles.attentionLink} onClick={() => setStatusFilter("nog-invoeren")}>! {pendingEntryCount} nog invoeren</button>}
+        </div>
+        <div className={styles.tools}>
+          <input aria-label="Zoek klant of product" placeholder="Zoek klant, datum of product" value={search} onChange={event => setSearch(event.target.value)} className={styles.search} />
+          <select aria-label="Filter status" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>
+            <option value="">Alle statussen</option><option value="aanvraag">Aanvraag</option><option value="offerte">Offerte</option><option value="akkoord">Definitief</option><option value="nog-invoeren">Nog invoeren</option><option value="afgewezen">Niet doorgegaan</option>
           </select>
-          <button
-            type="button"
-            onClick={() => void loadOrders(year)}
-            className="h-9 rounded-lg bg-[#fff3ba] px-3 text-xs font-black text-[#5a4300] transition hover:bg-[#fed500]/35"
-          >
-            Ververs
-          </button>
-          <button
-            type="button"
-            onClick={openNewOrderDialog}
-            className="flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#24551d] px-3 text-xs font-black text-white shadow-sm"
-          >
-            <span
-              className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-base leading-none"
-              aria-hidden="true"
-            >
-              +
-            </span>
-            Toevoegen
-          </button>
-          <label className="flex h-9 cursor-pointer items-center justify-center rounded-lg border border-[#d6e5d8] bg-[#f6faf4] px-3 text-xs font-black text-[#24551d]">
-            Excel import
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={(event) => void handleExcelFile(event.target.files?.[0])}
-              className="sr-only"
-            />
-          </label>
+          <select aria-label="Besteljaar" value={year} onChange={event => setYear(event.target.value)}>
+            {Array.from({ length: Number(currentYear()) - 2018 }, (_, index) => String(Number(currentYear()) - index)).map(optionYear => <option key={optionYear} value={optionYear}>{optionYear}</option>)}
+          </select>
+          <span className={styles.spacer} />
+          <button type="button" className={styles.quiet} disabled={loading} onClick={() => void loadOrders(year)}>↻ Ververs</button>
+          <label className={styles.quiet}>Excel import<input type="file" accept=".xlsx,.xls" onChange={event => void handleExcelFile(event.target.files?.[0])} className="sr-only" /></label>
         </div>
-
-        <div className="mt-2 border-t border-[#ece7e0] pt-2">
-          <div className="inline-flex items-center gap-3 rounded-full bg-[#a27a8e] px-4 py-2 text-white shadow-sm">
-            <span className="text-[0.62rem] font-black uppercase tracking-[0.08em] text-white/80">
-              Verwachte omzet {year}
-            </span>
-            <strong className="text-base leading-none">{money(expectedRevenue)}</strong>
-            <span className="text-[0.68rem] font-semibold text-white/85">
-              {forecastOrders.length} bestellingen
-            </span>
-          </div>
-        </div>
-      </section>
-
-      {saveNotice && <p role="status" className="rounded-lg border border-[#b8cab5] bg-[#edf4eb] px-3 py-2 text-sm font-bold text-[#24551d]">{saveNotice}</p>}
-      {error && (
-        <p className="border border-[#f1b8a8] bg-[#fff4ef] px-3 py-2 text-sm font-black text-[#9a3412]">
-          {error}
-        </p>
-      )}
-
-      {importPreview.length > 0 && (
-        <section className="border border-[#e5d28a] bg-[#fff8d8] p-3 shadow-sm">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-lg font-black text-[#1a1815]">
-              Import klaar: {importPreview.length} regels
-            </h2>
-            <button
-              type="button"
-              disabled={importing}
-              onClick={() => void saveImportPreview()}
-              className="h-10 bg-[#24551d] px-4 text-sm font-black text-white disabled:opacity-60"
-            >
-              {importing ? "Opslaan..." : "Opslaan in WordPress"}
-            </button>
-          </div>
-          <div className="mt-3 grid gap-1">
-            {importPreview.slice(0, 8).map((order, index) => (
-              <p
-                key={`${order.customerName}-${index}`}
-                className="border border-[#eadb8b] bg-white/75 px-2 py-1 text-xs font-bold text-[#4d463d]"
-              >
-                {formatDate(order.deliveryDate)} · {order.customerName} ·{" "}
-                {order.orderText.slice(0, 110)}
-              </p>
-            ))}
-          </div>
+        {importPreview.length > 0 && <section className={styles.import}>
+          <div className={styles.header}><h2>Import klaar: {importPreview.length} regels</h2><button type="button" disabled={importing} onClick={() => void saveImportPreview()} className={styles.primary}>{importing ? "Opslaan…" : "Import opslaan"}</button><button type="button" disabled={importing} onClick={() => setImportPreview([])} className={styles.quiet}>Annuleren</button></div>
+          {importPreview.slice(0, 8).map((order, index) => <p key={`${order.customerName}-${index}`}>{formatDate(order.deliveryDate)} · {order.customerName} · {order.orderText.slice(0, 110)}</p>)}
+        </section>}
+        <section className={styles.list} aria-label={`${seasonLabel(season)} bestellingen`}>
+          <div className={styles.columns}><span>Levering</span><span>Klant & bestelling</span><span>Status</span><span>Totaal ex. btw</span><span /></div>
+          {loading ? <p className={styles.empty} role="status">Bestellingen laden…</p> : groupedOrders.map(([key, group]) => <section key={key}>
+            <div className={styles.month}><h2>{monthLabel(key)}</h2><span>{group.length} {group.length === 1 ? "bestelling" : "bestellingen"}</span></div>
+            {group.map(order => <B2BOrderRow key={order.id} order={order} updatingId={updatingId} onToggle={toggleStatus} onEdit={openEditOrderDialog}
+              onDelete={nextOrder => { setError(""); setDeleteTarget(nextOrder); setDeleteReason(""); setDeleteReasonNote(""); }}
+              onRetryConfirmation={nextOrder => void resendConfirmation(nextOrder)} onCustomerConfirmation={setConfirmationTarget} />)}
+          </section>)}
+          {!loading && visibleOrders.length < 1 && <p className={styles.empty}>Geen B2B-bestellingen gevonden.</p>}
         </section>
-      )}
-
-      <section className="space-y-2">
-        <div className="px-1">
-          <h2 className="text-xl font-black text-[#1a1815]">Bestellingen</h2>
-        </div>
-
-        <div className="space-y-3">
-          {loading && (
-            <p className="border border-[#e4ded5] bg-white px-3 py-2 text-sm font-bold text-[#6b645b]">
-              Laden...
-            </p>
-          )}
-          {!loading &&
-            groupedOrders.map(([key, group]) => (
-              <section key={key} className="rounded-2xl border border-[#d7e2d3] bg-white/70 shadow-sm">
-                <div className="rounded-t-2xl px-3 py-2" style={{ backgroundColor: businessSeasonColors[season].pale }}>
-                  <h3 className="text-sm font-black capitalize text-[#1a1815]">
-                    {monthLabel(key)}
-                  </h3>
-                </div>
-                <div className="grid gap-2 p-2">
-                  {group.map((order) => (
-                    <B2BOrderRow
-                      key={order.id}
-                      order={order}
-                      updatingId={updatingId}
-                      onToggle={toggleStatus}
-                      onEdit={openEditOrderDialog}
-                      onDelete={(nextOrder) => { setError(""); setDeleteTarget(nextOrder); setDeleteReason(""); setDeleteReasonNote(""); }}
-                      onRetryConfirmation={(nextOrder) => void resendConfirmation(nextOrder)}
-                      onCustomerConfirmation={setConfirmationTarget}
-                    />
-                  ))}
-                </div>
-              </section>
-            ))}
-          {!loading && visibleOrders.length < 1 && (
-            <p className="border border-[#e4ded5] bg-white px-3 py-2 text-sm font-bold text-[#6b645b]">
-              Geen B2B-bestellingen gevonden.
-            </p>
-          )}
-        </div>
-      </section>
-
-      {formOpen && (
-        <B2BOrderDialog
-          order={editingOrder}
-          season={season}
-          onClose={closeOrderDialog}
-          onSaved={handleSavedOrder}
-        />
-      )}
+        <div className={styles.listFooter}><span>{visibleOrders.length} {visibleOrders.length === 1 ? "bestelling" : "bestellingen"} · bedragen excl. btw</span><span>Open een rij voor letterregels, contact en afhandeling.</span></div>
+      </>}
+      </div>
       {confirmationTarget && <B2BConfirmationDialog key={confirmationTarget.id} order={confirmationTarget} onClose={() => setConfirmationTarget(null)} onEdit={nextOrder => { setConfirmationTarget(null); openEditOrderDialog(nextOrder); }} onUpdated={nextOrder => { setOrders(current => updateOrderList(current, nextOrder)); setSaveNotice(customerConfirmationSent(nextOrder) ? `Klantbevestiging voor ${nextOrder.customerName} verstuurd.` : `Mailstatus voor ${nextOrder.customerName} bijgewerkt.`); }}/>}
       {deleteTarget && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[#1a1815]/50 p-4" role="dialog" aria-modal="true" aria-label="Bestelling verwijderen">
         <div className="w-full max-w-lg space-y-3 border border-[#e4ded5] bg-white p-4 shadow-2xl">
@@ -2251,6 +1820,6 @@ export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ sea
           </div>
         </div>
       </div>}
-    </div>
+    </>
   );
 }
