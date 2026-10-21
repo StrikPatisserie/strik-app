@@ -3,8 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { fetchB2BOrders, fetchLetterOrders } from "../../sinterklaasApi";
 import styles from "./ProductionPlanning.module.css";
-import ProductionSourceIcon from "./ProductionSourceIcon";
-import { addProductionOrderQuantity, aggregateProductionRows, productionOrderSource, productionSourceBreakdown, PRODUCTION_SOURCES, type ProductionOrderSource, type ProductionSeedRow } from "./productionSources";
+import { addProductionOrderQuantity, aggregateProductionRows, productionOrderSource, productionSourceBreakdown, type ProductionOrderSource, type ProductionSeedRow } from "./productionSources";
 export type { ProductionSeedRow } from "./productionSources";
 import type {
   ChocolateLetterLine,
@@ -382,9 +381,6 @@ function ProductionTable({
 
   return (
     <div className={styles.tables}>
-      <div className={styles.sourceLegend} aria-label="Legenda herkomst">
-        {PRODUCTION_SOURCES.filter(({ id }) => id !== "onbekend").map(({ id, label }) => <span key={id}><ProductionSourceIcon source={id} />{label}</span>)}
-      </div>
       {productionSections(rows).map((section) => (
         <section key={section.key} className={styles.tableSection}>
           <div className={styles.sectionHeading}>
@@ -437,8 +433,8 @@ function ProductionTable({
                       </td>
                       <td className={styles.sourceCell}>
                         <div className={styles.sourceBadges}>
-                          {productionSourceBreakdown(row).map(({ id, label, quantity }) => <span key={id} className={styles.sourceBadge} role="img" aria-label={`${label}: ${quantity} ${quantity === 1 ? "letter" : "letters"}`} title={`${label}: ${quantity} ${quantity === 1 ? "letter" : "letters"}`}>
-                            <ProductionSourceIcon source={id} /><span aria-hidden="true">{quantity}</span>
+                          {productionSourceBreakdown(row).map(({ id, label, quantity }) => <span key={id} className={styles.sourceBadge} data-source={id} title={`${label}: ${quantity} ${quantity === 1 ? "letter" : "letters"}`}>
+                            <span>{label}</span><b>{quantity}</b>
                           </span>)}
                         </div>
                       </td>

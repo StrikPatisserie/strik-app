@@ -80,12 +80,13 @@
 .table .total { background: #f3f5ef; font-size: 16px; font-weight: 600; color: var(--b2b-ink); }
 .table .stateCell { text-align: center; padding-inline: 3px; }
 .table .sourceCell { text-align: left; padding-left: 14px; }
-.sourceBadges { display: flex; flex-wrap: wrap; gap: 4px; }
-.sourceBadge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 5px; border: 1px solid var(--b2b-border); border-radius: 4px; color: var(--b2b-ink); background: #fafbf7; font-size: 11px; line-height: 1.2; font-variant-numeric: tabular-nums; }
-.sourceBadge svg { width: 14px; height: 14px; flex-shrink: 0; }
-.sourceLegend { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 12px 0 0; color: var(--b2b-muted); font-size: 10px; }
-.sourceLegend > span { display: inline-flex; align-items: center; gap: 5px; }
-.sourceLegend svg { width: 14px; height: 14px; }
+.sourceBadges { display: flex; flex-wrap: wrap; gap: 5px; }
+.sourceBadge { display: inline-flex; align-items: center; gap: 9px; max-width: 100%; padding: 4px 8px; border: 1px solid var(--b2b-border); border-radius: 5px; color: var(--b2b-ink); background: #f2f3ef; font-size: 11px; line-height: 1.45; font-variant-numeric: tabular-nums; }
+.sourceBadge b { padding-left: 8px; border-left: 1px solid currentColor; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.sourceBadge[data-source="winkel"] { color: #745522; border-color: #e4d1b5; background: #faf2e5; }
+.sourceBadge[data-source="online"] { color: #2f5769; border-color: #ccdce4; background: #edf4f7; }
+.sourceBadge[data-source="b2b"] { color: #644a73; border-color: #ddd3e6; background: #f4eff7; }
+.sourceBadge[data-source="voorraad"] { color: #3d6241; border-color: #cfdfcb; background: #edf4ea; }
 .status { display: inline-flex; align-items: center; justify-content: center; gap: 4px; font-size: 10px; color: #8a642b; white-space: nowrap; }
 .status::before { content: ""; width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
 .status[data-complete="true"] { color: #42684b; }
@@ -151,8 +152,7 @@
   .table .groupRow th { grid-column: 1/-1; }
   .table .sourceCol { display: none; }
   .table .sourceCell { grid-column: 1/-1; padding: 0 5px 8px; }
-  .sourceBadge { font-size: 10px; padding: 2px 5px; }
-  .sourceLegend { gap: 7px 12px; padding-inline: 5px; }
+  .sourceBadge { font-size: 11px; padding: 3px 7px; }
   .table .letterCell { padding-left: 5px; }
   .letterLine { gap: 3px 5px; }
   .letterLine > strong, .table .total { font-size: 15px; }
