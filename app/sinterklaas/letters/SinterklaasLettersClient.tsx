@@ -515,7 +515,7 @@ function OrderRow({
           {order.phone && <p><a href={`tel:${order.phone}`}>{order.phone}</a></p>}
           <p>Totaal {formatMoney(order.totalCents)} · betaald {formatMoney(paidAmount)} · open {formatMoney(openAmount)}</p>
           <p className={listStyles.muted}>Afrekenen bij afhalen in Bake-it.</p>
-          {extraLines.map((line, index) => <p className={listStyles.muted} key={index}>{line}</p>)}
+          {extraLines.filter((line) => typeof line === "string" && !/^(E-mail|Telefoon|Winkel):/.test(line)).map((line, index) => <p className={listStyles.muted} key={index}>{line}</p>)}
           {isDone && <p className={listStyles.muted}>Productie klaar: {doneAtLabel || "datum onbekend"}</p>}
         </div>
       </div>
@@ -1518,7 +1518,7 @@ export default function SinterklaasLettersClient({
         </section>)}
         {!loading && !visibleOrders.length && <p className={listStyles.empty}>Nog geen winkelbestellingen gevonden.</p>}
       </div>
-      <p className={listStyles.footer}><span>{visibleOrders.length} bestellingen zichtbaar</span><span>Gesorteerd op ophaaldatum · bedragen incl. btw</span></p>
+      <p className={listStyles.footer}><span>{visibleOrders.length} {visibleOrders.length === 1 ? "bestelling" : "bestellingen"} zichtbaar</span><span>Gesorteerd op ophaaldatum · bedragen incl. btw</span></p>
       {formOpen && <LetterOrderDialog order={editingOrder} mode={mode} defaultShop={defaultShop} pickupDates={pickupDates} pickupDeadlines={pickupDeadlines} onClose={closeOrderDialog} onSaved={handleSavedOrder} />}
     </div>;
   }

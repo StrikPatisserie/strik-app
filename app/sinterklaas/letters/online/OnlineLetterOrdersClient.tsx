@@ -75,6 +75,6 @@ export default function OnlineLetterOrdersClient({ orders, photoUrls, error }: {
         })}
       </section>)}
     </div>
-    <p className={styles.footer}><span>{visibleOrders.length} van {orders.length} bestellingen zichtbaar</span><span>Gesorteerd op ophaaldatum · bedragen incl. btw</span></p>
+    <p className={styles.footer}><span>{visibleOrders.length} van {orders.length} {orders.length === 1 ? "bestelling" : "bestellingen"} zichtbaar</span><span>Gesorteerd op ophaaldatum · bedragen incl. btw</span></p>
   </div>;
 }
