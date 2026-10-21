@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { fetchB2BOrders, fetchLetterOrders } from "../../sinterklaasApi";
+import styles from "./ProductionPlanning.module.css";
 import type {
   ChocolateLetterLine,
   ChocolateLetterOrder,
@@ -382,93 +383,65 @@ function ProductionTable({
   rows: WorkingRow[];
   onToggleComplete?: (row: WorkingRow) => void;
 }>) {
-  if (rows.length === 0) {
-    return <p className="bg-white px-3 py-4 text-center text-sm font-semibold text-[#776f66]">Nog geen letters ingepland.</p>;
-  }
+  if (rows.length === 0) return <p className={styles.empty}>Nog geen letters ingepland.</p>;
 
   return (
-    <div className="space-y-3 bg-[#f7f3ee] p-2 sm:space-y-4 sm:p-3">
+    <div className={styles.tables}>
       {productionSections(rows).map((section) => (
-        <section key={section.key} className="overflow-hidden rounded-xl border border-[#d9d2c8] bg-white shadow-sm">
-          <h3 className="border-b border-[#bfcfbb] bg-[#dcebd8] px-3 py-2 text-[0.68rem] font-black uppercase tracking-[0.15em] text-[#24551d]">{section.label}</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[500px] border-collapse text-left text-xs sm:min-w-[560px] sm:text-sm">
-              <thead className="bg-[#fffdfa] text-[0.56rem] italic tracking-[0.05em] text-[#9a9187] sm:text-[0.6rem]">
-                <tr>
-                  <th className="px-3 py-1.5 font-medium">Letter en uitvoering</th>
-                  <th className="w-16 px-1 py-1.5 text-center text-[0.5rem] font-normal text-[#aaa197]">Besteld</th>
-                  <th className="w-16 px-1 py-1.5 text-center text-[0.5rem] font-normal text-[#aaa197]">Winkel</th>
-                  <th className="w-16 border-x-2 border-[#d5cec5] bg-[#eeeae3] px-1 py-1.5 text-center text-[0.62rem] font-black uppercase text-[#4d463d]">Totaal</th>
-                  <th className="w-20 px-1 py-1.5 text-center font-medium">Klaar</th>
+        <section key={section.key} className={styles.tableSection}>
+          <div className={styles.sectionHeading}>
+            <h3>{section.label}</h3>
+            <span>{section.groups.reduce((sum, group) => sum + group.rows.reduce((count, row) => count + row.orders + row.stock, 0), 0)} stuks</span>
+          </div>
+          <table className={styles.table}>
+            <caption>{section.label} · aantallen voor productie</caption>
+            <thead>
+              <tr>
+                <th scope="col">Letter</th>
+                <th scope="col" className={styles.numberCol}>Besteld</th>
+                <th scope="col" className={styles.numberCol}>Winkel</th>
+                <th scope="col" className={styles.totalCol}>Totaal</th>
+                <th scope="col" className={styles.stateCol}>Status</th>
+              </tr>
+            </thead>
+            {section.groups.map((group) => (
+              <tbody key={`${section.key}-${group.key}`}>
+                <tr className={styles.groupRow}>
+                  <th colSpan={5} scope="rowgroup"><span className={styles.flavour} data-flavour={group.flavour}>{group.label}</span></th>
                 </tr>
-              </thead>
-              <tbody>
-                {section.groups.map((group) => {
-                  const flavourTheme = productionFlavourTheme(group.flavour);
+                {group.rows.map((row) => {
+                  const planned = row.orders + row.stock;
+                  const variant = productionVariant(row.label);
+                  const isComplete = productionRowIsComplete(row);
                   return (
-                  <Fragment key={`${section.key}-${group.key}`}>
-                    <tr className="bg-white">
-                      <td colSpan={5} className="px-3 pb-1 pt-2">
-                        <div className="flex items-center gap-2">
-                          <span className={`shrink-0 text-[0.58rem] font-bold italic uppercase tracking-[0.12em] ${flavourTheme.label}`}>{group.label}</span>
-                          <span className={`h-px flex-1 opacity-55 ${flavourTheme.line}`} />
+                    <tr key={row.key} data-complete={isComplete}>
+                      <td className={styles.letterCell}>
+                        <div className={styles.letterLine}>
+                          <strong>{variant.letter}</strong>
+                          <span className={styles.variant}>{productionValueLabel(variant.chocolate)} · {productionValueLabel(variant.size)}</span>
                         </div>
+                        {variant.extras.length > 0 && <div className={styles.extras}>
+                          {variant.extras.map((extra, index) => <span key={`${extra}-${index}`} className={styles.extra}>{index === 0 && <span className={styles.extraMark} aria-label="Afwijking">!</span>}{extra}</span>)}
+                        </div>}
+                      </td>
+                      <td className={styles.quantity}>{row.orders}</td>
+                      <td className={styles.quantity}>{row.stock}</td>
+                      <td className={styles.total}>{planned}</td>
+                      <td className={styles.stateCell}>
+                        {onToggleComplete ? (
+                          <button type="button" role="checkbox" aria-checked={isComplete}
+                            aria-label={`${variant.product} ${isComplete ? "weer openzetten" : "als geproduceerd markeren"}`}
+                            onClick={() => onToggleComplete(row)} className={styles.completeButton}>
+                            {isComplete ? "✓" : "○"}
+                          </button>
+                        ) : <span className={styles.status} data-complete={isComplete}>{isComplete ? "Gereed" : "Open"}</span>}
                       </td>
                     </tr>
-                    {group.rows.map((row) => {
-                      const planned = row.orders + row.stock;
-                      const variant = productionVariant(row.label);
-                      const isSpecial = variant.extras.length > 0;
-                      const isComplete = productionRowIsComplete(row);
-                      const rowTheme = productionFlavourTheme(variant.chocolate);
-                      return (
-                        <tr key={row.key} className={`border-t border-[#eee9e2] ${isComplete ? "bg-[#f3f8f0]" : "bg-white"}`}>
-                          <td className="p-0">
-                            <div className="flex min-h-12 items-stretch">
-                              <span className={`flex w-[1.4rem] shrink-0 items-center justify-center py-1 text-[0.48rem] font-black uppercase tracking-[0.08em] [writing-mode:vertical-rl] ${rowTheme.rail}`}>{productionValueLabel(variant.chocolate)}</span>
-                              <div className="flex flex-1 flex-wrap items-center gap-1.5 px-2 py-1.5 sm:px-3 sm:py-2">
-                                <strong className={isComplete ? "text-[#527058] line-through opacity-65" : "text-[#1a1815]"}>{variant.letter}</strong>
-                                {isSpecial && (
-                                  <>
-                                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#d75a48] text-[0.7rem] font-black text-white" aria-label="Afwijking">!</span>
-                                    {variant.extras.map((extra) => (
-                                      <span key={extra} className="rounded-full border border-[#e4c17b] bg-[#fffaf0] px-2 py-0.5 text-[0.62rem] font-black text-[#765019]">{extra}</span>
-                                    ))}
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-1 py-1.5 text-center text-[0.66rem] font-medium text-[#9d958c]">{row.orders}</td>
-                          <td className="px-1 py-1.5 text-center text-[0.66rem] font-medium text-[#9d958c]">{row.stock}</td>
-                          <td className="border-x-2 border-[#d5cec5] bg-[#eeeae3] px-1 py-1.5 text-center text-lg font-black text-[#1a1815]">{planned}</td>
-                          <td className="px-1 py-1.5 text-center">
-                            {onToggleComplete ? (
-                              <button
-                                type="button"
-                                role="checkbox"
-                                aria-checked={isComplete}
-                                aria-label={`${variant.product} ${isComplete ? "weer openzetten" : "als geproduceerd markeren"}`}
-                                onClick={() => onToggleComplete(row)}
-                                className={`mx-auto flex h-8 min-w-8 items-center justify-center rounded-full border px-2 text-xs font-black transition ${isComplete ? "border-[#24551d] bg-[#24551d] text-white" : "border-[#cfc8be] bg-white text-[#8b8278] hover:border-[#7aa173] hover:text-[#24551d]"}`}
-                              >
-                                {isComplete ? "✓" : "○"}
-                              </button>
-                            ) : (
-                              <span className={`inline-flex rounded-full px-2 py-1 text-[0.58rem] font-black uppercase tracking-[0.08em] ${isComplete ? "bg-[#dcebd8] text-[#24551d]" : "bg-[#fff0e8] text-[#9a3412]"}`}>
-                                {isComplete ? "✓ Gereed" : "Open"}
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </Fragment>
                   );
                 })}
               </tbody>
-            </table>
-          </div>
+            ))}
+          </table>
         </section>
       ))}
     </div>
@@ -541,6 +514,7 @@ function GeneralStoreOrderDialog({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!review || saving || locked) return;
     setSaving(true);
     setError("");
     try {
@@ -592,18 +566,18 @@ function GeneralStoreOrderDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-[#263b2b]/45 px-2 py-3 backdrop-blur-sm sm:px-3 sm:py-8" role="dialog" aria-modal="true">
+    <div className={`${styles.dialog} fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-[#263b2b]/45 px-2 py-3 backdrop-blur-sm sm:px-3 sm:py-8`} role="dialog" aria-modal="true" aria-label="Winkelvoorraad bestellen">
       <form onSubmit={submit} className="w-full max-w-3xl rounded-[1.4rem] border border-white/90 bg-[#faf8f2] p-3 shadow-2xl sm:rounded-[2rem] sm:p-5 lg:p-6">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-[0.65rem] font-black uppercase tracking-[0.16em] text-[#8b8278]">Algemene winkelvoorraad</p>
+            <p className={styles.dialogHeading}>Algemene winkelvoorraad</p>
             <h2 className="mt-0.5 text-lg font-black text-[#1a1815] sm:mt-1 sm:text-xl">{review ? "Bestelling controleren" : "Winkelbestelling maken"}</h2>
             <p className="mt-1 text-xs font-bold text-[#6b645b]">Productieronde {formatProductionPeriod(batch.startDate, batch.date)}</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Sluiten" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#dfd8ce] bg-white text-lg font-black sm:h-9 sm:w-9 sm:text-xl">×</button>
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-1.5 sm:mt-5 sm:grid-cols-4 sm:gap-2">
+        <div className={styles.shopGrid}>
           {DISTRIBUTION_SHOPS.map((shop) => {
             const total = (drafts[shop] || []).reduce((sum, row) => sum + row.quantity, 0);
             return (
@@ -611,16 +585,16 @@ function GeneralStoreOrderDialog({
                 key={shop}
                 type="button"
                 onClick={() => { setSelectedShop(shop); setReview(false); setError(""); }}
-                className={`rounded-xl border px-2.5 py-2 text-left transition sm:rounded-2xl sm:px-3 sm:py-3 ${selectedShop === shop ? "border-[#24551d] bg-[#e4eee0]" : "border-[#ddd5ca] bg-white"}`}
+                className={styles.shop} data-selected={selectedShop === shop} aria-pressed={selectedShop === shop}
               >
                 <span className="block text-[0.62rem] font-black uppercase tracking-[0.06em] text-[#4d463d] sm:text-xs sm:tracking-[0.08em]">{SHOP_LABELS[shop]}</span>
-                <span className="mt-0.5 block text-xs font-bold text-[#776f66] sm:mt-1 sm:text-sm">{total > 0 ? `${total} letters` : "Nog leeg"}</span>
+                <small>{total > 0 ? `${total} letters` : "Nog leeg"}</small>
               </button>
             );
           })}
         </div>
 
-        <div className="mt-3 rounded-xl bg-[#eee8df] px-3 py-2 text-[0.7rem] font-bold text-[#5f584f] sm:mt-4 sm:rounded-2xl sm:px-4 sm:py-3 sm:text-xs">
+        <div className={styles.dialogNote}>
           {locked
             ? "De besteldeadline is verstreken; deze winkelbestellingen zijn vergrendeld."
             : `Je kunt bevestigde bestellingen wijzigen tot ${formatDeadline(batch.deadlineAt)}.`}
@@ -628,17 +602,17 @@ function GeneralStoreOrderDialog({
 
         {!review ? (
           <>
-            <section className="mt-3 rounded-xl border border-[#e0d8cd] bg-white p-3 sm:mt-4 sm:rounded-2xl sm:p-4">
+            <section className={styles.dialogPanel}>
               <div className="flex items-end justify-between gap-3">
                 <div>
                   <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#8b8278]">Bestelling voor</p>
                   <h3 className="text-base font-black text-[#263b2b] sm:text-lg">{SHOP_LABELS[selectedShop]}</h3>
                 </div>
-                <strong className="rounded-full bg-[#e6efe2] px-2.5 py-1 text-xs text-[#24551d] sm:px-3 sm:text-sm">{rowsTotal} letters</strong>
+                <strong className={styles.dialogTotal}>{rowsTotal} letters</strong>
               </div>
 
               {!locked && (
-                <div className="mt-3 grid grid-cols-3 gap-2 sm:mt-4 sm:grid-cols-5 sm:gap-3">
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-4 sm:grid-cols-5 sm:gap-3">
                   <label className="text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#6b645b] sm:text-xs sm:tracking-[0.1em]">Letter
                     <select value={letter} disabled={style === "vorm"} onChange={(event) => setLetter(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-[#ddd5ca] bg-white px-2 text-xs font-black text-[#1a1815] disabled:bg-[#eee9e2] sm:h-11 sm:rounded-xl sm:px-3 sm:text-sm">
                       {LETTERS.map((value) => <option key={value} value={value}>{value}</option>)}
@@ -659,16 +633,16 @@ function GeneralStoreOrderDialog({
                       <option value="spuit">Spuit</option><option value="vorm">Vorm</option>
                     </select>
                   </label>
-                  <label className="text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#6b645b] sm:text-xs sm:tracking-[0.1em]">Aantal
+                  <label className="col-span-2 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#6b645b] sm:col-span-1 sm:text-xs sm:tracking-[0.1em]">Aantal
                     <input type="number" min={1} max={10000} value={quantity} onChange={(event) => setQuantity(Math.max(1, Number(event.target.value) || 1))} className="mt-1 h-9 w-full rounded-lg border border-[#ddd5ca] bg-white px-2 text-xs font-black text-[#1a1815] sm:h-11 sm:rounded-xl sm:px-3 sm:text-sm" />
                   </label>
-                  <button type="button" onClick={addLine} className="col-span-3 h-9 rounded-full bg-[#4b352f] px-3 text-xs font-black text-white sm:col-span-5 sm:h-11 sm:px-4 sm:text-sm">+ Zet op totaallijst van {SHOP_LABELS[selectedShop]}</button>
+                  <button type="button" onClick={addLine} className={`${styles.button} col-span-2 sm:col-span-5`}>+ Zet op totaallijst van {SHOP_LABELS[selectedShop]}</button>
                 </div>
               )}
             </section>
 
-            <section className="mt-3 overflow-hidden rounded-xl border border-[#e0d8cd] bg-white sm:mt-4 sm:rounded-2xl">
-              <div className="flex items-center justify-between bg-[#f1ede7] px-3 py-2 sm:px-4 sm:py-3">
+            <section className={styles.dialogList}>
+              <div className={styles.dialogListHead}>
                 <h3 className="text-xs font-black sm:text-sm">Totaallijst {SHOP_LABELS[selectedShop]}</h3>
                 <span className="text-[0.65rem] font-black text-[#6b645b] sm:text-xs">{rows.length} regels · {rowsTotal} stuks</span>
               </div>
@@ -678,7 +652,7 @@ function GeneralStoreOrderDialog({
                 <div className="divide-y divide-[#e4ded5]">
                   {rows.map((row) => (
                     <div key={row.key} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 sm:gap-3 sm:px-4 sm:py-3">
-                      <p className="text-sm font-black text-[#1a1815] sm:text-base">{row.label}</p>
+                      <p className={styles.dialogLineLabel}>{row.letter}<small>{productionValueLabel(row.flavour)} · {productionValueLabel(row.size)} · {productionValueLabel(row.style)}</small></p>
                       <div className="flex items-center gap-1.5 sm:gap-2">
                         {!locked && <button type="button" onClick={() => adjustLine(row.key, -1)} className="h-7 w-7 rounded-full border border-[#ddd5ca] bg-white text-sm font-black sm:h-8 sm:w-8">−</button>}
                         <strong className="min-w-8 text-center text-sm sm:min-w-10 sm:text-base">{row.quantity}×</strong>
@@ -692,8 +666,8 @@ function GeneralStoreOrderDialog({
             </section>
           </>
         ) : (
-          <section className="mt-3 rounded-[1.25rem] border border-[#c9d9c5] bg-white p-4 sm:mt-4 sm:rounded-[1.5rem] sm:p-5">
-            <p className="text-[0.65rem] font-black uppercase tracking-[0.15em] text-[#668064]">Laatste controle</p>
+          <section className={styles.dialogPanel}>
+            <p className={styles.dialogHeading}>Laatste controle</p>
             <div className="mt-1 flex items-end justify-between gap-3">
               <h3 className="text-xl font-black text-[#263b2b] sm:text-2xl">{SHOP_LABELS[selectedShop]}</h3>
               <strong className="text-lg text-[#24551d] sm:text-xl">{rowsTotal} letters</strong>
@@ -714,14 +688,14 @@ function GeneralStoreOrderDialog({
         {error && <p role="alert" className="mt-3 rounded-xl bg-[#fff0ea] p-3 text-sm font-black text-[#9a3412]">{error}</p>}
 
         <div className="mt-3 flex flex-col-reverse gap-1.5 sm:mt-5 sm:flex-row sm:justify-end sm:gap-2">
-          <button type="button" onClick={onClose} className="h-10 rounded-full border border-[#ddd5ca] bg-white px-4 text-xs font-black text-[#4d463d] sm:h-11 sm:px-5 sm:text-sm">Annuleren</button>
+          <button type="button" onClick={onClose} className={styles.button}>Annuleren</button>
           {review ? (
             <>
-              <button type="button" onClick={() => setReview(false)} className="h-10 rounded-full border border-[#b9cbb5] bg-[#edf4eb] px-4 text-xs font-black text-[#24551d] sm:h-11 sm:px-5 sm:text-sm">← Nog wijzigen</button>
-              <button type="submit" disabled={saving || locked} className="h-10 rounded-full bg-[#24551d] px-4 text-xs font-black text-white shadow-sm disabled:opacity-60 sm:h-11 sm:px-5 sm:text-sm">{saving ? "Opslaan..." : existingRows.length > 0 ? "Ja, wijzigingen opslaan" : "Ja, toevoegen aan productie"}</button>
+              <button type="button" onClick={() => setReview(false)} className={styles.button}>← Nog wijzigen</button>
+              <button key="save-stock" type="submit" disabled={saving || locked} className={styles.primary}>{saving ? "Opslaan..." : existingRows.length > 0 ? "Ja, wijzigingen opslaan" : "Ja, toevoegen aan productie"}</button>
             </>
           ) : (
-            <button type="button" onClick={() => setReview(true)} disabled={locked || (rows.length === 0 && existingRows.length === 0)} className="h-10 rounded-full bg-[#24551d] px-4 text-xs font-black text-white shadow-sm disabled:opacity-40 sm:h-11 sm:px-5 sm:text-sm">Controleer deze winkelbestelling →</button>
+            <button key="review-stock" type="button" onClick={() => setReview(true)} disabled={locked || (rows.length === 0 && existingRows.length === 0)} className={styles.primary}>Controleer deze winkelbestelling →</button>
           )}
         </div>
       </form>
@@ -1876,165 +1850,110 @@ export default function ProductionPlanningClient({
   }
 
   return (
-    <div className="space-y-3 sm:space-y-5">
-      {demoMode && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#e6be62] bg-[#fff4cc] px-4 py-3 text-sm text-[#62460b] shadow-sm">
-          <p><strong>Tijdelijke demoweergave</strong> · alle aantallen en bestellingen hieronder zijn fictief.</p>
-          <a href="/sinterklaas/letters/productie" className="font-black underline underline-offset-2">Demo sluiten</a>
-        </div>
-      )}
-      {loading && (
-        <p className="border border-[#d8d1c8] bg-white px-3 py-2 text-sm font-bold text-[#6b645b]">
-          Bestaande B2B- en winkelbestellingen worden erbij geladen...
-        </p>
-      )}
-      {warning && <p role="alert" className="border border-[#efb8aa] bg-[#fff4ef] px-3 py-2 text-sm font-bold text-[#9a3412]">{warning}</p>}
+    <div className={styles.planning}>
+      {demoMode && <div className={styles.notice}>
+        <p><strong>Demoweergave</strong> · de aantallen en bestellingen zijn fictief.</p>
+        <a href="/sinterklaas/letters/productie" className="underline underline-offset-2">Demo sluiten</a>
+      </div>}
+      {loading && <p className={styles.notice}>Bestaande B2B- en winkelbestellingen worden erbij geladen…</p>}
+      {warning && <p role="alert" className={styles.error}>{warning}</p>}
 
-      <section className="overflow-hidden rounded-2xl border border-white/80 bg-[#edf1e8]/90 shadow-sm">
-        <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 sm:px-4">
-          <div className="mr-auto min-w-[9rem]">
-            <p className="text-[0.58rem] font-black uppercase tracking-[0.14em] text-[#748071]">Alle rondes samen</p>
-            <p className="text-sm font-black text-[#263b2b]">Compact totaaloverzicht</p>
+      <section className={styles.summary} aria-label="Totaaloverzicht productie">
+        <div className={styles.summaryHead}>
+          <h2 className={styles.summaryTitle}>Alle productierondes</h2>
+          <dl className={styles.metrics}>
+            <div><dt>Totaal</dt><dd>{totalToMake}</dd></div>
+            <div><dt>Gereed</dt><dd>{grandTotals.produced}</dd></div>
+            <div className={styles.remaining}><dt>Nog te maken</dt><dd>{Math.max(0, totalToMake - grandTotals.produced)}</dd></div>
+          </dl>
+          <div className={styles.summaryActions}>
+            <button type="button" onClick={() => setShowGrandOverview((current) => !current)} aria-expanded={showGrandOverview} aria-controls="production-grand-overview" className={styles.quiet}>
+              {showGrandOverview ? "Totaallijst sluiten ↑" : "Bekijk totaallijst ↓"}
+            </button>
+            {!demoMode && <button type="button" onClick={() => { setEditingStartDistribution(null); setStartDistributionOpen(true); }} className={styles.button}>+ Startverdeling winkels</button>}
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            <p className="rounded-full bg-white px-2.5 py-1 text-[0.65rem] font-bold text-[#615a52]"><strong className="mr-1 text-sm text-[#1a1815]">{totalToMake}</strong> te maken</p>
-            <p className="rounded-full bg-white px-2.5 py-1 text-[0.65rem] font-bold text-[#615a52]"><strong className="mr-1 text-sm text-[#5f3f00]">{grandTotals.produced}</strong> gereed</p>
-            <p className="rounded-full bg-[#fff2e9] px-2.5 py-1 text-[0.65rem] font-bold text-[#7c3a28]"><strong className="mr-1 text-sm text-[#9a3412]">{Math.max(0, totalToMake - grandTotals.produced)}</strong> open</p>
-          </div>
-          <button type="button" onClick={() => setShowGrandOverview((current) => !current)} className="rounded-full border border-[#cbd6c7] bg-white px-3 py-1 text-[0.65rem] font-black text-[#36523a]">
-            {showGrandOverview ? "Verberg lijst ↑" : "Bekijk totaallijst ↓"}
-          </button>
-          {!demoMode && <button type="button" onClick={() => { setEditingStartDistribution(null); setStartDistributionOpen(true); }} className="rounded-full bg-[#4b352f] px-3 py-1 text-[0.65rem] font-black text-white shadow-sm">
-            + Startverdeling winkels
-          </button>}
         </div>
-        {showGrandOverview && (
-          <div className="border-t border-[#d7dfd3] bg-white">
-            <ProductionTable rows={overview.grandRows} />
-          </div>
-        )}
+        {showGrandOverview && <div id="production-grand-overview"><ProductionTable rows={overview.grandRows} /></div>}
         {!demoMode && (startDistributionsLoading || startDistributionError || startDistributions.length > 0) && (
-          <div className="border-t border-[#d7dfd3] bg-[#f8faf5] px-3 py-2.5 sm:px-4 sm:py-3">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <p className="mr-1 text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#6b645b]">Startvoorraad</p>
-              {startDistributionsLoading && <span className="text-xs font-semibold text-[#776f66]">Laden...</span>}
+          <div className={styles.startStock}>
+            <div className={styles.stockHeading}>
+              <span>Startvoorraad</span>
+              {startDistributionsLoading && <span>Laden…</span>}
               {!startDistributionsLoading && startDistributions.map((distribution) => (
-                <span key={distribution.id} className="inline-flex overflow-hidden rounded-full border border-[#c9d9c5] bg-white shadow-sm">
-                  <button type="button" onClick={() => { setEditingStartDistribution(distribution); setStartDistributionOpen(true); }} className="px-2.5 py-1 text-[0.65rem] font-black text-[#36523a]">
-                    {formatShortDate(distribution.date)} · {distributionTotal(distribution)}
-                  </button>
-                  <button type="button" onClick={() => setStartDistributionPrint(distribution)} aria-label={`Startverdeling van ${formatShortDate(distribution.date)} printen`} title="Startverdeling printen" className="flex w-8 items-center justify-center border-l border-[#dbe4d8] bg-[#edf4eb] text-[#24551d] transition hover:bg-[#dfead9]">
-                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7" rx="1"/></svg>
+                <span key={distribution.id} className={styles.stockDate}>
+                  <button type="button" onClick={() => { setEditingStartDistribution(distribution); setStartDistributionOpen(true); }}>{formatShortDate(distribution.date)} · {distributionTotal(distribution)}</button>
+                  <button type="button" onClick={() => setStartDistributionPrint(distribution)} aria-label={`Startverdeling van ${formatShortDate(distribution.date)} printen`} title="Startverdeling printen">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7" rx="1"/></svg>
                   </button>
                 </span>
               ))}
-              {startDistributions.length > 0 && <strong className="ml-auto text-xs text-[#24551d]">{startDistributionTotal} letters verdeeld</strong>}
+              {startDistributions.length > 0 && <strong>{startDistributionTotal} letters verdeeld</strong>}
             </div>
-            {startDistributionError && <p role="alert" className="mt-2 rounded-lg bg-[#fff0ea] px-2.5 py-2 text-xs font-black text-[#9a3412]">{startDistributionError}</p>}
-            {startDistributions.length > 0 && (
-              <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-                {DISTRIBUTION_SHOPS.map((shop) => {
-                  const startTotal = startTotalsByShop[shop] || 0;
-                  const roundsTotal = roundTotalsByShop[shop] || 0;
-                  return (
-                    <div key={shop} className="rounded-xl border border-[#dde5d9] bg-white px-2.5 py-2">
-                      <p className="text-[0.62rem] font-black uppercase tracking-[0.06em] text-[#6b645b]">{SHOP_LABELS[shop]}</p>
-                      <p className="mt-0.5 text-[0.64rem] font-semibold text-[#8b8278]">Start {startTotal} · rondes {roundsTotal}</p>
-                      <p className="text-sm font-black text-[#24551d]">Totaal {startTotal + roundsTotal}</p>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            {startDistributionError && <p role="alert" className={styles.error}>{startDistributionError}</p>}
+            {startDistributions.length > 0 && <details className={styles.startDetails}><summary>Verdeling per winkel</summary><div className={styles.shopGrid}>
+              {DISTRIBUTION_SHOPS.map((shop) => {
+                const startTotal = startTotalsByShop[shop] || 0;
+                const roundsTotal = roundTotalsByShop[shop] || 0;
+                return <div key={shop} className={styles.shop}>
+                  <span>{SHOP_LABELS[shop]}</span>
+                  <small>Start {startTotal} · rondes {roundsTotal}</small>
+                  <strong>Totaal {startTotal + roundsTotal}</strong>
+                </div>;
+              })}
+            </div></details>}
           </div>
         )}
       </section>
 
-      {(centralUnplannedCount > 0 || overview.unplanned.length > 0) && (
-        <section className="border border-[#e4c76c] bg-[#fff8d8] p-3">
-          <h2 className="font-black text-[#5f3f00]">Nog niet aan een productiedag gekoppeld</h2>
-          {centralUnplannedCount > 0 && <p className="mt-1 text-sm font-semibold">{centralUnplannedCount} centrale orderregel(s) zijn nog niet volledig ingepland.</p>}
-          {overview.unplanned.length > 0 && (
-            <p className="mt-1 text-sm font-semibold">
-              {overview.unplanned.length} bestaande bestelling(en): {overview.unplanned.slice(0, 6).join(" · ")}{overview.unplanned.length > 6 ? ` · +${overview.unplanned.length - 6}` : ""}
-            </p>
-          )}
-        </section>
-      )}
+      {(centralUnplannedCount > 0 || overview.unplanned.length > 0) && <section className={styles.attention}>
+        <h2>Nog niet aan een productiedag gekoppeld</h2>
+        {centralUnplannedCount > 0 && <p>{centralUnplannedCount} centrale orderregel(s) zijn nog niet volledig ingepland.</p>}
+        {overview.unplanned.length > 0 && <p>{overview.unplanned.length} bestaande bestelling(en): {overview.unplanned.slice(0, 6).join(" · ")}{overview.unplanned.length > 6 ? ` · +${overview.unplanned.length - 6}` : ""}</p>}
+      </section>}
 
-      <div className="space-y-4">
+      <div className={styles.rounds}>
         {overview.batches.map((batch) => {
           const totals = totalsFor(batch.rows);
           const planned = totals.orders + totals.stock;
           const storeStockTotal = (batch.storeOrders || []).reduce((sum, order) => sum + storeOrderTotal(order), 0);
           const storeOrdersLocked = batchIsLocked(batch);
-          return (
-            <section key={batch.id} className="overflow-hidden rounded-2xl border border-[#d8d1c8] bg-white shadow-sm">
-              <div className="relative flex flex-wrap items-center justify-between gap-2 bg-[#f7df83] py-2 pl-3 pr-12 sm:gap-3 sm:py-2.5 sm:pl-4 sm:pr-14">
-                <div>
-                  <p className="text-[0.56rem] font-black uppercase tracking-[0.11em] text-[#6b5120] sm:text-[0.62rem]">Centrale productieronde</p>
-                  <h2 className="mt-0.5 text-sm font-black leading-tight text-[#1a1815] sm:text-base md:text-lg">{formatCompactProductionDate(batch.startDate)}</h2>
-                </div>
-                <div className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto sm:justify-end sm:gap-2">
-                  {demoMode && (
-                    <button
-                      type="button"
-                      onClick={() => setPrintOptionsBatch(batch)}
-                      aria-label="Printlijsten openen"
-                      title="Printlijsten"
-                      className="flex h-8 w-8 items-center justify-center rounded-full border border-[#24551d]/15 bg-[#24551d] text-white shadow-sm transition hover:scale-105 sm:h-9 sm:w-9"
-                    >
-                      <svg viewBox="0 0 24 24" className="h-4 w-4 sm:h-[1.1rem] sm:w-[1.1rem]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M6 9V3h12v6" />
-                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                        <rect x="6" y="14" width="12" height="7" rx="1" />
-                      </svg>
-                    </button>
-                  )}
-                  <button type="button" onClick={() => { setStoreOrderInitialShop(DISTRIBUTION_SHOPS[0]); setStoreOrderBatch(batch); }} className="rounded-full border border-white/80 bg-white/90 px-2.5 py-1 text-[0.65rem] font-black text-[#4b352f] shadow-sm sm:px-3 sm:py-1.5 sm:text-xs">
-                    {storeOrdersLocked ? "Bekijk winkelvoorraad" : storeStockTotal > 0 ? "Winkelvoorraad wijzigen" : "+ Winkelvoorraad per winkel"}
-                  </button>
-                  <span className="bg-white/80 px-2 py-1 text-[0.64rem] font-black text-[#5f3f00] sm:px-3 sm:text-xs">{planned} te maken</span>
-                </div>
-                <span
-                  role="img"
-                  aria-label={batchIsPlanned(batch.status) ? "Productieronde ingepland" : "Productieronde nog niet ingepland"}
-                  title={batchIsPlanned(batch.status) ? "Ingepland" : "Nog niet ingepland"}
-                  className={`absolute right-3 top-2.5 flex h-7 w-7 items-center justify-center rounded-full border sm:right-4 sm:top-3 sm:h-8 sm:w-8 ${batchIsPlanned(batch.status) ? "border-[#24551d] bg-[#24551d] text-white" : "border-[#c9c2b8] bg-white/55 text-[#aaa197]"}`}
-                >
-                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="m5 12 4 4L19 6" />
-                  </svg>
-                </span>
+          return <section key={batch.id} className={styles.round}>
+            <div className={styles.roundHead}>
+              <div className={styles.roundDate}>
+                <p className={styles.roundLabel}>Centrale productieronde</p>
+                <h2>{formatCompactProductionDate(batch.startDate)}</h2>
               </div>
-              <div className="grid grid-cols-3 border-b border-[#e4ded5] bg-[#fffdf6] text-center text-[0.68rem] sm:text-xs">
-                <p className="border-r p-1.5 sm:p-2">Totaal te maken <strong className="block text-sm sm:text-base">{planned}</strong></p>
-                <p className="border-r p-1.5 sm:p-2">Gereed <strong className="block text-sm sm:text-base">{totals.produced}</strong></p>
-                <p className="p-1.5 sm:p-2">Open <strong className="block text-sm text-[#9a3412] sm:text-base">{Math.max(0, planned - totals.produced)}</strong></p>
+              <span className={styles.roundState} data-planned={batchIsPlanned(batch.status)}>{batchIsPlanned(batch.status) ? "Ingepland" : "Nog niet ingepland"}</span>
+              <div className={styles.roundActions}>
+                {demoMode && <button type="button" onClick={() => setPrintOptionsBatch(batch)} className={styles.button}>Printlijsten</button>}
+                <button type="button" onClick={() => { setStoreOrderInitialShop(DISTRIBUTION_SHOPS[0]); setStoreOrderBatch(batch); }} className={styles.button}>
+                  {storeOrdersLocked ? "Bekijk winkelvoorraad" : storeStockTotal > 0 ? "Winkelvoorraad wijzigen" : "+ Winkelvoorraad per winkel"}
+                </button>
               </div>
-              <ProductionTable
-                rows={batch.rows}
-                onToggleComplete={demoMode ? (row) => toggleProductionRow(batch, row) : undefined}
-              />
-              <div className="border-t border-[#e4ded5] bg-[#f7f3ee] p-2.5 sm:p-3">
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-[0.64rem] font-black uppercase tracking-[0.13em] text-[#776f66]">Bevestigde winkelvoorraad per vestiging</p>
-                  <p className="text-xs font-bold text-[#6b645b]">{storeOrdersLocked ? "Vergrendeld" : `Wijzigbaar tot ${formatDeadline(batch.deadlineAt)}`}</p>
-                </div>
-                <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
-                  {DISTRIBUTION_SHOPS.map((shop) => {
-                    const total = storeOrderTotal((batch.storeOrders || []).find((order) => order.shop === shop));
-                    return (
-                      <button key={shop} type="button" onClick={() => { setStoreOrderInitialShop(shop); setStoreOrderBatch(batch); }} className="rounded-xl border border-[#ded7cd] bg-white px-2.5 py-1.5 text-left sm:px-3 sm:py-2">
-                        <span className="block text-xs font-black text-[#4d463d]">{SHOP_LABELS[shop]}</span>
-                        <span className={`mt-0.5 block text-sm font-black ${total > 0 ? "text-[#24551d]" : "text-[#aaa197]"}`}>{total > 0 ? `${total} letters` : "Nog geen bestelling"}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+            </div>
+            <div className={styles.roundSummary}>
+              <span>Totaal <b>{planned}</b></span>
+              <span>Gereed <b>{totals.produced}</b></span>
+              <span className={styles.remaining}>Nog te maken <b>{Math.max(0, planned - totals.produced)}</b></span>
+              <p className={styles.tableLegend}>Besteld = klantbestellingen · Winkel = vrije winkelvoorraad</p>
+            </div>
+            <ProductionTable rows={batch.rows} onToggleComplete={demoMode ? (row) => toggleProductionRow(batch, row) : undefined} />
+            <div className={styles.storeFooter}>
+              <div className={styles.stockHeading}>
+                <span>Winkelbestellingen · voorraad per vestiging</span>
+                <strong>{storeOrdersLocked ? "Vergrendeld" : `Wijzigbaar tot ${formatDeadline(batch.deadlineAt)}`}</strong>
               </div>
-            </section>
-          );
+              <div className={styles.shopGrid}>
+                {DISTRIBUTION_SHOPS.map((shop) => {
+                  const total = storeOrderTotal((batch.storeOrders || []).find((order) => order.shop === shop));
+                  return <button key={shop} type="button" onClick={() => { setStoreOrderInitialShop(shop); setStoreOrderBatch(batch); }} className={styles.shop} data-empty={total === 0}>
+                    <span>{SHOP_LABELS[shop]}</span>
+                    <strong>{total > 0 ? `${total} letters` : "Nog geen bestelling"}</strong>
+                  </button>;
+                })}
+              </div>
+            </div>
+          </section>;
         })}
       </div>
       {printOptionsBatch && (

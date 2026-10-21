@@ -1,4 +1,6 @@
-import { StrikPageHeader, StrikShell, strikIcons } from "@/app/StrikUI";
+import { StrikShell } from "@/app/StrikUI";
+import ProductionPlanningHeader from "./ProductionPlanningHeader";
+import styles from "./ProductionPlanning.module.css";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 import ProductionPlanningClient, {
   type ProductionBatchSeed,
@@ -179,17 +181,15 @@ export default async function SinterklaasLettersProductiePage({
   if (demoMode) {
     return (
       <StrikShell wide>
-        <StrikPageHeader
-          title="Productie chocoladeletters"
-          description={`Tijdelijke preview van de productierondes van ${season}.`}
-          icon={strikIcons.sinterklaasProductie}
-        />
-        <ProductionPlanningClient
-          season={season}
-          batches={demoProductionBatches()}
-          centralUnplannedCount={0}
-          demoMode
-        />
+        <div className={styles.page}>
+          <ProductionPlanningHeader season={season} />
+          <ProductionPlanningClient
+            season={season}
+            batches={demoProductionBatches()}
+            centralUnplannedCount={0}
+            demoMode
+          />
+        </div>
       </StrikShell>
     );
   }
@@ -347,26 +347,24 @@ export default async function SinterklaasLettersProductiePage({
   });
   return (
     <StrikShell wide>
-      <StrikPageHeader
-        title="Productie chocoladeletters"
-        description={`Totaaloverzicht en verdeling over de drie centrale productierondes van ${season}.`}
-        icon={strikIcons.sinterklaasProductie}
-      />
-      {loadError ? (
-        <p role="alert" className="border border-[#efb8aa] bg-[#fff4ef] p-4 font-bold text-[#9a3412]">
-          De centrale productiegegevens konden niet worden geladen: {loadError.message}
-        </p>
-      ) : batchSeeds.length === 0 ? (
-        <p className="border border-[#d8d1c8] bg-white p-4 font-bold text-[#6b645b]">
-          Voor {season} zijn nog geen centrale productierondes ingesteld.
-        </p>
-      ) : (
-        <ProductionPlanningClient
-          season={season}
-          batches={batchSeeds}
-          centralUnplannedCount={centralUnplannedCount}
-        />
-      )}
+      <div className={styles.page}>
+        <ProductionPlanningHeader season={season} />
+        {loadError ? (
+          <p role="alert" className="border border-[#efb8aa] bg-[#fff4ef] p-4 font-bold text-[#9a3412]">
+            De centrale productiegegevens konden niet worden geladen: {loadError.message}
+          </p>
+        ) : batchSeeds.length === 0 ? (
+          <p className="border border-[#d8d1c8] bg-white p-4 font-bold text-[#6b645b]">
+            Voor {season} zijn nog geen centrale productierondes ingesteld.
+          </p>
+        ) : (
+          <ProductionPlanningClient
+            season={season}
+            batches={batchSeeds}
+            centralUnplannedCount={centralUnplannedCount}
+          />
+        )}
+      </div>
     </StrikShell>
   );
 }
