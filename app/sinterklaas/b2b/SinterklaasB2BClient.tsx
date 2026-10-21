@@ -1462,6 +1462,7 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
         <h3>{order.customerName}</h3>
         <p className={styles.orderProduct}>{orderSummary || "Bestelling nog invullen"}</p>
         <p className={styles.delivery}>{order.deliveryMethod || "Levering nog afspreken"}{order.season === "sint-kerst" ? " · Sint & Kerst" : ""}</p>
+        {order.reminderEmailError && <p className={styles.warning}>! Interne controlewaarschuwing niet bevestigd</p>}
         {(warnings.length > 0 || confirmationNeedsAttention) && <p className={styles.warning}>! {confirmationNeedsAttention ? "Controleer interne back-up" : warnings[0]}{warnings.length > 1 ? ` · +${warnings.length - 1}` : ""}</p>}
       </div>
       <div>
@@ -1499,6 +1500,7 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
           {confirmationNeedsAttention && <p className={styles.warning}>{order.confirmationEmailError || "Interne back-up nog niet bevestigd."}</p>}
           {order.confirmationEmailedAt && <p className={styles.contact} style={{ marginTop: 8 }}>Interne back-up: {formatDateTime(order.confirmationEmailedAt)}</p>}
           {order.confirmationMail?.customer?.sentAt && <p className={styles.contact}>Klantbevestiging: {formatDateTime(order.confirmationMail.customer.sentAt)}</p>}
+          {order.reminderEmailError && <p className={styles.warning}>{order.reminderEmailError}</p>}
           {order.reminderEmailedAt && <p className={styles.contact}>Reminder: {formatDateTime(order.reminderEmailedAt)}</p>}
           {order.invoiceInfo && <details><summary>Factuurgegevens</summary><div><p>{order.invoiceInfo}</p></div></details>}
           {archived ? <p className={styles.contact}>Archief · alleen lezen</p> : order.status === "akkoord" && <div className={styles.checks}>

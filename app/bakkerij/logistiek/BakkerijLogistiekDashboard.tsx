@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
 import { getRoutePrintBlockedReason, openRoutePrintWindow } from "./routePrintWindow";
 import { normalizeReceiptDelivery } from "./receiptDelivery";
+import BusinessDeliveries from "./BusinessDeliveries";
 import { PhotoPrintChoiceModal } from "./PhotoPrintChoiceModal";
 import { usePhotoPrintHistory } from "./usePhotoPrintHistory";
 import { buildPhotoPrintGroups, selectPhotoPrintItems, type PhotoPrintGroup, type PhotoPrintMode, type PhotoPrintSelection } from "./photoPrintTracking";
@@ -11549,6 +11550,8 @@ export default function BakkerijLogistiekDashboard() {
         kicker="Bakkerij logistiek"
         description="Ochtendregie, pakbonnen, routes en tweede rondes."
       />
+
+      <BusinessDeliveries date={selectedPlan.date} reloadKey={batchReloadCounter} receipts={receiptSummaries} />
 
       {futureGateMessage ? (
         <div className="relative mt-5 min-h-[35rem]">

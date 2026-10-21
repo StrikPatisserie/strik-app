@@ -6,7 +6,7 @@ import { businessSeasonColors } from "@/app/lib/businessSeasons";
 
 const colors = businessSeasonColors.sint;
 const items = [
-  { href: "/sinterklaas/b2b", title: "Bestellingen", description: "", icon: strikIcons.sinterklaasB2B, iconBackground: colors.pale, iconColor: colors.accent },
+  { href: "/sinterklaas/b2b", title: "B2B bestellingen", description: "", icon: strikIcons.sinterklaasB2B, iconBackground: colors.pale, iconColor: colors.accent },
   { href: "/sinterklaas/mailing", title: "Sinterklaasnieuwsbrief", description: "", icon: strikIcons.newsManagement, iconBackground: colors.pale, iconColor: colors.accent },
 ];
 

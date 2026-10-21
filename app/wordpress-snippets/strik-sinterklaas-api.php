@@ -779,6 +779,7 @@ function strik_sinterklaas_sanitize_b2b_order($order, $existing = array()) {
         'confirmationEmailedAt' => isset($existing['confirmationEmailedAt']) ? $existing['confirmationEmailedAt'] : '',
         'confirmationEmailError' => isset($existing['confirmationEmailError']) ? $existing['confirmationEmailError'] : '',
         'confirmationMail' => isset($existing['confirmationMail']) ? $existing['confirmationMail'] : array(),
+        'attentionMail' => isset($existing['attentionMail']) ? $existing['attentionMail'] : array(),
         // The original website request and its mail receipt belong to the server.
         // An edit from management must neither erase nor forge this history.
         'folderQuote' => isset($existing['folderQuote']) ? $existing['folderQuote'] : null,
@@ -1114,7 +1115,6 @@ function strik_business_folder_quote($request) {
 
 if (!function_exists('strik_sinterklaas_b2b_get')) {
 function strik_sinterklaas_b2b_get($request) {
-    strik_sinterklaas_maybe_send_b2b_reminders();
     $orders = strik_sinterklaas_get_orders(STRIK_SINTERKLAAS_B2B_OPTION_NAME);
     $filtered = strik_sinterklaas_filter_orders($orders, $request, 'deliveryDate');
 
@@ -1445,115 +1445,111 @@ function strik_sinterklaas_b2b_delete_unlocked($request) {
 }
 }
 
-if (!function_exists('strik_sinterklaas_create_b2b_reminder_body')) {
-function strik_sinterklaas_create_b2b_reminder_body($order) {
-    $entered = !empty($order['entered']);
-    $lines = array(
-        'Let op: deze B2B-bestelling moet over 2 dagen geleverd worden.',
-        '',
-        'Klant: ' . $order['customerName'],
-        'Leverdatum: ' . ($order['deliveryDate'] ?: '-'),
-        'Productiedatum: ' . ($order['productionDate'] ?: '-'),
-        'Afdeling: ' . ($order['department'] ?: '-'),
-        'Levering: ' . ($order['deliveryMethod'] ?: '-'),
-        'Bake-it: ' . ($entered ? 'gemarkeerd als ingevoerd' : 'NOG NIET gemarkeerd als ingevoerd'),
-        'In planning: ' . (!empty($order['productionScheduled']) || !empty($order['productionDone']) ? 'ja' : 'NOG NIET gemarkeerd als ingepland'),
-        'Productie: ' . (!empty($order['productionDone']) ? 'klaar' : 'nog niet als klaar gemarkeerd'),
-        'Verpakking: ' . (!empty($order['packed']) ? 'klaar' : 'nog niet als klaar gemarkeerd'),
-        '',
-        $entered
-            ? 'Controleer of de bestelling klaarstaat en of de Bake-it bon klopt.'
-            : 'Voer de bestelling in Bake-it in en controleer de bon en productieplanning.',
-        '',
-        'Bestelling:',
-        $order['orderText'],
-    );
-
-    if (!empty($order['logo'])) {
-        $lines[] = '';
-        $lines[] = 'Logo (' . (!empty($order['logoChecked']) ? 'gecontroleerd' : 'NOG TE CONTROLEREN') . '):';
-        $lines[] = $order['logo'];
+if (!function_exists('strik_business_b2b_delivery_window')) {
+function strik_business_b2b_delivery_window($order) {
+    $type = isset($order['deliveryWindowType']) ? $order['deliveryWindowType'] : 'date';
+    $start = isset($order['deliveryDate']) ? $order['deliveryDate'] : '';
+    $end = isset($order['deliveryDateEnd']) ? $order['deliveryDateEnd'] : '';
+    $week = isset($order['deliveryWeek']) ? $order['deliveryWeek'] : '';
+    if (!empty($order['sourceSheet']) && preg_match('/__STRIK_LEVERPERIODE__(range|week)\|([^|]*)\|([^|]*)$/', $order['sourceSheet'], $m)) {
+        $type = $m[1]; $end = $m[2]; $week = $m[3];
     }
-
-    if (!empty($order['textInstructions'])) {
-        $lines[] = '';
-        $lines[] = 'Tekst (' . (!empty($order['textChecked']) ? 'gecontroleerd' : 'NOG TE CONTROLEREN') . '):';
-        $lines[] = $order['textInstructions'];
+    $valid = function ($value) {
+        if (!is_string($value) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) return false;
+        $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value, new DateTimeZone('Europe/Amsterdam'));
+        return $date && $date->format('Y-m-d') === $value;
+    };
+    if ($type === 'week' && preg_match('/^(\d{4})-W(\d{2})$/', $week, $m)) {
+        $monday = (new DateTimeImmutable('today', new DateTimeZone('Europe/Amsterdam')))->setISODate((int) $m[1], (int) $m[2], 1);
+        if ($monday->format('o-\WW') !== $week) return null;
+        return array('start' => $monday->format('Y-m-d'), 'end' => $monday->modify('+6 days')->format('Y-m-d'), 'type' => 'week');
     }
-
-    if (!empty($order['packaging'])) {
-        $lines[] = '';
-        $lines[] = 'Verpakken (' . (!empty($order['packagingChecked']) ? 'gecontroleerd' : 'NOG TE CONTROLEREN') . '):';
-        $lines[] = $order['packaging'];
-    }
-
-    if (!empty($order['importantNotes'])) {
-        $lines[] = '';
-        $lines[] = 'Belangrijk:';
-        $lines[] = $order['importantNotes'];
-    }
-
-    if (!empty($order['deliveryAddress'])) {
-        $lines[] = '';
-        $lines[] = 'Adres:';
-        $lines[] = $order['deliveryAddress'];
-    }
-
-    $lines[] = '';
-    $lines[] = 'Automatische herinnering vanuit de Strik Team app.';
-    $lines[] = 'Order-id: ' . $order['id'];
-
-    return implode("\n", $lines);
-}
+    if (!$valid($start)) return null;
+    return array('start' => $start, 'end' => $type === 'range' && $valid($end) && $end >= $start ? $end : $start, 'type' => $type);
 }
 
-if (!function_exists('strik_sinterklaas_maybe_send_b2b_reminders')) {
-function strik_sinterklaas_maybe_send_b2b_reminders() {
-    if (get_transient('strik_sinterklaas_b2b_reminder_check')) return;
-    return strik_business_b2b_locked('strik_sinterklaas_maybe_send_b2b_reminders_unlocked');
+function strik_business_b2b_attention($order, $today) {
+    if (!is_array($order) || empty($order['id']) || strpos($order['id'], 'historie-') === 0 || !empty($order['cancelled']) || !empty($order['delivered'])) return null;
+    $status = isset($order['status']) ? $order['status'] : 'aanvraag';
+    if ($status === 'afgewezen' || ($status === 'akkoord' && !empty($order['entered']))) return null;
+    $window = strik_business_b2b_delivery_window($order);
+    if (!$window || $window['end'] < $today) return null;
+    $timezone = new DateTimeZone('Europe/Amsterdam');
+    $days = (int) (new DateTimeImmutable($today, $timezone))->diff(new DateTimeImmutable($window['start'], $timezone))->format('%r%a');
+    if ($days > 7) return null;
+    // A still-open delivery period remains relevant after its first possible day.
+    $days = max(0, $days);
+    $reason = $status === 'akkoord' ? 'not-entered' : 'not-confirmed';
+    $stage = $days === 0 ? 'delivery-day' : ($days <= 2 ? 'two-days' : 'one-week');
+    return array('reason' => $reason, 'stage' => $stage, 'days' => $days, 'window' => $window,
+        'version' => hash('sha256', wp_json_encode(array($order['id'], $window, $reason, $stage))));
 }
-function strik_sinterklaas_maybe_send_b2b_reminders_unlocked() {
-    if (get_transient('strik_sinterklaas_b2b_reminder_check')) {
-        return;
-    }
 
-    set_transient('strik_sinterklaas_b2b_reminder_check', '1', HOUR_IN_SECONDS);
+function strik_business_b2b_attention_html($order, $attention) {
+    $data = strik_business_b2b_confirmation_data($order);
+    $final = $attention['reason'] === 'not-entered';
+    $title = $final ? 'Let op: nog invoeren in Bake-it' : 'Controleer akkoord en invoer';
+    $action = $final ? 'Deze bestelling is definitief, maar nog niet als ingevoerd gemarkeerd. Voer de bestelling in Bake-it in en controleer de bon en bezorgafspraak.' : 'Deze aanvraag of offerte is nog niet definitief. Controleer het akkoord bij de klant en zorg dat de bestelling daarna ook in Bake-it staat.';
+    $season = $order['season'] === 'kerst' ? 'Kerst' : ($order['season'] === 'sint-kerst' ? 'Sint & Kerst' : 'Sinterklaas');
+    $url = 'https://app.strik-patisserie.nl/' . ($order['season'] === 'kerst' ? 'kerst' : 'sinterklaas') . '/b2b';
+    $p = function ($text) { return nl2br(esc_html($text)); };
+    $html = '<!doctype html><html lang="nl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#edf3ed;font-family:Arial,sans-serif;color:#293e30"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:24px 12px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:680px;background:#fffdf8;border-radius:22px;overflow:hidden"><tr><td style="padding:28px;background:#244b37;color:#fff"><p style="color:#e9cc89;font-size:12px;letter-spacing:2px">STRIK PATISSERIE · INTERNE CONTROLE</p><p>' . esc_html($season) . '</p><h1 style="font-size:26px;line-height:1.2">' . esc_html($title) . '</h1><strong>' . esc_html($data['company']) . '</strong></td></tr><tr><td style="padding:28px;font-size:15px;line-height:1.55">';
+    $html .= '<p style="padding:18px;background:#fff2d7;border-radius:12px"><strong>' . ($attention['days'] === 0 ? 'Levering vanaf vandaag / lopende leverperiode' : 'Eerste mogelijke levering over ' . (int) $attention['days'] . ' ' . ($attention['days'] === 1 ? 'dag' : 'dagen')) . '</strong><br>' . esc_html($action) . '</p>';
+    $html .= '<h2 style="font-size:18px">Levering</h2><p><strong>' . esc_html($data['moment']) . '</strong><br>' . esc_html($data['method'] ?: 'Leverwijze nog afspreken') . ($data['address'] !== '' ? '<br>' . $p($data['address']) : '') . '</p>';
+    $html .= '<p><strong>Fase:</strong> ' . ($final ? 'Definitief' : ($order['status'] === 'offerte' ? 'Offerte · akkoord nog controleren' : 'Aanvraag · akkoord nog controleren')) . '<br><strong>Bake-it:</strong> ' . (!empty($order['entered']) ? 'Gemarkeerd als ingevoerd' : 'Nog niet gemarkeerd als ingevoerd') . '</p>';
+    $html .= '<h2 style="font-size:18px">Bestelling</h2>' . strik_business_quote_details_html($data['products']);
+    foreach ($data['letters'] as $line) $html .= '<p><strong>' . absint($line['quantity']) . '× ' . esc_html(($line['style'] === 'vorm' ? 'Vormletter ' : 'Spuitletter ') . $line['letter']) . '</strong> · ' . esc_html($line['chocolate'] . ' · ' . $line['size']) . (!empty($line['exceptions']) ? '<br>' . esc_html(implode(', ', $line['exceptions'])) : '') . '</p>';
+    if ($data['legacyLetters'] !== '') $html .= '<p>' . $p($data['legacyLetters']) . '</p>';
+    foreach (array('Logo' => $data['logo'], 'Verpakking' => $data['packaging'], 'Tekst' => $data['text'], 'Interne opmerkingen' => $order['importantNotes']) as $label => $value) if ($value !== '') $html .= '<p><strong>' . esc_html($label) . '</strong><br>' . $p($value) . '</p>';
+    $html .= '<h2 style="font-size:18px">Contact</h2><p>' . $p(implode("\n", array_filter(array($data['company'], $data['contact'], $data['email'], $data['phone'])))) . '</p><p><strong>' . ($final ? 'Afgesproken totaal' : 'Huidige prijsindicatie') . ':</strong> ' . esc_html(strik_business_b2b_total_label($data['total'])) . ' excl. btw</p>';
+    return $html . '<p><a href="' . esc_url($url) . '" style="display:inline-block;padding:13px 20px;background:#244b37;color:#fff;border-radius:24px;text-decoration:none;font-weight:bold">Open B2B-bestellingen &rarr;</a></p><p style="font-size:12px;color:#637568">Automatische interne controle. Deze mail gaat uitsluitend naar info@strik-patisserie.nl.</p></td></tr></table></td></tr></table></body></html>';
+}
 
-    $target_date = (new DateTimeImmutable('today', wp_timezone()))->modify('+2 days')->format('Y-m-d');
+function strik_business_b2b_reminders_unlocked($today, $dry_run = false) {
     $orders = strik_sinterklaas_get_orders(STRIK_SINTERKLAAS_B2B_OPTION_NAME);
-    $changed = false;
-
+    $result = array('date' => $today, 'eligible' => 0, 'sent' => 0, 'failed' => 0, 'uncertain' => 0, 'alreadySent' => 0, 'dryRun' => $dry_run);
     foreach ($orders as $key => $order) {
-        if (!is_array($order)) continue;
-        if (!empty($order['cancelled']) || !empty($order['delivered'])) continue;
-        if (isset($order['status']) && $order['status'] !== 'akkoord') continue;
-        if (!empty($order['reminderEmailedAt'])) continue;
-        if (empty($order['deliveryDate']) || $order['deliveryDate'] !== $target_date) continue;
-
-        $sent = wp_mail(
-            STRIK_SINTERKLAAS_RECIPIENT,
-            'Over 2 dagen leveren - ' . $order['customerName'] . (!empty($order['entered']) ? ' - Bake-it ingevoerd' : ' - NIET in Bake-it'),
-            strik_sinterklaas_create_b2b_reminder_body($order),
-            array('Content-Type: text/plain; charset=UTF-8')
-        );
-
-        if ($sent) {
-            $orders[$key]['reminderEmailedAt'] = wp_date(DATE_ATOM);
-            $orders[$key]['reminderEmailError'] = '';
-        } else {
-            $orders[$key]['reminderEmailError'] = 'Reminder niet verstuurd.';
+        $attention = strik_business_b2b_attention($order, $today);
+        if (!$attention) continue;
+        $result['eligible']++;
+        $receipt_key = 'strik_b2b_attention_' . $attention['version'];
+        $receipt = get_option($receipt_key, array());
+        if (!empty($receipt['state']) && $receipt['state'] === 'sent') { $orders[$key]['attentionMail'] = $receipt; $orders[$key]['reminderEmailedAt'] = $receipt['sentAt']; $orders[$key]['reminderEmailError'] = ''; $result['alreadySent']++; continue; }
+        if (!empty($receipt['state']) && $receipt['state'] === 'sending') { $orders[$key]['attentionMail'] = $receipt; $orders[$key]['reminderEmailError'] = 'Verzendstatus onzeker; controleer de mailbox.'; $result['uncertain']++; continue; }
+        if ($dry_run) continue;
+        $receipt = array('state' => 'sending', 'version' => $attention['version'], 'reason' => $attention['reason'], 'stage' => $attention['stage'], 'sentAt' => '', 'error' => '');
+        update_option($receipt_key, $receipt, false);
+        if (get_option($receipt_key) !== $receipt) { $orders[$key]['reminderEmailError'] = 'Interne controlewaarschuwing gestopt: verzendregistratie kon niet worden opgeslagen.'; $result['failed']++; continue; }
+        $subject = ($attention['reason'] === 'not-entered' ? 'LET OP: nog invoeren in Bake-it' : 'CONTROLEER: bestelling definitief en ingevoerd?') . ' - ' . $order['customerName'] . ' - ' . $attention['window']['start'];
+        try {
+            $sent = wp_mail(STRIK_SINTERKLAAS_RECIPIENT, $subject, strik_business_b2b_attention_html($order, $attention), array('Content-Type: text/html; charset=UTF-8'));
+            $receipt['state'] = $sent ? 'sent' : 'failed';
+            $receipt['sentAt'] = $sent ? wp_date(DATE_ATOM) : '';
+            $receipt['error'] = $sent ? '' : 'Interne controlewaarschuwing kon niet worden verstuurd.';
+        } catch (Throwable $error) {
+            $receipt['state'] = 'sending';
+            $receipt['error'] = 'Verzendstatus onzeker; controleer de mailbox voordat opnieuw wordt verstuurd.';
         }
-
-        $changed = true;
+        update_option($receipt_key, $receipt, false);
+        if (get_option($receipt_key) !== $receipt) { $receipt['state'] = 'sending'; $receipt['sentAt'] = ''; $receipt['error'] = 'Verzendstatus onzeker; controleer de mailbox.'; }
+        $result[$receipt['state'] === 'sent' ? 'sent' : ($receipt['state'] === 'failed' ? 'failed' : 'uncertain')]++;
+        $orders[$key]['attentionMail'] = $receipt;
+        $orders[$key]['reminderEmailedAt'] = $receipt['sentAt'];
+        $orders[$key]['reminderEmailError'] = $receipt['error'];
     }
+    if (!$dry_run) strik_sinterklaas_save_orders(STRIK_SINTERKLAAS_B2B_OPTION_NAME, $orders);
+    return $result;
+}
 
-    if ($changed) {
-        strik_sinterklaas_save_orders(STRIK_SINTERKLAAS_B2B_OPTION_NAME, $orders);
-    }
+function strik_business_b2b_send_reminders($request) {
+    $params = $request->get_json_params();
+    $dry_run = is_array($params) && !empty($params['dryRun']);
+    $today = (new DateTimeImmutable('today', new DateTimeZone('Europe/Amsterdam')))->format('Y-m-d');
+    $result = strik_business_b2b_locked(function () use ($today, $dry_run) { return strik_business_b2b_reminders_unlocked($today, $dry_run); });
+    return is_wp_error($result) ? $result : rest_ensure_response($result);
 }
 }
 
-add_action('init', 'strik_sinterklaas_maybe_send_b2b_reminders');
 
 if (!function_exists('strik_business_mailing_selection')) {
 function strik_business_mailing_selection($value) {
@@ -1846,6 +1842,12 @@ add_action('rest_api_init', function () {
     register_rest_route('strik/v1', '/sinterklaas-letter-reminders', array(
         'methods' => WP_REST_Server::CREATABLE,
         'callback' => 'strik_sinterklaas_send_letter_reminders',
+        'permission_callback' => 'strik_sinterklaas_permission',
+    ));
+
+    register_rest_route('strik/v1', '/business-order-reminders', array(
+        'methods' => WP_REST_Server::CREATABLE,
+        'callback' => 'strik_business_b2b_send_reminders',
         'permission_callback' => 'strik_sinterklaas_permission',
     ));
 
