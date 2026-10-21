@@ -33,6 +33,7 @@ function registerFonts() {
   GlobalFonts.registerFromPath(publicAsset("fonts", "GothamBlack.otf"), "StrikGothamBlack");
   GlobalFonts.registerFromPath(publicAsset("fonts", "GothamCondensed-Book.otf"), "StrikGothamCondensedBook");
   GlobalFonts.registerFromPath(publicAsset("fonts", "GothamCondensed-Bold.otf"), "StrikGothamCondensedBold");
+  GlobalFonts.registerFromPath(publicAsset("fonts", "Overpass-Bold.ttf"), "StrikPriceCurrency");
   fontsReady = true;
 }
 
@@ -59,12 +60,12 @@ function roundedRect(
 }
 
 function wrappedLines(context: SKRSContext2D, text: string, maxWidth: number) {
-  const words = text.trim().split(/\s+/).filter(Boolean);
+  const words = text.trim().split(/\s+|(?<=-)/).filter(Boolean);
   if (!words.length) return [];
   const lines: string[] = [];
   let current = "";
   for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
+    const candidate = current ? `${current}${current.endsWith("-") ? "" : " "}${word}` : word;
     if (!current || context.measureText(candidate).width <= maxWidth) {
       current = candidate;
     } else {
@@ -176,13 +177,14 @@ async function renderCard(card: PriceCard) {
     context,
     text: card.name.toLocaleUpperCase("nl-NL"),
     maxWidth: titleRight - titleLeft,
-    maxLines: 1,
-    startSize: 155,
+    maxLines: 2,
+    startSize: card.description ? 135 : 155,
     minSize: 34,
     family: "StrikGothamBlack",
-    lineHeight: 0.91,
-    maxHeight: card.description ? 125 : 190,
+    lineHeight: 0.94,
+    maxHeight: card.description ? 170 : 230,
   });
+  const titleHeight = title.lines.length * title.size * 0.94;
   const description = card.description
       ? fitLines({
         context,
@@ -193,10 +195,9 @@ async function renderCard(card: PriceCard) {
         minSize: 22,
         family: "StrikGothamLight",
         lineHeight: 1.08,
-        maxHeight: 150,
+        maxHeight: Math.min(150, 302 - titleHeight - 26),
       })
     : { lines: [] as string[], size: 0 };
-  const titleHeight = title.lines.length * title.size * 0.94;
   const descriptionHeight = description.lines.length * description.size * 1.08;
   const copyHeight = titleHeight + (description.lines.length ? 26 + descriptionHeight : 0);
   const copyTop = Math.max(72, 235 - copyHeight / 2);
@@ -239,7 +240,7 @@ async function renderCard(card: PriceCard) {
       const formatted = formatPrice(option.priceCents);
       const whole = formatted.euros;
       const cents = `,${formatted.cents}`;
-      context.font = `700 ${euroSize}px Arial`;
+      context.font = `${euroSize}px "StrikPriceCurrency"`;
       const euroWidth = context.measureText("€").width;
       context.font = `${valueSize}px "StrikGothamBlack"`;
       const wholeWidth = context.measureText(whole).width;
@@ -285,7 +286,7 @@ async function renderCard(card: PriceCard) {
       context.fillText(row.label, paddingX, centerY);
       const valueLeft = priceBlockWidth - paddingX - row.valueWidth;
       const euroLeft = valueLeft - row.euroWidth - 6;
-      context.font = `700 ${euroSize}px Arial`;
+      context.font = `${euroSize}px "StrikPriceCurrency"`;
       context.fillText("€", euroLeft, centerY + 1);
       context.font = `${valueSize}px "StrikGothamBlack"`;
       context.fillText(row.whole, valueLeft, centerY);
@@ -294,16 +295,19 @@ async function renderCard(card: PriceCard) {
     });
   } else {
     const price = formatPrice(card.priceCents);
-    const mainPrice = `€ ${price.euros}`;
+    const mainPrice = price.euros;
     const centsPrice = `,${price.cents}`;
     const priceLeft = 22;
+    context.font = '44px "StrikPriceCurrency"';
+    const euroWidth = context.measureText("€").width;
+    const mainPriceLeft = priceLeft + euroWidth + 7;
     context.font = '80px "StrikGothamBlack"';
     const mainPriceWidth = context.measureText(mainPrice).width;
     context.font = '38px "StrikGothamBlack"';
     const centsPriceWidth = context.measureText(centsPrice).width;
     const priceBlockWidth = Math.max(
       235,
-      Math.ceil(priceLeft + mainPriceWidth + 4 + centsPriceWidth + 20)
+      Math.ceil(mainPriceLeft + mainPriceWidth + 4 + centsPriceWidth + 20)
     );
 
     context.fillStyle = "#161616";
@@ -323,13 +327,15 @@ async function renderCard(card: PriceCard) {
         514
       );
     }
-    context.font = '80px "StrikGothamBlack"';
     context.textAlign = "left";
-    context.fillText(mainPrice, priceLeft, card.pricePrefix ? 590 : 568);
+    context.font = '44px "StrikPriceCurrency"';
+    context.fillText("€", priceLeft, card.pricePrefix ? 596 : 574);
+    context.font = '80px "StrikGothamBlack"';
+    context.fillText(mainPrice, mainPriceLeft, card.pricePrefix ? 590 : 568);
     context.font = '38px "StrikGothamBlack"';
     context.fillText(
       centsPrice,
-      priceLeft + mainPriceWidth + 4,
+      mainPriceLeft + mainPriceWidth + 4,
       card.pricePrefix ? 570 : 548
     );
   }
@@ -511,6 +517,9 @@ async function renderBreadCard(card: PriceCard) {
       const centsWidth = context.measureText(cents).width;
       const valueLeft = right - 8 - wholeWidth - centsWidth + 3;
       context.textAlign = "left";
+      context.font = `${centsSize}px "StrikPriceCurrency"`;
+      const euroWidth = context.measureText("€").width;
+      context.fillText("€", valueLeft - euroWidth - 7, rowTop + rowHeight / 2 + 5);
       context.font = `${wholeSize}px "StrikGothamCondensedBold"`;
       context.fillText(formatted.euros, valueLeft, rowTop + rowHeight / 2);
       context.font = `${centsSize}px "StrikGothamCondensedBold"`;
@@ -532,14 +541,19 @@ async function renderBreadCard(card: PriceCard) {
     const wholeWidth = context.measureText(price.euros).width;
     context.font = '134px "StrikGothamBlack"';
     const centsWidth = context.measureText(cents).width;
-    const combinedWidth = wholeWidth + centsWidth - 13;
+    context.font = '86px "StrikPriceCurrency"';
+    const euroWidth = context.measureText("€").width;
+    const combinedWidth = euroWidth + 12 + wholeWidth + centsWidth - 13;
     const startX = (BREAD_PIXEL_WIDTH - combinedWidth) / 2;
     context.fillStyle = "#161616";
     context.textAlign = "left";
+    context.font = '86px "StrikPriceCurrency"';
+    context.fillText("€", startX, 670);
+    const wholeLeft = startX + euroWidth + 12;
     context.font = '320px "StrikGothamBlack"';
-    context.fillText(price.euros, startX, 545);
+    context.fillText(price.euros, wholeLeft, 545);
     context.font = '134px "StrikGothamBlack"';
-    context.fillText(cents, startX + wholeWidth - 13, 566);
+    context.fillText(cents, wholeLeft + wholeWidth - 13, 566);
   }
 
   context.fillStyle = "#161616";

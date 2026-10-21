@@ -33,16 +33,18 @@
 }
 
 .titleFrame {
-  height: 11.5cqw;
+  height: 18cqw;
+  flex-shrink: 0;
 }
 
 .descriptionFrame {
   width: 96%;
   height: 13cqw;
+  min-height: 0;
 }
 
 .noDescription .titleFrame {
-  height: 18cqw;
+  height: 24cqw;
 }
 
 .hasTheme .titleFrame {
@@ -54,12 +56,13 @@
   width: 100%;
   margin: 0;
   font-family: "StrikGotham", Arial, sans-serif;
-  font-size: 7cqw;
+  font-size: 13.5cqw;
   font-weight: 800;
   letter-spacing: -0.18cqw;
   line-height: 0.91;
   text-transform: uppercase;
-  white-space: nowrap;
+  white-space: normal;
+  text-wrap: balance;
 }
 
 .descriptionFrame p {
@@ -106,6 +109,7 @@
 }
 
 .euro {
+  font-family: Arial, sans-serif;
   margin-top: 2.3cqw;
   margin-right: 0.45cqw;
   font-size: 5.6cqw;
@@ -164,6 +168,7 @@
 }
 
 .optionEuro {
+  font-family: Arial, sans-serif;
   margin-top: 0.75cqw;
   margin-right: 0.25cqw;
   font-size: 2.25cqw;
@@ -398,6 +403,14 @@
   letter-spacing: -1.1cqw;
 }
 
+.breadPrice .breadEuro {
+  margin-top: 14cqw;
+  margin-right: 1cqw;
+  font-family: Arial, sans-serif;
+  font-size: 14cqw;
+  letter-spacing: 0;
+}
+
 .breadPriceOptions {
   position: absolute;
   top: 88cqw;
@@ -441,6 +454,13 @@
   margin-top: 0.35cqw;
   font-size: 4.5cqw;
   letter-spacing: -0.25cqw;
+}
+
+.breadPriceOptions .breadOptionEuro {
+  margin-top: 2cqw;
+  margin-right: 0.5cqw;
+  font-family: Arial, sans-serif;
+  font-size: 4.5cqw;
 }
 
 .breadBottomRule {

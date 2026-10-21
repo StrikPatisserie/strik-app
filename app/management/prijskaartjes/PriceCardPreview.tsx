@@ -26,7 +26,7 @@ function AllergenIcon({ allergen }: { allergen: AllergenKey }) {
   );
 }
 
-function useFittedText<T extends HTMLElement>(singleLine: boolean, text: string) {
+function useFittedText<T extends HTMLElement>(singleLine: boolean, text: string, maxLines?: number) {
   const ref = useRef<T>(null);
   const fit = useCallback(() => {
     const element = ref.current;
@@ -34,19 +34,24 @@ function useFittedText<T extends HTMLElement>(singleLine: boolean, text: string)
     if (!element || !frame || frame.clientWidth <= 0 || frame.clientHeight <= 0) return;
 
     element.style.whiteSpace = singleLine ? "nowrap" : "normal";
+    element.style.fontSize = "";
+    const preferredSize = Number.parseFloat(getComputedStyle(element).fontSize);
     let minimum = 10;
-    let maximum = Math.max(12, frame.clientHeight * (singleLine ? 1.45 : 1.15));
+    let maximum = maxLines
+      ? preferredSize
+      : Math.max(12, frame.clientHeight * (singleLine ? 1.45 : 1.15));
     for (let step = 0; step < 14; step += 1) {
       const size = (minimum + maximum) / 2;
       element.style.fontSize = `${size}px`;
       const fits =
         element.scrollWidth <= frame.clientWidth + 0.5 &&
-        element.scrollHeight <= frame.clientHeight + 0.5;
+        element.scrollHeight <= frame.clientHeight + 0.5 &&
+        (!maxLines || element.scrollHeight <= Number.parseFloat(getComputedStyle(element).lineHeight) * maxLines + 0.5);
       if (fits) minimum = size;
       else maximum = size;
     }
     element.style.fontSize = `${Math.max(10, minimum - 0.35)}px`;
-  }, [singleLine]);
+  }, [singleLine, maxLines]);
 
   useLayoutEffect(() => {
     const element = ref.current;
@@ -63,7 +68,7 @@ function useFittedText<T extends HTMLElement>(singleLine: boolean, text: string)
 }
 
 function FittedTitle({ text }: { text: string }) {
-  const ref = useFittedText<HTMLHeadingElement>(true, text);
+  const ref = useFittedText<HTMLHeadingElement>(false, text, 2);
   return <h2 ref={ref}>{text}</h2>;
 }
 
@@ -126,6 +131,7 @@ function BreadCardPreview({
               <div key={`${option.label}-${index}`}>
                 <span>{option.label}</span>
                 <b>
+                  <span className={styles.breadOptionEuro}>€</span>
                   <strong>{optionPrice.euros}</strong>
                   <small>,{optionPrice.cents}</small>
                 </b>
@@ -135,6 +141,7 @@ function BreadCardPreview({
         </div>
       ) : (
         <div className={styles.breadPrice} aria-label={`€ ${price.euros},${price.cents}`}>
+          <span className={styles.breadEuro}>€</span>
           <strong>{price.euros}</strong>
           <span>,{price.cents}</span>
         </div>
