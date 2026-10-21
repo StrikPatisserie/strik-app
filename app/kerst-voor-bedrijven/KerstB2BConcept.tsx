@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { createQuoteRequestId, sendBusinessFolderQuote } from "@/app/lib/businessFolderSubmission";
 import { useEffect, useRef, useState, type ReactNode, type FormEvent } from "react";
 import { BusinessFolderSeasonIntro, BusinessFolderSeasonNav, BusinessGiftFinderButton } from "@/app/BusinessFolderSeasonControls";
 import { BUSINESS_FOLDER_PRICE_TIERS } from "@/app/lib/business-folder-pricing";
@@ -116,11 +117,9 @@ export default function KerstB2BConcept() {
     }
     setSaving(true); setSaveError("");
     try {
-      if (pendingRequest.current?.signature !== quoteSignature) pendingRequest.current = { signature: quoteSignature, id: crypto.randomUUID() };
-      const response = await fetch("/api/business-folder-quote", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...quotePayload, requestId: pendingRequest.current.id }) });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.ok || !data.reference) throw new Error(data.message || "De ontvangst van je aanvraag is nog niet bevestigd. Probeer opnieuw.");
-      setReference(data.reference);
+      if (pendingRequest.current?.signature !== quoteSignature) pendingRequest.current = { signature: quoteSignature, id: createQuoteRequestId() };
+      const reference = await sendBusinessFolderQuote({ ...quotePayload, requestId: pendingRequest.current.id });
+      setReference(reference);
       setSavedSignature(quoteSignature);
     } catch (error) { setSaveError(error instanceof Error && !(error instanceof TypeError) ? error.message : "De ontvangst van je aanvraag is nog niet bevestigd. Probeer opnieuw."); }
     finally { setSaving(false); }
@@ -227,7 +226,7 @@ export default function KerstB2BConcept() {
         <div className={styles.formGrid}><label>Bedrijf<input required autoComplete="organization" maxLength={180} value={contact.company} onChange={(event) => setContact({ ...contact, company: event.target.value })} /></label><label>Contactpersoon<input required autoComplete="name" maxLength={160} value={contact.contactName} onChange={(event) => setContact({ ...contact, contactName: event.target.value })} /></label><label>E-mailadres<input required type="email" autoComplete="email" maxLength={254} value={contact.email} onChange={(event) => setContact({ ...contact, email: event.target.value })} /></label><label>Telefoon · optioneel<input type="tel" autoComplete="tel" value={contact.phone} onChange={(event) => setContact({ ...contact, phone: event.target.value })} /></label><label>Gewenste datum · of in overleg<input type="date" value={contact.date} onChange={(event) => setContact({ ...contact, date: event.target.value })} /></label><label>Afhalen of bezorgen<select value={contact.delivery} onChange={(event) => setContact({ ...contact, delivery: event.target.value })}><option value="pickup">Afhalen bij Strik</option><option value="delivery">Bezorgen · prijs op aanvraag</option></select></label></div>
         {contact.delivery === "delivery" && <label>Afleveradres<input autoComplete="street-address" value={contact.address} onChange={(event) => setContact({ ...contact, address: event.target.value })} /></label>}
         <label>Wensen · verpakking, logo of kaartje<textarea rows={3} maxLength={2000} value={contact.wishes} onChange={(event) => setContact({ ...contact, wishes: event.target.value })} placeholder="Vertel ons wat jullie cadeau bijzonder maakt." /></label>
-        <label className={styles.honeypot} aria-hidden="true">Website<input tabIndex={-1} autoComplete="off" value={contact.website} onChange={(event) => setContact({ ...contact, website: event.target.value })} /></label>
+        <label className={styles.honeypot} aria-hidden="true">Laat dit veld leeg<input name="quote-check" type="text" tabIndex={-1} autoComplete="off" value={contact.website} onChange={(event) => setContact({ ...contact, website: event.target.value })} /></label>
         <label className={styles.consent}><input type="checkbox" checked={contact.consent} onChange={(event) => setContact({ ...contact, consent: event.target.checked })} /><span>Houd mij ook op de hoogte van de zakelijke Sint- en kerstfolders. Optioneel; afmelden kan altijd.</span></label>
         <details className={styles.mailPreview}><summary>Bekijk je volledige aanvraag</summary><pre>{offerText}</pre></details>
         {saveError && <div role="alert" className={styles.error}>{saveError}</div>}

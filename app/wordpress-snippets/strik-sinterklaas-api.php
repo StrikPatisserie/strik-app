@@ -956,6 +956,54 @@ function strik_business_quote_response($order) {
     $meta = $order['folderQuote'];
     return rest_ensure_response(array('ok' => !empty($meta['mailSentAt']) && !empty($meta['b2bStoredAt']), 'saved' => !empty($meta['b2bStoredAt']), 'mailSent' => !empty($meta['mailSentAt']), 'reference' => $meta['reference']));
 }
+// Explicit HTML rows and breaks also work in Outlook, which ignores pre-wrap.
+// Render the immutable quote text: prices and details stay exactly as submitted.
+function strik_business_quote_details_html($text) {
+    $headings = array('BEDRIJF EN CONTACT' => 'Bedrijf en contact', 'GEKOZEN SINTERKLAASPRODUCTEN' => 'Gekozen producten', 'LOSSE KERSTCADEAUS' => 'Losse kerstcadeaus', 'KERSTPAKKET OP MAAT' => 'Kerstpakket op maat', 'PRIJSINDICATIE' => 'Prijsindicatie', 'GEWENSTE LEVERING' => 'Gewenste levering', 'WENSEN' => 'Aanvullende wensen');
+    $sections = array(); $current = array('heading' => '', 'lines' => array());
+    foreach (preg_split('/\r\n|\r|\n/', (string) $text) as $line) {
+        // Stop interpreting headings after WENSEN; customer wishes are free text.
+        if ($current['heading'] !== 'WENSEN' && isset($headings[$line])) {
+            if ($current['heading'] !== '' || count($current['lines'])) $sections[] = $current;
+            $current = array('heading' => $line, 'lines' => array());
+        } else $current['lines'][] = $line;
+    }
+    $sections[] = $current;
+    $html = '';
+    foreach ($sections as $section) {
+        $heading = $section['heading'];
+        $lines = $section['lines'];
+        while (count($lines) && trim($lines[0]) === '') array_shift($lines);
+        while (count($lines) && trim($lines[count($lines) - 1]) === '') array_pop($lines);
+        if (!$heading && !count($lines)) continue;
+        $price = $heading === 'PRIJSINDICATIE';
+        $html .= '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:22px 0;' . ($price ? 'background:#f0f5ee;border:1px solid #dce7dc;' : '') . '"><tr><td style="' . ($price ? 'padding:18px;' : '') . 'font-size:15px;line-height:1.55;word-break:break-word">';
+        if ($heading) $html .= '<h2 style="font-size:18px;margin:0 0 12px;color:#244b37">' . esc_html($headings[$heading]) . '</h2>';
+        if ($heading === 'BEDRIJF EN CONTACT') {
+            $html .= '<table role="presentation" width="100%" cellspacing="0" cellpadding="0">';
+            foreach ($lines as $line) {
+                $parts = explode(': ', $line, 2);
+                $html .= '<tr><td valign="top" style="padding:5px 12px 5px 0;color:#647367;width:110px">' . esc_html($parts[0]) . '</td><td style="padding:5px 0;font-weight:bold;word-break:break-word">' . esc_html(isset($parts[1]) ? $parts[1] : '') . '</td></tr>';
+            }
+            $html .= '</table>';
+        } elseif (in_array($heading, array('GEKOZEN SINTERKLAASPRODUCTEN', 'LOSSE KERSTCADEAUS', 'KERSTPAKKET OP MAAT'), true)) {
+            // Keep each product with its indented price, logo and wrapping detail.
+            $html .= '<table role="presentation" width="100%" cellspacing="0" cellpadding="0">';
+            foreach ($lines as $line) {
+                if (trim($line) === '') continue;
+                $detail = strpos($line, '  ') === 0;
+                $html .= '<tr><td style="padding:' . ($detail ? '0 0 12px' : '10px 0 4px;border-top:1px solid #e2e8df') . ';font-size:' . ($detail ? '13' : '15') . 'px;' . ($detail ? 'color:#647367' : 'font-weight:bold') . '">' . esc_html(trim($line)) . '</td></tr>';
+            }
+            $html .= '</table>';
+        } else {
+            foreach ($lines as $index => $line) {
+                $html .= '<p style="margin:0 0 8px;' . ($price && $index === 0 ? 'font-size:21px;font-weight:bold;' : '') . '">' . (trim($line) === '' ? '&nbsp;' : esc_html($line)) . '</p>';
+            }
+        }
+        $html .= '</td></tr></table>';
+    }
+    return $html;
+}
 function strik_business_quote_html($order) {
     $meta = $order['folderQuote'];
     $season = $order['season'] === 'kerst' ? 'Kerst' : 'Sinterklaas';
@@ -964,7 +1012,7 @@ function strik_business_quote_html($order) {
         . '<body style="margin:0;background:#edf3ed;font-family:Arial,sans-serif;color:#293e30"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:24px 12px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:680px;background:#fffdf8;border-radius:24px;overflow:hidden">'
         . '<tr><td style="background:#244b37;padding:28px;color:white"><div style="color:#e9cc89;font-size:12px;font-weight:bold;letter-spacing:3px">STRIK PATISSERIE</div><h1 style="font-size:27px;margin:16px 0 8px">Nieuwe offerteaanvraag ' . esc_html($season) . '</h1><strong>' . esc_html($order['customerName']) . '</strong><br><span style="font-size:13px">Referentie: ' . esc_html($meta['reference']) . '</span></td></tr>'
         . '<tr><td style="padding:28px"><p style="padding:16px;background:#f0f5ee;border-radius:12px;font-size:14px;line-height:1.5"><strong>Opgeslagen bij B2B · status Aanvraag</strong><br>Dit is een vrijblijvende aanvraag. Controleer de inhoud en stem prijs, beschikbaarheid en levering af met de klant.</p>'
-        . '<div style="font-size:15px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere">' . esc_html($meta['quoteText']) . '</div>'
+        . strik_business_quote_details_html($meta['quoteText'])
         . '<p style="margin-top:28px"><a href="' . esc_url($url) . '" style="display:inline-block;background:#244b37;color:white;padding:14px 22px;border-radius:24px;font-weight:bold;text-decoration:none">Open B2B-aanvragen &rarr;</a></p>'
         . '<p style="font-size:12px;color:#647367">Reageer op deze mail om contact op te nemen met de aanvrager. De klant ziet de ontvangstbevestiging in de folder.</p></td></tr></table></td></tr></table></body></html>';
 }

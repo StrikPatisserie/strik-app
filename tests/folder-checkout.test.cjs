@@ -10,8 +10,9 @@ function load(file, imports = {}, globals = {}) {
   const source = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: {
     module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX,
   } }).outputText;
-  vm.runInNewContext(source, { exports, ...globals, require(name) {
+  vm.runInNewContext(source, { exports, Error, TypeError, AbortController, setTimeout, clearTimeout, Uint8Array, ...globals, require(name) {
     if (name in imports) return imports[name];
+    if (name === '@/app/lib/businessFolderSubmission') return load('app/lib/businessFolderSubmission.ts', {}, globals);
     if (name === 'react/jsx-runtime') return require(name);
     return { default: name };
   } });
@@ -60,7 +61,7 @@ test('letter gift wrapping is EUR 0.25 including VAT and is not reduced by produ
   assert.match(offer, /338,75.*incl\. btw/);
 });
 
-function christmasQuote(response = { ok: true, json: async () => ({ ok: true, reference: "KERST26-TEST" }) }) {
+function christmasQuote(response = { ok: true, json: async () => ({ ok: true, reference: "KERST26-F12345671234" }) }) {
   const calls = [];
   const ui = component('app/kerst-voor-bedrijven/KerstB2BConcept.tsx', {
     './christmasProducts': catalog, '@/app/lib/business-folder-pricing': pricing,
@@ -109,7 +110,7 @@ test('Christmas quote submits the complete mixed selection directly and confirms
   assert.equal(quote.calls[0].body.wishes, 'Een kaartje per pakket');
   assert.equal(quote.calls[0].body.consent, false);
   const status = find(quote.render(), node => node.props?.role === 'status');
-  assert.match(status.props.children.join(''), /Aanvraag ontvangen!.*KERST26-TEST/);
+  assert.match(status.props.children.join(''), /Aanvraag ontvangen!.*KERST26-F12345671234/);
   await quote.submit();
   assert.equal(quote.calls.length, 1, 'a successfully submitted request cannot be sent again');
   quote.field('Telefoon · optioneel', '0699999999');
@@ -173,4 +174,55 @@ test('the corrected bonbon video has portrait display dimensions and only one si
   const header = boxes(tracks[0].start, tracks[0].end).find(box => box.type === 'tkhd');
   assert.equal(bytes.readUInt32BE(header.end - 8) / 65536, 540);
   assert.equal(bytes.readUInt32BE(header.end - 4) / 65536, 960);
+});
+
+function sintQuote(response = { ok: true, json: async () => ({ ok: true, reference: "SINT26-F12345671234" }) }) {
+  const calls = [];
+  const ui = component('app/sint-voor-bedrijven/SintB2BConcept.tsx', {
+    '@/app/lib/business-folder-pricing': pricing, '@/app/lib/letter-pricing': wrapping,
+    './B2BChocolateLetters': { default: 'Letters', describeB2BLetter: line => `spuitletter ${line.letter} ${line.size}` },
+  }, { fetch: async (url, options) => { calls.push({ url, body: JSON.parse(options.body) }); return response; } });
+  find(ui.render(), node => node.type === 'Letters' && node.props.style === 'spuit').props.onChange([{ id: 'test', style: 'spuit', chocolate: 'melk', letter: 'S', size: 'groot', quantity: 25, specialRequests: [] }]);
+  find(ui.render(), node => node.type === 'button' && node.props.children === 'Bekijk offerteaanvraag').props.onClick();
+  return { ...ui, calls,
+    field(label, value) { find(ui.render(), node => node.props?.['aria-label'] === label).props.onChange({ target: { value } }); },
+    submit: () => find(ui.render(), node => node.type === 'form').props.onSubmit({ preventDefault() {} }),
+  };
+}
+
+test('Sint submit explains missing delivery/contact details instead of silently disabling the button', async () => {
+  const quote = sintQuote();
+  assert.equal(find(quote.render(), node => node.type === 'button' && node.props.type === 'submit').props.disabled, false);
+  await quote.submit();
+  assert.equal(quote.calls.length, 0);
+  assert.match(find(quote.render(), node => node.props?.role === 'alert').props.children, /bedrijfsnaam.*e-mailadres.*levermoment/);
+  quote.field('Bedrijfsnaam', 'Voorbeeld BV'); quote.field('E-mailadres', 'test@example.invalid');
+  await quote.submit();
+  assert.match(find(quote.render(), node => node.props?.role === 'alert').props.children, /gewenst levermoment/);
+  quote.field('Gewenste leverdag', '2026-11-23');
+  await quote.submit();
+  assert.equal(quote.calls.length, 1);
+  assert.equal(quote.calls[0].body.selection.lines[0].letter.letter, 'S');
+  assert.equal(quote.calls[0].body.delivery.date, '2026-11-23');
+  assert.match(find(quote.render(), node => node.props?.role === 'status').props.children.join(''), /SINT26-F12345671234/);
+  await quote.submit();
+  assert.equal(quote.calls.length, 1);
+});
+
+test('Sint network failures remain visible and retry keeps the same request ID', async () => {
+  const quote = sintQuote({ ok: false, json: async () => ({ message: 'Aanvraag opgeslagen; mail nog niet verstuurd.' }) });
+  quote.field('Bedrijfsnaam', 'Voorbeeld BV'); quote.field('E-mailadres', 'test@example.invalid'); quote.field('Gewenste leverdag', '2026-11-23');
+  await quote.submit(); await quote.submit();
+  assert.match(find(quote.render(), node => node.props?.role === 'alert').props.children, /opgeslagen/);
+  assert.equal(quote.calls[0].body.requestId, quote.calls[1].body.requestId);
+});
+
+test('quote submission works without randomUUID and never accepts a fake receipt', async () => {
+  const submission = load('app/lib/businessFolderSubmission.ts', {}, {
+    crypto: { getRandomValues: bytes => require('node:crypto').webcrypto.getRandomValues(bytes) },
+    fetch: async () => ({ ok: true, json: async () => ({ ok: true, reference: 'Ontvangen' }) }),
+  });
+  assert.match(submission.createQuoteRequestId(), /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/);
+  assert.notEqual(submission.createQuoteRequestId(), submission.createQuoteRequestId());
+  await assert.rejects(submission.sendBusinessFolderQuote({}), /nog niet bevestigd/);
 });

@@ -85,3 +85,25 @@ $wpdb->available = false;
 check(is_wp_error(submit_quote(quote_fixture('c1234567-1234-4567-8123-123456789abc'))) && count($mail_calls) === 0, 'No storage or mail occurs if the concurrency lock is unavailable.');
 echo "PASS immutable receipt, explicit newsletter consent and concurrent-send protection\n";
 echo "All business quote tests passed; no real emails sent.\n";
+
+$details = "BEDRIJF EN CONTACT\nBedrijf: Voorbeeld & Co\nContactpersoon: Testpersoon\nE-mail: quote@example.invalid\nTelefoon: 0612345678\n\nGEKOZEN SINTERKLAASPRODUCTEN\n3 × Chocolade spuitletters · spuitletter S groot · melk\n  € 12,80 p.s. excl. btw · € 38,40 totaal excl. btw\n\nPRIJSINDICATIE\n€ 38,40 excl. btw / € 41,85 incl. btw\nExtra verpakking en bezorging in overleg.\n\nGEWENSTE LEVERING\n2026-11-23\nBezorgen\nAfleveradres: Voorbeeldstraat 1\nTweede adresregel\n\nWENSEN\nEen kaartje\n<script>alert(1)</script>\nPRIJSINDICATIE\nDit is vrije klanttekst";
+$order['folderQuote']['quoteText'] = $details;
+$sint_html = strik_business_quote_html(array_merge($order, array('season' => 'sint')));
+check(has($sint_html, '<h2') && has($sint_html, '>Gekozen producten</h2>') && has($sint_html, '>Gewenste levering</h2>'), 'Sections have real HTML headings, not CSS-only line breaks.');
+check(has($sint_html, '>Bedrijf</td><td') && has($sint_html, '>Voorbeeld &amp; Co</td>'), 'Contact details render in separate label/value cells.');
+check(has($sint_html, '€ 38,40 excl. btw / € 41,85 incl. btw') && has($sint_html, '>Tweede adresregel</p>'), 'Amounts and multiline address remain intact.');
+check(!has($sint_html, '<script>') && substr_count($sint_html, '>Prijsindicatie</h2>') === 1, 'Free customer text stays escaped and cannot create extra sections.');
+$christmas = str_replace('GEKOZEN SINTERKLAASPRODUCTEN', 'LOSSE KERSTCADEAUS', $details);
+$christmas = str_replace('PRIJSINDICATIE', "KERSTPAKKET OP MAAT\n25 gelijke pakketten, met per pakket:\n  3 × Kerstchocolade · € 17,10 excl. btw per pakket\nPer pakket: € 23,55 excl. btw / € 25,67 incl. btw\n\nPRIJSINDICATIE", $christmas);
+$kerst_html = strik_business_quote_details_html($christmas);
+check(has($kerst_html, '>Losse kerstcadeaus</h2>') && has($kerst_html, '>Kerstpakket op maat</h2>') && has($kerst_html, '3 × Kerstchocolade'), 'Christmas singles and package contents have their own sections.');
+check(has(strik_business_quote_details_html("Oud formaat\nNog een regel"), '>Oud formaat</p><p') && has(strik_business_quote_details_html("Oud formaat\nNog een regel"), '>Nog een regel</p>'), 'Legacy or unrecognized quote text retains explicit paragraph breaks.');
+if (getenv('STRIK_MAIL_PREVIEW_DIR')) {
+    $preview_order = array_merge($order, array('season' => 'sint'));
+    $preview_order['folderQuote']['reference'] = 'SINT26-F12345671234';
+    $preview_order['folderQuote']['quoteText'] = substr($details, 0, strpos($details, "WENSEN\n")) . "WENSEN\nGraag iedere letter in cadeaupapier. Levering bij de receptie.\n\nVrijblijvende aanvraag; beschikbaarheid, levermoment en definitieve prijs moeten nog worden bevestigd.";
+    file_put_contents(getenv('STRIK_MAIL_PREVIEW_DIR') . '/sint.html', strik_business_quote_html($preview_order));
+    $order['folderQuote']['quoteText'] = $christmas;
+    file_put_contents(getenv('STRIK_MAIL_PREVIEW_DIR') . '/kerst.html', strik_business_quote_html($order));
+}
+echo "PASS structured Sint and Christmas email sections, totals, line breaks and safe free text\n";

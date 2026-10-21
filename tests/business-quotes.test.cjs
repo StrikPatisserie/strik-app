@@ -87,6 +87,7 @@ test('public API validates origin and actual body size, and confirms success onl
   assert.equal((await api.POST(request(fixture(), 'https://other.example.invalid'))).status, 403);
   assert.equal((await api.POST(request({ ...fixture(), wishes: 'a'.repeat(64000) }))).status, 413);
   assert.equal((await api.POST(request({ ...fixture(), email: 'invalid' }))).status, 400);
+  assert.equal((await api.POST(request({ ...fixture(), website: 'autofilled.example' }))).status, 400);
   assert.equal(calls.length, 0);
   assert.equal((await api.POST(request())).status, 200);
   assert.equal(calls[0].order.status, 'aanvraag');
