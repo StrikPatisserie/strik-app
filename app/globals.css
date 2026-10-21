@@ -212,6 +212,49 @@ body {
 }
 
 /*
+ * A dialog taller than the viewport must scroll from its very first line to
+ * its last action. Safe centering falls back to top alignment on older Safari.
+ * Keep existing inner scrollers (lists, photo selection, etc.) working too.
+ */
+@media screen {
+  [data-app-content] .fixed.inset-0 {
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  [data-app-content] .fixed.inset-0:is(.items-center, .place-items-center) {
+    align-items: flex-start;
+    align-items: safe center;
+  }
+
+  [data-app-content] .fixed.inset-0 :is(.overflow-y-auto, .overflow-auto) {
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media screen and (max-width: 767px) {
+  /* Follow the visible browser height, including collapsed/expanded toolbars. */
+  [data-app-content] .fixed.inset-0 {
+    bottom: auto;
+    height: 100dvh;
+    padding-top: max(0.75rem, env(safe-area-inset-top));
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+    scroll-padding-block: 0.75rem;
+  }
+
+  /* Older `vh` caps can extend underneath Safari's toolbar or home indicator. */
+  [data-app-content] .fixed.inset-0 > [class*="max-h-"] {
+    max-height: calc(100dvh - max(0.75rem, env(safe-area-inset-top)) - max(0.75rem, env(safe-area-inset-bottom)));
+  }
+
+  body:has([data-app-content] .fixed.inset-0) {
+    overflow: hidden;
+  }
+}
+
+/*
  * Full-screen dialogs live inside the app content tree, but `position: fixed`
  * otherwise uses the complete viewport. On desktop that would place the first
  * 7rem underneath the persistent navigation rail. Keep every internal overlay

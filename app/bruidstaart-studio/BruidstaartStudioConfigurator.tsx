@@ -7812,13 +7812,13 @@ export default function BruidstaartStudioConfigurator() {
 
       {paymentRequestOpen && (
         <div className="studio-no-print fixed inset-0 z-50 flex items-center justify-center bg-[#1a1815]/45 p-4">
-          <section className="w-full max-w-xl rounded-[1.2rem] border border-[#d7e3d2] bg-white p-4 shadow-2xl">
+          <section role="dialog" aria-modal="true" aria-labelledby="wedding-payment-title" className="w-full max-w-xl rounded-[1.2rem] border border-[#d7e3d2] bg-white p-4 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#6d8665]">
                   Bruidstaart
                 </p>
-                <h2 className="mt-1 text-xl font-black text-[#1a1815]">
+                <h2 id="wedding-payment-title" className="mt-1 text-xl font-black text-[#1a1815]">
                   Betaling
                 </h2>
                 <p className="mt-1 text-sm font-bold leading-snug text-[#6b645b]">

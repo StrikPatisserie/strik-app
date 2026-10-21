@@ -117,7 +117,7 @@ export default function BottomNav({
   return (
     <nav
       aria-label="Hoofdnavigatie"
-      className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#e8e4de] bg-white/95 px-2 pt-1.5 pb-[max(0.45rem,env(safe-area-inset-bottom))] backdrop-blur-md md:hidden"
+      className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#e8e4de] bg-white/95 px-2 pt-1.5 pb-[max(0.45rem,env(safe-area-inset-bottom))] backdrop-blur-md md:hidden"
     >
       <div
         ref={scrollContainerRef}
