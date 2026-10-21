@@ -37,6 +37,7 @@ const PUBLIC_API_PATHS = new Set([
   "/api/management-revenue/day-import",
   "/api/personnel-sheet-agenda",
   "/api/personnel-mail-orders/cron",
+  "/api/business-order-reminders",
   "/api/bruidstaart-payment-request/webhook",
 ]);
 
