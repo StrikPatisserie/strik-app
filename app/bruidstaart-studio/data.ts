@@ -826,6 +826,7 @@ export const initialWeddingCakeConfig: WeddingCakeConfig = {
   topperInitialsText: "",
   topperNotes: "",
   topperSurcharges: [],
+  additionalProducts: [],
   customCakeDescription: "",
   customCakePersons: 0,
   customCakeSurchargePerPerson: 1,

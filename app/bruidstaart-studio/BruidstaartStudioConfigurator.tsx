@@ -2,6 +2,8 @@
 
 import Image from "next/image";
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import AdditionalProductsEditor from "./AdditionalProductsEditor";
+import WeddingCakeMoneyInput, { parseWeddingCakeAmount } from "./WeddingCakeMoneyInput";
 import {
   CUSTOM_CAKE_SIZE_ID,
   cakeSizes,
@@ -20,6 +22,8 @@ import {
   createProductionForm,
   findOption,
   formatEuro,
+  getAdditionalProducts,
+  getAdditionalProductLines,
   getCakeDesignGroups,
   getCakeLayers,
   getDecorationColorNotes,
@@ -184,7 +188,7 @@ const steps: { id: StepId; title: string; description: string }[] = [
   {
     id: "gegevens",
     title: "Gegevens",
-    description: "Contact en levering.",
+    description: "Contact, levering en overige producten.",
   },
   {
     id: "overzicht",
@@ -3750,12 +3754,7 @@ function createStudioItemId(prefix: string) {
 }
 
 function parseEuroAmount(value: string) {
-  const normalized = value.replace(",", ".").replace(/[^\d.]/g, "");
-  const amount = Number.parseFloat(normalized);
-
-  if (!Number.isFinite(amount)) return 0;
-
-  return Math.max(0, Math.round(amount * 100) / 100);
+  return parseWeddingCakeAmount(value);
 }
 
 function getAllowedBorderDecorationIds(styleId: WeddingCakeConfig["styleId"]) {
@@ -3805,6 +3804,7 @@ function createEmptyWeddingCakeConfig(): WeddingCakeConfig {
     topperInitialsText: "",
     topperNotes: "",
     topperSurcharges: [],
+    additionalProducts: [],
     contact: { ...initialWeddingCakeConfig.contact },
   };
 }
@@ -4042,6 +4042,7 @@ export default function BruidstaartStudioConfigurator() {
   );
   const topperNoteTexts = useMemo(() => getTopperNoteTexts(config), [config]);
   const topperSurcharges = useMemo(() => getTopperSurcharges(config), [config]);
+  const additionalProducts = useMemo(() => getAdditionalProducts(config), [config]);
   const allOverviewGroups = useMemo(() => {
     const groups = new Map<string, WeddingCakeDraft[]>();
 
@@ -4669,6 +4670,9 @@ export default function BruidstaartStudioConfigurator() {
               .join(" | ")
           : "-"
       }`,
+      ...(additionalProducts.length
+        ? ["", "Overige producten & toevoegingen", ...getAdditionalProductLines(config), ""]
+        : []),
       `Betaald: ${config.paid ? "Ja" : "Nee"}`,
       `Bestelling definitief: ${config.completed ? "Ja" : "Nee"}`,
       `Betaalverzoek gemaild: ${
@@ -4878,6 +4882,9 @@ export default function BruidstaartStudioConfigurator() {
         "de afgesproken datum"
       )}.`,
       `Bedrag: ${formatEuro(amount)}`,
+      ...(additionalProducts.length
+        ? ["", "Inbegrepen overige producten & toevoegingen:", ...getAdditionalProductLines(config)]
+        : []),
       "",
       "Betaallink: [MOLLIE LINK HIER PLAKKEN]",
       "",
@@ -5352,6 +5359,7 @@ export default function BruidstaartStudioConfigurator() {
         : "",
       topperNotes: draft.config.topperNotes || "",
       topperSurcharges: draft.config.topperSurcharges || [],
+      additionalProducts: draft.config.additionalProducts || [],
       customCakeDescription: draft.config.customCakeDescription || "",
       customCakePersons: Number(draft.config.customCakePersons) || 0,
       customCakeSurchargePerPerson: Number.isFinite(
@@ -6926,17 +6934,14 @@ export default function BruidstaartStudioConfigurator() {
                         <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-black text-[#7a5a18]">
                           €
                         </span>
-                        <input
-                          value={
-                            surcharge.amount
-                              ? String(surcharge.amount).replace(".", ",")
-                              : ""
-                          }
-                          onChange={(event) =>
+                        <WeddingCakeMoneyInput
+                          aria-label={`Bedrag decoratietoeslag ${index + 1}`}
+                          value={surcharge.amount}
+                          onValueChange={(value) =>
                             updateDecorationSurcharge(
                               surcharge.id,
                               "amount",
-                              event.target.value
+                              value
                             )
                           }
                           inputMode="decimal"
@@ -7054,17 +7059,14 @@ export default function BruidstaartStudioConfigurator() {
                         <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-black text-[#7a5a18]">
                           €
                         </span>
-                        <input
-                          value={
-                            surcharge.amount
-                              ? String(surcharge.amount).replace(".", ",")
-                              : ""
-                          }
-                          onChange={(event) =>
+                        <WeddingCakeMoneyInput
+                          aria-label={`Bedrag toppertoeslag ${index + 1}`}
+                          value={surcharge.amount}
+                          onValueChange={(value) =>
                             updateTopperSurcharge(
                               surcharge.id,
                               "amount",
-                              event.target.value
+                              value
                             )
                           }
                           inputMode="decimal"
@@ -7313,6 +7315,13 @@ export default function BruidstaartStudioConfigurator() {
                 }
                 placeholder="Extra wensen, allergenen, planning, inspiratie"
                 className="min-h-20 rounded-xl border border-[#e7e0d8] bg-white p-2.5 text-sm"
+              />
+              <AdditionalProductsEditor
+                value={config.additionalProducts || []}
+                onChange={(products) => setConfig((current) => ({
+                  ...current,
+                  additionalProducts: products,
+                }))}
               />
             </div>
           )}
@@ -7645,9 +7654,9 @@ export default function BruidstaartStudioConfigurator() {
               </div>
 
               <div className="border-t border-[#e7e0d8] pt-2">
-                {price.lines.map((line) => (
+                {price.lines.map((line, index) => (
                   <div
-                    key={line.label}
+                    key={`${index}-${line.label}`}
                     className="mb-1 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 text-xs"
                   >
                     <span className="min-w-0 leading-snug text-[#2d2a26]/65">
@@ -7959,6 +7968,19 @@ export default function BruidstaartStudioConfigurator() {
                 <span className="font-black text-[#1a1815]">Studio totaal:</span>{" "}
                 {livePriceLabel}
               </p>
+              {additionalProducts.length > 0 && (
+                <div className="mt-2 border-t border-[#e7e0d8] pt-2">
+                  <p className="font-black text-[#1a1815]">Inclusief overige producten:</p>
+                  <ul className="mt-1 space-y-1">
+                    {additionalProducts.map((product) => (
+                      <li key={product.id} className="flex justify-between gap-3">
+                        <span>{product.description || "Extra product / toevoeging"}</span>
+                        <span className="whitespace-nowrap">{formatEuro(product.amount)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
               </>
             )}

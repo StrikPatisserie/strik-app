@@ -117,6 +117,18 @@ export function getTopperSurcharges(config: WeddingCakeConfig) {
   );
 }
 
+export function getAdditionalProducts(config: WeddingCakeConfig) {
+  return (config.additionalProducts || []).filter(
+    (product) => product.description.trim() || product.amount > 0
+  );
+}
+
+export function getAdditionalProductLines(config: WeddingCakeConfig) {
+  return getAdditionalProducts(config).map(
+    (product) => `${product.description.trim() || "Extra product / toevoeging"}: ${formatEuro(product.amount)}`
+  );
+}
+
 function getDecorationColorLabel(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) return "";
@@ -524,6 +536,15 @@ export function calculateWeddingCakePrice(
     });
   });
 
+  // Additional products are a fixed total per line, independent of the
+  // number of cake portions.
+  getAdditionalProducts(config).forEach((product) => {
+    lines.push({
+      label: `Overige producten: ${product.description.trim() || "toevoeging"}`,
+      amount: product.amount,
+    });
+  });
+
   if (config.contact.deliveryMethod === "delivery") {
     lines.push({
       label: "Bezorgkosten Nijmegen",
@@ -738,6 +759,9 @@ export function createProductionForm(config: WeddingCakeConfig) {
             .join(" | ")
         : "-"
     }`,
+    ...(getAdditionalProducts(config).length
+      ? ["", "Overige producten & toevoegingen", ...getAdditionalProductLines(config), ""]
+      : []),
     `Betaald: ${config.paid ? "Ja" : "Nee"}`,
     `Bestelling definitief: ${config.completed ? "Ja" : "Nee"}`,
     "",

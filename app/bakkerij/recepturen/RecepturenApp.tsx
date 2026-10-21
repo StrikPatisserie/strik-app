@@ -42,6 +42,7 @@ import {
   createProductionForm,
   findOption,
   formatEuro,
+  getAdditionalProductLines,
   getDecorationColorNotes,
   getDecorationNoteTexts,
   getDecorationSurcharges,
@@ -2979,6 +2980,7 @@ function BakkerijWeddingCakeDetail({
   const decorationSurcharges = getDecorationSurcharges(config);
   const topperNoteTexts = getTopperNoteTexts(config);
   const topperSurcharges = getTopperSurcharges(config);
+  const additionalProductLines = getAdditionalProductLines(config);
   const customerName = weddingCakeCustomerName(draft) || draft.code;
   const deliveryDate = getWeddingCakeDeliveryDate(draft);
 
@@ -3121,6 +3123,11 @@ function BakkerijWeddingCakeDetail({
                     )})`
                 )
                 .join(" | ")}
+            </BakkerijWeddingCakeRow>
+          )}
+          {additionalProductLines.length > 0 && (
+            <BakkerijWeddingCakeRow label="Overige producten & toevoegingen">
+              {additionalProductLines.join(" | ")}
             </BakkerijWeddingCakeRow>
           )}
           <BakkerijWeddingCakeRow label="Levering">

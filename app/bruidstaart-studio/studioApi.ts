@@ -201,6 +201,7 @@ export function normalizeDraft(value: unknown): WeddingCakeDraft | null {
       ),
       topperNotes: textFrom(config.topperNotes),
       topperSurcharges: decorationSurchargesFrom(config.topperSurcharges),
+      additionalProducts: decorationSurchargesFrom(config.additionalProducts),
       topperInitialsText: normalizedTopperInitialsText(
         config.topperInitialsText,
         topperIds
