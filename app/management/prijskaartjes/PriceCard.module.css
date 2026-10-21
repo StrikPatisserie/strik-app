@@ -19,7 +19,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1.8cqw;
+  gap: 1.5cqw;
   text-align: center;
 }
 
@@ -35,16 +35,19 @@
 .titleFrame {
   height: 18cqw;
   flex-shrink: 0;
+  align-items: flex-end;
 }
 
 .descriptionFrame {
   width: 96%;
   height: 13cqw;
   min-height: 0;
+  align-items: flex-start;
 }
 
 .noDescription .titleFrame {
   height: 24cqw;
+  align-items: center;
 }
 
 .hasTheme .titleFrame {

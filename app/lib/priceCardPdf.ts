@@ -119,6 +119,18 @@ function drawCenteredLines(
   });
 }
 
+function textInkBounds(context: SKRSContext2D, lines: string[], size: number, lineHeight: number) {
+  const bounds = lines.map((line, index) => {
+    const metrics = context.measureText(line);
+    const y = index * size * lineHeight;
+    return { top: y - metrics.actualBoundingBoxAscent, bottom: y + metrics.actualBoundingBoxDescent };
+  });
+  return {
+    top: Math.min(...bounds.map((line) => line.top)),
+    bottom: Math.max(...bounds.map((line) => line.bottom)),
+  };
+}
+
 function formatPrice(priceCents: number) {
   const safe = Math.max(0, Math.round(priceCents));
   return {
@@ -206,7 +218,20 @@ async function renderCard(card: PriceCard) {
   context.textAlign = "center";
   context.textBaseline = "top";
   context.font = `${title.size}px "StrikGothamBlack"`;
-  drawCenteredLines(context, title.lines, titleCenter, copyTop, title.size, 0.94);
+  let titleTop = copyTop;
+  let descriptionTop = copyTop + titleHeight + 28;
+  if (description.lines.length && allergenIcons.length) {
+    const titleBounds = textInkBounds(context, title.lines, title.size, 0.94);
+    context.font = `${description.size}px "StrikGothamLight"`;
+    const descriptionBounds = textInkBounds(context, description.lines, description.size, 1.08);
+    const inkHeight = titleBounds.bottom - titleBounds.top + descriptionBounds.bottom - descriptionBounds.top;
+    const gap = Math.min(32, (398 - 72 - inkHeight) / 2);
+    // Balance the visible whitespace, rather than the fonts' invisible line padding.
+    descriptionTop = 398 - gap - descriptionBounds.bottom;
+    titleTop = descriptionTop + descriptionBounds.top - gap - titleBounds.bottom;
+  }
+  context.font = `${title.size}px "StrikGothamBlack"`;
+  drawCenteredLines(context, title.lines, titleCenter, titleTop, title.size, 0.94);
 
   if (description.lines.length) {
     context.font = `${description.size}px "StrikGothamLight"`;
@@ -214,7 +239,7 @@ async function renderCard(card: PriceCard) {
       context,
       description.lines,
       545,
-      copyTop + titleHeight + 28,
+      descriptionTop,
       description.size,
       1.08
     );
