@@ -12,8 +12,9 @@ function load(path, imports, globals = {}) {
   return exports;
 }
 const access = load('app/lib/auth/access.ts', {});
-const mfa = load('app/lib/auth/mfa.ts', {});
 const now = Math.floor(Date.now() / 1000);
+// Boundary assertions must use the same clock even during a slower full run.
+const mfa = load('app/lib/auth/mfa.ts', {}, { Date: { now: () => now * 1000 } });
 const claimsFor = (aal, timestamp = now) => ({ sub: 'test', aal, amr: [{ method: 'password', timestamp: now }, { method: 'totp', timestamp }] });
 const profile = role => ({ id: 'test', active: true, role, permissions: {}, email: 'test@example.invalid' });
 test('management requires an explicit manager role, not app.all or bakery.data flags', () => {

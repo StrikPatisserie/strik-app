@@ -133,6 +133,7 @@ const dashboard = load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx', 
   react: React, 'react/jsx-runtime': require('react/jsx-runtime'),
   '../../StrikUI': {}, './routePrintWindow': {}, './arendPrintSession': {},
   './specialSchoolDelivery': {}, './specialProCollegeDelivery': {}, './receiptDelivery': delivery,
+  './PhotoPrintChoiceModal': {}, './usePhotoPrintHistory': {}, './photoPrintTracking': {},
 }, 'exports.normalize = normalizeImportedReceipt; exports.notes = visibleReceiptNotes; exports.print = createReceiptPrintHtml; exports.Row = ReceiptRow; exports.fulfillment = receiptFulfillment; exports.filter = receiptMatchesFilter; exports.overrides = applyReceiptOverrides;');
 
 test('screen and print retain original note lines and show the delivery warning in the delivery list', () => {

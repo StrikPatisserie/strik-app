@@ -4,6 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
 import { getRoutePrintBlockedReason, openRoutePrintWindow } from "./routePrintWindow";
 import { normalizeReceiptDelivery } from "./receiptDelivery";
+import { PhotoPrintChoiceModal } from "./PhotoPrintChoiceModal";
+import { usePhotoPrintHistory } from "./usePhotoPrintHistory";
+import { buildPhotoPrintGroups, selectPhotoPrintItems, type PhotoPrintGroup, type PhotoPrintMode, type PhotoPrintSelection } from "./photoPrintTracking";
 import {
   AREND_PRINT_SESSION_KEY,
   AREND_PRINT_SQUARES_PER_SHEET,
@@ -268,21 +271,7 @@ type MarzipanPrintItem = {
   confidence: string;
   needsCheck: boolean;
   printKey: string;
-};
-
-type MarzipanPhotoPrintGroup = {
-  customerName: string;
-  imageId: string;
-  itemCount: number;
-  newItemCount: number;
-  photoUrl: string;
-  products: string[];
-  receiptNumbers: string[];
-};
-
-type MarzipanPhotoPrintHistory = {
-  printedAt: string;
-  printedKeys: string[];
+  legacyPrintKey?: string;
 };
 
 type WrittenTextPrintItem = {
@@ -373,8 +362,6 @@ type ReceiptOverrideDraft = {
 };
 
 const MAX_MANUAL_PHOTO_UPLOAD_BYTES = 1_250_000;
-const MARZIPAN_PHOTO_PRINT_HISTORY_STORAGE_KEY =
-  "strik-logistiek-marsepeinfoto-print-history-v1";
 
 type ReceiptSeed = Omit<
   ReceiptSummary,
@@ -2854,6 +2841,7 @@ function addSpecialProCollegeLogoReserveCopies(items: MarzipanPrintItem[]) {
       copyNumber,
       copyTotal,
       printKey: `${template.printKey}:reserve-v1:${reserveCopy}`,
+      legacyPrintKey: template.legacyPrintKey ? `${template.legacyPrintKey}:reserve-v1:${reserveCopy}` : undefined,
     });
   }
 }
@@ -2880,7 +2868,7 @@ function pushMarzipanPrintCopies(input: {
   const imageImportedAt = imageImportedAtForPrint(input.image);
 
   for (let copy = 1; copy <= copyTotal; copy += 1) {
-    const printKey = marzipanPhotoPrintKeyFor({
+    const legacyPrintKey = marzipanPhotoPrintKeyFor({
       imageId: input.image.id,
       planIndex: input.planIndex,
       copyNumber: copy,
@@ -2909,7 +2897,8 @@ function pushMarzipanPrintCopies(input: {
       copyTotal,
       confidence: input.image.confidence,
       needsCheck: input.needsCheck || input.plan.needsCheck,
-      printKey,
+      legacyPrintKey,
+      printKey: `${marzipanPhotoPrintVersionForImage(input.image)}:photo-v2:${JSON.stringify([input.image.id, receiptNumber, input.plan.product, input.plan.shape, input.plan.sizeCm, copy])}`,
     });
   }
 }
@@ -3044,107 +3033,6 @@ function buildMarzipanPrintItems(
   addSpecialProCollegeLogoReserveCopies(items);
 
   return items;
-}
-
-function buildMarzipanPhotoPrintGroups(
-  items: MarzipanPrintItem[],
-  printedKeys: Set<string>
-): MarzipanPhotoPrintGroup[] {
-  const groups = new Map<
-    string,
-    MarzipanPhotoPrintGroup & {
-      productSet: Set<string>;
-      receiptNumberSet: Set<string>;
-    }
-  >();
-
-  items.forEach((item) => {
-    let group = groups.get(item.imageId);
-    if (!group) {
-      group = {
-        customerName: item.customerName || "Klant controleren",
-        imageId: item.imageId,
-        itemCount: 0,
-        newItemCount: 0,
-        photoUrl: item.photoUrl,
-        products: [],
-        productSet: new Set<string>(),
-        receiptNumbers: [],
-        receiptNumberSet: new Set<string>(),
-      };
-      groups.set(item.imageId, group);
-    }
-
-    group.itemCount += 1;
-    if (!printedKeys.has(item.printKey)) group.newItemCount += 1;
-    if (item.product) group.productSet.add(item.product);
-    if (item.receiptNumber) group.receiptNumberSet.add(item.receiptNumber);
-  });
-
-  return Array.from(groups.values())
-    .map(({ productSet, receiptNumberSet, ...group }) => ({
-      ...group,
-      products: Array.from(productSet),
-      receiptNumbers: Array.from(receiptNumberSet),
-    }))
-    .sort((left, right) =>
-      left.customerName.localeCompare(right.customerName, "nl")
-    );
-}
-
-function readMarzipanPhotoPrintHistory() {
-  try {
-    const raw = window.localStorage.getItem(
-      MARZIPAN_PHOTO_PRINT_HISTORY_STORAGE_KEY
-    );
-    if (!raw) return {};
-
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return {};
-    }
-
-    return Object.fromEntries(
-      Object.entries(parsed).flatMap(([date, value]) => {
-        if (!value || typeof value !== "object" || Array.isArray(value)) {
-          return [];
-        }
-
-        const history = value as Partial<MarzipanPhotoPrintHistory>;
-        const printedKeys = Array.isArray(history.printedKeys)
-          ? history.printedKeys.filter(
-              (key): key is string => typeof key === "string" && key.length > 0
-            )
-          : [];
-
-        return [
-          [
-            date,
-            {
-              printedAt:
-                typeof history.printedAt === "string" ? history.printedAt : "",
-              printedKeys,
-            },
-          ],
-        ];
-      })
-    ) as Record<string, MarzipanPhotoPrintHistory>;
-  } catch {
-    return {};
-  }
-}
-
-function writeMarzipanPhotoPrintHistory(
-  history: Record<string, MarzipanPhotoPrintHistory>
-) {
-  try {
-    window.localStorage.setItem(
-      MARZIPAN_PHOTO_PRINT_HISTORY_STORAGE_KEY,
-      JSON.stringify(history)
-    );
-  } catch {
-    // Niet kritisch: printen moet blijven werken, ook zonder opslag.
-  }
 }
 
 function cleanWrittenTextSource(value: string) {
@@ -3894,7 +3782,9 @@ function createMarzipanPhotoPrintHtml(input: {
         font-weight: 800;
         padding: 8px 12px;
       }
+      .screen-actions button:disabled { cursor: default; opacity: 0.5; }
       .screen-actions .action-buttons {
+        flex-wrap: wrap;
         align-items: center;
         display: flex;
         gap: 8px;
@@ -4125,36 +4015,33 @@ function createMarzipanPhotoPrintHtml(input: {
       }
     </style>
     <script>
-      function printAndConfirmMarzipanSheet() {
+      function printMarzipanSheet() {
+        var status = document.getElementById("print-registration-note");
+        var images = Array.from(document.querySelectorAll("main img"));
+        if (images.some(function (image) { return !image.complete || image.naturalWidth === 0; })) {
+          status.textContent = "Wacht tot alle foto’s geladen zijn. Ontbreekt er een foto? Open het vel opnieuw.";
+          return;
+        }
         window.print();
-        window.setTimeout(function () {
-          var didPrint = window.confirm(
-            "Is de afdruk daadwerkelijk gelukt?\\n\\nKlik OK om deze foto’s als geprint te registreren.\\nKlik Annuleren als je alleen hebt gekeken of niet hebt afgedrukt."
-          );
-          var status = document.getElementById("print-registration-note");
-
-          if (!didPrint) {
-            if (status) {
-              status.textContent = "Niet geregistreerd · je kunt later opnieuw printen";
-              status.classList.remove("confirmed");
-            }
-            return;
-          }
-
-          if (typeof window.confirmMarzipanPrint !== "function") {
-            if (status) {
-              status.textContent = "Afdruk niet geregistreerd · open de dagstart opnieuw";
-              status.classList.remove("confirmed");
-            }
-            return;
-          }
-
-          window.confirmMarzipanPrint();
-          if (status) {
-            status.textContent = "Geregistreerd als geprint";
-            status.classList.add("confirmed");
-          }
-        }, 100);
+        document.getElementById("confirm-print").disabled = false;
+        status.textContent = "Controleer de afdruk en klik daarna op ‘Afdruk gelukt’.";
+      }
+      async function confirmMarzipanSheet() {
+        var status = document.getElementById("print-registration-note");
+        var button = document.getElementById("confirm-print");
+        button.disabled = true;
+        status.textContent = "Printstatus opslaan…";
+        try {
+          if (typeof window.confirmMarzipanPrint !== "function") throw new Error("Houd de dagstart open om de printstatus te bewaren.");
+          await window.confirmMarzipanPrint();
+          status.textContent = "✓ Geregistreerd als geprint";
+          status.classList.add("confirmed");
+          button.textContent = "✓ Afdruk geregistreerd";
+        } catch (error) {
+          status.textContent = error.message || "Opslaan niet gelukt. Probeer opnieuw.";
+          button.disabled = false;
+          button.textContent = "Opnieuw registreren";
+        }
       }
     </script>
   </head>
@@ -4164,7 +4051,8 @@ function createMarzipanPhotoPrintHtml(input: {
       <div class="action-buttons">
         <span id="print-registration-note" class="print-registration-note">Bekijken telt niet als print</span>
         <button type="button" class="secondary" onclick="if (window.opener) window.close(); else window.history.back();">Terug</button>
-        <button type="button" onclick="printAndConfirmMarzipanSheet()">Afdrukken</button>
+        <button type="button" onclick="printMarzipanSheet()">Afdrukken</button>
+        <button id="confirm-print" type="button" disabled onclick="confirmMarzipanSheet()">Afdruk gelukt</button>
       </div>
     </div>
     <main>
@@ -4183,7 +4071,7 @@ function createMarzipanPhotoPrintHtml(input: {
 function openMarzipanPhotoSheet(
   plan: DayPlan,
   items: MarzipanPrintItem[],
-  onPrinted?: (items: MarzipanPrintItem[]) => void
+  onPrinted?: (items: MarzipanPrintItem[]) => Promise<void>
 ) {
   if (items.length === 0) {
     window.alert("Geen webshopfoto's gevonden voor deze dag.");
@@ -4202,9 +4090,13 @@ function openMarzipanPhotoSheet(
   printWindow.document.write(createMarzipanPhotoPrintHtml({ items, plan }));
   printWindow.document.close();
   const trackedPrintWindow = printWindow as Window & {
-    confirmMarzipanPrint?: () => void;
+    confirmMarzipanPrint?: () => Promise<void>;
   };
-  trackedPrintWindow.confirmMarzipanPrint = () => onPrinted?.(items);
+  let registration: Promise<void> | undefined;
+  trackedPrintWindow.confirmMarzipanPrint = () => {
+    if (!registration) registration = (onPrinted?.(items) || Promise.resolve()).catch(error => { registration = undefined; throw error; });
+    return registration;
+  };
   printWindow.focus();
 }
 
@@ -9907,9 +9799,6 @@ export default function BakkerijLogistiekDashboard() {
     Record<string, LogisticsBatch | null>
   >({});
   const [webshopImages, setWebshopImages] = useState<WebshopImageSummary[]>([]);
-  const [photoPrintHistoryByDate, setPhotoPrintHistoryByDate] = useState<
-    Record<string, MarzipanPhotoPrintHistory>
-  >({});
   const [receiptOverrides, setReceiptOverrides] = useState<
     ReceiptOverrideSummary[]
   >([]);
@@ -10139,10 +10028,17 @@ export default function BakkerijLogistiekDashboard() {
     () => buildMarzipanPrintItems(receiptSummaries, webshopImages),
     [receiptSummaries, webshopImages]
   );
+  const { historyByDate: photoPrintHistoryByDate, recordPrint, syncMessage: photoPrintSyncMessage, refresh: refreshPhotoPrintHistory, loading: photoPrintHistoryLoading } = usePhotoPrintHistory(selectedPlan.date, batchReloadCounter);
   const photoPrintHistory = photoPrintHistoryByDate[selectedPlan.date] || null;
   const printedPhotoKeys = useMemo(
-    () => new Set(photoPrintHistory?.printedKeys || []),
-    [photoPrintHistory]
+    () => {
+      const keys = new Set(photoPrintHistory?.printedKeys || []);
+      marzipanPrintItems.forEach(item => {
+        if (item.legacyPrintKey && keys.has(item.legacyPrintKey)) keys.add(item.printKey);
+      });
+      return keys;
+    },
+    [photoPrintHistory, marzipanPrintItems]
   );
   const newMarzipanPrintItems = useMemo(
     () =>
@@ -10150,7 +10046,7 @@ export default function BakkerijLogistiekDashboard() {
     [marzipanPrintItems, printedPhotoKeys]
   );
   const marzipanPhotoPrintGroups = useMemo(
-    () => buildMarzipanPhotoPrintGroups(marzipanPrintItems, printedPhotoKeys),
+    () => buildPhotoPrintGroups(marzipanPrintItems, printedPhotoKeys),
     [marzipanPrintItems, printedPhotoKeys]
   );
   const writtenTextPrintItems = useMemo(
@@ -10258,10 +10154,6 @@ export default function BakkerijLogistiekDashboard() {
   useEffect(() => {
     dateStateRef.current = dateState;
   }, [dateState]);
-
-  useEffect(() => {
-    setPhotoPrintHistoryByDate(readMarzipanPhotoPrintHistory());
-  }, []);
 
   useEffect(() => {
     const date = dateState.tomorrow;
@@ -10522,38 +10414,15 @@ export default function BakkerijLogistiekDashboard() {
     setBatchReloadCounter((current) => current + 1);
   }
 
-  function rememberMarzipanPhotoPrint(items: MarzipanPrintItem[]) {
-    if (items.length === 0) return;
-
-    const date = selectedPlan.date;
-    const printedAt = new Date().toISOString();
-
-    setPhotoPrintHistoryByDate((current) => {
-      const previous = current[date];
-      const printedKeys = new Set(previous?.printedKeys || []);
-
-      items.forEach((item) => printedKeys.add(item.printKey));
-
-      const next = {
-        ...current,
-        [date]: {
-          printedAt,
-          printedKeys: Array.from(printedKeys),
-        },
-      };
-
-      writeMarzipanPhotoPrintHistory(next);
-      return next;
-    });
-  }
-
   function openMarzipanPrintMenu() {
     setMarzipanPrintChoiceOpen(true);
+    void refreshPhotoPrintHistory();
   }
 
-  function printMarzipanPhotos(items: MarzipanPrintItem[]) {
-    setMarzipanPrintChoiceOpen(false);
-    openMarzipanPhotoSheet(selectedPlan, items, rememberMarzipanPhotoPrint);
+  function printMarzipanPhotos(items: MarzipanPrintItem[], mode: PhotoPrintMode) {
+    const printDate = selectedPlan.date;
+    const jobId = crypto.randomUUID();
+    openMarzipanPhotoSheet(selectedPlan, items, () => recordPrint(printDate, items.map(item => item.printKey), mode, jobId));
   }
 
   function printArendNumbers() {
@@ -10561,13 +10430,9 @@ export default function BakkerijLogistiekDashboard() {
     openArendNumberSheet(selectedPlan, arendNumberPrintOrders);
   }
 
-  function printSelectedMarzipanPhotos(imageIds: string[]) {
-    const selectedImageIds = new Set(imageIds);
-    const selectedItems = marzipanPrintItems.filter((item) =>
-      selectedImageIds.has(item.imageId)
-    );
-
-    printMarzipanPhotos(selectedItems);
+  function printSelectedMarzipanPhotos(selection: PhotoPrintSelection[], mode: PhotoPrintMode) {
+    const items = selectPhotoPrintItems(marzipanPrintItems, printedPhotoKeys, selection, mode);
+    printMarzipanPhotos(items, mode);
   }
 
   async function saveRouteDraft(
@@ -11872,7 +11737,8 @@ export default function BakkerijLogistiekDashboard() {
                 onClick={refreshBatch}
               />
               <MarzipanPhotoPrintButton
-                count={marzipanPrintItems.length + arendNumberPrintCount}
+                count={newMarzipanPrintItems.length + arendNumberPrintCount}
+                allPrinted={!photoPrintHistoryLoading && marzipanPrintItems.length > 0 && newMarzipanPrintItems.length === 0 && arendNumberPrintCount === 0}
                 disabled={
                   marzipanPrintItems.length === 0 &&
                   arendNumberPrintOrders.length === 0
@@ -12088,6 +11954,7 @@ export default function BakkerijLogistiekDashboard() {
             routeRounds={routeRounds}
             selectedPlan={selectedPlan}
             webshopImages={webshopImages}
+            photoPrintGroups={photoPrintHistoryLoading ? undefined : marzipanPhotoPrintGroups}
           />
         )}
         {activeTab === "leren" && (
@@ -12217,18 +12084,15 @@ export default function BakkerijLogistiekDashboard() {
           </div>
         )}
         {marzipanPrintChoiceOpen && (
-          <MarzipanPrintChoiceModal
-            allPhotoCount={marzipanPrintItems.length}
+          <PhotoPrintChoiceModal
             arendCount={arendNumberPrintCount}
-            hasPrintHistory={Boolean(photoPrintHistory?.printedAt)}
-            lastPrintAt={photoPrintHistory?.printedAt || ""}
-            newPhotoCount={newMarzipanPrintItems.length}
+            groups={marzipanPhotoPrintGroups}
+            loading={photoPrintHistoryLoading}
+            syncMessage={photoPrintSyncMessage}
+            onRefresh={() => { void refreshPhotoPrintHistory(); }}
             onClose={() => setMarzipanPrintChoiceOpen(false)}
-            onPrintAll={() => printMarzipanPhotos(marzipanPrintItems)}
             onPrintArend={printArendNumbers}
-            onPrintNew={() => printMarzipanPhotos(newMarzipanPrintItems)}
-            onPrintSelection={printSelectedMarzipanPhotos}
-            photoGroups={marzipanPhotoPrintGroups}
+            onPrint={printSelectedMarzipanPhotos}
           />
         )}
         {preparationProductManagerCategory && (
@@ -12557,284 +12421,6 @@ function RouteStopDeleteModal({
           disabled={isDeletingReceipt}
           onClick={onClose}
           className="mt-4 min-h-10 w-full rounded-xl border border-[#d7cec4] bg-white px-4 text-xs font-black text-[#554d45] disabled:opacity-40"
-        >
-          Annuleren
-        </button>
-      </section>
-    </div>
-  );
-}
-
-function MarzipanPrintChoiceModal({
-  allPhotoCount,
-  arendCount,
-  hasPrintHistory,
-  lastPrintAt,
-  newPhotoCount,
-  onClose,
-  onPrintAll,
-  onPrintArend,
-  onPrintNew,
-  onPrintSelection,
-  photoGroups,
-}: Readonly<{
-  allPhotoCount: number;
-  arendCount: number;
-  hasPrintHistory: boolean;
-  lastPrintAt: string;
-  newPhotoCount: number;
-  onClose: () => void;
-  onPrintAll: () => void;
-  onPrintArend: () => void;
-  onPrintNew: () => void;
-  onPrintSelection: (imageIds: string[]) => void;
-  photoGroups: MarzipanPhotoPrintGroup[];
-}>) {
-  const [selectedImageIds, setSelectedImageIds] = useState<string[]>([]);
-  const parsedLastPrintAt = lastPrintAt ? new Date(lastPrintAt) : null;
-  const lastPrintLabel =
-    parsedLastPrintAt && !Number.isNaN(parsedLastPrintAt.getTime())
-      ? parsedLastPrintAt.toLocaleString("nl-NL", {
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-          month: "long",
-        })
-      : "";
-  const selectedImageIdSet = new Set(selectedImageIds);
-  const selectedItemCount = photoGroups.reduce(
-    (count, group) =>
-      count + (selectedImageIdSet.has(group.imageId) ? group.itemCount : 0),
-    0
-  );
-
-  function toggleImage(imageId: string) {
-    setSelectedImageIds((current) =>
-      current.includes(imageId)
-        ? current.filter((id) => id !== imageId)
-        : [...current, imageId]
-    );
-  }
-
-  return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 p-4">
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="marzipan-print-choice-title"
-        className="flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-3xl border border-[#d7cec4] bg-[#f8f6f1] p-4 shadow-2xl sm:p-5"
-      >
-        <header className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#7d746b]">
-              Printkeuze
-            </p>
-            <h2
-              id="marzipan-print-choice-title"
-              className="mt-0.5 text-xl font-black tracking-normal text-[#1a1815]"
-            >
-              Foto’s en logo’s printen
-            </h2>
-            {hasPrintHistory && (
-              <p className="mt-1 text-xs font-semibold text-[#776f66]">
-                Laatste print{lastPrintLabel ? `: ${lastPrintLabel}` : ""}
-              </p>
-            )}
-          </div>
-          <button
-            type="button"
-            aria-label="Sluiten"
-            onClick={onClose}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#d7cec4] bg-white text-lg font-black text-[#554d45]"
-          >
-            ×
-          </button>
-        </header>
-
-        <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
-          <div className="grid gap-2">
-            {arendCount > 0 && (
-              <button
-                type="button"
-                onClick={onPrintArend}
-                className="flex min-h-16 items-center justify-between gap-3 rounded-2xl border border-[#c9d8c2] bg-white px-4 py-3 text-left shadow-sm transition hover:bg-[#f3f8f1]"
-              >
-                <span>
-                  <strong className="block text-sm font-black text-[#1a1815]">
-                    Arend-cijfers printen
-                  </strong>
-                  <small className="mt-0.5 block text-xs font-semibold text-[#776f66]">
-                    Open de cijfersheet voor de Arend-bestelling.
-                  </small>
-                </span>
-                <span className="rounded-full bg-[#c3d3bc] px-2.5 py-1 text-xs font-black text-[#253822]">
-                  {arendCount}
-                </span>
-              </button>
-            )}
-
-            {hasPrintHistory && (
-              <button
-                type="button"
-                disabled={newPhotoCount === 0}
-                onClick={onPrintNew}
-                className="flex min-h-16 items-center justify-between gap-3 rounded-2xl border border-[#c9d8c2] bg-[#edf5ea] px-4 py-3 text-left shadow-sm transition hover:bg-[#e5f0e1] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <span>
-                  <strong className="block text-sm font-black text-[#1a1815]">
-                    Alleen nieuw sinds laatste print
-                  </strong>
-                  <small className="mt-0.5 block text-xs font-semibold text-[#62705d]">
-                    {newPhotoCount > 0
-                      ? "Print alleen later toegevoegde foto’s."
-                      : "Er zijn geen nieuwe foto’s bijgekomen."}
-                  </small>
-                </span>
-                <span className="rounded-full bg-[#2d6b43] px-2.5 py-1 text-xs font-black text-white">
-                  {newPhotoCount}
-                </span>
-              </button>
-            )}
-
-            {allPhotoCount > 0 && (
-              <button
-                type="button"
-                onClick={onPrintAll}
-                className="flex min-h-16 items-center justify-between gap-3 rounded-2xl border border-[#d5c0ca] bg-white px-4 py-3 text-left shadow-sm transition hover:bg-[#f8f1f5]"
-              >
-                <span>
-                  <strong className="block text-sm font-black text-[#1a1815]">
-                    {hasPrintHistory
-                      ? "Alles opnieuw printen"
-                      : "Alle foto’s printen"}
-                  </strong>
-                  <small className="mt-0.5 block text-xs font-semibold text-[#776f66]">
-                    {hasPrintHistory
-                      ? "Open ook alle eerder geprinte foto’s opnieuw."
-                      : "Open alle foto’s voor deze dag."}
-                  </small>
-                </span>
-                <span className="rounded-full bg-[#a27a8e] px-2.5 py-1 text-xs font-black text-white">
-                  {allPhotoCount}
-                </span>
-              </button>
-            )}
-          </div>
-
-          {photoGroups.length > 0 && (
-            <section className="mt-4 border-t border-[#ddd5cc] pt-4">
-              <div className="flex items-end justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-black tracking-normal text-[#1a1815]">
-                    Handmatig foto’s kiezen
-                  </h3>
-                  <p className="mt-0.5 text-[0.68rem] font-semibold text-[#776f66]">
-                    Selecteer klantnamen die je nogmaals wilt openen.
-                  </p>
-                </div>
-                <div className="flex shrink-0 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setSelectedImageIds(
-                        photoGroups.map((group) => group.imageId)
-                      )
-                    }
-                    className="rounded-lg border border-[#d7cec4] bg-white px-2 py-1 text-[0.62rem] font-black text-[#554d45]"
-                  >
-                    Alles
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedImageIds([])}
-                    className="rounded-lg border border-[#d7cec4] bg-white px-2 py-1 text-[0.62rem] font-black text-[#554d45]"
-                  >
-                    Geen
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-2 grid gap-1.5">
-                {photoGroups.map((group) => {
-                  const selected = selectedImageIdSet.has(group.imageId);
-                  const productLabel = group.products.join(" · ");
-                  const receiptLabel = group.receiptNumbers.join(", ");
-
-                  return (
-                    <label
-                      key={group.imageId}
-                      className={`grid cursor-pointer grid-cols-[auto_2.75rem_minmax(0,1fr)_auto] items-center gap-2 rounded-xl border px-2.5 py-2 transition ${
-                        selected
-                          ? "border-[#88a881] bg-[#edf5ea]"
-                          : "border-[#ddd5cc] bg-white hover:border-[#b8aea4]"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selected}
-                        onChange={() => toggleImage(group.imageId)}
-                        className="h-4 w-4 accent-[#2d6b43]"
-                      />
-                      <span
-                        aria-hidden="true"
-                        className="h-11 w-11 rounded-lg border border-[#e5ddd4] bg-white bg-contain bg-center bg-no-repeat"
-                        style={{
-                          backgroundImage: `url("${group.photoUrl.replace(/"/g, "%22")}")`,
-                        }}
-                      />
-                      <span className="min-w-0">
-                        <strong className="block truncate text-xs font-black text-[#1a1815]">
-                          {group.customerName}
-                        </strong>
-                        {productLabel && (
-                          <small className="mt-0.5 block truncate text-[0.64rem] font-semibold text-[#776f66]">
-                            {productLabel}
-                          </small>
-                        )}
-                        {receiptLabel && (
-                          <small className="mt-0.5 block truncate text-[0.6rem] font-medium text-[#948a80]">
-                            bon {receiptLabel}
-                          </small>
-                        )}
-                      </span>
-                      <span className="text-right">
-                        <strong className="block text-xs font-black text-[#1a1815]">
-                          {group.itemCount}x
-                        </strong>
-                        <small
-                          className={`mt-0.5 block whitespace-nowrap text-[0.58rem] font-black ${
-                            group.newItemCount > 0
-                              ? "text-[#2d6b43]"
-                              : "text-[#948a80]"
-                          }`}
-                        >
-                          {group.newItemCount > 0
-                            ? `${group.newItemCount} nieuw`
-                            : "geprint"}
-                        </small>
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-
-              <button
-                type="button"
-                disabled={selectedImageIds.length === 0}
-                onClick={() => onPrintSelection(selectedImageIds)}
-                className="mt-3 min-h-11 w-full rounded-xl bg-[#1a1815] px-4 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Selectie printen
-                {selectedItemCount > 0 ? ` · ${selectedItemCount} stuks` : ""}
-              </button>
-            </section>
-          )}
-        </div>
-
-        <button
-          type="button"
-          onClick={onClose}
-          className="mt-4 min-h-10 w-full rounded-xl border border-[#d7cec4] bg-white px-4 text-xs font-black text-[#554d45]"
         >
           Annuleren
         </button>
@@ -13810,6 +13396,7 @@ function OrdersPanel({
   onSaveReceiptOverride,
   overrideMessage,
   photoLinkMessage,
+  photoPrintGroups,
   receiptOverrides,
   receiptSummaries,
   routeRounds,
@@ -13833,6 +13420,7 @@ function OrdersPanel({
   ) => Promise<void>;
   overrideMessage: string;
   photoLinkMessage: string;
+  photoPrintGroups?: PhotoPrintGroup[];
   receiptOverrides: ReceiptOverrideSummary[];
   receiptSummaries: ReceiptSummary[];
   routeRounds: RouteRound[];
@@ -14005,6 +13593,7 @@ function OrdersPanel({
 
         <ReceiptDetail
           imageMatches={selectedImageMatches}
+          photoPrintGroups={photoPrintGroups}
           onDeleteReceipt={onDeleteReceipt}
           onDeleteWebshopImage={onDeleteWebshopImage}
           onUnlinkWebshopImageFromReceipt={onUnlinkWebshopImageFromReceipt}
@@ -14181,11 +13770,13 @@ function thumbnailStyleFor(image: WebshopImageSummary) {
 
 function WebshopImageBlock({
   images,
+  printGroups,
   onDelete,
   onUnlink,
   receipt,
 }: Readonly<{
   images: WebshopImageSummary[];
+  printGroups?: PhotoPrintGroup[];
   onDelete: (image: WebshopImageSummary) => Promise<void>;
   onUnlink: (image: WebshopImageSummary) => Promise<void>;
   receipt: ReceiptSummary;
@@ -14204,6 +13795,9 @@ function WebshopImageBlock({
       </div>
       <div className="mt-2 grid gap-1.5">
         {images.map((image) => {
+          const imagePrintGroups = printGroups?.filter(group => group.imageId === image.id && group.receiptNumber === (receipt.receiptNumber || receipt.id));
+          const pendingCount = imagePrintGroups?.reduce((sum, group) => sum + group.newItemCount, 0) || 0;
+          const totalCount = imagePrintGroups?.reduce((sum, group) => sum + group.itemCount, 0) || 0;
           const manualUpload = isManualUploadedWebshopImage(image);
           const displayCustomerName =
             image.customerName ||
@@ -14242,6 +13836,9 @@ function WebshopImageBlock({
                       ? "handmatig"
                       : image.confidence}
                   </span>
+                  {totalCount > 0 && <span className={`mt-1 block text-[0.68rem] font-black ${pendingCount === 0 ? "text-[#2d6b43]" : "text-[#8b621c]"}`}>
+                    {pendingCount === 0 ? "✓ Geprint" : pendingCount < totalCount ? "◐ Deels geprint" : "○ Nog te printen"} · {totalCount - pendingCount}/{totalCount}
+                  </span>}
                   {image.productSummary && (
                     <span className="mt-0.5 block truncate text-[0.65rem] font-normal tracking-normal text-[#555]">
                       {image.productSummary}
@@ -14715,6 +14312,7 @@ function ReceiptDetail({
   override,
   overrideMessage,
   photoLinkMessage,
+  photoPrintGroups,
   receipt,
   selectedPlan,
 }: Readonly<{
@@ -14735,6 +14333,7 @@ function ReceiptDetail({
   override: ReceiptOverrideSummary | null;
   overrideMessage: string;
   photoLinkMessage: string;
+  photoPrintGroups?: PhotoPrintGroup[];
   receipt: ReceiptSummary | null;
   selectedPlan: DayPlan;
 }>) {
@@ -14914,6 +14513,7 @@ function ReceiptDetail({
           )}
           <WebshopImageBlock
             images={imageMatches}
+            printGroups={photoPrintGroups}
             onDelete={onDeleteWebshopImage}
             onUnlink={onUnlinkWebshopImageFromReceipt}
             receipt={receipt}
@@ -15343,10 +14943,12 @@ function RefreshButton({
 
 function MarzipanPhotoPrintButton({
   count,
+  allPrinted,
   disabled,
   onClick,
 }: Readonly<{
   count: number;
+  allPrinted: boolean;
   disabled: boolean;
   onClick: () => void;
 }>) {
@@ -15354,12 +14956,13 @@ function MarzipanPhotoPrintButton({
     <button
       type="button"
       aria-label="Marsepeinfoto's controleren"
-      title="Marsepeinfoto's controleren"
+      title={allPrinted ? "Alle foto’s geprint · klik voor herdrukken" : `${count} nog te printen · foto’s controleren`}
       disabled={disabled}
       onClick={onClick}
       className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-[#e8e4de] bg-white text-[#1a1815] shadow-sm transition hover:bg-[#faf8f5] disabled:cursor-not-allowed disabled:opacity-40"
     >
       <PhotoSheetIcon />
+      {allPrinted && <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#2d6b43] text-[0.6rem] font-black text-white">✓</span>}
       {count > 0 && (
         <span className="absolute -right-1 -top-1 min-w-4 rounded-full border border-[#1a1815] bg-[#1a1815] px-1 text-center text-[0.56rem] font-black leading-4 tracking-normal text-white">
           {count > 99 ? "99+" : count}
