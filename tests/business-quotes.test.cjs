@@ -28,7 +28,8 @@ test('full Christmas requests preserve package contents and server-calculated in
   assert.equal(quote.order.status, 'aanvraag');
   assert.equal(quote.order.season, 'kerst');
   assert.equal(quote.order.totalExVat, '839.50');
-  for (const text of ['25 × Bonbondoosje', '25 gelijke pakketten', '3 × Kerstchocolade', '0612345678', 'Voorbeeldstraat 1', '2026-12-18', 'Een kaartje per pakket', '915,00', 'nog worden bevestigd']) assert.ok(quote.quoteText.includes(text), text);
+  for (const text of ['25 × Bonbondoosje', '25 gelijke pakketten', '3 × Kerstchocolade', '0612345678', 'Voorbeeldstraat 1', 'vr 18 dec 2026', 'Een kaartje per pakket', '915,00']) assert.ok(quote.quoteText.includes(text), text);
+  assert.doesNotMatch(quote.quoteText,/Vrijblijvende aanvraag;|nog worden bevestigd/);
   assert.equal(quote.snapshot.email, 'test@example.invalid');
   assert.equal(quote.snapshot.consent, false);
   assert.equal(quote.snapshot.selection.contents.kerstchocolade, 3);
@@ -50,10 +51,23 @@ test('Sint letter prices share the quantity tier and retain logo, gift wrap, exc
   assert.equal(quote.order.letterLines[1].exceptions[0], 'vegan');
   assert.equal(quote.order.deliveryWindowType, 'range');
   assert.equal(quote.order.deliveryDateEnd, '2026-11-29');
+  assert.match(quote.quoteText, /Tussen ma 23 nov en zo 29 nov 2026/);
   assert.match(quote.quoteText, /inclusief eigen logo/);
   assert.match(quote.quoteText, /cadeaupapier.*0,25/);
   input.selection.lines[0].letter.exceptions = [['vegan']];
   assert.throws(() => build(input), /bijzondere wensen/);
+});
+
+test('Dutch delivery labels retain actual weekdays and years, without empty or repeated quote boilerplate', () => {
+  const {formatBusinessDeliveryMoment:format}=load('app/lib/businessDeliveryMoment.ts');
+  assert.equal(format('2026-11-23'),'ma 23 nov 2026');
+  assert.equal(format('2026-11-30','2026-12-06'),'Tussen ma 30 nov en zo 6 dec 2026');
+  assert.equal(format('2026-12-28','2027-01-03'),'Tussen ma 28 dec 2026 en zo 3 jan 2027');
+  assert.equal(format(''),'In overleg');
+  const input=fixture();input.phone='';input.contactName='';input.wishes='';
+  const quote=build(input);
+  assert.doesNotMatch(quote.quoteText,/Niet opgegeven|Geen aanvullende wensen|\nWENSEN\n|Vrijblijvende aanvraag/);
+  assert.equal(quote.order.deliveryDate,'2026-12-18','machine-readable dates are unchanged');
 });
 test('Sint variants retain fixed personalization surcharges and reject unknown selections', () => {
   const input = fixture('sint');

@@ -89,8 +89,12 @@ echo "All business quote tests passed; no real emails sent.\n";
 $details = "BEDRIJF EN CONTACT\nBedrijf: Voorbeeld & Co\nContactpersoon: Testpersoon\nE-mail: quote@example.invalid\nTelefoon: 0612345678\n\nGEKOZEN SINTERKLAASPRODUCTEN\n3 × Chocolade spuitletters · spuitletter S groot · melk\n  € 12,80 p.s. excl. btw · € 38,40 totaal excl. btw\n\nPRIJSINDICATIE\n€ 38,40 excl. btw / € 41,85 incl. btw\nExtra verpakking en bezorging in overleg.\n\nGEWENSTE LEVERING\n2026-11-23\nBezorgen\nAfleveradres: Voorbeeldstraat 1\nTweede adresregel\n\nWENSEN\nEen kaartje\n<script>alert(1)</script>\nPRIJSINDICATIE\nDit is vrije klanttekst";
 $order['folderQuote']['quoteText'] = $details;
 $sint_html = strik_business_quote_html(array_merge($order, array('season' => 'sint')));
-check(has($sint_html, '<h2') && has($sint_html, '>Gekozen producten</h2>') && has($sint_html, '>Gewenste levering</h2>'), 'Sections have real HTML headings, not CSS-only line breaks.');
-check(has($sint_html, '>Bedrijf</td><td') && has($sint_html, '>Voorbeeld &amp; Co</td>'), 'Contact details render in separate label/value cells.');
+check(has($sint_html, '<h2') && has($sint_html, '>Bestelling</h2>') && has($sint_html, '>Gewenste levering</h2>'), 'Sections have real HTML headings, not CSS-only line breaks.');
+check(!has($sint_html, '>Bedrijf</td><td') && has($sint_html, '>E-mail</td><td') && has($sint_html, 'quote@example.invalid'), 'Company is shown once in the header; useful contact details remain.');
+check(strpos($sint_html, '>Gewenste levering</h2>') < strpos($sint_html, '>Bestelling</h2>') && strpos($sint_html, '>Contact</h2>') > strpos($sint_html, '>Prijsindicatie</h2>'), 'Delivery and products take priority; contact is compact at the end.');
+check(has($sint_html, 'ma 23 nov 2026') && !has($sint_html, 'Opgeslagen bij B2B') && !has($sint_html, 'Dit is een vrijblijvende aanvraag.') && !has($sint_html, 'De klant ziet de ontvangstbevestiging'), 'Dates are Dutch with weekday and redundant instructions are omitted.');
+check(has($sint_html, '3 × Spuitletter S · melk · groot') && !has($sint_html, 'Chocolade spuitletters · spuitletter'), 'Letter specifications are shown once instead of repeating the product name.');
+check(strik_business_quote_product_label('2 × Chocolade spuitletters · spuitletter P groot · puur · vegan · inclusief logo') === '2 × Spuitletter P · puur · groot · vegan · inclusief logo', 'Product cleanup preserves dietary requirements and custom options.');
 check(has($sint_html, '€ 38,40 excl. btw / € 41,85 incl. btw') && has($sint_html, '>Tweede adresregel</p>'), 'Amounts and multiline address remain intact.');
 check(!has($sint_html, '<script>') && substr_count($sint_html, '>Prijsindicatie</h2>') === 1, 'Free customer text stays escaped and cannot create extra sections.');
 $christmas = str_replace('GEKOZEN SINTERKLAASPRODUCTEN', 'LOSSE KERSTCADEAUS', $details);
@@ -98,11 +102,20 @@ $christmas = str_replace('PRIJSINDICATIE', "KERSTPAKKET OP MAAT\n25 gelijke pakk
 $kerst_html = strik_business_quote_details_html($christmas);
 check(has($kerst_html, '>Losse kerstcadeaus</h2>') && has($kerst_html, '>Kerstpakket op maat</h2>') && has($kerst_html, '3 × Kerstchocolade'), 'Christmas singles and package contents have their own sections.');
 check(has(strik_business_quote_details_html("Oud formaat\nNog een regel"), '>Oud formaat</p><p') && has(strik_business_quote_details_html("Oud formaat\nNog een regel"), '>Nog een regel</p>'), 'Legacy or unrecognized quote text retains explicit paragraph breaks.');
+$week_details = str_replace('2026-11-23', 'Week van 2026-11-23 t/m 2026-11-29', $details);
+$week_html = strik_business_quote_details_html($week_details, true);
+check(has($week_html, 'Tussen ma 23 nov en zo 29 nov 2026') && !has($week_html, 'Week van 2026'), 'Historical ISO week labels are also formatted as readable Dutch ranges.');
+check(strik_business_quote_delivery_label('Week van 2026-12-28 t/m 2027-01-03') === 'Tussen ma 28 dec 2026 en zo 3 jan 2027', 'Cross-year dates retain both years.');
+check(strik_business_quote_date_label('2026-02-30') === '2026-02-30', 'Unrecognized dates are never silently changed.');
+$empty_html = strik_business_quote_details_html("BEDRIJF EN CONTACT\nBedrijf: Voorbeeld BV\nContactpersoon: Voorbeeld BV\nTelefoon: Niet opgegeven\nE-mail: quote@example.invalid\n\nWENSEN\nGeen aanvullende wensen\n\nVrijblijvende aanvraag; beschikbaarheid, levermoment en definitieve prijs moeten nog worden bevestigd.", true);
+check(!has($empty_html, 'Aanvullende wensen') && !has($empty_html, 'Contactpersoon') && !has($empty_html, 'Niet opgegeven') && !has($empty_html, 'Vrijblijvende aanvraag;') && has($empty_html, 'quote@example.invalid'), 'Empty sections, duplicate contacts and generated boilerplate disappear without losing email.');
 if (getenv('STRIK_MAIL_PREVIEW_DIR')) {
     $preview_order = array_merge($order, array('season' => 'sint'));
     $preview_order['folderQuote']['reference'] = 'SINT26-F12345671234';
     $preview_order['folderQuote']['quoteText'] = substr($details, 0, strpos($details, "WENSEN\n")) . "WENSEN\nGraag iedere letter in cadeaupapier. Levering bij de receptie.\n\nVrijblijvende aanvraag; beschikbaarheid, levermoment en definitieve prijs moeten nog worden bevestigd.";
     file_put_contents(getenv('STRIK_MAIL_PREVIEW_DIR') . '/sint.html', strik_business_quote_html($preview_order));
+    $preview_order['folderQuote']['quoteText'] = str_replace('2026-11-23', 'Week van 2026-11-23 t/m 2026-11-29', $preview_order['folderQuote']['quoteText']);
+    file_put_contents(getenv('STRIK_MAIL_PREVIEW_DIR') . '/sint-week.html', strik_business_quote_html($preview_order));
     $order['folderQuote']['quoteText'] = $christmas;
     file_put_contents(getenv('STRIK_MAIL_PREVIEW_DIR') . '/kerst.html', strik_business_quote_html($order));
 }

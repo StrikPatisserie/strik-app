@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { christmasPackage, christmasProducts, christmasUnitPrice, money, roundMoney } from "@/app/kerst-voor-bedrijven/christmasProducts";
 import { defaultProductChoice, pricedProduct, productChoiceCandidates, productChoiceLabel, productLogoPrice, products, productSupportsLogo, productUnitPrice, tierFor } from "@/app/sint-voor-bedrijven/sintProducts";
 import { letterGiftWrapPrice } from "@/app/lib/letter-pricing";
+import { formatBusinessDeliveryMoment } from "@/app/lib/businessDeliveryMoment";
 import type { B2BLetterLine } from "@/app/sinterklaas/types";
 
 type RecordValue = Record<string, unknown>;
@@ -62,7 +63,7 @@ export function buildBusinessFolderQuote(value: unknown) {
   if (end && momentType === "week") end.setUTCDate(end.getUTCDate() + 6);
   const deliveryDateEnd = momentType === "week" && end ? end.toISOString().slice(0, 10) : "";
   const deliveryLabel = method === "pickup" ? "Afhalen bij Strik" : method === "nijmegen" ? "Bezorgen in/rondom Nijmegen · € 10–15 in overleg" : "Bezorgen · prijs op aanvraag";
-  const momentLabel = deliveryDate ? (momentType === "week" ? `Week van ${deliveryDate} t/m ${deliveryDateEnd}` : deliveryDate) : "In overleg";
+  const momentLabel = formatBusinessDeliveryMoment(deliveryDate, deliveryDateEnd);
   const selection = record(input.selection);
   const rows: string[] = [];
   const letterLines: B2BLetterLine[] = [];
@@ -134,7 +135,7 @@ export function buildBusinessFolderQuote(value: unknown) {
   }
   totalEx = roundMoney(totalEx); totalIncl = roundMoney(totalIncl);
   const reference = `${season.toUpperCase()}26-${requestId.replaceAll("-", "").slice(0, 12).toUpperCase()}`;
-  const quoteText = ["BEDRIJF EN CONTACT", `Bedrijf: ${company}`, `Contactpersoon: ${contactName || "Niet opgegeven"}`, `E-mail: ${email}`, `Telefoon: ${phone || "Niet opgegeven"}`, "", ...rows, "", "PRIJSINDICATIE", `${money(totalEx)} excl. btw / ${money(totalIncl)} incl. btw`, "Eventuele extra verpakking en bezorging zijn niet inbegrepen; definitieve prijs in overleg.", "", "GEWENSTE LEVERING", momentLabel, deliveryLabel, ...(address ? [`Afleveradres: ${address}`] : []), "", "WENSEN", wishes || "Geen aanvullende wensen", "", "Vrijblijvende aanvraag; beschikbaarheid, levermoment en definitieve prijs moeten nog worden bevestigd."].join("\n");
+  const quoteText = ["BEDRIJF EN CONTACT", `Bedrijf: ${company}`, ...(contactName ? [`Contactpersoon: ${contactName}`] : []), `E-mail: ${email}`, ...(phone ? [`Telefoon: ${phone}`] : []), "", ...rows, "", "PRIJSINDICATIE", `${money(totalEx)} excl. btw / ${money(totalIncl)} incl. btw`, "Extra verpakking en bezorging in overleg.", "", "GEWENSTE LEVERING", momentLabel, deliveryLabel, ...(address ? [`Afleveradres: ${address}`] : []), ...(wishes ? ["", "WENSEN", wishes] : [])].join("\n");
   if (Buffer.byteLength(quoteText, "utf8") > 45000) throw new Error("Deze aanvraag is te uitgebreid. Verdeel de producten over twee aanvragen.");
   const snapshot = { season, company, contactName, email, phone, wishes, consent, delivery: { method, address, momentType, date: deliveryDate }, selection: snapshotSelection };
   const payloadHash = createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");

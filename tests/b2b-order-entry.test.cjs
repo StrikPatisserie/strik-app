@@ -29,6 +29,7 @@ const quoteBuilder = load('app/lib/businessFolderQuote.ts', {
   '@/app/sint-voor-bedrijven/sintProducts': sint,
   '@/app/kerst-voor-bedrijven/christmasProducts': kerst,
   '@/app/lib/letter-pricing': load('app/lib/letter-pricing.ts'),
+  '@/app/lib/businessDeliveryMoment': load('app/lib/businessDeliveryMoment.ts'),
 }, { Buffer }).buildBusinessFolderQuote;
 function entry(season = 'sint', initialOrder = null) {
   const state = [], refs = [], effects = [], calls = [], updated = [], storage = new Map();
