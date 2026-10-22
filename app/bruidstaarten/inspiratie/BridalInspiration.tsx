@@ -20,7 +20,7 @@ export default function BridalInspiration({ preview = false }: Readonly<{ previe
     <header className={styles.header}>
       <a className={styles.brand} href="https://strik-patisserie.nl/" aria-label="Strik Patisserie, naar de website"><Image src="/strik-logo.png" width={64} height={64} alt="Strik Patisserie" /><span>Bruidstaarten<small>Een bijzonder moment, van Strik.</small></span></a>
       <nav aria-label="Bruidstaartinformatie"><a href="#inspiratie">De basis</a><a href="#voorbeelden">Inspiratie</a><a href="#werkwijze">Zo werkt het</a></nav>
-      <Link className={styles.button} href={book}>Plan jullie afspraak <span aria-hidden="true">↗</span></Link>
+      <Link className={styles.button} href={book}><span className={styles.desktopBookingLabel}>Plan jullie afspraak</span><span className={styles.mobileBookingLabel}>Afspraak</span><span aria-hidden="true">↗</span></Link>
     </header>
     <main>
       <div className={styles.heroWrap}>
@@ -35,8 +35,10 @@ export default function BridalInspiration({ preview = false }: Readonly<{ previe
             <p className={styles.note}>Vrijblijvend · een halfuur samen aan de Ziekerstraat in Nijmegen</p>
           </div>
           <div className={styles.heroVisual}>
-            <div className={styles.heroPhoto}><Image src="/bruidstaarten/voorbeeld-1.webp" alt="Romantische bruidstaart met crème, roze en witte bloemen, in warm daglicht" fill sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 580px" preload /></div>
-            <div className={styles.craftSeal}><span>Uit eigen bakkerij</span><svg viewBox="0 0 64 36" fill="none" aria-hidden="true"><path d="M6 29c13-1 20-4 26-12M58 29c-13-1-20-4-26-12M32 32V4M32 18c-7-1-11-5-10-10 6 0 10 4 10 10Zm0 6c-8 0-13-3-14-8 7-1 12 2 14 8Zm0-6c7-1 11-5 10-10-6 0-10 4-10 10Zm0 6c8 0 13-3 14-8-7-1-12 2-14 8Z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg><strong>Ambacht.<br />Sinds 1937.</strong></div>
+            <div className={styles.heroFrame}>
+              <div className={styles.heroPhoto}><Image src="/bruidstaarten/voorbeeld-1.webp" alt="Romantische bruidstaart met crème, roze en witte bloemen, in warm daglicht" fill sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 580px" preload /></div>
+              <div className={styles.craftSeal}><span>Uit eigen<br />bakkerij</span><svg viewBox="0 0 64 36" fill="none" aria-hidden="true"><path d="M6 29c13-1 20-4 26-12M58 29c-13-1-20-4-26-12M32 32V4M32 18c-7-1-11-5-10-10 6 0 10 4 10 10Zm0 6c-8 0-13-3-14-8 7-1 12 2 14 8Zm0-6c7-1 11-5 10-10-6 0-10 4-10 10Zm0 6c8 0 13-3 14-8-7-1-12 2-14 8Z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg><strong>Ambacht.<br />Sinds 1937.</strong></div>
+            </div>
             <span className={styles.photoNote}>Handwerk, tot in de details.</span>
           </div>
         </section>

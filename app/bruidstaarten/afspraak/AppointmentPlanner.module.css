@@ -106,3 +106,29 @@
 .info dd,.confirmation dd,.description,.preparation p { font-size:13px; }
 .form label,.help { font-size:12px; }
 @media(max-width:760px) { .intro > div > p:last-child,.description,.preparation p { font-size:14px; } .smallPrint { font-size:11px; } }
+
+@media(max-width:760px) {
+  .brandBar > .homeBack { min-height:44px; font-size:12px; max-width:210px; text-align:left; line-height:1.5; }
+  .intro h1 { font-size:clamp(30px,8vw,38px); overflow-wrap:break-word; }
+  .cake { display:none; }
+  .intro .eyebrow,.eyebrow { font-size:11px; }
+  .form label { font-size:14px; }
+  .form label > small,.smallPrint { font-size:12px; }
+  .primary,.secondary { min-height:48px; font-size:13px!important; }
+  .month button { width:44px; height:44px; }
+  .month h3 { font-size:15px; }
+  .weekday { font-size:11px; }
+  .days { gap:3px; }
+  .days button { min-height:44px; font-size:14px; }
+  .timePanel h3 { font-size:14px; }
+  .timePanel > p,.calendarLegend,.next > p { font-size:12px; }
+  .calendarHelp,.help,.demoNotice { font-size:13px; }
+  .help a { min-height:44px; display:inline-flex; align-items:center; font-size:12px; }
+  .times button { flex:1 1 130px; font-size:15px; min-height:50px; }
+  .times button > span { font-size:13px; }
+  .back { min-height:44px; font-size:12px!important; }
+  .steps { gap:10px; padding-inline:12px; }
+  .steps li { font-size:10px; }
+  .steps li > span { flex-shrink:0; }
+}
+@media(pointer:coarse) { .page a,.page button { touch-action:manipulation; } }
