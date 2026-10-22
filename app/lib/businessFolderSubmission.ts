@@ -1,3 +1,5 @@
+import { trackB2BQuoteSubmitted } from "./b2bMetaTracking";
+
 // randomUUID is absent in some older browsers and embedded webviews.
 export function createQuoteRequestId(): string {
   if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
@@ -20,6 +22,8 @@ export async function sendBusinessFolderQuote(payload: unknown): Promise<string>
     if (!response.ok || data.ok !== true || typeof data.reference !== "string" || !/^(SINT|KERST)26-[A-F0-9]{12}$/.test(data.reference)) {
       throw new Error(data.message || "De ontvangst van je aanvraag is nog niet bevestigd. Probeer opnieuw; je ingevulde aanvraag blijft staan.");
     }
+    const quote = payload as { season?: unknown; requestId?: unknown } | null;
+    if (quote?.season === "sint" && typeof quote.requestId === "string") trackB2BQuoteSubmitted(quote.requestId);
     return data.reference;
   } catch (error) {
     if (controller.signal.aborted || error instanceof TypeError) {

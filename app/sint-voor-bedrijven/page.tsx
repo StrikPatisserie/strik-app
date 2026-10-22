@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import SintB2BConcept from "./SintB2BConcept";
+import B2BMarketingConsent from "./B2BMarketingConsent";
 
 export const metadata: Metadata = {
   title: "Sint voor bedrijven | Strik Patisserie",
@@ -8,5 +9,5 @@ export const metadata: Metadata = {
 };
 
 export default function SintVoorBedrijvenPage() {
-  return <SintB2BConcept />;
+  return <><SintB2BConcept /><B2BMarketingConsent /></>;
 }

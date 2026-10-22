@@ -12,6 +12,7 @@ function load(file, imports = {}, globals = {}) {
   } }).outputText;
   vm.runInNewContext(source, { exports, Error, TypeError, AbortController, setTimeout, clearTimeout, Uint8Array, ...globals, require(name) {
     if (name in imports) return imports[name];
+    if (name === './b2bMetaTracking') return load('app/lib/b2bMetaTracking.ts', {}, globals);
     if (name === '@/app/lib/businessFolderSubmission') return load('app/lib/businessFolderSubmission.ts', {}, globals);
     if (name === 'react/jsx-runtime') return require(name);
     return { default: name };
