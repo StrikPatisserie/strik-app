@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { B2B_ORDER_BACK_EVENT } from "./lib/businessSeasons";
 
 const WEDDING_CAKE_STUDIO_BACK_EVENT = "strik:wedding-cake-studio-back";
 
@@ -83,12 +84,18 @@ export default function StrikBackButton({
 
   if (!destination) return null;
 
-  if (pathname === "/bruidstaarten/studio") {
+  const backEvent = pathname === "/bruidstaarten/studio"
+    ? WEDDING_CAKE_STUDIO_BACK_EVENT
+    : pathname === "/sinterklaas/b2b" || pathname === "/kerst/b2b"
+      ? B2B_ORDER_BACK_EVENT
+      : "";
+
+  if (backEvent) {
     return (
       <button
         type="button"
         onClick={() => {
-          const event = new Event(WEDDING_CAKE_STUDIO_BACK_EVENT, {
+          const event = new Event(backEvent, {
             cancelable: true,
           });
           const shouldNavigate = window.dispatchEvent(event);

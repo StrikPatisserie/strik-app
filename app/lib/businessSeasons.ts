@@ -1,6 +1,8 @@
 export type BusinessSeason = "sint" | "kerst";
 export type FolderSelection = BusinessSeason | "sint-kerst";
 
+export const B2B_ORDER_BACK_EVENT = "strik:b2b-order-back";
+
 export const businessSeasonColors = {
   sint: { accent: "#a6322d", pale: "#f7e6e1", border: "#e4bdb6" },
   kerst: { accent: "#202542", pale: "#e7ebf4", border: "#c5cbdc" },

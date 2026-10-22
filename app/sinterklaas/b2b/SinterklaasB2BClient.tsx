@@ -7,7 +7,7 @@ import B2BProductText from "./B2BProductText";
 import B2BConfirmationDialog, { customerConfirmationSent, shouldOfferCustomerConfirmation } from "./B2BConfirmationDialog";
 import B2BApprovalDialog from "./B2BApprovalDialog";
 import { editableFolderOrderText } from "../../lib/businessFolderOrderText";
-import { businessSeasonColors, businessSeasons, orderBelongsToSeason, seasonLabel, type BusinessSeason } from "../../lib/businessSeasons";
+import { B2B_ORDER_BACK_EVENT, businessSeasonColors, businessSeasons, orderBelongsToSeason, seasonLabel, type BusinessSeason } from "../../lib/businessSeasons";
 import { christmasProducts } from "../../kerst-voor-bedrijven/christmasProducts";
 import { BUSINESS_FOLDER_PRICE_TIERS } from "../../lib/business-folder-pricing";
 import {
@@ -1687,6 +1687,17 @@ export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ sea
   const [deleteTarget, setDeleteTarget] = useState<SinterklaasB2BOrder | null>(null);
   const [deleteReason, setDeleteReason] = useState("");
   const [deleteReasonNote, setDeleteReasonNote] = useState("");
+
+  useEffect(() => {
+    if (!formOpen) return;
+    const returnToOverview = (event: Event) => {
+      event.preventDefault();
+      setFormOpen(false);
+      setEditingOrder(null);
+    };
+    window.addEventListener(B2B_ORDER_BACK_EVENT, returnToOverview);
+    return () => window.removeEventListener(B2B_ORDER_BACK_EVENT, returnToOverview);
+  }, [formOpen]);
 
   async function loadOrders(nextYear = year) {
     setLoading(true);
