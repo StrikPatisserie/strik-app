@@ -128,7 +128,7 @@ function addLetters(ui, quantity, withLogo, character='S') {
   ui.check('Eigen logo op deze letters', withLogo); ui.button('+ Letter toevoegen');
 }
 function addPackage(ui, quantity, withLogo=false) {
-  ui.button('Overige producten');
+  ui.button('Overige producten toevoegen');
   const product=sint.products.find(item=>item.id==='stafwerk');
   ui.field('Product',product.id);ui.field('Variant',sint.productChoiceCandidates(product)[0]);ui.field('Aantal producten',String(quantity));
   ui.check('Eigen logo op dit product',withLogo);ui.button('+ Product toevoegen');
@@ -170,7 +170,7 @@ test('bulk logos remain reversible per article and manually agreed unit prices c
   addLetters(ui,10,false);addPackage(ui,3,false);
   ui.field('Prijs Stafwerk pakket','20');
   ui.button('Logo bij alle geschikte artikelen');
-  ui.check('Logo op Stafwerk pakket · eigen logo',false);
+  ui.check('Logo op Stafwerk pakket',false);
   ui.button('Bestelling controleren →');await ui.submit();
   let saved=ui.calls[0],prices=ui.parse(saved.orderText).productLines;
   assert.equal(saved.letterLines[0].withLogo,true);assert.equal(prices.find(p=>p.productId==='stafwerk').withLogo,false);
@@ -191,7 +191,7 @@ test('removing all logos clears only the generated logo agreement',async()=>{
 
 test('bulk logos skip catalogue articles that do not support a logo',async()=>{
   const ui=entry();ui.field('Bedrijfsnaam / klantnaam *','Ondersteunde producten');ui.button('Verder naar producten →');addLetters(ui,10,false);
-  ui.button('Overige producten');const product=sint.products.find(item=>item.id==='marsepein-letter');
+  ui.button('Overige producten toevoegen');const product=sint.products.find(item=>item.id==='marsepein-letter');
   ui.field('Product',product.id);ui.field('Variant',product.variants[0].label);ui.field('Aantal producten','3');ui.button('+ Product toevoegen');
   ui.button('Logo bij alle geschikte artikelen');ui.button('Bestelling controleren →');await ui.submit();
   assert.equal(ui.calls[0].letterLines[0].withLogo,true);
@@ -206,4 +206,56 @@ test('the API normalizer retains explicit true/false line choices while older or
   assert.equal(letters.b2bLetterHasLogo(result,result.letterLines[1]),false);
   const legacy=api.normalizeB2BOrder({...base,letterLines:[{...base.letterLines[1],withLogo:null}]});
   assert.equal(letters.b2bLetterHasLogo(legacy,legacy.letterLines[0]),true);
+});
+
+function legacyLogoRequest() {
+  return {...entry().blank(), id:'legacy-logo',year:'2026',season:'sint',customerName:'Voorbeeld 30 letters',status:'aanvraag',department:'chocolade',deliveryDate:'2026-11-24',updatedAt:'2026-10-22T12:04:23Z',logo:'Ja',totalExVat:'€ 366,00',orderText:'PRODUCTEN EN PRIJS\n30 × Chocolade spuitletters · Groot · € 12,20 p.s. ex btw · € 366,00',letterLines:[
+    {id:'milk',letter:'P',chocolate:'melk',style:'spuit',size:'groot',quantity:29,exceptions:[]},
+    {id:'vegan',letter:'P',chocolate:'puur',style:'spuit',size:'groot',quantity:1,exceptions:['vegan']},
+  ]};
+}
+
+test('an older general logo agreement is priced immediately when editing: 366.00 products plus 13.80 logos',async()=>{
+  const original=legacyLogoRequest(),before=JSON.stringify(original),ui=entry('sint',original);
+  ui.button('Verder naar producten →');
+  const cart=nodes(ui.render(),n=>n.props?.['aria-label']==='Bestelling aanpassen')[0];
+  const rows=nodes(cart,n=>n.props?.['data-order-item']==='letter');
+  assert.equal(rows.length,2,'show the 29 milk and 1 vegan letters exactly once');
+  assert.equal(nodes(cart,n=>n.type==='input'&&n.props.type==='checkbox').length,2,'one logo control per actual letter row');
+  assert.match(label(rows[0]),/Spuitletter PMelk.*29 × €\s?12,20 \+ €\s?13,34 logo/);
+  assert.match(label(rows[1]),/Puur.*Vegan/);assert.doesNotMatch(label(rows[1]),/Vrij van/i);
+  assert.equal(nodes(ui.render(),n=>n.props?.['aria-label']==='Afgesproken totaal excl. btw')[0].props.value,'379.80');
+  assert.equal(nodes(ui.render(),n=>n.props?.className==='builderPanel')[0].props.hidden,true,'adding controls stay folded while editing the current order');
+  ui.check('Logo op letterregel 2: P · puur · groot',false);
+  assert.equal(nodes(ui.render(),n=>n.props?.['aria-label']==='Afgesproken totaal excl. btw')[0].props.value,'379.34');
+  ui.check('Logo op letterregel 2: P · puur · groot',true);ui.button('Bestelling controleren →');await ui.submit();
+  assert.equal(ui.calls[0].totalExVat.replace(/\s/g,''),'€379,80');
+  assert.equal(JSON.stringify(original),before,'opening and changing the draft never overwrites the saved request');
+  const again=entry('sint',{...ui.calls[0],id:'reopened'});
+  assert.equal(nodes(again.render(),n=>n.props?.['aria-label']==='Afgesproken totaal excl. btw')[0].props.value,'379.80','logos must not be charged again when reopened');
+});
+
+test('logos adjust a manually agreed total instead of disappearing into an unchanged override',async()=>{
+  const original=legacyLogoRequest();original.logo='';original.letterLines=original.letterLines.map(line=>({...line,withLogo:false}));
+  const ui=entry('sint',original);ui.button('Verder naar producten →');
+  ui.field('Afgesproken totaal excl. btw','350');ui.button('Logo bij alle geschikte artikelen');
+  assert.equal(nodes(ui.render(),n=>n.props?.['aria-label']==='Afgesproken totaal excl. btw')[0].props.value,'363.80');
+  const priceParts=nodes(ui.render(),n=>n.props?.className==='priceBreakdown')[0];
+  assert.match(label(priceParts),/Producten€\s?366,00Logo’s30 × €\s?0,46€\s?13,80Prijsafspraak€\s?-16,00/);
+  ui.check('Logo op letterregel 2: P · puur · groot',false);
+  assert.equal(nodes(ui.render(),n=>n.props?.['aria-label']==='Afgesproken totaal excl. btw')[0].props.value,'363.34');
+  ui.button('Bestelling controleren →');await ui.submit();
+  assert.equal(ui.calls[0].totalExVat.replace(/\s/g,''),'€363,34');
+  const again=entry('sint',{...ui.calls[0],id:'manual-reopen'});
+  assert.equal(nodes(again.render(),n=>n.props?.['aria-label']==='Afgesproken totaal excl. btw')[0].props.value,'363.34');
+});
+
+test('adding fields collapse after adding a product, and an empty agreed unit price cannot save a free product accidentally',async()=>{
+  const ui=entry();ui.field('Bedrijfsnaam / klantnaam *','Nieuwe bestelling');ui.button('Verder naar producten →');
+  addLetters(ui,10,false);addPackage(ui,3,false);
+  assert.equal(nodes(ui.render(),n=>n.props?.className==='builderPanel')[0].props.hidden,true);
+  ui.field('Prijs Stafwerk pakket','');
+  nodes(ui.render(),n=>n.props?.['aria-label']==='Prijs Stafwerk pakket')[0].props.onBlur();
+  ui.button('Bestelling controleren →');await ui.submit();
+  assert.equal(ui.calls.length,0);assert.match(label(ui.render()),/Vul een geldige stukprijs in/);
 });
