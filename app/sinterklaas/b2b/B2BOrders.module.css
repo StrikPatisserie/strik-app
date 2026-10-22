@@ -85,6 +85,30 @@
 .sent { color: #52725c; }
 .amount { text-align: right; white-space: nowrap; font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; }
 .rowActions { display: flex; justify-content: flex-end; align-items: center; gap: 4px; }
+.approveLink { display: block; margin-top: 8px; padding: 3px 0; border: 0; background: transparent; color: var(--b2b-accent); font-size: 11px; font-weight: 600; text-align: left; }
+.approveLink:hover { text-decoration: underline; text-underline-offset: 3px; }
+.page.approvalDialog { position: fixed; inset: 0; width: min(680px, calc(100vw - 28px)); max-width: none; max-height: calc(100dvh - 28px); margin: auto; padding: 0; border: 1px solid #dce3d9; border-radius: 16px; background: #fffefa; box-shadow: 0 24px 80px #15251d55; }
+.approvalDialog::backdrop { background: #15251da6; backdrop-filter: blur(4px); }
+.approvalHeader { position: relative; padding: 24px 28px; border-bottom: 1px solid var(--b2b-border); background: var(--b2b-pale); }
+.approvalHeader h2 { font-size: 23px; }
+.approvalHeader > p:last-of-type { margin-top: 9px; font-size: 12px; color: var(--b2b-muted); }
+.approvalHeader > button { position: absolute; right: 16px; top: 16px; width: 32px; height: 32px; border-radius: 50%; background: #fff9; color: var(--b2b-ink); font-size: 23px; }
+.approvalBody { padding: 24px 28px; }
+.approvalCustomer { margin-bottom: 20px; }
+.approvalCustomer h3 { font-size: 18px; }
+.approvalCustomer p { color: var(--b2b-muted); font-size: 12px; overflow-wrap: anywhere; }
+.approvalProducts { padding: 15px; background: #f4f6f0; border: 1px solid var(--b2b-border); border-radius: 9px; font-size: 12px; white-space: pre-wrap; }
+.approvalProducts h3 { margin-bottom: 10px; }
+.approvalDetails { margin: 20px 0; }
+.approvalDetails > div { display: grid; grid-template-columns: 130px 1fr; gap: 18px; padding: 12px 0; border-bottom: 1px solid var(--b2b-border); font-size: 12px; }
+.approvalDetails dt { color: var(--b2b-muted); }
+.approvalDetails dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.approvalDetails strong { font-size: 19px; font-weight: 600; }
+.approvalNote { margin-bottom: 13px !important; font-size: 11px; color: var(--b2b-muted); white-space: pre-wrap; }
+.approvalCheck { display: flex; gap: 10px; align-items: flex-start; padding: 15px; margin-top: 20px; border: 1px solid var(--b2b-border); background: #f4f6f0; border-radius: 9px; font-size: 12px; font-weight: 600; }
+.approvalCheck input { margin-top: 3px; width: 17px; height: 17px; flex-shrink: 0; }
+.approvalMailNote { color: var(--b2b-muted); margin-top: 15px !important; font-size: 11px; line-height: 1.7; }
+.approvalActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 9px; padding: 17px 24px; border-top: 1px solid var(--b2b-border); background: #fffefa; }
 .chevron { min-height: 31px; width: 27px; font-size: 16px; color: var(--b2b-muted); }
 .detail { padding: 20px 20px 20px 149px; border-top: 1px dashed var(--b2b-border); background: #f6f8f3; }
 .detailGrid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 24px; font-size: 12px; }

@@ -99,3 +99,35 @@ test('public API validates origin and actual body size, and confirms success onl
   backend = { ok: true, saved: false, mailSent: true };
   assert.equal((await api.POST(request())).status, 502);
 });
+
+const { editableFolderOrderText } = load('app/lib/businessFolderOrderText.ts');
+test('real folder requests convert both Christmas singles and complete packages without losing contents or double-counting', () => {
+  const quote = build(fixture());
+  const editable = editableFolderOrderText(quote.quoteText);
+  assert.ok(editable.startsWith('PRODUCTEN EN PRIJS\n'));
+  assert.match(editable, /25 × Bonbondoosje Fijne Feestdagen · 16 stuks · in een luxe doosje/);
+  assert.match(editable, /25 × Kerstpakket op maat · per pakket: 1 × Kleine kerststol .*3 × Kerstchocolade/);
+  assert.match(editable, /Wensen uit aanvraag: Een kaartje per pakket/);
+  assert.match(editable, /Passende tas of doos/);
+  const rows = editable.split('\n').filter(row => /^\d+ ×/.test(row));
+  assert.equal(rows.length, 2, 'package contents remain one package, not extra separately charged products');
+  const total = rows.reduce((sum,row) => {
+    const match = row.match(/ · €\s*([\d.,]+)$/);
+    return sum + Number(match[1].replace(/\./g,'').replace(',','.'));
+  },0);
+  assert.equal(total.toFixed(2), quote.order.totalExVat);
+});
+test('folder conversion preserves letter charges, logo, dietary requirements, wrapping and custom product details', () => {
+  const input = fixture('sint');
+  input.selection = { lines: [
+    { productId: 'chocoladeletter', quantity: 25, withLogo: true, withGiftWrap: true, letter: { letter: 'M', size: 'groot', chocolate: 'puur', exceptions: ['vegan','notenvrij'] } },
+    { productId: 'speculaasbrok-met-letter', quantity: 60 },
+  ] };
+  const quote = build(input);
+  const editable = editableFolderOrderText(quote.quoteText);
+  assert.match(editable, /25 × Chocolade spuitletters · spuitletter M groot · puur · vegan, notenvrij · eigen logo/);
+  assert.match(editable, /inclusief cadeaupapier.*0,25/);
+  assert.match(editable, /60 × Speculaasbrok met letter.*letter S/);
+  assert.equal(editableFolderOrderText('Handmatige bestelling met eigen afspraken'), null);
+  assert.equal(editableFolderOrderText('BEDRIJF EN CONTACT\nGEKOZEN SINTERKLAASPRODUCTEN\nOnbekende invoer\nPRIJSINDICATIE\n€ 10,00'), null);
+});

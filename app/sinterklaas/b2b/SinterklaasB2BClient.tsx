@@ -5,6 +5,8 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import styles from "./B2BOrders.module.css";
 import B2BProductText from "./B2BProductText";
 import B2BConfirmationDialog, { customerConfirmationSent, shouldOfferCustomerConfirmation } from "./B2BConfirmationDialog";
+import B2BApprovalDialog from "./B2BApprovalDialog";
+import { editableFolderOrderText } from "../../lib/businessFolderOrderText";
 import { businessSeasonColors, businessSeasons, orderBelongsToSeason, seasonLabel, type BusinessSeason } from "../../lib/businessSeasons";
 import { christmasProducts } from "../../kerst-voor-bedrijven/christmasProducts";
 import { BUSINESS_FOLDER_PRICE_TIERS } from "../../lib/business-folder-pricing";
@@ -288,6 +290,9 @@ function serializeOrderText(lines: B2BProductLine[], otherText: string) {
 function matchCatalogDescription(description: string) {
   const withLogo = / · eigen logo$/i.test(description);
   const cleanDescription = description.replace(/ · eigen logo$/i, "");
+  const letter = cleanDescription.match(/^Chocolade spuitletters · spuitletter [A-Z] (klein|groot) · /i);
+  if (letter) return { product: catalogProduct("chocoladeletter")!, choice: letter[1].toLowerCase() === "groot" ? "Groot" : "Klein", withLogo };
+  if (/^Chocolade vormletter S · vormletter S groot · /i.test(cleanDescription)) return { product: catalogProduct("chocolade-vormletter")!, choice: "", withLogo };
   for (const product of PRODUCT_CATALOG) {
     for (const choice of productHasLetterChoice(product) ? productChoiceCandidates(product) : choicesForProduct(product)) {
       const label = visibleChoiceLabel(product, choice);
@@ -303,8 +308,10 @@ function matchCatalogDescription(description: string) {
   return null;
 }
 
-function parseOrderText(value: string) {
+function parseOrderText(value: string, preservePrices = false): { productLines: B2BProductLine[]; otherText: string; originalProductTotal: number } {
   if (!value.startsWith(`${PRODUCT_SECTION_HEADING}\n`)) {
+    const editable = editableFolderOrderText(value);
+    if (editable) return parseOrderText(editable, true);
     return { productLines: [] as B2BProductLine[], otherText: value, originalProductTotal: 0 };
   }
 
@@ -330,6 +337,7 @@ function parseOrderText(value: string) {
   });
   const quantities = productQuantities(savedProductLines);
   const productLines = savedProductLines.map((line) => {
+    if (preservePrices) return line;
     const automaticPrice = automaticPriceBreakdown(line, quantities);
     if (!automaticPrice) return line;
     const storedPrice = moneyNumber(line.unitPriceEx);
@@ -884,7 +892,11 @@ function B2BOrderForm({
     try {
       const stored = sessionStorage.getItem(draftKey);
       const draft = stored ? JSON.parse(stored) : null;
-      if (draft?.form && typeof draft.form.customerName === "string" && Array.isArray(draft.form.productLines) && Array.isArray(draft.form.letterLines)) {
+      const outdatedFolderDraft = initialOrder && editableFolderOrderText(initialOrder.orderText) && draft?.productFormatVersion !== 1;
+      const changedOrder = initialOrder && draft?.orderRevision !== undefined && draft.orderRevision !== initialOrder.updatedAt;
+      if (draft?.form && (outdatedFolderDraft || changedOrder)) {
+        setDraftNotice("De opgeslagen bestelling is opnieuw geladen, inclusief producten. Een ouder reserveconcept is niet overgenomen.");
+      } else if (draft?.form && typeof draft.form.customerName === "string" && Array.isArray(draft.form.productLines) && Array.isArray(draft.form.letterLines)) {
         setForm({ ...formStateFromOrder(initialOrder, season), ...draft.form });
         setManualTotal(Boolean(draft.manualTotal));
         if (draft.selectionVersion === 2 && draft.productDraft) setProductDraft(draft.productDraft);
@@ -900,11 +912,11 @@ function B2BOrderForm({
   useEffect(() => {
     if (!draftReady) return;
     try {
-      sessionStorage.setItem(draftKey, JSON.stringify({ form, manualTotal, productDraft, letterDraft, selectionVersion: 2 }));
+      sessionStorage.setItem(draftKey, JSON.stringify({ form, manualTotal, productDraft, letterDraft, selectionVersion: 2, productFormatVersion: 1, orderRevision: initialOrder?.updatedAt || "" }));
     } catch {
       setDraftNotice("Dit tabblad kan geen reserveconcept bewaren. Houd het formulier open totdat opslaan is gelukt.");
     }
-  }, [draftKey, draftReady, form, manualTotal, productDraft, letterDraft]);
+  }, [draftKey, draftReady, form, manualTotal, productDraft, letterDraft, initialOrder?.updatedAt]);
 
   useEffect(() => {
     if (message) {
@@ -1441,7 +1453,7 @@ function B2BOrderEditor({ order, season, onClose, onSaved }: Readonly<{
   </>;
 }
 
-function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryConfirmation, onCustomerConfirmation }: Readonly<{
+function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryConfirmation, onCustomerConfirmation, onApprove }: Readonly<{
   order: SinterklaasB2BOrder;
   updatingId: string;
   onToggle: (order: SinterklaasB2BOrder, key: "entered" | "productionScheduled" | "productionDone" | "letterProductionDone" | "packed" | "delivered" | "logoChecked" | "textChecked" | "packagingChecked") => void;
@@ -1449,6 +1461,7 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
   onDelete: (order: SinterklaasB2BOrder) => void;
   onRetryConfirmation: (order: SinterklaasB2BOrder) => void;
   onCustomerConfirmation: (order: SinterklaasB2BOrder) => void;
+  onApprove: (order: SinterklaasB2BOrder) => void;
 }>) {
   const [expanded, setExpanded] = useState(false);
   const parsedOrder = parseOrderText(order.orderText);
@@ -1480,6 +1493,7 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
       </div>
       <div>
         <span className={styles.status} data-status={order.cancelled ? "geannuleerd" : order.status}>{statusLabel}</span>
+        {!archived && !order.cancelled && (order.status === "aanvraag" || order.status === "offerte") && <button type="button" className={styles.approveLink} aria-label={`Aanvraag goedkeuren van ${order.customerName}`} onClick={() => onApprove(order)}>Goedkeuren →</button>}
         {order.status === "akkoord" && !order.cancelled && <p className={styles.next} style={order.entered ? { color: "#52725c" } : undefined}>{order.entered ? "✓ Ingevoerd" : "! Nog invoeren"}</p>}
         {order.confirmationMail?.customer?.sentAt && <p className={`${styles.next} ${customerConfirmationSent(order) ? styles.sent : ""}`}>{customerConfirmationSent(order) ? "✓ Klant gemaild" : "Mail bijwerken"}</p>}
       </div>
@@ -1552,6 +1566,7 @@ export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ sea
     null
   );
   const [confirmationTarget, setConfirmationTarget] = useState<SinterklaasB2BOrder | null>(null);
+  const [approvalTarget, setApprovalTarget] = useState<SinterklaasB2BOrder | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SinterklaasB2BOrder | null>(null);
   const [deleteReason, setDeleteReason] = useState("");
   const [deleteReasonNote, setDeleteReasonNote] = useState("");
@@ -1671,6 +1686,23 @@ export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ sea
     const offerConfirmation = shouldOfferCustomerConfirmation(order, editingOrder);
     closeOrderDialog();
     if (offerConfirmation) setConfirmationTarget(order);
+  }
+
+  async function approveOrder(order: SinterklaasB2BOrder) {
+    setUpdatingId(`${order.id}-approval`);
+    setError("");
+    try {
+      // A status-only patch preserves the saved products, quoted price and
+      // original inquiry. The existing server flow sends the internal backup.
+      const saved = await updateB2BOrder(order.id, { status: "akkoord" });
+      setOrders(current => updateOrderList(current, saved));
+      setApprovalTarget(null);
+      setSaveNotice(`Bestelling voor ${saved.customerName} is definitief.`);
+      if (saved.confirmationEmailError) setError(saved.confirmationEmailError);
+      setConfirmationTarget(saved);
+    } finally {
+      setUpdatingId("");
+    }
   }
 
   async function resendConfirmation(order: SinterklaasB2BOrder) {
@@ -1810,7 +1842,7 @@ export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ sea
             <div className={styles.month}><h2>{monthLabel(key)}</h2><span>{group.length} {group.length === 1 ? "bestelling" : "bestellingen"}</span></div>
             {group.map(order => <B2BOrderRow key={order.id} order={order} updatingId={updatingId} onToggle={toggleStatus} onEdit={openEditOrderDialog}
               onDelete={nextOrder => { setError(""); setDeleteTarget(nextOrder); setDeleteReason(""); setDeleteReasonNote(""); }}
-              onRetryConfirmation={nextOrder => void resendConfirmation(nextOrder)} onCustomerConfirmation={setConfirmationTarget} />)}
+              onRetryConfirmation={nextOrder => void resendConfirmation(nextOrder)} onCustomerConfirmation={setConfirmationTarget} onApprove={setApprovalTarget} />)}
           </section>)}
           {!loading && visibleOrders.length < 1 && <p className={styles.empty}>Geen B2B-bestellingen gevonden.</p>}
         </section>
@@ -1818,6 +1850,7 @@ export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ sea
       </>}
       </div>
       {confirmationTarget && <B2BConfirmationDialog key={confirmationTarget.id} order={confirmationTarget} onClose={() => setConfirmationTarget(null)} onEdit={nextOrder => { setConfirmationTarget(null); openEditOrderDialog(nextOrder); }} onUpdated={nextOrder => { setOrders(current => updateOrderList(current, nextOrder)); setSaveNotice(customerConfirmationSent(nextOrder) ? `Klantbevestiging voor ${nextOrder.customerName} verstuurd.` : `Mailstatus voor ${nextOrder.customerName} bijgewerkt.`); }}/>}
+      {approvalTarget && <B2BApprovalDialog key={approvalTarget.id} order={approvalTarget} productText={nextOrder => compactOrderText(nextOrder.orderText)} totalLabel={nextOrder => money(effectiveOrderTotal(nextOrder))} onClose={() => setApprovalTarget(null)} onEdit={nextOrder => { setApprovalTarget(null); openEditOrderDialog(nextOrder); }} onApprove={approveOrder} />}
       {deleteTarget && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[#1a1815]/50 p-4" role="dialog" aria-modal="true" aria-label="Bestelling verwijderen">
         <div className="w-full max-w-lg space-y-3 border border-[#e4ded5] bg-white p-4 shadow-2xl">
           <h2 className="text-lg font-black">Bestelling van {deleteTarget.customerName} verwijderen?</h2>

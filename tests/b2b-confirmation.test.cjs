@@ -96,3 +96,48 @@ test('the API reads the preview and sends only an order ID and reviewed version,
   await api.sendB2BCustomerConfirmation('example', 'v1');
   assert.deepEqual(calls, [{ id: 'example', previewCustomerConfirmation: true }, { id: 'example', sendCustomerConfirmation: true, confirmationVersion: 'v1' }]);
 });
+
+function approvalDialog(latest, failure) {
+  const states = [], refs = [], depsSeen = [], effects = [], calls = [];
+  let cursor = 0, refCursor = 0, effectCursor = 0, closed = 0;
+  const loaded = load('app/sinterklaas/b2b/B2BApprovalDialog.tsx', {
+    react: { ...React,
+      useState(value) { const i=cursor++; if (!(i in states)) states[i]=typeof value==='function'?value():value; return [states[i],next=>{ states[i]=typeof next==='function'?next(states[i]):next; }]; },
+      useRef(value) { return refs[refCursor++] ||= {current:value}; },
+      useEffect(callback,deps) { const i=effectCursor++; if (!depsSeen[i] || deps.some((dep,j)=>dep!==depsSeen[i][j])) { depsSeen[i]=deps; effects.push(callback); } },
+    },
+    '../sinterklaasApi': { fetchB2BOrders: async () => { calls.push({kind:'read'}); if (failure) throw new Error(failure); return [latest]; } },
+    '../../lib/businessSeasons': load('app/lib/businessSeasons.ts'),
+    './B2BOrders.module.css': { default: new Proxy({}, {get:(_,key)=>key}) },
+  }, { document: { documentElement: {style:{overflow:''}} } });
+  const initial = {...latest, orderText:'Old order', totalExVat:'1.00'};
+  return { calls, get closed(){return closed;},
+    render() { cursor=refCursor=effectCursor=0; return loaded.default({order:initial, productText:o=>o.orderText, totalLabel:o=>o.totalExVat, onClose(){closed++;}, onEdit(){}, onApprove:async o=>{calls.push({kind:'approve',order:o});} }); },
+    async flush(){while(effects.length) effects.shift()(); await new Promise(setImmediate);},
+  };
+}
+function inquiry(overrides={}) {return order({status:'aanvraag',year:'2026',department:'bakkerij',letterLines:[],cancelled:false,...overrides});}
+test('quick approval reads the current saved order, requires a double-check and prevents double clicks',async()=>{
+  const latest=inquiry({orderText:'60 speculaaspakketten · letter S',totalExVat:'690.60'});
+  const ui=approvalDialog(latest); ui.render(); await ui.flush();
+  const button=()=>find(ui.render(),n=>n.type==='button'&&n.props.children==='Ja, maak definitief');
+  assert.equal(button().props.disabled,true); button().props.onClick(); await ui.flush();
+  assert.equal(ui.calls.filter(c=>c.kind==='approve').length,0);
+  assert.ok(JSON.stringify(ui.render()).includes('60 speculaaspakketten'));
+  find(ui.render(),n=>n.type==='input'&&n.props.type==='checkbox').props.onChange({target:{checked:true}});
+  assert.equal(button().props.disabled,false);
+  const action=button(); action.props.onClick(); action.props.onClick(); await ui.flush();
+  assert.equal(ui.calls.filter(c=>c.kind==='approve').length,1);
+  assert.equal(ui.calls.find(c=>c.kind==='approve').order,latest);
+});
+test('declining approval, a missing delivery date and a failed refresh never approve or mail',async()=>{
+  const ui=approvalDialog(inquiry()); ui.render(); await ui.flush();
+  find(ui.render(),n=>n.type==='button'&&n.props.children==='Annuleren').props.onClick();
+  assert.equal(ui.closed,1); assert.equal(ui.calls.length,1); assert.equal(ui.calls[0].kind,'read');
+  for(const candidate of [approvalDialog(inquiry({deliveryDate:''})),approvalDialog(inquiry(),'Connection unavailable'),approvalDialog(inquiry({status:'akkoord'}))]) {
+    candidate.render(); await candidate.flush();
+    assert.equal(find(candidate.render(),n=>n.type==='button'&&n.props.children==='Ja, maak definitief').props.disabled,true);
+    assert.ok(find(candidate.render(),n=>n.props?.role==='alert'));
+    assert.equal(candidate.calls.filter(c=>c.kind==='approve').length,0);
+  }
+});
