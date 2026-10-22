@@ -22,18 +22,20 @@ const BREAD_PIXEL_HEIGHT = PIXEL_WIDTH;
 
 let fontsReady = false;
 
-function publicAsset(...parts: string[]) {
-  return path.join(process.cwd(), "public", ...parts);
+// Keep dynamic paths inside the font directory. A generic public/... helper
+// causes file tracing to bundle every product photo and video into the API.
+function fontAsset(file: string) {
+  return path.join(process.cwd(), "public", "fonts", file);
 }
 
 function registerFonts() {
   if (fontsReady) return;
-  GlobalFonts.registerFromPath(publicAsset("fonts", "GothamLight.otf"), "StrikGothamLight");
-  GlobalFonts.registerFromPath(publicAsset("fonts", "Gotham Bold.otf"), "StrikGothamBold");
-  GlobalFonts.registerFromPath(publicAsset("fonts", "GothamBlack.otf"), "StrikGothamBlack");
-  GlobalFonts.registerFromPath(publicAsset("fonts", "GothamCondensed-Book.otf"), "StrikGothamCondensedBook");
-  GlobalFonts.registerFromPath(publicAsset("fonts", "GothamCondensed-Bold.otf"), "StrikGothamCondensedBold");
-  GlobalFonts.registerFromPath(publicAsset("fonts", "Overpass-Bold.ttf"), "StrikPriceCurrency");
+  GlobalFonts.registerFromPath(fontAsset("GothamLight.otf"), "StrikGothamLight");
+  GlobalFonts.registerFromPath(fontAsset("Gotham Bold.otf"), "StrikGothamBold");
+  GlobalFonts.registerFromPath(fontAsset("GothamBlack.otf"), "StrikGothamBlack");
+  GlobalFonts.registerFromPath(fontAsset("GothamCondensed-Book.otf"), "StrikGothamCondensedBook");
+  GlobalFonts.registerFromPath(fontAsset("GothamCondensed-Bold.otf"), "StrikGothamCondensedBold");
+  GlobalFonts.registerFromPath(fontAsset("Overpass-Bold.ttf"), "StrikPriceCurrency");
   fontsReady = true;
 }
 
@@ -147,19 +149,19 @@ async function renderCard(card: PriceCard) {
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, PIXEL_WIDTH, PIXEL_HEIGHT);
 
-  const logoPromise = loadImage(publicAsset("STRIK_LOGO_2021_BW.png"));
+  const logoPromise = loadImage(path.join(process.cwd(), "public", "STRIK_LOGO_2021_BW.png"));
   const shownAllergens = card.allergens.slice(0, 8);
   const allergenPromise = Promise.all(
     shownAllergens.map((allergen) =>
-      loadImage(publicAsset("allergens", `${allergen}.svg`))
+      loadImage(path.join(process.cwd(), "public", "allergens", `${allergen}.svg`))
     )
   );
   const themePromise = card.theme === "geen"
     ? Promise.resolve(null)
     : loadImage(
         card.theme === "sint"
-          ? publicAsset("APP_icons_strik_SINT.svg")
-          : publicAsset("evaluation-icons", "kerst.svg")
+          ? path.join(process.cwd(), "public", "APP_icons_strik_SINT.svg")
+          : path.join(process.cwd(), "public", "evaluation-icons", "kerst.svg")
       );
   const [logo, allergenIcons, themeIcon] = await Promise.all([
     logoPromise,
