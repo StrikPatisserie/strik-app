@@ -81,3 +81,21 @@ test('Sint letter rules retain quantities and pricing when review is revisited',
   assert.equal(ui.calls[0].letterLines.length, 1); assert.equal(ui.calls[0].letterLines[0].quantity, 25);
   assert.ok(ui.calls[0].totalExVat); assert.match(ui.calls[0].orderText, /25/);
 });
+
+test('speculaas packages retain a chosen letter through entry, review and reopening; old packages retain S', async () => {
+  const ui = entry(); ui.field('Bedrijfsnaam / klantnaam *', 'Voorbeeld pakket'); ui.button('Verder naar producten →');
+  const product = sint.products.find(item => item.id === 'speculaasbrok-met-letter');
+  ui.field('Product', product.id); ui.field('Variant', product.variants[1].label);
+  ui.field('Letter bij speculaasbrok', 'M'); ui.field('Aantal producten', '60'); ui.button('+ Product toevoegen');
+  ui.button('Bestelling controleren →'); await ui.submit();
+  assert.equal(ui.calls.length, 1); assert.match(ui.calls[0].orderText, /letter M/);
+  const saved = { ...ui.calls[0], id: 'existing', folderQuote: null };
+  const reopened = entry('sint', saved);
+  const selectedLetter = nodes(reopened.render(), node => node.type === 'select' && node.props['aria-label']?.startsWith('Letter in '))[0];
+  assert.equal(selectedLetter.props.value, 'M');
+  const old = { ...saved, orderText: saved.orderText.replace(' · letter M', '') };
+  const original = old.orderText;
+  const legacy = entry('sint', old);
+  assert.equal(nodes(legacy.render(), node => node.type === 'select' && node.props['aria-label']?.startsWith('Letter in '))[0].props.value, 'S');
+  assert.equal(old.orderText, original, 'opening an old request does not rewrite the stored order');
+});

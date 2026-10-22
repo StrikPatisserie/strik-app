@@ -215,3 +215,6 @@
   .page input:not([type="checkbox"]), .page select, .page textarea { min-height: 44px; font-size: 16px; }
   .line input { font-size: 16px !important; }
 }
+
+.packageLetterField { display:flex; align-items:center; gap:8px; margin-top:6px; color:var(--b2b-muted); font-size:11px; }
+.packageLetterField select { width:70px; min-height:32px; padding:5px 8px; }

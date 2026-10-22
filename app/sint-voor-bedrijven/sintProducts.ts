@@ -127,7 +127,7 @@ export const products: Product[] = [
   {
     id: "speculaasbrok-met-letter",
     name: "Speculaasbrok met letter",
-    description: "Speculaasbrok met een kleine of grote chocoladeletter. Kies de brok met of zonder amandel.",
+    description: "Speculaasbrok met een kleine of grote chocoladeletter. Kies met of zonder amandel en je eigen letter van A tot Z.",
     image: "/sinterklaas/Pakketje 2 brok letter.jpg",
     shelfLifeInfo: [
       "Speculaasbrok · t.g.t. ca. 30 dagen",
@@ -299,8 +299,28 @@ export function productUnitPrice(product: Product, tier: PriceTier, includeVat: 
   return includeVat ? roundUpFiveCents(priceEx * FOOD_VAT_FACTOR) : roundCents(priceEx);
 }
 
+export const PACKAGE_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+
+export function productHasLetterChoice(product: Product) {
+  return product.id === "speculaasbrok-met-letter";
+}
+
+export function productVariantChoice(product: Product, choice?: string) {
+  const value = choice || product.variants?.[0]?.label || "";
+  return productHasLetterChoice(product) ? value.replace(/ · letter [A-Z]$/, "") : value;
+}
+
+export function productLetterChoice(product: Product, choice?: string) {
+  return productHasLetterChoice(product) ? choice?.match(/ · letter ([A-Z])$/)?.[1] || "S" : "";
+}
+
+export function productChoiceWithLetter(product: Product, choice: string, letter: string) {
+  if (!productHasLetterChoice(product)) return choice;
+  return `${productVariantChoice(product, choice)} · letter ${/^[A-Z]$/.test(letter) ? letter : "S"}`;
+}
+
 function selectedProductVariant(product: Product, choice?: string) {
-  return product.variants?.find((variant) => variant.label === choice) || product.variants?.[0];
+  return product.variants?.find((variant) => variant.label === productVariantChoice(product, choice)) || product.variants?.[0];
 }
 
 export function duoChoice(first: string, second: string) {
@@ -328,6 +348,7 @@ export function productChoiceLabel(product: Product, choice?: string) {
     const [first, second] = selectedDuoOptions(product, choice);
     return `${first.label} + ${second.label}`;
   }
+  if (productHasLetterChoice(product)) return productChoiceWithLetter(product, choice || defaultProductChoice(product), productLetterChoice(product, choice));
   return choice || product.variants?.[0]?.label || product.options?.[0] || "Standaard";
 }
 
@@ -360,7 +381,11 @@ export function productChoiceCandidates(product: Product) {
       product.duoOptions!.slice(firstIndex).map((second) => duoChoice(first.label, second.label))
     );
   }
-  if (product.variants?.length) return product.variants.map((variant) => variant.label);
+  if (product.variants?.length) {
+    const variants = product.variants.map(variant => variant.label);
+    // Older folder requests did not include a letter: they retain the original S.
+    return productHasLetterChoice(product) ? [...variants, ...variants.flatMap(choice => PACKAGE_LETTERS.map(letter => productChoiceWithLetter(product, choice, letter)))] : variants;
+  }
   if (product.options?.length) return product.options;
   return [""];
 }
