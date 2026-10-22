@@ -123,7 +123,12 @@ function strik_personnel_mail_sanitize_order($order) {
 
     $id = isset($order['id']) ? strik_cupcake_text($order['id'], 180) : '';
     $subject = isset($order['subject']) ? strik_cupcake_text($order['subject'], 240) : '';
-    $body = isset($order['body']) ? strik_cupcake_textarea($order['body']) : '';
+    $mail_type = isset($order['mailType']) ? strik_cupcake_text($order['mailType'], 60) : '';
+    $is_deposit = $mail_type === 'cash-deposit-summary';
+    $body = isset($order['body']) ? strik_cupcake_textarea($order['body'], $is_deposit ? 40000 : STRIK_PERSONNEL_MAIL_MAX_BODY_LENGTH) : '';
+    $html_body = $is_deposit && isset($order['htmlBody']) && is_string($order['htmlBody']) && strlen($order['htmlBody']) <= 300000
+        ? wp_kses_post($order['htmlBody'])
+        : '';
 
     if ($id === '' || $subject === '' || $body === '') {
         return null;
@@ -131,7 +136,7 @@ function strik_personnel_mail_sanitize_order($order) {
 
     return array(
         'id' => $id,
-        'mailType' => isset($order['mailType']) ? strik_cupcake_text($order['mailType'], 60) : '',
+        'mailType' => $mail_type,
         'employeeName' => isset($order['employeeName']) ? strik_cupcake_text($order['employeeName'], 180) : '',
         'firstName' => isset($order['firstName']) ? strik_cupcake_text($order['firstName'], 80) : '',
         'yearsLabel' => isset($order['yearsLabel']) ? strik_cupcake_text($order['yearsLabel'], 40) : '',
@@ -152,6 +157,7 @@ function strik_personnel_mail_sanitize_order($order) {
         ),
         'subject' => $subject,
         'body' => $body,
+        'htmlBody' => $html_body,
         'deliveryShop' => isset($order['deliveryShop']) ? strik_cupcake_text($order['deliveryShop'], 120) : '',
         'deliveryDate' => isset($order['deliveryDate']) ? strik_cupcake_text($order['deliveryDate'], 40) : '',
         'deliveryDateLabel' => isset($order['deliveryDateLabel']) ? strik_cupcake_text($order['deliveryDateLabel'], 160) : '',
@@ -233,7 +239,8 @@ function strik_cupcake_send_order($order) {
 
 if (!function_exists('strik_personnel_mail_send_order')) {
 function strik_personnel_mail_send_order($order) {
-    $headers = array('Content-Type: text/plain; charset=UTF-8');
+    $is_html = $order['mailType'] === 'cash-deposit-summary' && !empty($order['htmlBody']);
+    $headers = array($is_html ? 'Content-Type: text/html; charset=UTF-8' : 'Content-Type: text/plain; charset=UTF-8');
 
     if (!empty($order['ccRecipients'])) {
         $headers[] = 'Cc: ' . implode(', ', $order['ccRecipients']);
@@ -242,7 +249,7 @@ function strik_personnel_mail_send_order($order) {
     return wp_mail(
         $order['recipients'],
         $order['subject'],
-        $order['body'],
+        $is_html ? $order['htmlBody'] : $order['body'],
         $headers
     );
 }

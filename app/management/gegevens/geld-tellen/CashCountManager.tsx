@@ -3446,6 +3446,7 @@ export default function CashCountManager() {
               <div>
                 <p className="text-[0.56rem] font-black uppercase tracking-[0.08em] text-[#8a6a35]">
                   Naar administratie@strik-banket.nl
+                  <span className="mt-1 block font-semibold normal-case tracking-normal">Kopie naar eva@strik-patisserie.nl</span>
                 </p>
                 <h2
                   id="deposit-report-title"

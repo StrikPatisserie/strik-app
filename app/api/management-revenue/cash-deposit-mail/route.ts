@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
+import { createCashDepositMail, type CashDepositMailEntry } from "@/app/lib/cashDepositMail";
 import {
   sendPersonnelMailOrders,
   type PersonnelMailOrder,
@@ -130,7 +131,7 @@ function normalizeRows(rows: unknown) {
 function normalizeReportEntries(entries: unknown) {
   if (!Array.isArray(entries)) return [];
 
-  return entries.slice(0, 80).flatMap((entry) => {
+  return entries.slice(0, 80).flatMap<CashDepositMailEntry & { key: string; label: string }>((entry) => {
     const source = entry && typeof entry === "object"
       ? entry as CashDepositReportEntry
       : null;
@@ -168,81 +169,6 @@ function normalizeReportEntries(entries: unknown) {
   });
 }
 
-function formatReportedDate(date: Date) {
-  return new Intl.DateTimeFormat("nl-NL", {
-    timeZone: "Europe/Amsterdam",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(date);
-}
-
-function createBatchMailBody(entries: ReturnType<typeof normalizeReportEntries>, reportedAt: Date) {
-  const byWeek = new Map<string, typeof entries>();
-  for (const entry of entries) {
-    const key = `${entry.year}-W${String(entry.week).padStart(2, "0")}`;
-    byWeek.set(key, [...(byWeek.get(key) || []), entry]);
-  }
-  const totalDeposit = entries.reduce((total, entry) => total + entry.amount, 0);
-  const lines = [
-    `Storting gemeld op ${formatReportedDate(reportedAt)}`,
-    "",
-  ];
-
-  for (const weekEntries of byWeek.values()) {
-    const first = weekEntries[0];
-    lines.push(`Week ${first.week} ${first.year} - ${first.weekLabel}`);
-    const byShop = new Map<string, typeof entries>();
-    for (const entry of weekEntries) {
-      byShop.set(entry.shop, [...(byShop.get(entry.shop) || []), entry]);
-    }
-    for (const [shop, shopEntries] of byShop) {
-      const total = shopEntries.reduce((sum, entry) => sum + entry.amount, 0);
-      const breakdown = (["ice", "patisserie"] as const).flatMap((kind) => {
-        const selected = shopEntries.filter((entry) => entry.kind === kind);
-        return selected.length
-          ? [`${formatMoney(selected.reduce((sum, entry) => sum + entry.amount, 0))} = ${kind === "ice" ? "ijs" : "patisserie"}`]
-          : [];
-      });
-      lines.push(`${shop}: ${formatMoney(total)} totaal gestort`);
-      lines.push(`  ${breakdown.join(" · ")}`);
-    }
-    lines.push("");
-  }
-
-  lines.push(`Totaal gestort: ${formatMoney(totalDeposit)}`);
-  lines.push("");
-  lines.push("Automatisch gemeld vanuit Geld tellen in de Strik Team app.");
-
-  return lines.join("\n").slice(0, 3900);
-}
-
-function createMailBody(
-  year: number,
-  week: number,
-  weekLabel: string,
-  rows: ReturnType<typeof normalizeRows>,
-  reportedAt: Date
-) {
-  const totalDeposit = rows.reduce((total, row) => total + row.depositAmount, 0);
-  const lines = [
-    `Storting gemeld op ${formatReportedDate(reportedAt)}`,
-    `Week ${week} ${year} - ${weekLabel}`,
-    "",
-  ];
-
-  rows.forEach((row) => {
-    lines.push(`${row.shop || "Onbekende winkel"}: ${formatMoney(row.depositAmount)}`);
-  });
-
-  lines.push("");
-  lines.push(`Totaal winkelstortingen: ${formatMoney(totalDeposit)}`);
-  lines.push("");
-  lines.push("Automatisch verstuurd vanuit de Strik Team app.");
-
-  return lines.join("\n").slice(0, 3900);
-}
-
 export async function POST(request: Request) {
   try {
     const input = (await request.json().catch(() => null)) as
@@ -256,7 +182,7 @@ export async function POST(request: Request) {
         (total, entry) => total + entry.amount,
         0
       );
-      const body = createBatchMailBody(reportEntries, reportedAt);
+      const { body, htmlBody } = createCashDepositMail(reportEntries, reportedAt);
       const hash = createHash("sha1")
         .update(JSON.stringify(reportEntries))
         .digest("hex")
@@ -275,8 +201,10 @@ export async function POST(request: Request) {
         daysUntil: 0,
         source: "drive",
         recipients: ADMINISTRATION_RECIPIENTS,
+        ccRecipients: ["eva@strik-patisserie.nl"],
         subject,
         body,
+        htmlBody,
         deliveryShop: "Administratie",
         deliveryDate: today,
         deliveryDateLabel: today,
@@ -292,7 +220,7 @@ export async function POST(request: Request) {
       return NextResponse.json({
         ok: true,
         message: result.sent.length
-          ? "Storting naar administratie gemaild."
+          ? "Storting naar administratie gemaild, met een kopie naar Eva."
           : "Deze stortingsmelding was al eerder gemaild.",
         sent: result.sent.length,
         skipped: result.skipped.length,
@@ -322,7 +250,7 @@ export async function POST(request: Request) {
       return jsonError("Weekstorting is nog niet compleet.", 409);
     }
 
-    const body = createMailBody(year, week, weekLabel, rows, reportedAt);
+    const { body, htmlBody } = createCashDepositMail(rows.map(row => ({ year, week, weekLabel, shop: row.shop, kind: "patisserie" as const, amount: row.depositAmount })), reportedAt);
     const hash = createHash("sha1")
       .update(JSON.stringify({ year, week, rows }))
       .digest("hex")
@@ -338,8 +266,10 @@ export async function POST(request: Request) {
       daysUntil: 0,
       source: "drive",
       recipients: ADMINISTRATION_RECIPIENTS,
+      ccRecipients: ["eva@strik-patisserie.nl"],
       subject,
       body,
+      htmlBody,
       deliveryShop: "Administratie",
       deliveryDate: "",
       deliveryDateLabel: weekLabel,
@@ -355,7 +285,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       message: result.sent.length
-        ? "Weekstorting naar administratie gemaild."
+        ? "Weekstorting naar administratie gemaild, met een kopie naar Eva."
         : "Deze weekstorting was al eerder gemaild.",
       sent: result.sent.length,
       skipped: result.skipped.length,

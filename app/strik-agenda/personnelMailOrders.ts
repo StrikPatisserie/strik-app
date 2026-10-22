@@ -42,6 +42,7 @@ export type PersonnelMailOrder = {
   ccRecipients?: string[];
   subject: string;
   body: string;
+  htmlBody?: string;
   deliveryShop: string;
   deliveryDate: string;
   deliveryDateLabel: string;
