@@ -30,7 +30,10 @@ export default function AppChrome({
     pathname === "/sint-voor-bedrijven" ||
     pathname === "/kerst-voor-bedrijven" ||
     pathname === "/lettershop" ||
-    pathname === "/menu-preview";
+    pathname === "/menu-preview" ||
+    pathname === "/bruidstaarten/agenda/voorbeeld" ||
+    pathname === "/bruidstaarten/agenda/voorbeeld/bevestiging" ||
+    pathname === "/bruidstaarten/voorbeeld";
   const isWelcomeArea = pathname === "/";
 
   if (isAuthArea || isPrintArea || isPublicCampaign) {
