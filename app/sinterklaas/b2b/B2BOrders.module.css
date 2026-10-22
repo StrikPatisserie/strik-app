@@ -270,6 +270,8 @@
 .letterMark { display: grid; place-items: center; width: 40px; height: 44px; flex-shrink: 0; border: 1px solid var(--b2b-border); border-radius: 7px; background: #fafbf8; font-size: 23px; font-weight: 600; }
 .itemTags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
 .itemTags span { border: 1px solid #d6dfce; border-radius: 4px; padding: 2px 6px; color: #354b32; background: #f0f5ea; font-size: 11px; font-weight: 500; }
+.itemTags span[data-exception="vegan"] { display: inline-flex; align-items: center; gap: 7px; min-height: 35px; padding: 6px 10px; border-color: #8ab791; border-radius: 6px; color: #20532e; background: #dcefdc; font-size: 14px; font-weight: 700; letter-spacing: .045em; text-transform: uppercase; }
+.itemTags svg { flex: 0 0 auto; }
 .cartQuantity label, .cartUnit label { display: grid; gap: 5px; }
 .cartQuantity label > span, .cartUnit label > span, .cartUnit > span, .cartAmount > span { display: none; }
 .cartQuantity input, .cartUnit input { width: 100%; text-align: right; font-variant-numeric: tabular-nums; padding: 9px 8px !important; }
