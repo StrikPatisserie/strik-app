@@ -1496,7 +1496,7 @@ function B2BOrderForm({
           <p className={styles.reviewNote}>{form.status === "akkoord" ? "Na opslaan kun je de klant een definitieve bevestiging mailen. De interne back-up gaat automatisch naar info@strik-patisserie.nl." : "Deze bestelling is nog niet definitief. Je kunt de fase later aanpassen."}</p>
         </section>
 
-        <aside className={styles.summary}>
+        <div className={styles.summaryColumn}><aside className={styles.summary}>
           <h2>Deze bestelling</h2>
           <div className={styles.summaryPair}><small>Klant</small><strong>{form.customerName || "Nog in te vullen"}</strong></div>
           <div className={styles.summaryPair}><small>Levering</small><strong>{form.deliveryMethod || "Nog af te spreken"}</strong><br />{deliveryWindowLabel(form)}</div>
@@ -1510,7 +1510,7 @@ function B2BOrderForm({
             <div className={styles.payableTotal}><span>Totaal excl. btw</span><strong>{money(total)}</strong></div>
             <details className={styles.totalAgreement}><summary>Totaalafspraak aanpassen</summary><label className={styles.field}>Afgesproken totaal excl. btw<input aria-label="Afgesproken totaal excl. btw" value={displayedTotalEx} onChange={event => { setManualTotal(true); setManualLogoBaseline(logosEx); setField("totalExVat", event.target.value); }} placeholder="Automatisch" /></label><p>Nieuwe logo’s worden altijd boven op de huidige productafspraak geteld.</p>{manualTotal && <button type="button" onClick={() => setManualTotal(false)}>Gebruik berekend totaal</button>}</details>
           </div>
-        </aside>
+        </aside></div>
         <div className={styles.feedback}>
           {draftNotice && <p role="status" className={styles.notice}>{draftNotice}</p>}
           {message && <p ref={messageRef} tabIndex={-1} role="alert" className={styles.error}>{message} Je invoer blijft bewaard.</p>}

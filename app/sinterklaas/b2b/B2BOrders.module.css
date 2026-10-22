@@ -152,6 +152,7 @@
 .extra summary { color: var(--b2b-muted); }
 .extra > div { margin-top: 15px; }
 .summary h2 { font-size: 14px; margin-bottom: 20px; }
+.summaryColumn { min-width: 0; align-self: stretch; }
 .summaryPair { margin-bottom: 18px; font-size: 12px; overflow-wrap: anywhere; }
 .summaryPair small { display: block; color: var(--b2b-muted); font-size: 11px; margin-bottom: 4px; }
 .summaryPair strong { font-weight: 500; }
