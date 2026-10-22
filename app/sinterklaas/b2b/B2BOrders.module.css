@@ -84,6 +84,7 @@
 .next { display: block; margin-top: 7px !important; color: #8a642b; font-size: 11px; }
 .sent { color: #52725c; }
 .amount { text-align: right; white-space: nowrap; font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.amount small { display: block; margin-top: 3px; color: var(--b2b-muted); font-size: 10px; font-weight: 400; }
 .rowActions { display: flex; justify-content: flex-end; align-items: center; gap: 4px; }
 .approveLink { display: block; margin-top: 8px; padding: 3px 0; border: 0; background: transparent; color: var(--b2b-accent); font-size: 11px; font-weight: 600; text-align: left; }
 .approveLink:hover { text-decoration: underline; text-underline-offset: 3px; }
@@ -287,6 +288,8 @@
 .cartFoot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 7px; padding: 13px 16px; border-top: 1px solid var(--b2b-border); background: #fafbf8; font-size: 12px; }
 .cartFoot > span { color: var(--b2b-muted); }
 .cartFoot strong { font-weight: 600; }
+.cartFoot > div { display: grid; gap: 4px; text-align: right; }
+.cartFoot > div > span { color: var(--b2b-muted); font-size: 11px; }
 .cartBulk { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin: 10px 0 18px; font-size: 11px; color: var(--b2b-muted); }
 .cartBulk button { min-height: 40px; text-decoration: underline; text-underline-offset: 3px; }
 .cartBulk button:hover { color: var(--b2b-accent); }
@@ -307,6 +310,10 @@
 .payableTotal { margin-top: 10px; padding-top: 14px; border-top: 1px solid var(--b2b-border); }
 .payableTotal > span { font-size: 12px; }
 .payableTotal > strong { display: block; margin-top: 3px; font-size: 25px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.total h3 small { display: block; margin-top: 4px; color: var(--b2b-muted); font-size: 11px; font-weight: 400; }
+.inclusiveTotal { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 7px; margin-top: 14px; padding: 12px; border: 1px solid var(--b2b-border); border-radius: 7px; background: #f7f9f5; font-size: 12px; }
+.inclusiveTotal strong { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.inclusiveTotal small { grid-column: 1/-1; color: var(--b2b-muted); font-size: 10px; line-height: 1.5; }
 .totalAgreement { margin-top: 18px; font-size: 11px; color: var(--b2b-muted); }
 .totalAgreement > label { margin-top: 12px; }
 .totalAgreement p { margin-top: 10px; font-size: 11px; }

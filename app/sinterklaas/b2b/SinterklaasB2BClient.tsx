@@ -200,7 +200,9 @@ function automaticPriceBreakdown(
   const configured = configuredProduct(product, line.choice);
   const tier = tierFor(configured, Math.max(1, quantities.get(line.productId) || line.quantity));
   const basePrice = productUnitPrice(configured, tier, false);
-  const optionSurcharge = configured.fixedSurchargeIncl || 0;
+  // productUnitPrice already includes fixed options (such as the poem).
+  // Adding the retail surcharge here again charged it twice and mixed VAT bases.
+  const optionSurcharge = 0;
   const logoSurcharge = line.withLogo && productSupportsLogo(product, line.choice)
     ? productLogoPrice(false)
     : 0;
@@ -275,6 +277,25 @@ function productLinesTotal(lines: B2BProductLine[]) {
     (total, line) => total + Math.max(0, line.quantity) * moneyNumber(line.unitPriceEx),
     0
   ));
+}
+
+function productLinesTotalIncl(lines: B2BProductLine[]) {
+  const quantities = productQuantities(lines);
+  return roundCents(lines.reduce((total, line) => {
+    const automatic = automaticPriceBreakdown(line, quantities);
+    const product = catalogProduct(line.productId);
+    // Use the folder's inclusive unit price, rather than converting an already
+    // rounded exclusive subtotal back to VAT-inclusive prices (30 x 13.80 = 414).
+    // Matching saved quotes use this too; genuine price agreements stay intact.
+    if (product && automatic && Math.abs(moneyNumber(line.unitPriceEx) - automatic.unitPrice) < 0.005) {
+      const configured = configuredProduct(product, line.choice);
+      const tier = tierFor(configured, Math.max(1, quantities.get(line.productId) || line.quantity));
+      const unitIncl = roundCents(productUnitPrice(configured, tier, true) +
+        (line.withLogo && productSupportsLogo(product, line.choice) ? productLogoPrice(true) : 0));
+      return total + roundCents(line.quantity * unitIncl);
+    }
+    return total + roundCents(line.quantity * moneyNumber(line.unitPriceEx) * 1.09);
+  }, 0));
 }
 
 function logoTotal(lines: B2BProductLine[]) {
@@ -1141,12 +1162,14 @@ function B2BOrderForm({
   }
 
   const calculatedTotalEx = productLinesTotal(form.productLines);
+  const calculatedTotalIncl = productLinesTotalIncl(form.productLines);
   const logosEx = logoTotal(form.productLines);
   const logosCount = form.productLines.filter(line => line.withLogo).reduce((sum, line) => sum + line.quantity, 0);
   const productsEx = roundCents(calculatedTotalEx - logosEx);
   // An agreed product price remains intact; adding/removing logos always adjusts
   // its payable total rather than silently disappearing into a fixed override.
   const total = manualTotal ? roundCents(moneyNumber(form.totalExVat) + logosEx - manualLogoBaseline) : calculatedTotalEx;
+  const totalIncl = manualTotal ? roundCents(total * 1.09) : calculatedTotalIncl;
   const displayedTotalEx = form.productLines.length || manualTotal ? decimalInput(total) : "";
   const draftProduct = catalogProduct(productDraft.productId);
   const draftChoices = draftProduct ? choicesForProduct(draftProduct) : [];
@@ -1304,7 +1327,7 @@ function B2BOrderForm({
     const count = form.letterLines.length + productRows.length;
     return <div className={styles.cart} aria-label={editable ? "Bestelling aanpassen" : "Bestelling controleren"}>
       <div className={styles.cartHead}><h3>{count ? `Bestelling · ${count} ${count === 1 ? "regel" : "regels"}` : "Jouw bestelling"}</h3><span>{form.productLines.reduce((sum, line) => sum + line.quantity, 0)} artikelen</span></div>
-      {count > 0 && <div className={styles.cartColumns} aria-hidden="true"><span>Artikel</span><span>Aantal</span><span>Prijs / stuk<br/><small>excl. logo</small></span><span>Logo<br/><small>{money(productLogoPrice(false))} per stuk</small></span><span>Regeltotaal</span><span/></div>}
+      {count > 0 && <div className={styles.cartColumns} aria-hidden="true"><span>Artikel</span><span>Aantal</span><span>Prijs / stuk<br/><small>excl. btw en logo</small></span><span>Logo<br/><small>{money(productLogoPrice(false))} excl. btw</small></span><span>Regeltotaal<br/><small>excl. btw</small></span><span/></div>}
       {form.letterLines.map((line, index) => {
         const price = letterPriceLine(line, form.productLines);
         const base = price ? unitPriceWithoutLogo(price) : 0;
@@ -1334,7 +1357,7 @@ function B2BOrderForm({
         </div>;
       })}
       {!count && <p className={styles.cartEmpty}>Voeg chocoladeletters of andere producten toe met de knoppen hieronder.</p>}
-      {count > 0 && <div className={styles.cartFoot}><span>Alle bedragen excl. btw</span><strong>Subtotaal artikelen {money(calculatedTotalEx)}</strong></div>}
+      {count > 0 && <div className={styles.cartFoot}><span>Artikelprijzen hierboven zijn excl. btw</span><div><strong>{money(calculatedTotalEx)} excl. btw</strong><span>{money(calculatedTotalIncl)} incl. btw</span></div></div>}
     </div>;
   }
 
@@ -1505,9 +1528,10 @@ function B2BOrderForm({
             <option value="aanvraag">Aanvraag</option><option value="offerte">Offerte</option><option value="akkoord">Definitief · akkoord klant</option><option value="afgewezen">Niet doorgegaan</option>
           </select><small>Staat los van productie en invoer.</small></label>
           <div className={styles.total}>
-            <h3>Prijsopbouw</h3>
+            <h3>Prijsopbouw <small>excl. btw</small></h3>
             <dl className={styles.priceBreakdown}><div><dt>Producten</dt><dd>{money(productsEx)}</dd></div><div data-price-part="logos"><dt>Logo’s{logosCount > 0 && <small>{logosCount} × {money(productLogoPrice(false))}</small>}</dt><dd>{money(logosEx)}</dd></div>{manualTotal && <div><dt>Prijsafspraak</dt><dd>{money(roundCents(total - calculatedTotalEx))}</dd></div>}</dl>
             <div className={styles.payableTotal}><span>Totaal excl. btw</span><strong>{money(total)}</strong></div>
+            <div className={styles.inclusiveTotal} data-price-part="inclusive-total"><span>Totaal incl. 9% btw</span><strong>{money(totalIncl)}</strong><small>{manualTotal || form.productLines.some(line => line.manualPrice) ? "Inclusief eventuele prijsafspraken" : "Vergelijk met de folderprijs incl. btw."}</small></div>
             <details className={styles.totalAgreement}><summary>Totaalafspraak aanpassen</summary><label className={styles.field}>Afgesproken totaal excl. btw<input aria-label="Afgesproken totaal excl. btw" value={displayedTotalEx} onChange={event => { setManualTotal(true); setManualLogoBaseline(logosEx); setField("totalExVat", event.target.value); }} placeholder="Automatisch" /></label><p>Nieuwe logo’s worden altijd boven op de huidige productafspraak geteld.</p>{manualTotal && <button type="button" onClick={() => setManualTotal(false)}>Gebruik berekend totaal</button>}</details>
           </div>
         </aside></div>
@@ -1590,7 +1614,7 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
         {order.status === "akkoord" && !order.cancelled && <p className={styles.next} style={order.entered ? { color: "#52725c" } : undefined}>{order.entered ? "✓ Ingevoerd" : "! Nog invoeren"}</p>}
         {order.confirmationMail?.customer?.sentAt && <p className={`${styles.next} ${customerConfirmationSent(order) ? styles.sent : ""}`}>{customerConfirmationSent(order) ? "✓ Klant gemaild" : "Mail bijwerken"}</p>}
       </div>
-      <div className={styles.amount}>{order.totalExVat.trim() || priceBreakdowns.length > 0 ? money(orderTotal) : "—"}</div>
+      <div className={styles.amount}>{order.totalExVat.trim() || priceBreakdowns.length > 0 ? <>{money(orderTotal)}<small>excl. btw</small></> : "—"}</div>
       <div className={styles.rowActions}>
         {!archived && <button type="button" onClick={() => onEdit(order)} className={styles.rowButton}>Wijzig</button>}
         <button type="button" aria-label={`Details ${order.customerName}`} aria-expanded={expanded} onClick={() => setExpanded(!expanded)} className={styles.chevron}>{expanded ? "⌃" : "⌄"}</button>

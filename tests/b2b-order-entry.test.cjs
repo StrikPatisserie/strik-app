@@ -24,6 +24,12 @@ const sint = load('app/sint-voor-bedrijven/sintProducts.ts', { '@/app/lib/busine
 const kerst = load('app/kerst-voor-bedrijven/christmasProducts.ts', { '@/app/lib/business-folder-pricing': pricing });
 const letters = load('app/sinterklaas/b2bLetterLines.ts');
 const folderOrderText = load('app/lib/businessFolderOrderText.ts');
+const quoteBuilder = load('app/lib/businessFolderQuote.ts', {
+  'node:crypto': require('node:crypto'),
+  '@/app/sint-voor-bedrijven/sintProducts': sint,
+  '@/app/kerst-voor-bedrijven/christmasProducts': kerst,
+  '@/app/lib/letter-pricing': load('app/lib/letter-pricing.ts'),
+}, { Buffer }).buildBusinessFolderQuote;
 function entry(season = 'sint', initialOrder = null) {
   const state = [], refs = [], effects = [], calls = [], updated = [], storage = new Map();
   let cursor = 0, refCursor = 0;
@@ -36,7 +42,7 @@ function entry(season = 'sint', initialOrder = null) {
     '../b2bLetterLines': letters,
     '../sinterklaasApi': { saveB2BOrder: async data => { calls.push(data); return { ...data, id: 'saved' }; } },
     './B2BOrders.module.css': { default: new Proxy({}, { get: (_, key) => key }) },
-  }, { crypto: require('node:crypto').webcrypto, sessionStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) }, HTMLInputElement: class {}, HTMLSelectElement: class {}, HTMLTextAreaElement: class {} }, '\nexports.Form = B2BOrderForm; exports.blank = createFormState; exports.parse = parseOrderText;');
+  }, { crypto: require('node:crypto').webcrypto, sessionStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) }, HTMLInputElement: class {}, HTMLSelectElement: class {}, HTMLTextAreaElement: class {} }, '\nexports.Form = B2BOrderForm; exports.blank = createFormState; exports.parse = parseOrderText; exports.prices = lines => { const priced = repriceProductLines(lines); return {ex: productLinesTotal(priced), incl: productLinesTotalIncl(priced), lines: priced}; };');
   function render() { cursor = refCursor = 0; return loaded.Form({ season, initialOrder, onSaved: order => updated.push(order), onCancel() {} }); }
   render(); effects.splice(0).forEach(effect => effect()); render(); effects.length = 0;
   function field(name) {
@@ -44,7 +50,7 @@ function entry(season = 'sint', initialOrder = null) {
     return nodes(tree, n => ['input','select','textarea'].includes(n.type) && n.props['aria-label'] === name)[0]
       || nodes(nodes(tree, n => n.type === 'label' && label(n.props.children).startsWith(name))[0], n => ['input','select','textarea'].includes(n.type))[0];
   }
-  return { render, calls, updated, blank: loaded.blank, parse: loaded.parse,
+  return { render, calls, updated, blank: loaded.blank, parse: loaded.parse, prices: loaded.prices,
     check(name, checked) { const input = field(name); assert.ok(input, `Checkbox: ${name}`); input.props.onChange({ target: { checked } }); },
     field(name, value) { const input = field(name); assert.ok(input, `Field: ${name}`); input.props.onChange({ target: { value } }); },
     button(name) { const button = nodes(render(), n => n.type === 'button' && label(n) === name)[0]; assert.ok(button, `Button: ${name}`); const event = { defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } }; button.props.onClick?.(event); return event; },
@@ -123,8 +129,9 @@ test('an existing folder request opens as editable products and preserves its or
   assert.equal(order.orderText, raw, 'opening/editing never mutates the original inquiry object');
 });
 
-function addLetters(ui, quantity, withLogo, character='S') {
-  ui.field('Letter', character); ui.field('Chocolade', 'melk'); ui.field('Soort', 'spuit'); ui.field('Formaat', 'groot'); ui.field('Aantal letters', String(quantity));
+function addLetters(ui, quantity, withLogo, character='S', chocolate='melk', vegan=false) {
+  ui.field('Letter', character); ui.field('Chocolade', chocolate); ui.field('Soort', 'spuit'); ui.field('Formaat', 'groot'); ui.field('Aantal letters', String(quantity));
+  if(vegan) ui.check('Vegan',true);
   ui.check('Eigen logo op deze letters', withLogo); ui.button('+ Letter toevoegen');
 }
 function addPackage(ui, quantity, withLogo=false) {
@@ -225,6 +232,8 @@ test('an older general logo agreement is priced immediately when editing: 366.00
   assert.match(label(rows[0]),/Spuitletter PMelk.*29 × €\s?12,20 \+ €\s?13,34 logo/);
   assert.match(label(rows[1]),/Puur.*Vegan/);assert.doesNotMatch(label(rows[1]),/Vrij van/i);
   assert.equal(nodes(ui.render(),n=>n.props?.['aria-label']==='Afgesproken totaal excl. btw')[0].props.value,'379.80');
+  const inclusive=nodes(ui.render(),n=>n.props?.['data-price-part']==='inclusive-total')[0];
+  assert.match(label(inclusive),/Totaal incl\. 9% btw€\s?414,00/,'show the same inclusive total as the public folder, without a reverse-conversion rounding loss');
   assert.equal(nodes(ui.render(),n=>n.props?.className==='builderPanel')[0].props.hidden,true,'adding controls stay folded while editing the current order');
   ui.check('Logo op letterregel 2: P · puur · groot',false);
   assert.equal(nodes(ui.render(),n=>n.props?.['aria-label']==='Afgesproken totaal excl. btw')[0].props.value,'379.34');
@@ -244,10 +253,73 @@ test('logos adjust a manually agreed total instead of disappearing into an uncha
   assert.match(label(priceParts),/Producten€\s?366,00Logo’s30 × €\s?0,46€\s?13,80Prijsafspraak€\s?-16,00/);
   ui.check('Logo op letterregel 2: P · puur · groot',false);
   assert.equal(nodes(ui.render(),n=>n.props?.['aria-label']==='Afgesproken totaal excl. btw')[0].props.value,'363.34');
+  assert.match(label(nodes(ui.render(),n=>n.props?.['data-price-part']==='inclusive-total')[0]),/€\s?396,04/,'a genuine total agreement uses its own VAT total');
   ui.button('Bestelling controleren →');await ui.submit();
   assert.equal(ui.calls[0].totalExVat.replace(/\s/g,''),'€363,34');
   const again=entry('sint',{...ui.calls[0],id:'manual-reopen'});
   assert.equal(nodes(again.render(),n=>n.props?.['aria-label']==='Afgesproken totaal excl. btw')[0].props.value,'363.34');
+});
+
+function folderQuote(lines) {
+  return quoteBuilder({ requestId:'f1234567-1234-4567-8123-123456789abc',season:'sint',company:'Prijscontrole',contactName:'',email:'prijs@example.invalid',phone:'',wishes:'',consent:false,
+    delivery:{method:'pickup',momentType:'date',date:'2026-11-24'},selection:{lines} });
+}
+
+test('30 letters with logos have identical folder and B2B totals, including a split milk/vegan order',async()=>{
+  const ui=entry();ui.field('Bedrijfsnaam / klantnaam *','Prijscontrole');ui.button('Verder naar producten →');
+  addLetters(ui,29,true,'P');addLetters(ui,1,true,'P','puur',true);
+  const quote=folderQuote([
+    {productId:'chocoladeletter',quantity:29,withLogo:true,letter:{letter:'P',chocolate:'melk',size:'groot',exceptions:[]}},
+    {productId:'chocoladeletter',quantity:1,withLogo:true,letter:{letter:'P',chocolate:'puur',size:'groot',exceptions:['vegan']}},
+  ]);
+  assert.equal(quote.order.totalExVat,'379.80');assert.match(quote.order.priceAgreement,/414,00 incl/);
+  assert.match(label(nodes(ui.render(),n=>n.props?.['data-price-part']==='inclusive-total')[0]),/414,00/);
+  ui.button('Bestelling controleren →');await ui.submit();
+  assert.equal(ui.calls[0].totalExVat.replace(/\s/g,''),'€379,80');
+  assert.equal(ui.calls[0].letterLines.length,2);
+  assert.equal(ui.calls[0].letterLines[1].exceptions[0],'vegan');
+});
+
+test('both sizes and styles of letters match folder prices at every tier boundary, with and without logos',()=>{
+  const ui=entry();
+  for(const productId of ['chocoladeletter','chocolade-vormletter']) for(const size of ['klein','groot']) for(const quantity of [1,24,25,50,51,100,101,200,201]) for(const withLogo of [false,true]) {
+    if(productId==='chocolade-vormletter'&&size==='klein') continue;
+    const quote=folderQuote([{productId,quantity,withLogo,letter:{letter:'S',chocolate:'melk',size,exceptions:[]}}]);
+    const result=ui.prices([{id:'letter',productId,choice:productId==='chocolade-vormletter'?'':size==='groot'?'Groot':'Klein',description:'Letter',quantity,unitPriceEx:'0',manualPrice:false,withLogo}]);
+    assert.equal(result.ex,Number(quote.order.totalExVat));
+    assert.ok(quote.order.priceAgreement.includes(`${new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR'}).format(result.incl)} incl. btw`));
+  }
+});
+
+test('all automatic Sint variants and tier boundaries match the folder, including fixed poem options and logos',()=>{
+  const ui=entry();
+  let comparisons=0;
+  for(const product of sint.products.filter(product=>!['chocoladeletter','chocolade-vormletter'].includes(product.id))) {
+    const choices=sint.productChoiceCandidates(product);
+    // Cover every variant; package letter choice does not change its price.
+    const variants=product.id==='speculaasbrok-met-letter'?choices.filter(choice=>/letter M$/.test(choice)):choices;
+    for(const choice of variants) for(const quantity of [1,24,25,50,51,100,101,200,201]) for(const withLogo of [false,true]) {
+      if(withLogo&&!sint.productSupportsLogo(product,choice)) continue;
+      const quote=folderQuote([{productId:product.id,choice,quantity,withLogo}]);
+      const result=ui.prices([{id:'compare',productId:product.id,choice,description:product.name,quantity,unitPriceEx:'0',manualPrice:false,withLogo}]);
+      const context=`${product.id}: ${choice}, ${quantity}, logo=${withLogo}`;
+      assert.equal(result.ex,Number(quote.order.totalExVat),context);
+      assert.ok(quote.order.priceAgreement.includes(`${new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR'}).format(result.incl)} incl. btw`),context);
+      comparisons++;
+    }
+  }
+  assert.ok(comparisons>200);
+});
+
+test('Christmas automatic inclusive prices also match its folder; manual prices stay unchanged',()=>{
+  const ui=entry('kerst');
+  for(const product of kerst.christmasProducts) for(const quantity of [1,25,51,101,201]) {
+    const result=ui.prices([{id:'kerst',productId:`kerst-${product.id}`,choice:product.detail,description:product.name,quantity,unitPriceEx:'0',manualPrice:false,withLogo:false}]);
+    assert.equal(result.ex,kerst.roundMoney(quantity*kerst.christmasUnitPrice(product,quantity,false)));
+    assert.equal(result.incl,kerst.roundMoney(quantity*kerst.christmasUnitPrice(product,quantity,true)));
+  }
+  const agreed=ui.prices([{id:'custom',productId:'anders',choice:'',description:'Prijsafspraak',quantity:3,unitPriceEx:'20.00',manualPrice:true,withLogo:false}]);
+  assert.equal(agreed.ex,60);assert.equal(agreed.incl,65.4);assert.equal(agreed.lines[0].unitPriceEx,'20.00');
 });
 
 test('adding fields collapse after adding a product, and an empty agreed unit price cannot save a free product accidentally',async()=>{
