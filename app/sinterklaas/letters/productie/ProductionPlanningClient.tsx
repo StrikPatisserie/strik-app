@@ -1,15 +1,10 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { fetchB2BOrders, fetchLetterOrders } from "../../sinterklaasApi";
+import { productionDeadlinePassed, productionRemaining, productionTotals as totalsFor, type ProductionChecklist } from "./productionChecklist";
 import styles from "./ProductionPlanning.module.css";
-import { addProductionOrderQuantity, aggregateProductionRows, productionOrderSource, productionSourceBreakdown, type ProductionOrderSource, type ProductionSeedRow } from "./productionSources";
+import { aggregateProductionRows, productionSourceBreakdown, type ProductionSeedRow } from "./productionSources";
 export type { ProductionSeedRow } from "./productionSources";
-import type {
-  ChocolateLetterLine,
-  ChocolateLetterOrder,
-  SinterklaasB2BOrder,
-} from "../../types";
 
 export type StoreOrderRow = {
   key: string;
@@ -48,6 +43,7 @@ export type ProductionBatchSeed = {
   deadlineAt?: string;
   status: string;
   minimumLeadDays: number;
+  checklist?: ProductionChecklist;
   rows: ProductionSeedRow[];
   storeOrders: StoreStockOrder[];
 };
@@ -217,8 +213,7 @@ function distributionTotal(distribution: StartDistribution) {
 }
 
 function batchIsLocked(batch: ProductionBatchSeed) {
-  return ["COMPLETED", "CLOSED", "IN_PRODUCTION"].includes(batch.status)
-    || Boolean(batch.deadlineAt && Date.now() > new Date(batch.deadlineAt).getTime());
+  return Boolean(batch.checklist) || productionDeadlinePassed(batch);
 }
 
 function addDays(date: string, days: number) {
@@ -226,66 +221,8 @@ function addDays(date: string, days: number) {
   return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
 }
 
-function findProductionDate(
-  batches: ProductionBatchSeed[],
-  requestedDate: string,
-  explicitDate = ""
-) {
-  const explicitBatch = batches.find(
-    (batch) => batch.date === explicitDate || batch.startDate === explicitDate
-  );
-  if (explicitBatch) return explicitBatch.date;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) return "";
-
-  return batches
-    .filter(
-      (batch) =>
-        (batch.pickupFrom || addDays(batch.date, batch.minimumLeadDays)) <=
-        requestedDate
-    )
-    .at(-1)?.date || "";
-}
-
-function legacyLineIdentity(line: ChocolateLetterLine) {
-  const extras = [
-    line.logo ? "logo" : "",
-    ...(line.specialRequests || []),
-    line.notes.trim(),
-  ].filter(Boolean);
-  const label = [
-    line.letter.toUpperCase(),
-    line.chocolate,
-    line.size,
-    line.style,
-    ...extras,
-  ].join(" · ");
-  const key = [
-    line.letter.toUpperCase(),
-    line.chocolate,
-    line.size,
-    line.style,
-    ...extras,
-  ].join("|").toLocaleLowerCase("nl-NL");
-
-  return { key, label };
-}
-
 function batchIsPlanned(status: string) {
   return ["PLANNED", "IN_PRODUCTION", "COMPLETED", "CLOSED"].includes(status);
-}
-
-function totalsFor(rows: WorkingRow[]) {
-  return rows.reduce(
-    (total, row) => {
-      const planned = row.orders + row.stock;
-      return {
-        orders: total.orders + row.orders,
-        stock: total.stock + row.stock,
-        produced: total.produced + (planned > 0 && row.produced >= planned ? planned : 0),
-      };
-    },
-    { orders: 0, stock: 0, produced: 0 }
-  );
 }
 
 function productionRowIsComplete(row: WorkingRow) {
@@ -373,9 +310,13 @@ function productionSections(rows: WorkingRow[]) {
 function ProductionTable({
   rows,
   onToggleComplete,
+  onEditQuantity,
+  saving = false,
 }: Readonly<{
   rows: WorkingRow[];
   onToggleComplete?: (row: WorkingRow) => void;
+  onEditQuantity?: (row: WorkingRow) => void;
+  saving?: boolean;
 }>) {
   if (rows.length === 0) return <p className={styles.empty}>Nog geen letters ingepland.</p>;
 
@@ -423,17 +364,19 @@ function ProductionTable({
                       <td className={styles.quantity}>{row.stock}</td>
                       <td className={styles.total}>{planned}</td>
                       <td className={styles.stateCell}>
-                        {onToggleComplete ? (
+                        {onToggleComplete && planned > 0 ? (
                           <button type="button" role="checkbox" aria-checked={isComplete}
-                            aria-label={`${variant.product} ${isComplete ? "weer openzetten" : "als geproduceerd markeren"}`}
-                            onClick={() => onToggleComplete(row)} className={styles.completeButton}>
-                            {isComplete ? "✓" : "○"}
+                            aria-label={`${row.label} ${isComplete ? "weer openzetten" : "als geproduceerd markeren"}`}
+                            disabled={saving} onClick={() => onToggleComplete(row)} className={styles.completeButton}>
+                            {isComplete ? "✓" : ""}
                           </button>
-                        ) : <span className={styles.status} data-complete={isComplete}>{isComplete ? "Gereed" : "Open"}</span>}
+                        ) : <span className={styles.status} data-complete={isComplete}>{planned === 0 ? "Vervallen" : isComplete ? "Gereed" : "Open"}</span>}
+                        {onEditQuantity && <button type="button" disabled={saving} className={styles.amountButton} onClick={() => onEditQuantity(row)} aria-label={`Geproduceerd aantal voor ${row.label} aanpassen`}>{row.produced}/{planned}</button>}
+                        {!onEditQuantity && row.produced > 0 && !isComplete && <small className={styles.partial}>{row.produced}/{planned} gereed</small>}
                       </td>
                       <td className={styles.sourceCell}>
                         <div className={styles.sourceBadges}>
-                          {productionSourceBreakdown(row).map(({ id, label, quantity }) => <span key={id} className={styles.sourceBadge} data-source={id} title={`${label}: ${quantity} ${quantity === 1 ? "letter" : "letters"}`}>
+                          {productionSourceBreakdown(row).filter(({ id }) => id !== "voorraad").map(({ id, label, quantity }) => <span key={id} className={styles.sourceBadge} data-source={id} title={`${label}: ${quantity} ${quantity === 1 ? "letter" : "letters"}`}>
                             <span>{label}</span><b>{quantity}</b>
                           </span>)}
                         </div>
@@ -1477,7 +1420,7 @@ function DistributionPreviewDialog({ batch, onClose }: Readonly<{ batch: Product
 function ProductionPrintPreviewDialog({ batch, onClose }: Readonly<{ batch: ProductionBatchSeed; onClose: () => void }>) {
   const totals = totalsFor(batch.rows);
   const totalToMake = totals.orders + totals.stock;
-  const totalOpen = Math.max(0, totalToMake - totals.produced);
+  const totalOpen = productionRemaining(batch.rows);
 
   return (
     <div className="production-checklist-overlay fixed inset-0 z-[95] overflow-y-auto bg-[#263b2b]/65 px-2 py-4 backdrop-blur-sm sm:px-4" role="dialog" aria-modal="true">
@@ -1502,7 +1445,7 @@ function ProductionPrintPreviewDialog({ batch, onClose }: Readonly<{ batch: Prod
       <div className="production-checklist-no-print sticky top-0 z-10 mx-auto mb-3 flex max-w-5xl flex-wrap items-center justify-between gap-2 rounded-2xl border border-white/80 bg-[#faf8f2]/95 p-3 shadow-xl backdrop-blur">
         <div>
           <p className="font-black text-[#1a1815]">Preview productielijst · {formatCompactProductionDate(batch.startDate)}</p>
-          <p className="text-xs font-semibold text-[#6b645b]">Eén duidelijke afwerklijst voor de bakkerij.</p>
+          <p className="text-xs font-semibold text-[#6b645b]">Printen verandert de productievoortgang niet.</p>
         </div>
         <div className="flex gap-2">
           <button type="button" onClick={onClose} className="h-9 rounded-full border border-[#ddd5ca] bg-white px-4 text-xs font-black text-[#4d463d]">Sluiten</button>
@@ -1515,8 +1458,10 @@ function ProductionPrintPreviewDialog({ batch, onClose }: Readonly<{ batch: Prod
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-[0.66rem] font-black uppercase tracking-[0.2em] text-[#778878]">Strik Patisserie · chocoladeletters</p>
-              <h2 className="mt-1 text-3xl font-black text-[#263b2b]">Productielijst</h2>
+              <h2 className="mt-1 text-3xl font-black text-[#263b2b]">{batch.checklist ? "Productielijst" : "Voorlopige productielijst"}</h2>
               <p className="mt-1 text-lg font-black text-[#4b352f]">{formatCompactProductionDate(batch.startDate)}</p>
+              <p className="mt-2 text-xs text-[#6b645b]">{batch.checklist ? `Versie ${batch.checklist.planRevision} · vastgezet ${formatDeadline(batch.checklist.lockedAt)}` : `Voorlopig · aantallen kunnen nog wijzigen tot ${formatDeadline(batch.deadlineAt)}`}</p>
+              {!!batch.checklist?.changes.length && <p className="mt-2 text-xs font-bold text-[#9a3412]">Let op: {batch.checklist.changes.length} wijziging(en) nog niet overgenomen. Controleer deze in de app.</p>}
             </div>
             <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-[#d8d1c8] text-center">
               <div className="px-3 py-2">
@@ -1594,7 +1539,7 @@ function ProductionPrintPreviewDialog({ batch, onClose }: Readonly<{ batch: Prod
                               <td className="px-1 py-2.5 text-center text-[0.68rem] font-medium text-[#88827b]">{row.orders}</td>
                               <td className="px-1 py-2.5 text-center text-[0.68rem] font-medium text-[#88827b]">{row.stock}</td>
                               <td className="border-x-2 border-[#a9a29a] bg-[#ededeb] px-1 py-2.5 text-center text-xl font-black text-black">{planned}</td>
-                              <td className={`px-2 py-2.5 text-center text-2xl font-black ${isComplete ? "text-[#24551d]" : "text-[#8b8278]"}`}>{isComplete ? "✓" : "□"}</td>
+                              <td className={`px-2 py-2.5 text-center text-2xl font-black ${isComplete ? "text-[#24551d]" : "text-[#8b8278]"}`}>{isComplete ? "✓" : "□"}{row.produced > 0 && <span className="block text-xs font-normal">{row.produced}/{planned} gemaakt{planned === 0 ? " · vervallen" : ""}</span>}</td>
                             </tr>
                           );
                         })}
@@ -1628,8 +1573,17 @@ export default function ProductionPlanningClient({
   centralUnplannedCount: number;
   demoMode?: boolean;
 }>) {
-  const [legacyOrders, setLegacyOrders] = useState<ChocolateLetterOrder[]>([]);
-  const [b2bOrders, setB2BOrders] = useState<SinterklaasB2BOrder[]>([]);
+  const [liveBatches, setLiveBatches] = useState<ProductionBatchSeed[] | null>(null);
+  const [liveUnplanned, setLiveUnplanned] = useState<string[]>([]);
+  const [liveUnplannedCount, setLiveUnplannedCount] = useState(centralUnplannedCount);
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const [savingProduction, setSavingProduction] = useState(false);
+  const productionMutationVersion = useRef(0);
+  const [productionNotice, setProductionNotice] = useState("");
+  const [productionNoticeBatch, setProductionNoticeBatch] = useState("");
+  const [quantityDialog, setQuantityDialog] = useState<{batch: ProductionBatchSeed; row: WorkingRow} | null>(null);
+  const [quantityDraft, setQuantityDraft] = useState("");
+  const [reviseBatch, setReviseBatch] = useState<ProductionBatchSeed | null>(null);
   const [loading, setLoading] = useState(!demoMode);
   const [warning, setWarning] = useState("");
   const [storeOrderBatch, setStoreOrderBatch] = useState<ProductionBatchSeed | null>(null);
@@ -1651,31 +1605,42 @@ export default function ProductionPlanningClient({
   const [producedRowsByBatch, setProducedRowsByBatch] = useState<Record<string, ProductionSeedRow[]>>({});
 
   useEffect(() => {
-    if (demoMode) {
-      setLegacyOrders([]);
-      setB2BOrders([]);
-      setLoading(false);
-      setWarning("");
-      return;
-    }
-
+    if (demoMode) { setLoading(false); return; }
     let active = true;
-    Promise.allSettled([fetchLetterOrders(season), fetchB2BOrders(season)])
-      .then(([lettersResult, b2bResult]) => {
-        if (!active) return;
-        if (lettersResult.status === "fulfilled") setLegacyOrders(lettersResult.value);
-        if (b2bResult.status === "fulfilled") setB2BOrders(b2bResult.value);
-        const failed = [lettersResult, b2bResult].filter((result) => result.status === "rejected").length;
-        if (failed > 0) setWarning("Een bestaande bestellijst kon niet worden geladen. De centrale online aantallen staan wel in beeld.");
-      })
-      .finally(() => {
+    const controller = new AbortController();
+    let pending = false;
+    async function refresh() {
+      if (pending || document.visibilityState === "hidden") return;
+      pending = true;
+      const version = productionMutationVersion.current;
+      try {
+        const response = await fetch(`/api/sinterklaas-letter-production?season=${encodeURIComponent(season)}`, { cache: "no-store", signal: controller.signal });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || "Productiegegevens laden is mislukt.");
+        if (active && version === productionMutationVersion.current) {
+          setLiveBatches(result.batches);
+          setLiveUnplanned(result.unplanned || []);
+          setLiveUnplannedCount(result.centralUnplannedCount || 0);
+          setStockRowsByBatch({});
+          setWarning("");
+        }
+      } catch (error) {
+        if (active) setWarning(error instanceof Error ? error.message : "De volledige productielijst kon niet worden geladen.");
+      } finally {
+        pending = false;
         if (active) setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [demoMode, season]);
+      }
+    }
+    void refresh();
+    const timer = window.setInterval(() => { void refresh(); }, 60000);
+    // Also switch an already open page at the deadline, without a manual reload.
+    const nextDeadline = Math.min(...batches.map(batch => Date.parse(batch.deadlineAt || "")).filter(time => time > Date.now()));
+    const deadlineTimer = Number.isFinite(nextDeadline) ? window.setTimeout(() => { void refresh(); }, Math.min(nextDeadline - Date.now() + 500, 2147483647)) : undefined;
+    const onFocus = () => { void refresh(); };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => { active = false; controller.abort(); window.clearInterval(timer); window.clearTimeout(deadlineTimer); window.removeEventListener("focus", onFocus); document.removeEventListener("visibilitychange", onFocus); };
+  }, [demoMode, season, batches, refreshVersion]);
 
   useEffect(() => {
     if (demoMode) {
@@ -1710,7 +1675,7 @@ export default function ProductionPlanningClient({
 
   const overview = useMemo(() => {
     const rowsByDate = new Map<string, Map<string, WorkingRow>>();
-    for (const batch of batches) {
+    for (const batch of liveBatches || batches) {
       rowsByDate.set(
         batch.date,
         new Map(batch.rows.map((row) => [row.key, { ...row, orderSources: { ...row.orderSources } }]))
@@ -1735,72 +1700,19 @@ export default function ProductionPlanningClient({
       });
     });
 
-    Object.entries(producedRowsByBatch).forEach(([batchId, producedRows]) => {
-      const batch = batches.find((item) => item.id === batchId);
-      const rows = batch ? rowsByDate.get(batch.date) : undefined;
-      if (!rows) return;
-      producedRows.forEach((update) => {
-        const current = rows.get(update.key);
-        if (current) current.produced = update.produced;
-      });
-    });
-
-    const unplanned: string[] = [];
-    const addOrderLine = (date: string, key: string, label: string, quantity: number, source: ProductionOrderSource) => {
-      const rows = rowsByDate.get(date);
-      if (!rows) return;
-      const current = rows.get(key) || { key, label, orders: 0, stock: 0, produced: 0 };
-      rows.set(key, addProductionOrderQuantity(current, source, quantity));
-    };
-
-    legacyOrders
-      .filter((order) => !order.productionDone && !order.pickedUp && order.status !== "opgehaald" && order.status !== "geannuleerd")
-      .forEach((order) => {
-        const date = findProductionDate(batches, order.pickupDate);
-        if (!date) {
-          unplanned.push(`${order.code} · ${order.customerName}`);
-          return;
-        }
-        order.lines.forEach((line) => {
-          const identity = legacyLineIdentity(line);
-          addOrderLine(date, identity.key, identity.label, line.quantity, productionOrderSource(order.source));
-        });
-      });
-
-    b2bOrders
-      .filter((order) => {
-        const done = order.department === "beide" || order.department === "bakkerij"
-          ? order.letterProductionDone
-          : order.productionDone;
-        return order.status === "akkoord" && !order.cancelled && !order.delivered && !done;
-      })
-      .forEach((order) => {
-        const date = findProductionDate(batches, order.deliveryDate, order.productionDate);
-        if (!date || order.letterLines.length === 0) {
-          unplanned.push(`B2B · ${order.customerName}`);
-          return;
-        }
-        order.letterLines.forEach((line) => {
-          const extras = [order.logo ? "logo" : "", ...line.exceptions].filter(Boolean);
-          const label = [line.letter, line.chocolate, line.size, line.style, ...extras].join(" · ");
-          const key = [line.letter, line.chocolate, line.size, line.style, ...extras].join("|").toLocaleLowerCase("nl-NL");
-          addOrderLine(date, key, label, line.quantity, "b2b");
-        });
-      });
-
-    const batchViews = batches.map((batch) => ({
+    const batchViews = (liveBatches || batches).map(batch => ({
       ...batch,
-      storeOrders: storeOrdersByBatch[batch.id] || batch.storeOrders || [],
-      rows: [...(rowsByDate.get(batch.date)?.values() || [])].sort(compareProductionRows),
+      storeOrders: demoMode ? storeOrdersByBatch[batch.id] || batch.storeOrders || [] : batch.storeOrders,
+      rows: [...(rowsByDate.get(batch.date)?.values() || [])].map(row => ({...row, produced: producedRowsByBatch[batch.id]?.find(update => update.key === row.key)?.produced ?? row.produced})).sort(compareProductionRows),
     }));
     const grandRows = aggregateProductionRows(batchViews.flatMap((batch) => batch.rows));
 
     return {
       batches: batchViews,
       grandRows: grandRows.sort(compareProductionRows),
-      unplanned,
+      unplanned: liveUnplanned,
     };
-  }, [b2bOrders, batches, legacyOrders, producedRowsByBatch, stockRowsByBatch, storeOrdersByBatch]);
+  }, [batches, liveBatches, liveUnplanned, demoMode, producedRowsByBatch, stockRowsByBatch, storeOrdersByBatch]);
 
   const grandTotals = overview.batches.reduce(
     (total, batch) => {
@@ -1843,6 +1755,38 @@ export default function ProductionPlanningClient({
     }));
   }
 
+  async function saveProduction(batch: ProductionBatchSeed, action: "quantity" | "revise", row?: WorkingRow, quantity?: number) {
+    if (savingProduction) return false;
+    setProductionNoticeBatch(batch.id);
+    if (demoMode) {
+      if (row && quantity !== undefined) setProducedRowsByBatch(current => ({...current, [batch.id]: batch.rows.map(item => item.key === row.key ? {...item, produced: quantity} : item)}));
+      setProductionNotice("Demo: voortgang aangepast, niets werkelijk opgeslagen.");
+      return true;
+    }
+    if (!batch.checklist) return false;
+    setSavingProduction(true);
+    setProductionNotice("");
+    productionMutationVersion.current += 1;
+    try {
+      const response = await fetch("/api/sinterklaas-letter-production", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({batchId: batch.id, revision: batch.checklist.revision, planVersion: batch.checklist.planVersion, action, key: row?.key, quantity})});
+      const result = await response.json();
+      if (!response.ok) {
+        if (response.status === 409) { setRefreshVersion(current => current + 1); setQuantityDialog(null); setReviseBatch(null); }
+        throw new Error(result.message || "Productie opslaan is mislukt.");
+      }
+      const list = result.list;
+      setLiveBatches(current => current?.map(item => item.id === batch.id ? {...item, rows: list.rows, checklist: {...item.checklist!, revision: list.revision, planRevision: list.plan_revision, updatedAt: list.updated_at, changes: action === "revise" ? [] : item.checklist?.changes || []}} : item) || null);
+      setProductionNotice(action === "revise" ? "Nieuwe versie opgeslagen. Print de bijgewerkte productielijst voor de bakkers." : "Productievoortgang opgeslagen.");
+      return true;
+    } catch (error) {
+      setProductionNotice(error instanceof Error ? error.message : "Opslaan is mislukt.");
+      return false;
+    } finally {
+      productionMutationVersion.current += 1;
+      setSavingProduction(false);
+    }
+  }
+
   return (
     <div className={styles.planning}>
       {demoMode && <div className={styles.notice}>
@@ -1858,7 +1802,7 @@ export default function ProductionPlanningClient({
           <dl className={styles.metrics}>
             <div><dt>Totaal</dt><dd>{totalToMake}</dd></div>
             <div><dt>Gereed</dt><dd>{grandTotals.produced}</dd></div>
-            <div className={styles.remaining}><dt>Nog te maken</dt><dd>{Math.max(0, totalToMake - grandTotals.produced)}</dd></div>
+            <div className={styles.remaining}><dt>Nog te maken</dt><dd>{overview.batches.reduce((sum, batch) => sum + productionRemaining(batch.rows), 0)}</dd></div>
           </dl>
           <div className={styles.summaryActions}>
             <button type="button" onClick={() => setShowGrandOverview((current) => !current)} aria-expanded={showGrandOverview} aria-controls="production-grand-overview" className={styles.quiet}>
@@ -1899,9 +1843,9 @@ export default function ProductionPlanningClient({
         )}
       </section>
 
-      {(centralUnplannedCount > 0 || overview.unplanned.length > 0) && <section className={styles.attention}>
+      {(liveUnplannedCount > 0 || overview.unplanned.length > 0) && <section className={styles.attention}>
         <h2>Nog niet aan een productiedag gekoppeld</h2>
-        {centralUnplannedCount > 0 && <p>{centralUnplannedCount} centrale orderregel(s) zijn nog niet volledig ingepland.</p>}
+        {liveUnplannedCount > 0 && <p>{liveUnplannedCount} centrale orderregel(s) zijn nog niet volledig ingepland.</p>}
         {overview.unplanned.length > 0 && <p>{overview.unplanned.length} bestaande bestelling(en): {overview.unplanned.slice(0, 6).join(" · ")}{overview.unplanned.length > 6 ? ` · +${overview.unplanned.length - 6}` : ""}</p>}
       </section>}
 
@@ -1917,9 +1861,10 @@ export default function ProductionPlanningClient({
                 <p className={styles.roundLabel}>Centrale productieronde</p>
                 <h2>{formatCompactProductionDate(batch.startDate)}</h2>
               </div>
-              <span className={styles.roundState} data-planned={batchIsPlanned(batch.status)}>{batchIsPlanned(batch.status) ? "Ingepland" : "Nog niet ingepland"}</span>
+              <span className={styles.roundState} data-planned={Boolean(batch.checklist) || batchIsPlanned(batch.status)}>{batch.checklist ? productionRemaining(batch.rows) === 0 ? "Productie gereed" : "Vastgezet · afvinken mogelijk" : batchIsPlanned(batch.status) ? "Ingepland" : "Nog niet ingepland"}</span>
               <div className={styles.roundActions}>
                 {demoMode && <button type="button" onClick={() => setPrintOptionsBatch(batch)} className={styles.button}>Printlijsten</button>}
+                {!demoMode && <button type="button" disabled={loading || Boolean(warning) || !liveBatches} onClick={() => setProductionPrintBatch(batch)} className={styles.button}>{batch.checklist ? "Productielijst printen" : "Voorbeeld printen"}</button>}
                 <button type="button" onClick={() => { setStoreOrderInitialShop(DISTRIBUTION_SHOPS[0]); setStoreOrderBatch(batch); }} className={styles.button}>
                   {storeOrdersLocked ? "Bekijk winkelvoorraad" : storeStockTotal > 0 ? "Winkelvoorraad wijzigen" : "+ Winkelvoorraad per winkel"}
                 </button>
@@ -1928,10 +1873,17 @@ export default function ProductionPlanningClient({
             <div className={styles.roundSummary}>
               <span>Totaal <b>{planned}</b></span>
               <span>Gereed <b>{totals.produced}</b></span>
-              <span className={styles.remaining}>Nog te maken <b>{Math.max(0, planned - totals.produced)}</b></span>
+              <span className={styles.remaining}>Nog te maken <b>{productionRemaining(batch.rows)}</b></span>
               <p className={styles.tableLegend}>Besteld = klantbestellingen · Winkel = vrije winkelvoorraad</p>
             </div>
-            <ProductionTable rows={batch.rows} onToggleComplete={demoMode ? (row) => toggleProductionRow(batch, row) : undefined} />
+            <div className={styles.checklistNote}>
+              {batch.checklist ? <>Vastgezet op {formatDeadline(batch.checklist.lockedAt)} · versie {batch.checklist.planRevision}. Vink af wat klaar is, of tik op het aantal voor deelproductie. Printen verandert de voortgang niet.</> : <>Bestellen tot {formatDeadline(batch.deadlineAt)}. Daarna wordt de lijst vastgezet en kun je afvinken.</>}
+            </div>
+            {productionNotice && productionNoticeBatch === batch.id && <p role="status" className={styles.checklistNote}>{productionNotice}</p>}
+            {!!batch.checklist?.changes.length && <div className={styles.changeNotice} role="status"><strong>Bestellingen gewijzigd na vastzetten</strong><p>{batch.checklist.changes.length} gewijzigde letterregel(s). De productielijst blijft staan totdat je deze wijzigingen controleert.</p><button type="button" className={styles.button} disabled={savingProduction || Boolean(warning)} onClick={() => {setProductionNotice(""); setReviseBatch(batch);}}>Wijzigingen bekijken</button></div>}
+            <ProductionTable rows={batch.rows} saving={savingProduction}
+              onToggleComplete={demoMode ? row => toggleProductionRow(batch, row) : batch.checklist && !warning ? row => { void saveProduction(batch, "quantity", row, productionRowIsComplete(row) ? 0 : row.orders + row.stock); } : undefined}
+              onEditQuantity={(demoMode || batch.checklist && !warning) ? row => {setProductionNotice(""); setQuantityDialog({batch, row}); setQuantityDraft(String(row.produced));} : undefined} />
             <div className={styles.storeFooter}>
               <div className={styles.stockHeading}>
                 <span>Winkelbestellingen · voorraad per vestiging</span>
@@ -1972,6 +1924,7 @@ export default function ProductionPlanningClient({
             setStoreOrdersByBatch((current) => ({ ...current, [result.batchId]: result.orders }));
             setStockRowsByBatch((current) => ({ ...current, [result.batchId]: result.aggregateRows }));
             setStoreOrderBatch(null);
+            if (!demoMode) setRefreshVersion(current => current + 1);
           }}
         />
       )}
@@ -1981,6 +1934,19 @@ export default function ProductionPlanningClient({
       {productionPrintBatch && (
         <ProductionPrintPreviewDialog batch={productionPrintBatch} onClose={() => setProductionPrintBatch(null)} />
       )}
+      {quantityDialog && <div className={`${styles.progressOverlay} ${styles.dialog}`} role="dialog" aria-modal="true" aria-labelledby="quantity-title"><form className={styles.progressDialog} onSubmit={async event => {event.preventDefault(); if (!/^\d+$/.test(quantityDraft)) return; const saved = await saveProduction(quantityDialog.batch, "quantity", quantityDialog.row, Number(quantityDraft)); if (saved) setQuantityDialog(null);}}>
+        <h2 id="quantity-title">Hoeveel zijn er gemaakt?</h2><p>{quantityDialog.row.label}</p><p>Ingepland: {quantityDialog.row.orders + quantityDialog.row.stock} stuks. De rest blijft openstaan.</p>
+        <label>Geproduceerd aantal<input aria-label="Geproduceerd aantal" type="text" inputMode="numeric" pattern="[0-9]+" required value={quantityDraft} onChange={event => setQuantityDraft(event.target.value)} /></label>
+        {productionNotice && <p role="alert">{productionNotice}</p>}
+        <div className={styles.progressActions}><button type="button" className={styles.button} disabled={savingProduction} onClick={() => setQuantityDialog(null)}>Annuleren</button><button type="submit" className={styles.primary} disabled={savingProduction}>{savingProduction ? "Opslaan…" : "Aantal opslaan"}</button></div>
+      </form></div>}
+      {reviseBatch && <div className={`${styles.progressOverlay} ${styles.dialog}`} role="dialog" aria-modal="true" aria-labelledby="revise-title"><section className={styles.progressDialog}>
+        <h2 id="revise-title">Gewijzigde bestellingen controleren</h2><p>De bestaande vinkjes en gemaakte aantallen blijven bewaard. Bij een verhoging blijft het extra aantal openstaan.</p>
+        <ul className={styles.changeList}>{reviseBatch.checklist?.changes.map(change => <li key={change.key}><strong>{change.label}</strong><span>{change.before} → {change.after} stuks · {change.detail}</span></li>)}</ul>
+        <p>Na overnemen krijgt de lijst een nieuw versienummer. Vervang ook de papieren lijst in de bakkerij.</p>
+        {productionNotice && <p role="alert">{productionNotice}</p>}
+        <div className={styles.progressActions}><button type="button" className={styles.button} disabled={savingProduction} onClick={() => setReviseBatch(null)}>Sluiten</button><button type="button" className={styles.primary} disabled={savingProduction} onClick={async () => {if (await saveProduction(reviseBatch, "revise")) setReviseBatch(null);}}>{savingProduction ? "Opslaan…" : "Bijgewerkte lijst overnemen"}</button></div>
+      </section></div>}
       {startDistributionOpen && (
         <StartDistributionDialog
           season={season}

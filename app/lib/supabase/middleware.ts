@@ -5,6 +5,7 @@ import type { UserProfile } from "./types";
 import { getSupabasePublicConfig } from "./config";
 import { canAccessPath, getDefaultPathForProfile, hasFullAccess } from "../auth/access";
 import { hasRecentMfa } from "../auth/mfa";
+import { hasCronAuthorization } from "../auth/cron";
 
 const PUBLIC_PATHS = new Set([
   "/login",
@@ -107,7 +108,8 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
   const isApi = pathname.startsWith("/api/");
-  const isPublic = isPublicPath(pathname) || PUBLIC_API_PATHS.has(pathname);
+  const productionCron = pathname === "/api/sinterklaas-letter-production" && request.method === "GET" && hasCronAuthorization(request);
+  const isPublic = isPublicPath(pathname) || PUBLIC_API_PATHS.has(pathname) || productionCron;
   function withSessionCookies(result: NextResponse) {
     // A redirect/403 must carry refreshed cookies too. Otherwise the browser
     // keeps a spent refresh token and loses its already verified MFA session.

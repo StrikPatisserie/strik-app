@@ -38,7 +38,7 @@ function numberFrom(value: unknown) {
   return Number.isFinite(numberValue) ? Math.max(0, Math.round(numberValue)) : 0;
 }
 
-function normalizeLetterOrder(value: unknown): ChocolateLetterOrder | null {
+export function normalizeLetterOrder(value: unknown): ChocolateLetterOrder | null {
   if (!isRecord(value)) return null;
 
   const id = textFrom(value.id);
@@ -130,7 +130,7 @@ function normalizeLetterOrder(value: unknown): ChocolateLetterOrder | null {
   };
 }
 
-function normalizeB2BOrder(value: unknown): SinterklaasB2BOrder | null {
+export function normalizeB2BOrder(value: unknown): SinterklaasB2BOrder | null {
   if (!isRecord(value)) return null;
 
   const id = textFrom(value.id);

@@ -86,13 +86,28 @@
 .sourceBadge[data-source="winkel"] { color: #745522; border-color: #e4d1b5; background: #faf2e5; }
 .sourceBadge[data-source="online"] { color: #2f5769; border-color: #ccdce4; background: #edf4f7; }
 .sourceBadge[data-source="b2b"] { color: #644a73; border-color: #ddd3e6; background: #f4eff7; }
-.sourceBadge[data-source="voorraad"] { color: #3d6241; border-color: #cfdfcb; background: #edf4ea; }
 .status { display: inline-flex; align-items: center; justify-content: center; gap: 4px; font-size: 10px; color: #8a642b; white-space: nowrap; }
 .status::before { content: ""; width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
 .status[data-complete="true"] { color: #42684b; }
 .table tr[data-complete="true"] .letterLine > strong { color: #52725c; }
 .completeButton { min-width: 32px; min-height: 32px; border: 1px solid var(--b2b-border); border-radius: 6px; color: var(--b2b-muted); }
 .completeButton[aria-checked="true"] { background: #edf4eb; color: #42684b; }
+.completeButton:disabled, .button:disabled, .primary:disabled { opacity: .5; cursor: wait; }
+.amountButton, .partial { display: block; margin: 4px auto 0; font-size: 10px; color: var(--b2b-muted); }
+.amountButton { text-decoration: underline; text-underline-offset: 3px; min-height: 24px; }
+.checklistNote { padding: 11px 18px; font-size: 11px; line-height: 1.6; color: var(--b2b-muted); }
+.changeNotice { margin: 0 18px 12px; padding: 12px; background: #fff8eb; border: 1px solid #e6d3aa; border-radius: 8px; color: #795a24; font-size: 12px; }
+.changeNotice p { margin: 5px 0 10px; }
+.progressOverlay { position: fixed; inset: 0; z-index: 100; display: grid; align-items: start; justify-items: center; overflow-y: auto; background: #263b2b99; padding: max(20px, env(safe-area-inset-top)) 12px max(100px, env(safe-area-inset-bottom)); }
+.progressDialog, .dialog .progressDialog { box-sizing: border-box; width: 100%; max-width: 540px; margin: 5vh auto; border: 1px solid #dce3d9; border-radius: 12px; background: #fafaf6; padding: 24px; }
+.progressDialog p { margin: 12px 0; font-size: 13px; line-height: 1.6; }
+.progressDialog label { display: grid; gap: 7px; margin: 18px 0; }
+.progressDialog input { padding: 12px; border: 1px solid #dce3d9; background: #fff; width: 100%; }
+.progressActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.changeList { display: grid; gap: 12px; margin: 18px 0; }
+.changeList li { padding-bottom: 10px; border-bottom: 1px solid #dce3d9; font-size: 12px; }
+.changeList strong, .changeList span { display: block; }
+.changeList span { margin-top: 5px; }
 .storeFooter { padding: 14px 18px 17px; border-top: 1px solid var(--b2b-border); background: #f7f8f4; border-radius: 0 0 12px 12px; }
 .page .attention h2 { font-size: 13px; margin-bottom: 4px; }
 .attention { padding: 13px 16px; border: 1px solid #e3d1a0; border-radius: 8px; background: #fffaf0; color: #795a24; font-size: 12px; }

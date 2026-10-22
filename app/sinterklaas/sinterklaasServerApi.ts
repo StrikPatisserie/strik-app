@@ -5,6 +5,7 @@ import { canAccessPath, canAccessSinterklaas } from "../lib/auth/access";
 import { getCurrentProfile } from "../lib/auth/session";
 import { canViewStoreLetterOrder, getLetterStoreScope, letterOrderShop, letterShopName } from "./letterStoreAccess";
 import { randomUUID } from "node:crypto";
+import { normalizeB2BOrder, normalizeLetterOrder } from "./sinterklaasApi";
 
 const WORDPRESS_SINTERKLAAS_API_BASE =
   process.env.WORDPRESS_SINTERKLAAS_API_BASE ||
@@ -74,6 +75,25 @@ function createWordPressErrorResponse(endpoint: string, status: number) {
 async function getAuthorizedSinterklaasProfile(endpoint: string) {
   const profile = await getCurrentProfile();
   return canAccessSinterklaas(profile) || (["sinterklaas-mailing", "sinterklaas-b2b-orders"].includes(endpoint) && canAccessPath(profile, "/kerst")) ? profile : null;
+}
+
+// Called only behind the production-page access check. Production must include
+// every shop; the ordinary store-order proxy intentionally applies shop scope.
+export async function loadProductionWordPressOrders(season: string) {
+  async function read(endpoint: string) {
+    const url = getWordPressUrl(endpoint, `https://app.strik-patisserie.nl/?year=${encodeURIComponent(season)}`);
+    const response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(15000) });
+    const data = await readWordPressResponse(response);
+    if (!response.ok || !data || typeof data !== "object" || !("orders" in data) || !Array.isArray(data.orders)) {
+      throw new Error("Niet alle bestellingen konden worden opgehaald. De productielijst is niet vastgezet.");
+    }
+    return data.orders;
+  }
+  const [letters, b2b] = await Promise.all([read("sinterklaas-letter-orders"), read("sinterklaas-b2b-orders")]);
+  return {
+    letters: letters.flatMap(value => { const order = normalizeLetterOrder(value); return order ? [order] : []; }),
+    b2b: b2b.flatMap(value => { const order = normalizeB2BOrder(value); return order ? [order] : []; }),
+  };
 }
 
 export async function proxySinterklaasGet(request: Request, endpoint: string) {
