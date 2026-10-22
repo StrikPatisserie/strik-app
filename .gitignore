@@ -47,3 +47,6 @@ next-env.d.ts
 /public/Kerst/Kerststol IMG_3403_VSCO.MOV
 /public/Kerst/Tulband Video.MP4
 /public/Kerst/Bonbon IMG_5450.MOV
+
+# Local previews, screenshots and QA exports (existing tracked documents remain tracked).
+/output/
