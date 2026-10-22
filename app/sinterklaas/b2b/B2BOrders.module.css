@@ -157,7 +157,7 @@
 .summaryPair strong { font-weight: 500; }
 .total { border-top: 1px solid var(--b2b-border); padding-top: 18px; margin-top: 20px; }
 .total > strong { display: block; margin-top: 12px; font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.total > small { color: var(--b2b-muted); font-size: 11px; }
+.total > small { display: block; margin-top: 4px; line-height: 1.5; color: var(--b2b-muted); font-size: 11px; }
 .total input { text-align: right; }
 .total button { color: var(--b2b-accent); font-size: 11px; text-decoration: underline; }
 .formBottom { grid-column: 1/-1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-top: 2px; }

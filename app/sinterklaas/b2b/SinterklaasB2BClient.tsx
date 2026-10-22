@@ -1382,11 +1382,11 @@ function B2BOrderForm({
             <button type="button" className={styles.button} onClick={() => applyLogoToAll(true)}>Logo bij alle geschikte artikelen</button>
             <button type="button" className={styles.quiet} onClick={() => applyLogoToAll(false)}>Alle logo’s uit</button>
           </div>}
-          {addFeedback && <p role="status" className={addFeedback.startsWith("Toegevoegd") ? styles.notice : styles.error} style={{ marginTop: 16 }}>{addFeedback}</p>}
+          {addFeedback && <p role="status" className={addFeedback.startsWith("Toegevoegd") || addFeedback.startsWith("Logo ") ? styles.notice : styles.error} style={{ marginTop: 16 }}>{addFeedback}</p>}
           {form.letterLines.length > 0 && <div className={styles.lines}>
             <h3 style={{ marginTop: 16 }}>Letterregels · {b2bLetterTotal(form.letterLines)} stuks</h3>
-            {form.letterLines.map(line => <div key={line.id} className={`${styles.line} ${styles.letterLine}`}>
-              <div><strong>{line.letter} · {line.chocolate} · {line.style} · {line.size}</strong><label className={styles.inlineLogo}><input aria-label={`Logo op letterregel ${line.letter} ${line.chocolate} ${line.size} ${line.id}`} type="checkbox" checked={Boolean(line.withLogo)} onChange={event => updateLetterLine(line.id, { withLogo: event.target.checked })} /> Eigen logo · + {money(productLogoPrice(false))} per letter excl. btw</label>{line.exceptions.length > 0 && <small>Vrij van: {line.exceptions.join(", ")}</small>}</div>
+            {form.letterLines.map((line, index) => <div key={line.id} className={`${styles.line} ${styles.letterLine}`}>
+              <div><strong>{line.letter} · {line.chocolate} · {line.style} · {line.size}</strong><label className={styles.inlineLogo}><input aria-label={`Logo op letterregel ${index + 1}: ${line.letter} · ${line.chocolate} · ${line.size}`} type="checkbox" checked={Boolean(line.withLogo)} onChange={event => updateLetterLine(line.id, { withLogo: event.target.checked })} /> Eigen logo · + {money(productLogoPrice(false))} per letter excl. btw</label>{line.exceptions.length > 0 && <small>Vrij van: {line.exceptions.join(", ")}</small>}</div>
               <input aria-label={`Aantal ${line.letter}`} type="number" min="1" max="10000" value={line.quantity} onChange={event => updateLetterLine(line.id, { quantity: Math.max(1, Number(event.target.value) || 1) })} />
               <button type="button" aria-label="Letterregel verwijderen" className={styles.danger} onClick={() => setLetterLines(form.letterLines.filter(item => item.id !== line.id))}>×</button>
             </div>)}
