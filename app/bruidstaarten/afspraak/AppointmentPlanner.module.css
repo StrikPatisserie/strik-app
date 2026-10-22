@@ -12,6 +12,11 @@
 .brandBar img { width:66px; height:66px; object-fit:contain; }
 .brandBar > span { font-size:11px; color:var(--muted); }
 .brandBar > a:last-child { margin-left:auto; font-size:11px; font-weight:800; }
+.brandBar > .homeBack { display:inline-flex; align-items:center; padding:12px 16px; border:1px solid #d6d9cc; border-radius:7px; background:#fffefa; color:var(--green); text-decoration:none; }
+.calendarHelp { padding:12px 0 20px; font-size:11px; color:var(--muted); line-height:1.8; }
+.calendarHelp a { text-decoration:underline; text-underline-offset:3px; color:var(--green); }
+.bookingError { margin-bottom:22px!important; padding:14px; border:1px solid #d8b69c; background:#fcf2e7; color:#784323; font-size:12px; line-height:1.7; border-radius:8px; }
+.bookingError a { text-decoration:underline; }
 .main { max-width:1220px; margin:auto; padding:50px 34px 24px; }
 .intro { display:flex; align-items:center; justify-content:space-between; gap:40px; max-width:900px; margin-bottom:40px; }
 .eyebrow { font-size:10px; line-height:1.5; font-weight:800; letter-spacing:.15em; text-transform:uppercase; color:#7b795d; }

@@ -31,6 +31,8 @@ export default function AppChrome({
     pathname === "/kerst-voor-bedrijven" ||
     pathname === "/lettershop" ||
     pathname === "/menu-preview" ||
+    pathname === "/bruidstaart" ||
+    pathname === "/bruidstaart/afspraak" ||
     pathname === "/bruidstaarten/agenda/voorbeeld" ||
     pathname === "/bruidstaarten/agenda/voorbeeld/bevestiging" ||
     pathname === "/bruidstaarten/voorbeeld";

@@ -7,6 +7,7 @@ export type WeddingAppointment = {
   status: "confirmed" | "pending" | "cancelled" | "trash"; names: string; email: string; phone: string;
   wedding_date?: string | null; guests?: number | null; notes: string; source: "app" | "wordpress";
   source_booking_id?: string | null; raw_source?: unknown; created_at?: string;
+  revision?: number; updated_at?: string;
 };
 export type WeddingSlotDay = { date: string; times: string[] };
 export type WeddingReceipt = Pick<WeddingAppointment, "id" | "reference" | "appointment_date" | "start_time" | "end_time" | "names" | "email"> & { mailPending: boolean };
@@ -48,7 +49,7 @@ export function availableWeddingSlots(settings: WeddingSettings, from: string, t
   }
   return result;
 }
-export function parseWeddingContact(input: unknown): WeddingContact {
+export function parseWeddingContact(input: unknown, staff = false): WeddingContact {
   if (!input || typeof input !== "object") throw new Error("Vul jullie gegevens in.");
   const raw = input as Record<string, unknown>;
   const text = (key: string, limit: number) => {
@@ -58,7 +59,7 @@ export function parseWeddingContact(input: unknown): WeddingContact {
     return value;
   };
   const contact = { names: text("names", 160), email: text("email", 200).toLowerCase(), phone: text("phone", 40), weddingDate: text("weddingDate", 10), guests: text("guests", 4), notes: text("notes", 1500) };
-  if (!contact.names || !contact.phone || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email)) throw new Error("Vul jullie namen, een geldig e-mailadres en telefoonnummer in.");
+  if (!contact.names || (!staff && !contact.phone) || ((!staff || contact.email) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email))) throw new Error(staff ? "Vul de namen en, indien ingevuld, een geldig e-mailadres in." : "Vul jullie namen, een geldig e-mailadres en telefoonnummer in.");
   if (/[\r\n]/.test(contact.email + contact.names + contact.phone)) throw new Error("Controleer de contactgegevens.");
   if (contact.weddingDate && !weddingDateIsValid(contact.weddingDate)) throw new Error("Controleer de trouwdatum.");
   if (contact.guests && (!/^\d+$/.test(contact.guests) || Number(contact.guests) < 1 || Number(contact.guests) > 2000)) throw new Error("Kies een aantal gasten tussen 1 en 2000.");

@@ -14,7 +14,7 @@
 .preview a { margin-left:12px; text-decoration:underline; text-underline-offset:3px; }
 .header { max-width:1360px; margin:auto; min-height:110px; padding:20px 48px; display:flex; align-items:center; justify-content:space-between; gap:26px; border-bottom:1px solid var(--line); }
 .brand { display:flex; align-items:center; gap:18px; }
-.brand img { width:57px; height:64px; object-fit:contain; }
+.brand img { width:auto; height:64px; object-fit:contain; }
 .brand>span { padding-left:18px; border-left:1px solid var(--line); font:24px/1.4 Georgia,"Times New Roman",serif; }
 .brand small { display:block; font:10px/1.8 StrikGotham,Arial,sans-serif; color:var(--muted); letter-spacing:.035em; }
 .header nav { display:flex; gap:25px; font-size:12px; }
@@ -92,6 +92,7 @@
 .flavour em { color:#d8bd91; }
 .flavourInner>div>p:not(.eyebrow) { font-size:12px; color:#d9ded2; max-width:410px; }
 .flavour .textLink { margin-top:25px; border-color:#a6b2a366; }
+.flavour .appointmentNote { margin-top:24px; padding-top:20px; border-top:1px solid #a6b2a366; font-size:11px; }
 .flavours>p { margin-bottom:8px!important; font-size:9px!important; text-transform:uppercase; letter-spacing:.15em; color:#cebd9d!important; }
 .flavours>div { display:flex; align-items:baseline; gap:28px; padding:21px 0; border-bottom:1px solid #9fae9e55; }
 .flavours>div>span { font:italic 12px Georgia,"Times New Roman",serif; color:#c9b28a; }
@@ -132,7 +133,7 @@
 .finalCta .button { margin-top:28px; }
 .handwritten { display:block; margin-top:25px; font:28px Butterscotch,Georgia,serif; color:#948169; transform:rotate(-5deg); }
 .footer { max-width:1360px; margin:auto; padding:27px 48px; display:flex; justify-content:space-between; align-items:center; gap:25px; font-size:10px; color:var(--muted); }
-.footer img { width:45px; height:50px; object-fit:contain; }
+.footer img { width:auto; height:50px; object-fit:contain; }
 .galleryDialog { position:fixed; inset:0; margin:auto; width:min(900px,calc(100vw - 40px)); max-width:none; max-height:calc(100dvh - 40px); border:1px solid #d8cbb6; border-radius:4px; padding:0; background:#fbf8f1; color:#403c32; box-shadow:0 20px 80px #0c120d66; }
 .galleryDialog::backdrop { background:#1e2a25d9; backdrop-filter:blur(5px); }
 .lightbox { display:flex; flex-direction:column; max-height:calc(100dvh - 42px); }
@@ -140,12 +141,17 @@
 .lightboxHeader p { font-size:10px; letter-spacing:.08em; text-transform:uppercase; }
 .lightboxHeader button { display:flex; align-items:center; gap:12px; background:none; border:0; padding:8px 0 8px 10px; font-size:11px; }
 .lightboxHeader button span { font-size:24px; line-height:1; }
-.lightboxPhoto { position:relative; height:min(70dvh,800px); min-height:0; flex-shrink:1; background:#eee8dd; }
+.lightboxPhoto { position:relative; height:min(60dvh,700px); min-height:180px; flex-shrink:1; background:#eee8dd; }
 .lightboxPhoto img { object-fit:contain; }
 .lightboxPhoto button { position:absolute; top:calc(50% - 25px); width:44px; height:50px; display:grid; place-items:center; border:1px solid #d9cebb; background:#fbf8f1ee; color:#403c32; border-radius:3px; font:32px/1 Georgia,"Times New Roman",serif; }
 .previousPhoto { left:15px; }
 .nextPhoto { right:15px; }
-.lightboxCaption { display:flex; justify-content:space-between; align-items:center; gap:20px; padding:18px 22px; }
+.lightboxCaption { display:flex; justify-content:space-between; align-items:flex-start; gap:20px; padding:18px 22px; }
+.lightboxCaption > div { flex:1; min-width:0; }
+.exampleSpecs { display:flex; flex-wrap:wrap; gap:12px 35px; margin:14px 0; }
+.exampleSpecs dt { font-size:10px; color:var(--muted); }
+.exampleSpecs dd { margin:2px 0 0; font-size:13px; font-weight:800; }
+.lightboxCaption .exampleBuild { font-size:12px; color:var(--ink); margin-top:10px; }
 .lightboxCaption h3 { font:26px/1.2 Georgia,"Times New Roman",serif; letter-spacing:-.02em; }
 .lightboxCaption p { margin-top:4px; font-size:11px; color:#777367; }
 .lightboxCaption>span { font-size:11px; white-space:nowrap; color:#987650; }
@@ -186,7 +192,7 @@
   .preview a { margin-left:0; }
   .header { min-height:90px; padding:15px 22px; gap:18px; flex-wrap:wrap; }
   .brand { gap:10px; }
-  .brand img { width:38px; height:46px; }
+  .brand img { width:auto; height:46px; }
   .brand>span { font-size:21px; padding-left:10px; }
   .header nav { order:3; width:100%; justify-content:center; gap:28px; border-top:1px solid var(--line); padding-top:12px; }
   .header .button { margin-left:auto; padding:10px 12px; font-size:9px; gap:7px; }
@@ -266,7 +272,7 @@
   .lightbox { max-height:calc(100dvh - 26px); }
   .lightboxHeader { padding:10px 14px; }
   .lightboxHeader p { font-size:8px; }
-  .lightboxPhoto { height:min(68dvh,700px); }
+  .lightboxPhoto { height:48dvh; }
   .lightboxPhoto button { width:36px; height:44px; font-size:28px; }
   .previousPhoto { left:8px; }
   .nextPhoto { right:8px; }

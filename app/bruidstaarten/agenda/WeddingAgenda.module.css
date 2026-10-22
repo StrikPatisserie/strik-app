@@ -1,0 +1,46 @@
+.page { color:#293e32; font-family:StrikGotham,Arial,sans-serif; font-size:13px; font-weight:400; padding-bottom:30px; }
+.page * { box-sizing:border-box; }
+.page h2 { font-size:16px; font-weight:800; margin:0; }
+.page h3 { font-size:15px; font-weight:800; margin:0; }
+.page p { margin:0; }
+.button,.primary,.active,.quiet { display:inline-flex; justify-content:center; align-items:center; gap:8px; border:1px solid #d8e1d5; border-radius:7px; background:#fff; color:#294b3d; min-height:38px; padding:9px 14px; font:400 12px/1.4 StrikGotham,Arial,sans-serif; cursor:pointer; }
+.active { background:#e6eee0; border-color:#a6b89b; font-weight:800; }
+.primary { background:#294b3d; border-color:#294b3d; color:white; font-weight:800; }
+.quiet { border-color:transparent; background:transparent; color:#82675b; }
+.page button:disabled { opacity:.45; cursor:default; }
+.topActions { display:flex; flex-wrap:wrap; gap:9px; margin-bottom:22px; }
+.setup { padding:18px 20px; border:1px solid #d8d6c4; border-radius:10px; background:#faf8ed; color:#666047; margin-bottom:20px; font-size:12px; line-height:1.8; }
+.setup strong { font-weight:800; }
+.setup small { display:block; margin-top:8px; font-size:11px; }
+.setup button { margin-top:12px; }
+.notice,.error { padding:13px 16px; background:#edf4e8; border:1px solid #c0d0b9; border-radius:8px; margin-bottom:20px!important; font-size:12px; line-height:1.7; }
+.error { background:#fff2e9; border-color:#e2bfa7; color:#86482c; }
+.tools { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:22px; }
+.page input:not([type=checkbox]),.page select,.page textarea { min-width:0; border:1px solid #d8e1d5; border-radius:7px; background:#fff; color:#293e32; padding:10px; font:400 13px/1.5 StrikGotham,Arial,sans-serif; }
+.tools input[placeholder] { flex:1; min-width:190px; }
+.list { background:#fff; border:1px solid #dce3d9; border-radius:12px; overflow:hidden; }
+.list section>h2 { background:#edf2e8; padding:14px 20px; font-size:13px; font-weight:400; text-transform:capitalize; border-bottom:1px solid #dce3d9; }
+.list article { display:flex; align-items:flex-start; gap:25px; padding:20px; border-bottom:1px solid #e5e9e0; }
+.time { min-width:56px; font-size:17px; font-weight:800; font-variant-numeric:tabular-nums; }
+.time small { display:block; margin-top:4px; font-size:11px; font-weight:400; color:#778171; }
+.customer { flex:1; min-width:0; }
+.customer>p { margin-top:7px; font-size:12px; color:#697567; overflow-wrap:anywhere; }
+.customer .notes { margin-top:14px; white-space:pre-wrap; font-size:12px; line-height:1.8; color:#45583f; }
+.mail { display:flex; flex-wrap:wrap; gap:7px 17px; font-size:10px; color:#78846f; margin-top:12px; }
+.mail [data-error] { color:#9e452d; }
+.rowActions { display:flex; flex-wrap:wrap; gap:6px; }
+.cancelled { opacity:.65; }
+.empty { padding:26px 20px; border:1px solid #dce3d9; background:#fff; border-radius:10px; color:#718067; font-size:12px; }
+.form { border:1px solid #dce3d9; border-radius:12px; background:#fff; padding:25px; max-width:900px; }
+.form header p { margin-top:7px; color:#718067; font-size:12px; }
+.fields { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:25px; }
+.fields label { display:grid; gap:7px; font-size:12px; }
+.fields input,.fields textarea { width:100%; }
+.fields small { font-size:10px; color:#718067; }
+.full { grid-column:1/-1; }
+.times { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.fields .check { grid-column:1/-1; display:flex; align-items:center; gap:10px; margin-top:6px; }
+.check input { width:18px; height:18px; accent-color:#294b3d; }
+.help { grid-column:1/-1; font-size:11px; color:#718067; line-height:1.8; }
+.form footer { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:10px; margin-top:25px; padding-top:20px; border-top:1px solid #dce3d9; }
+@media(max-width:700px) { .list article { gap:15px; padding:17px 15px; flex-wrap:wrap; }.rowActions { width:100%; padding-left:71px; }.fields { grid-template-columns:1fr; }.full { grid-column:auto; }.form { padding:20px 16px; }.tools input[placeholder] { flex-basis:100%; }.page input:not([type=checkbox]),.page select,.page textarea { font-size:16px; } }

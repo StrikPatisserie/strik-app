@@ -1,1 +1,2 @@
-export { default } from "../../agenda/BruidstaartAgendaPage";
+import WeddingAgenda from "./WeddingAgenda";
+export default function WeddingAgendaPage() { return <WeddingAgenda />; }

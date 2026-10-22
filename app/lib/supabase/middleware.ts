@@ -22,6 +22,8 @@ const PUBLIC_PATHS = new Set([
   "/Kerst/bonbons-zo-maken-we-ze.mp4",
   "/lettershop",
   "/menu-preview",
+  "/bruidstaart",
+  "/bruidstaart/afspraak",
 ]);
 
 // These endpoints either contain no private data or perform their own
@@ -39,6 +41,9 @@ const PUBLIC_API_PATHS = new Set([
   "/api/personnel-sheet-agenda",
   "/api/personnel-mail-orders/cron",
   "/api/business-order-reminders",
+  "/api/wedding-appointments/availability",
+  "/api/wedding-appointments/book",
+  "/api/wedding-appointments/mail-retry",
   "/api/bruidstaart-payment-request/webhook",
 ]);
 

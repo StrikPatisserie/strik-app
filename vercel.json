@@ -20,6 +20,10 @@
     {
       "path": "/api/business-order-reminders",
       "schedule": "15 6 * * *"
+    },
+    {
+      "path": "/api/wedding-appointments/mail-retry",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

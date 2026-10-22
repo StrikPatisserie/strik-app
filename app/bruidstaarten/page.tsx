@@ -12,7 +12,7 @@ const items = [
   },
   {
     href: "/bruidstaarten/agenda",
-    title: "Geplande afspraken",
+    title: "Afspraken · agenda & inplannen",
     description: "",
     icon: strikIcons.strikAgenda,
     accent: "green" as const,
@@ -36,9 +36,9 @@ export default function BruidstaartenPage() {
     >
       <div className="flex justify-end">
         <SecondaryResourceLink
-          href="https://strik-patisserie.nl/wp-content/uploads/2025/06/bruidstaart-inspiratie.pdf"
-          title="Bekijk de bruidstaart voorbeelden"
-          label="Inspiratie-pdf"
+          href="/bruidstaarten/voorbeeld"
+          title="Bekijk de bruidstaartpagina"
+          label="Inspiratie & afspraken"
           icon={strikIcons.info}
           newTab
         />
