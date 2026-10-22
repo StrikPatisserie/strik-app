@@ -155,6 +155,7 @@ export function normalizeB2BOrder(value: unknown): SinterklaasB2BOrder | null {
     if (quantity < 1) return [];
     return [{
       id: textFrom(rawLine.id) || `b2b-line-${index}`,
+      withLogo: typeof rawLine.withLogo === "boolean" ? rawLine.withLogo : undefined,
       letter,
       chocolate: rawLine.chocolate === "puur" || rawLine.chocolate === "wit" ? rawLine.chocolate : "melk",
       style,

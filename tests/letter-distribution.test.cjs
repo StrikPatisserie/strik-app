@@ -127,3 +127,10 @@ test('two identical lines of the same order become one customer allocation witho
  const actual=sources.productionRecipientsFor(row({orders:8,orderSources:{online:8},recipients:[recipient,{...recipient,quantity:2},{...recipient,id:'other',code:'CL2',quantity:3}]}),'online');
  assert.deepEqual(plain(actual.map(item=>[item.code,item.quantity])),[['CL1',5],['CL2',3]]);
 });
+
+test('per-line B2B logos override the old general logo agreement, including packages with a logo and plain standalone letters',()=>{
+ const result=helper.combineProductionOrders([batch()],[],[b2b({logo:'Logo op de pakketten',letterLines:[line({quantity:10,withLogo:true}),line({quantity:3,withLogo:false})]})]).batches[0];
+ const logo=result.rows.find(row=>row.key.endsWith('|logo')),plainRow=result.rows.find(row=>!row.key.endsWith('|logo'));
+ assert.equal(logo.orders,10);assert.equal(plainRow.orders,3);
+ assert.equal(result.rows.length,2);
+});

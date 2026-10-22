@@ -127,7 +127,7 @@ export function buildBusinessFolderQuote(value: unknown) {
       const colors = customColors && product.customColorMinimum && quantity >= product.customColorMinimum ? ` · eigen kleuren: ${customColors}` : product.defaultColors ? ` · standaard ${product.defaultColors}` : "";
       rows.push(`${quantity} × ${product.name} · ${detail}${colors}`, `  ${money(unit(false))} p.s. excl. btw · ${money(roundMoney(quantity * unit(false)))} totaal excl. btw${withLogo ? " · inclusief eigen logo" : ""}${withGiftWrap ? ` · inclusief cadeaupapier (${money(letterGiftWrapPrice(true))} incl. btw per letter)` : ""}`);
       totalEx += roundMoney(quantity * unit(false)); totalIncl += roundMoney(quantity * unit(true));
-      if (letter) letterLines.push(letter);
+      if (letter) letterLines.push({ ...letter, withLogo });
       hasPackaging ||= withGiftWrap; hasLogo ||= withLogo;
     }
     snapshotSelection = lines.map(({ product, ...line }) => ({ productId: product.id, ...line }));

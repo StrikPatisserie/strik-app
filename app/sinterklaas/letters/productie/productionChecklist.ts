@@ -1,3 +1,4 @@
+import { b2bLetterHasLogo } from "../../b2bLetterLines";
 import { b2bProductionPlan, eligibleB2BLetterOrder, type B2BProductionAssignment } from "./b2bProductionPlanning";
 import type { ChocolateLetterLine, ChocolateLetterOrder, SinterklaasB2BOrder } from "../../types";
 import type { ProductionBatchSeed } from "./ProductionPlanningClient";
@@ -91,7 +92,7 @@ export function combineProductionOrders(batches: ProductionBatchSeed[], legacyOr
         return;
       }
       order.letterLines.forEach((line) => {
-        const extras = [order.logo ? "logo" : "", ...line.exceptions].filter(Boolean);
+        const extras = [b2bLetterHasLogo(order, line) ? "logo" : "", ...line.exceptions].filter(Boolean);
         const label = [line.letter, line.chocolate, line.size, line.style, ...extras].join(" · ");
         const key = [line.letter, line.chocolate, line.size, line.style, ...extras].join("|").toLocaleLowerCase("nl-NL");
         addOrderLine(date, key, label, line.quantity, "b2b", {id:`b2b:${order.id}`,customerName:order.customerName,code:order.folderQuote?.reference || order.id,date:order.deliveryDate,notes:[order.packaging,order.importantNotes].filter(Boolean).join(" · ")});

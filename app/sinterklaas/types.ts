@@ -119,6 +119,7 @@ export type B2BConfirmationReceipt = {
 };
 
 export type B2BLetterLine = {
+  withLogo?: boolean;
   id: string;
   letter: string;
   chocolate: "melk" | "puur" | "wit";

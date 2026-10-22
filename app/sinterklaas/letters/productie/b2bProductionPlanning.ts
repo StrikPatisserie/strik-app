@@ -1,3 +1,4 @@
+import { b2bLetterHasLogo, b2bLetterLineLabel } from "../../b2bLetterLines";
 import type { SinterklaasB2BOrder } from "../../types";
 import type { ProductionBatchSeed } from "./ProductionPlanningClient";
 
@@ -14,6 +15,6 @@ export function batchReadyDate(batch:ProductionBatchSeed) {
 export function b2bProductionPlan(order:SinterklaasB2BOrder,batches:ProductionBatchSeed[],assignments:B2BProductionAssignment[]=[]):B2BProductionPlan {
   const saved=assignments.find(item=>item.order_id===order.id);
   const suggested=batches.find(batch=>order.productionDate&&(batch.startDate===order.productionDate||batch.date===order.productionDate))||[...batches].filter(batch=>order.deliveryDate&&batchReadyDate(batch)<=order.deliveryDate).sort((a,b)=>a.date.localeCompare(b.date)).at(-1);
-  return {id:order.id,customerName:order.customerName,deliveryDate:order.deliveryDate,letters:order.letterLines.map(line=>`${line.quantity}× ${line.letter} · ${line.chocolate} · ${line.size} · ${line.style}${line.exceptions.length?` · ${line.exceptions.join(", ")}`:""}`).join(" / "),quantity:order.letterLines.reduce((sum,line)=>sum+line.quantity,0),batchId:saved?saved.batch_id:suggested?.id||null,manual:Boolean(saved),revision:saved?.revision||0,version:JSON.stringify([order.id,order.status,order.cancelled,order.delivered,doneForVersion(order),order.deliveryDate,order.productionDate,order.letterLines,order.logo,order.packaging])};
+  return {id:order.id,customerName:order.customerName,deliveryDate:order.deliveryDate,letters:order.letterLines.map(line=>b2bLetterLineLabel({...line,withLogo:b2bLetterHasLogo(order,line)})).join(" / "),quantity:order.letterLines.reduce((sum,line)=>sum+line.quantity,0),batchId:saved?saved.batch_id:suggested?.id||null,manual:Boolean(saved),revision:saved?.revision||0,version:JSON.stringify([order.id,order.status,order.cancelled,order.delivered,doneForVersion(order),order.deliveryDate,order.productionDate,order.letterLines,order.logo,order.packaging])};
 }
 function doneForVersion(order:SinterklaasB2BOrder){return [order.productionDone,order.letterProductionDone];}

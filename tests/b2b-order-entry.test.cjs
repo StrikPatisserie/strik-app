@@ -45,6 +45,7 @@ function entry(season = 'sint', initialOrder = null) {
       || nodes(nodes(tree, n => n.type === 'label' && label(n.props.children).startsWith(name))[0], n => ['input','select','textarea'].includes(n.type))[0];
   }
   return { render, calls, updated, blank: loaded.blank, parse: loaded.parse,
+    check(name, checked) { const input = field(name); assert.ok(input, `Checkbox: ${name}`); input.props.onChange({ target: { checked } }); },
     field(name, value) { const input = field(name); assert.ok(input, `Field: ${name}`); input.props.onChange({ target: { value } }); },
     button(name) { const button = nodes(render(), n => n.type === 'button' && label(n) === name)[0]; assert.ok(button, `Button: ${name}`); const event = { defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } }; button.props.onClick?.(event); return event; },
     step() { return nodes(render(), n => n.props?.['aria-current'] === 'step').map(label)[0]; },
@@ -120,4 +121,89 @@ test('an existing folder request opens as editable products and preserves its or
   assert.equal(ui.calls[0].totalExVat.replace(/\s/g,''), '€690,60');
   assert.equal(ui.calls[0].status, 'aanvraag');
   assert.equal(order.orderText, raw, 'opening/editing never mutates the original inquiry object');
+});
+
+function addLetters(ui, quantity, withLogo, character='S') {
+  ui.field('Letter', character); ui.field('Chocolade', 'melk'); ui.field('Soort', 'spuit'); ui.field('Formaat', 'groot'); ui.field('Aantal letters', String(quantity));
+  ui.check('Eigen logo op deze letters', withLogo); ui.button('+ Letter toevoegen');
+}
+function addPackage(ui, quantity, withLogo=false) {
+  ui.button('Overige producten');
+  const product=sint.products.find(item=>item.id==='stafwerk');
+  ui.field('Product',product.id);ui.field('Variant',sint.productChoiceCandidates(product)[0]);ui.field('Aantal producten',String(quantity));
+  ui.check('Eigen logo op dit product',withLogo);ui.button('+ Product toevoegen');
+}
+
+test('10 letters with a logo and 3 packages without retain separate charges through save and reopening',async()=>{
+  const ui=entry();ui.field('Bedrijfsnaam / klantnaam *','Logo voorbeeld');ui.button('Verder naar producten →');
+  addLetters(ui,10,true);addPackage(ui,3,false);
+  ui.button('Bestelling controleren →');await ui.submit();
+  const saved=ui.calls[0],parsed=ui.parse(saved.orderText);
+  assert.equal(saved.letterLines[0].withLogo,true);
+  const letterPrice=parsed.productLines.find(line=>line.productId==='chocoladeletter'),packagePrice=parsed.productLines.find(line=>line.productId==='stafwerk');
+  assert.equal(letterPrice.quantity,10);assert.equal(letterPrice.withLogo,true);assert.equal(packagePrice.withLogo,false);
+  assert.equal(Number(letterPrice.unitPriceEx),13.26); // 12.80 ex VAT + 0.46 logo
+  assert.equal(Number(packagePrice.unitPriceEx),Number(sint.productUnitPrice(sint.products.find(p=>p.id==='stafwerk'),sint.tierFor(sint.products.find(p=>p.id==='stafwerk'),3),false)));
+  const reopened=entry('sint',{...saved,id:'logo-saved',updatedAt:'2026-10-22'});
+  const checkbox=nodes(reopened.render(),n=>n.type==='input'&&n.props['aria-label']?.startsWith('Logo op letterregel'))[0];
+  assert.equal(checkbox.props.checked,true);
+  reopened.button('Verder naar producten →');reopened.button('Bestelling controleren →');await reopened.submit();
+  assert.equal(reopened.calls[0].orderText,saved.orderText);assert.equal(reopened.calls[0].totalExVat,saved.totalExVat);
+});
+
+test('the same letter can be split into quantities with and without logos, while staffels still use the full product quantity',async()=>{
+  const ui=entry();ui.field('Bedrijfsnaam / klantnaam *','Gemengd');ui.button('Verder naar producten →');
+  addLetters(ui,20,true);addLetters(ui,5,false);
+  ui.button('Bestelling controleren →');await ui.submit();
+  const saved=ui.calls[0],prices=ui.parse(saved.orderText).productLines;
+  assert.equal(saved.letterLines.length,2);
+  assert.deepEqual(JSON.parse(JSON.stringify(saved.letterLines.map(line=>[line.quantity,line.withLogo]))),[[20,true],[5,false]]);
+  assert.equal(prices.length,2);
+  const plain=prices.find(line=>!line.withLogo),logo=prices.find(line=>line.withLogo);
+  assert.equal(Math.round((Number(logo.unitPriceEx)-Number(plain.unitPriceEx))*100),46);
+  const configured={...sint.products.find(p=>p.id==='chocoladeletter'),retailPriceIncl:13.95};
+  assert.equal(Number(plain.unitPriceEx),sint.productUnitPrice(configured,sint.tierFor(configured,25),false));
+});
+
+test('bulk logos remain reversible per article and manually agreed unit prices change only by the logo surcharge',async()=>{
+  const ui=entry();ui.field('Bedrijfsnaam / klantnaam *','Alle artikelen');ui.button('Verder naar producten →');
+  addLetters(ui,10,false);addPackage(ui,3,false);
+  ui.field('Prijs Stafwerk pakket','20');
+  ui.button('Logo bij alle geschikte artikelen');
+  ui.check('Logo op Stafwerk pakket · eigen logo',false);
+  ui.button('Bestelling controleren →');await ui.submit();
+  let saved=ui.calls[0],prices=ui.parse(saved.orderText).productLines;
+  assert.equal(saved.letterLines[0].withLogo,true);assert.equal(prices.find(p=>p.productId==='stafwerk').withLogo,false);
+  assert.equal(prices.find(p=>p.productId==='stafwerk').unitPriceEx,'20.00');
+  const reopened=entry('sint',{...saved,id:'manual',updatedAt:'2026-10-22'});reopened.button('Verder naar producten →');
+  reopened.check('Logo op Stafwerk pakket',true);
+  reopened.button('Bestelling controleren →');await reopened.submit();
+  assert.equal(reopened.parse(reopened.calls[0].orderText).productLines.find(p=>p.productId==='stafwerk').unitPriceEx,'20.46');
+});
+
+test('removing all logos clears only the generated logo agreement',async()=>{
+  const ui=entry();ui.field('Bedrijfsnaam / klantnaam *','Geen logos');ui.button('Verder naar producten →');addLetters(ui,10,true);
+  ui.button('Bestelling controleren →');await ui.submit();
+  const saved={...ui.calls[0],id:'remove',updatedAt:'2026-10-22'};
+  const reopened=entry('sint',saved);reopened.button('Verder naar producten →');reopened.button('Alle logo’s uit');reopened.button('Bestelling controleren →');await reopened.submit();
+  assert.equal(reopened.calls[0].logo,'');assert.equal(reopened.calls[0].letterLines[0].withLogo,false);assert.doesNotMatch(reopened.calls[0].orderText,/eigen logo/);
+});
+
+test('bulk logos skip catalogue articles that do not support a logo',async()=>{
+  const ui=entry();ui.field('Bedrijfsnaam / klantnaam *','Ondersteunde producten');ui.button('Verder naar producten →');addLetters(ui,10,false);
+  ui.button('Overige producten');const product=sint.products.find(item=>item.id==='marsepein-letter');
+  ui.field('Product',product.id);ui.field('Variant',product.variants[0].label);ui.field('Aantal producten','3');ui.button('+ Product toevoegen');
+  ui.button('Logo bij alle geschikte artikelen');ui.button('Bestelling controleren →');await ui.submit();
+  assert.equal(ui.calls[0].letterLines[0].withLogo,true);
+  assert.equal(ui.parse(ui.calls[0].orderText).productLines.find(line=>line.productId==='marsepein-letter').withLogo,false);
+});
+
+test('the API normalizer retains explicit true/false line choices while older orders keep their general logo fallback',()=>{
+  const api=load('app/sinterklaas/sinterklaasApi.ts',{'./b2bLetterLines':letters});
+  const base={id:'logo-roundtrip',customerName:'Voorbeeld',status:'aanvraag',logo:'Alleen op de pakketten',letterLines:[{id:'a',letter:'S',chocolate:'melk',style:'spuit',size:'groot',quantity:10,exceptions:[],withLogo:true},{id:'b',letter:'S',chocolate:'melk',style:'spuit',size:'groot',quantity:3,exceptions:[],withLogo:false}]};
+  const result=api.normalizeB2BOrder(base);
+  assert.equal(letters.b2bLetterHasLogo(result,result.letterLines[0]),true);
+  assert.equal(letters.b2bLetterHasLogo(result,result.letterLines[1]),false);
+  const legacy=api.normalizeB2BOrder({...base,letterLines:[{...base.letterLines[1],withLogo:null}]});
+  assert.equal(letters.b2bLetterHasLogo(legacy,legacy.letterLines[0]),true);
 });

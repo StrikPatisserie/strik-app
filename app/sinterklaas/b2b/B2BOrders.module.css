@@ -242,3 +242,11 @@
 
 .packageLetterField { display:flex; align-items:center; gap:8px; margin-top:6px; color:var(--b2b-muted); font-size:11px; }
 .packageLetterField select { width:70px; min-height:32px; padding:5px 8px; }
+
+.logoChoice { display: flex; gap: 10px; align-items: center; min-height: 48px; padding: 12px; border: 1px solid var(--b2b-border); border-radius: 10px; font-size: 13px; }
+.logoChoice input, .inlineLogo input { flex: 0 0 auto; width: 18px; height: 18px; accent-color: var(--b2b-accent); }
+.logoChoice small { display: block; margin-top: 3px; font-size: 11px; color: var(--b2b-muted); }
+.inlineLogo { display: flex; align-items: center; gap: 7px; min-height: 44px; margin-top: 6px; font-size: 11px; color: var(--b2b-muted); }
+.logoActions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 20px; padding: 14px; border: 1px solid var(--b2b-border); border-radius: 10px; background: var(--b2b-pale); }
+.logoActions > div { flex: 1 1 220px; font-size: 13px; }
+.logoActions p { margin: 4px 0 0; font-size: 12px; color: var(--b2b-muted); }

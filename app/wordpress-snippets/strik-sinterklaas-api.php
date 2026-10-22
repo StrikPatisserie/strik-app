@@ -697,6 +697,7 @@ function strik_sinterklaas_sanitize_b2b_letter_lines($lines) {
             'size' => $size,
             'quantity' => $quantity,
             'exceptions' => array_values(array_unique($exceptions)),
+            'withLogo' => isset($line['withLogo']) ? $line['withLogo'] === true : null,
         );
     }
     return $clean;
@@ -1162,10 +1163,15 @@ function strik_business_b2b_confirmation_data($order) {
     if ($window === 'week') $moment = 'Leverweek ' . $week . ($moment !== '' ? ' · vanaf ' . $moment : '');
     $agreement = $order['priceAgreement'];
     if (!empty($order['folderQuote']) && strpos($agreement, 'Prijsindicatie:') === 0) $agreement = '';
+    $letter_lines = $order['letterLines'];
+    foreach ($letter_lines as &$letter_line) {
+        if (!isset($letter_line['withLogo'])) $letter_line['withLogo'] = !empty($order['logo']);
+    }
+    unset($letter_line);
     return array(
         'season' => $order['season'], 'company' => $order['customerName'], 'contact' => $order['contactName'],
         'email' => $order['customerEmail'], 'phone' => $order['phone'], 'products' => trim($text),
-        'letters' => $order['letterLines'], 'legacyLetters' => empty($order['letterLines']) ? $order['letterOrderText'] : '', 'moment' => $moment, 'method' => $order['deliveryMethod'],
+        'letters' => $letter_lines, 'legacyLetters' => empty($order['letterLines']) ? $order['letterOrderText'] : '', 'moment' => $moment, 'method' => $order['deliveryMethod'],
         'address' => $order['deliveryAddress'], 'total' => $order['totalExVat'], 'agreement' => $agreement,
         'logo' => $order['logo'], 'packaging' => $order['packaging'], 'text' => $order['textInstructions'],
     );
@@ -1208,7 +1214,7 @@ function strik_business_b2b_confirmation_html($order, $internal = false, $update
     if (count($data['letters'])) {
         $html .= '<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse">';
         foreach ($data['letters'] as $line) {
-            $html .= '<tr><td style="padding:11px 10px 11px 0;border-bottom:1px solid #e2e8df;font-weight:bold;vertical-align:top;white-space:nowrap">' . absint($line['quantity']) . '×</td><td style="padding:11px 0;border-bottom:1px solid #e2e8df"><strong>' . esc_html(($line['style'] === 'vorm' ? 'Vormletter ' : 'Spuitletter ') . $line['letter']) . '</strong> · ' . esc_html($line['chocolate'] . ' · ' . $line['size']) . (!empty($line['exceptions']) ? '<br><span style="font-size:13px">' . esc_html(implode(', ', $line['exceptions'])) . '</span>' : '') . '</td></tr>';
+            $html .= '<tr><td style="padding:11px 10px 11px 0;border-bottom:1px solid #e2e8df;font-weight:bold;vertical-align:top;white-space:nowrap">' . absint($line['quantity']) . '×</td><td style="padding:11px 0;border-bottom:1px solid #e2e8df"><strong>' . esc_html(($line['style'] === 'vorm' ? 'Vormletter ' : 'Spuitletter ') . $line['letter']) . '</strong> · ' . esc_html($line['chocolate'] . ' · ' . $line['size']) . (!empty($line['withLogo']) ? ' · <strong>Eigen logo</strong>' : '') . (!empty($line['exceptions']) ? '<br><span style="font-size:13px">' . esc_html(implode(', ', $line['exceptions'])) . '</span>' : '') . '</td></tr>';
         }
         $html .= '</table>';
     }
@@ -1357,7 +1363,7 @@ function strik_sinterklaas_create_b2b_confirmation_body($order, $is_new_confirma
     if (!empty($order['letterOrderText'])) $lines[] = 'Oude vrije letteromschrijving: ' . $order['letterOrderText'];
     if (!empty($order['letterLines'])) {
         $lines[] = 'Chocoladeletterregels:';
-        foreach ($order['letterLines'] as $line) $lines[] = sprintf('%d x %s - %s %s - %s%s', $line['quantity'], $line['letter'], $line['chocolate'], $line['style'], $line['size'], !empty($line['exceptions']) ? ' - VEREIST: ' . implode(', ', $line['exceptions']) : '');
+        foreach ($order['letterLines'] as $line) $lines[] = sprintf('%d x %s - %s %s - %s%s', $line['quantity'], $line['letter'], $line['chocolate'], $line['style'], $line['size'], !empty($line['exceptions']) ? ' - VEREIST: ' . implode(', ', $line['exceptions']) : '') . ((isset($line['withLogo']) ? $line['withLogo'] : !empty($order['logo'])) ? ' - EIGEN LOGO' : '');
     }
     $lines[] = '';
     $lines[] = 'Order-id: ' . $order['id'];
@@ -1498,7 +1504,7 @@ function strik_business_b2b_attention_html($order, $attention) {
     $html .= '<h2 style="font-size:18px">Levering</h2><p><strong>' . esc_html($data['moment']) . '</strong><br>' . esc_html($data['method'] ?: 'Leverwijze nog afspreken') . ($data['address'] !== '' ? '<br>' . $p($data['address']) : '') . '</p>';
     $html .= '<p><strong>Fase:</strong> ' . ($final ? 'Definitief' : ($order['status'] === 'offerte' ? 'Offerte · akkoord nog controleren' : 'Aanvraag · akkoord nog controleren')) . '<br><strong>Bake-it:</strong> ' . (!empty($order['entered']) ? 'Gemarkeerd als ingevoerd' : 'Nog niet gemarkeerd als ingevoerd') . '</p>';
     $html .= '<h2 style="font-size:18px">Bestelling</h2>' . strik_business_quote_details_html($data['products']);
-    foreach ($data['letters'] as $line) $html .= '<p><strong>' . absint($line['quantity']) . '× ' . esc_html(($line['style'] === 'vorm' ? 'Vormletter ' : 'Spuitletter ') . $line['letter']) . '</strong> · ' . esc_html($line['chocolate'] . ' · ' . $line['size']) . (!empty($line['exceptions']) ? '<br>' . esc_html(implode(', ', $line['exceptions'])) : '') . '</p>';
+    foreach ($data['letters'] as $line) $html .= '<p><strong>' . absint($line['quantity']) . '× ' . esc_html(($line['style'] === 'vorm' ? 'Vormletter ' : 'Spuitletter ') . $line['letter']) . '</strong> · ' . esc_html($line['chocolate'] . ' · ' . $line['size']) . (!empty($line['withLogo']) ? ' · <strong>Eigen logo</strong>' : '') . (!empty($line['exceptions']) ? '<br>' . esc_html(implode(', ', $line['exceptions'])) : '') . '</p>';
     if ($data['legacyLetters'] !== '') $html .= '<p>' . $p($data['legacyLetters']) . '</p>';
     foreach (array('Logo' => $data['logo'], 'Verpakking' => $data['packaging'], 'Tekst' => $data['text'], 'Interne opmerkingen' => $order['importantNotes']) as $label => $value) if ($value !== '') $html .= '<p><strong>' . esc_html($label) . '</strong><br>' . $p($value) . '</p>';
     $html .= '<h2 style="font-size:18px">Contact</h2><p>' . $p(implode("\n", array_filter(array($data['company'], $data['contact'], $data['email'], $data['phone'])))) . '</p><p><strong>' . ($final ? 'Afgesproken totaal' : 'Huidige prijsindicatie') . ':</strong> ' . esc_html(strik_business_b2b_total_label($data['total'])) . ' excl. btw</p>';
