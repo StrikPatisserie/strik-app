@@ -184,6 +184,4 @@
 
 /* Keep the existing printed headings independent of the compact screen headings. */
 .page :global(.start-distribution-print-page) h2,
-.page :global(.letter-distribution-print) h2,
-.page :global(.production-checklist-print) h2 { font-size: 30px; font-weight: 900; line-height: 1.2; }
-.page :global(.production-checklist-print) h3 { font-size: 11.2px; font-weight: 900; letter-spacing: .14em; }
+.page :global(.letter-distribution-print) h2 { font-size: 30px; font-weight: 900; line-height: 1.2; }
