@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
 import { getRoutePrintBlockedReason, openRoutePrintWindow } from "./routePrintWindow";
+import { routePrintPaginationScript } from "./routePrintPagination";
 import { normalizeReceiptDelivery } from "./receiptDelivery";
 import BusinessDeliveries from "./BusinessDeliveries";
 import { PhotoPrintChoiceModal } from "./PhotoPrintChoiceModal";
@@ -4841,28 +4842,9 @@ function createBusRoutePrintHtml(input: {
     input.routeGroup.routes,
     input.departureOverride
   );
-  const printPages = printableRoutes.reduce<RouteRound[][]>((pages, route) => {
-    const currentPage = pages.at(-1);
-    const routePrintUnits = (routes: RouteRound[]) =>
-      routes.reduce(
-        (total, pageRoute) => total + pageRoute.stops.length + 2,
-        0
-      );
-
-    // A full round always stays together. Two rounds only share one side when
-    // all stops plus both round headings fit comfortably on that A4.
-    if (
-      currentPage &&
-      currentPage.length < 2 &&
-      routePrintUnits([...currentPage, route]) <= 17
-    ) {
-      currentPage.push(route);
-    } else {
-      pages.push([route]);
-    }
-
-    return pages;
-  }, []);
+  // Render complete source rounds first. The standalone print document measures
+  // actual address/stop heights before choosing page breaks (including on iPad).
+  const printPages = printableRoutes.map(route => [route]);
   const routesHtml = printPages
     .map((pageRoutes, pageIndex) => {
       const nextPage = printPages[pageIndex + 1];
@@ -4991,8 +4973,9 @@ function createBusRoutePrintHtml(input: {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${escapeHtml(title)} · ${stopCount} stops · ${generatedAt}</title>
     <style>
-      @page { margin: 0; size: A4 portrait; }
+      @page { margin: 8mm; size: A4 portrait; }
       * { box-sizing: border-box; }
+      html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
       body {
         background: #e9e9e9;
         color: #111;
@@ -5010,6 +4993,11 @@ function createBusRoutePrintHtml(input: {
         justify-content: space-between;
         padding: 10px 12px;
       }
+      .print-status { font-size: 12px; margin: 4px 0 0; }
+      .screen-actions button:disabled { opacity: .5; cursor: wait; }
+      /* Leave room for AirPrint/printer margins and header/footer differences. */
+      .page-height-guide { position: absolute; top: 0; left: 0; height: 260mm; width: 1px; visibility: hidden; pointer-events: none; }
+      .print-error { display: none; }
       .screen-actions h1 {
         font-size: 15px;
         margin: 0;
@@ -5034,12 +5022,10 @@ function createBusRoutePrintHtml(input: {
       }
       .route-page {
         background: #fff;
-        display: flex;
-        flex-direction: column;
-        margin: 0 auto;
-        min-height: 280mm;
-        padding: 7mm;
-        width: 210mm;
+        display: flow-root;
+        margin: 8mm auto;
+        padding: 0;
+        width: 194mm;
       }
       .route-page + .route-page {
         margin-top: 8mm;
@@ -5091,10 +5077,8 @@ function createBusRoutePrintHtml(input: {
         height: 4.5mm;
         padding-top: 0.6mm;
       }
-      .route-sections {
-        display: grid;
-        gap: 2mm;
-      }
+      .route-sections { display: flow-root; }
+      .route-block + .route-block { margin-top: 1.5mm; }
       .route-block {
         break-inside: avoid;
         page-break-inside: avoid;
@@ -5129,20 +5113,17 @@ function createBusRoutePrintHtml(input: {
         font-size: 10px;
         padding: 1.1mm 2.5mm;
       }
-      .stops {
-        display: grid;
-        gap: 1mm;
-        margin-top: 1.4mm;
-      }
+      .stops { display: block; margin-top: 1mm; }
+      .stop-card + .stop-card { margin-top: .8mm; }
       .stop-card {
-        align-items: stretch;
         border: 1.5px solid #111;
         border-left-width: 4px;
         border-radius: 2.5mm;
-        display: grid;
-        grid-template-columns: 10mm minmax(0, 1fr) 17mm;
+        display: table;
+        table-layout: fixed;
+        width: 100%;
         min-height: 12.5mm;
-        overflow: hidden;
+        break-inside: avoid;
         page-break-inside: avoid;
       }
       .stop-card.missed-deadline {
@@ -5164,17 +5145,19 @@ function createBusRoutePrintHtml(input: {
         margin-top: 0.5mm;
         padding: 0.7mm 1.2mm;
       }
+      .stop-card > div { display: table-cell; vertical-align: middle; }
       .stop-number {
-        align-items: center;
+        width: 10mm;
+        text-align: center;
         border-right: 1px solid #aaa;
-        display: flex;
         font-size: 15px;
         font-weight: 900;
         justify-content: center;
       }
       .stop-content {
         min-width: 0;
-        padding: 1.1mm 2mm 0.8mm;
+        overflow-wrap: anywhere;
+        padding: .8mm 2mm .6mm;
       }
       .stop-heading {
         align-items: flex-start;
@@ -5183,6 +5166,8 @@ function createBusRoutePrintHtml(input: {
         justify-content: space-between;
       }
       .stop-heading strong {
+        min-width: 0;
+        overflow-wrap: anywhere;
         font-size: 14.5px;
         line-height: 1.05;
       }
@@ -5222,24 +5207,18 @@ function createBusRoutePrintHtml(input: {
         font-size: 9px;
         gap: 3mm;
         grid-template-columns: 35mm minmax(0, 1fr);
-        margin-top: 0.8mm;
+        margin-top: 0.5mm;
       }
       .write-fields span {
         border-bottom: 1px solid #777;
-        min-height: 2.7mm;
+        min-height: 2.2mm;
       }
       .write-fields b {
         background: #fff;
         padding-right: 1.5mm;
       }
-      .stop-check {
-        align-items: center;
-        border-left: 1px solid #aaa;
-        display: flex;
-        flex-direction: column;
-        gap: 1mm;
-        justify-content: center;
-      }
+      .stop-check { width: 17mm; border-left: 1px solid #aaa; text-align: center; }
+      .stop-check span, .stop-check small { display: block; margin: 1mm auto; }
       .stop-check span {
         border: 2px solid #111;
         height: 7mm;
@@ -5252,8 +5231,8 @@ function createBusRoutePrintHtml(input: {
       .general-notes {
         border: 1.5px solid #111;
         border-radius: 2.5mm;
-        margin-top: 1.8mm;
-        padding: 1.2mm 2.5mm;
+        margin-top: 1.2mm;
+        padding: .8mm 2.5mm;
       }
       .general-notes h2 {
         font-size: 11px;
@@ -5261,126 +5240,53 @@ function createBusRoutePrintHtml(input: {
       }
       .general-notes div {
         border-bottom: 1px solid #888;
-        height: 3.5mm;
+        height: 2.8mm;
       }
       .page-footer {
         align-items: flex-end;
         border-top: 3px solid #111;
         display: flex;
         justify-content: space-between;
-        margin-top: auto;
-        padding-top: 1.5mm;
+        margin-top: 2mm;
+        padding-top: 1mm;
       }
       .page-footer span {
         font-size: 11px;
         font-weight: 800;
       }
       .page-footer strong {
-        font-size: 20px;
+        font-size: 14px;
         font-weight: 900;
         letter-spacing: 0.04em;
+        white-space: nowrap;
       }
       .page-footer .route-end {
         font-size: 13px;
       }
       @media print {
-        html,
-        body {
-          background: #fff;
-          height: auto;
-          margin: 0;
-          padding: 0;
-          width: 210mm;
-        }
+        html, body { background: #fff; height: auto; margin: 0; padding: 0; width: 194mm; }
         .screen-actions { display: none; }
-        .route-page {
-          break-inside: avoid-page;
-          break-after: page;
-          display: flex;
-          flex-direction: column;
-          height: 296mm;
-          margin: 0;
-          max-height: 296mm;
-          min-height: 296mm;
-          page-break-after: always;
-          page-break-inside: avoid;
-          padding: 7mm;
-          width: 210mm;
-        }
-        .sheet-header {
-          margin-bottom: 1.5mm;
-          padding-bottom: 1.5mm;
-        }
-        .route-sections {
-          gap: 1.5mm;
-        }
-        .route-block {
-          break-inside: auto;
-          page-break-inside: auto;
-        }
-        .route-title {
-          padding: 1.1mm 2.2mm;
-        }
-        .depot-line {
-          padding: 0.8mm 2.2mm;
-        }
-        .stops {
-          display: block;
-          margin-top: 1mm;
-        }
-        .stop-card {
-          break-inside: avoid-page !important;
-          min-height: 0;
-          page-break-inside: avoid !important;
-        }
-        .stop-card + .stop-card {
-          margin-top: 0.8mm;
-        }
-        .stop-content {
-          padding-bottom: 0.6mm;
-          padding-top: 0.8mm;
-        }
-        .write-fields {
-          margin-top: 0.5mm;
-        }
-        .write-fields span {
-          min-height: 2.2mm;
-        }
-        .general-notes {
-          break-inside: avoid-page;
-          margin-top: 1.2mm;
-          page-break-inside: avoid;
-          padding-bottom: 0.8mm;
-          padding-top: 0.8mm;
-        }
-        .general-notes div {
-          height: 2.8mm;
-        }
-        .page-footer {
-          break-inside: avoid-page;
-          margin-top: auto;
-          page-break-inside: avoid;
-          padding-top: 1mm;
-        }
-        .route-page:last-child {
-          break-after: auto;
-          page-break-after: auto;
-        }
-        .route-page + .route-page {
-          margin-top: 0;
-        }
+        .route-page { display: flow-root; height: auto; min-height: 0; max-height: none; margin: 0; padding: 0; width: 194mm; break-after: page; page-break-after: always; }
+        .route-page + .route-page { margin-top: 0; }
+        .route-page:last-child { break-after: auto; page-break-after: auto; }
+        .route-block, .stop-card, .general-notes, .page-footer { break-inside: avoid; page-break-inside: avoid; }
+        body:not([data-route-ready="true"]):not([data-route-preparing="true"]) .route-pages { display: none; }
+        body:not([data-route-ready="true"]):not([data-route-preparing="true"]) .print-error { display: block; font-size: 14px; font-weight: 700; }
       }
     </style>
   </head>
   <body>
     <div class="screen-actions">
-      <h1>${escapeHtml(title)} · ${stopCount} stops · gemaakt ${generatedAt}</h1>
+      <div><h1>${escapeHtml(title)} · ${stopCount} stops · gemaakt ${generatedAt}</h1><p class="print-status" role="status">Route wordt over de pagina’s verdeeld…</p></div>
       <div class="action-buttons">
         <button type="button" class="secondary" onclick="if (window.opener) window.close(); else window.history.back();">Terug</button>
-        <button type="button" onclick="if(document.querySelectorAll('.stop-card').length === ${stopCount}) window.print(); else alert('De route is niet volledig geladen. Open de routeprint opnieuw.');">${stopCount} stops afdrukken</button>
+        <button type="button" data-route-print disabled onclick="window.printPreparedRoute()">${stopCount} stops afdrukken</button>
       </div>
     </div>
-    ${routesHtml}
+    <div class="page-height-guide" aria-hidden="true"></div>
+    <p class="print-error">De route is nog niet volledig ingedeeld. Sluit deze afdruk en open de routeprint opnieuw vanuit de dagstart.</p>
+    <main class="route-pages" data-stop-count="${stopCount}" data-generated-at="${generatedAt}">${routesHtml}</main>
+    <script>${routePrintPaginationScript()}</script>
   </body>
 </html>`;
 }

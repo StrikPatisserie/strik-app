@@ -7,7 +7,7 @@ const ts = require('typescript');
 function load(file, imports = {}, globals = {}, expose = '') {
   const exports = {};
   const source = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
-  vm.runInNewContext(source + '\n' + expose, { exports, require: name => imports[name] || {}, URL, Intl, Date, ...globals });
+  vm.runInNewContext(source + '\n' + expose, { exports, require: name => imports[name] || (name === './routePrintPagination' ? load('app/bakkerij/logistiek/routePrintPagination.ts') : {}), URL, Intl, Date, ...globals });
   return exports;
 }
 const dashboard = 'app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx';
@@ -81,4 +81,50 @@ test('iPad print uses a freshly written document and rejects an incomplete docum
   assert.equal(openRoutePrintWindow({ html: '<article class="stop-card"></article>', expectedStopCount: 10 }), false);
   assert(closed);
   assert.match(alerts[0], /niet alle stops/);
+});
+
+const { paginateRoutePrint } = load('app/bakkerij/logistiek/routePrintPagination.ts');
+function measuredLayout(limit = 1000) {
+  const pages = [];
+  return {
+    pages,
+    createPage() { const page = { fragments: [] }; pages.push(page); return page; },
+    appendFragment(page, section, continued) { const fragment = { page, section, continued, stops: [] }; page.fragments.push(fragment); return fragment; },
+    appendStop(fragment, stop) { const placed = { fragment, stop }; fragment.stops.push(placed); return placed; },
+    removeFragment(fragment) { fragment.page.fragments.splice(fragment.page.fragments.indexOf(fragment), 1); },
+    removeStop(placed) { placed.fragment.stops.splice(placed.fragment.stops.indexOf(placed), 1); },
+    // Header, notes and footer occupy 140px; each round heading 60px. The
+    // address height is measured independently instead of counting stops.
+    fits(page) { return 140 + page.fragments.reduce((sum, fragment) => sum + 60 + fragment.stops.reduce((sum, placed) => sum + placed.stop.height, 0), 0) <= limit; },
+  };
+}
+const measuredRoute = (heights, id = 'r1') => ({ section: id, stops: heights.map((height, index) => ({ id: `${id}-${index}`, height, detail: `Volledig adres ${index}` })) });
+test('the same stop count gets more pages when addresses and extra information need more space', () => {
+  const shortLayout = measuredLayout();
+  const longLayout = measuredLayout();
+  assert.equal(paginateRoutePrint([measuredRoute(Array(10).fill(50))], shortLayout).length, 1);
+  assert.equal(paginateRoutePrint([measuredRoute(Array(10).fill(110))], longLayout).length, 2);
+  assert(longLayout.pages.every(page => longLayout.fits(page)));
+});
+test('a round that fits on a fresh page moves there intact instead of splitting', () => {
+  const layout = measuredLayout();
+  const pages = paginateRoutePrint([measuredRoute([160, 160, 160]), measuredRoute([120, 120, 120], 'r2')], layout);
+  assert.equal(pages.length, 2);
+  assert.equal(pages[1].fragments.length, 1);
+  assert.equal(pages[1].fragments[0].continued, false);
+  assert.equal(pages[1].fragments[0].stops.length, 3);
+});
+test('an oversized round breaks only between complete stops, repeating the round heading and preserving stop order and details', () => {
+  const layout = measuredLayout();
+  const route = measuredRoute(Array.from({ length: 23 }, (_, index) => index % 3 === 0 ? 140 : 70));
+  const pages = paginateRoutePrint([route, measuredRoute([], 'empty')], layout);
+  assert(pages.length >= 3);
+  assert(pages.every(page => layout.fits(page)));
+  assert(pages.slice(1).every(page => page.fragments[0].continued));
+  const printed = pages.flatMap(page => page.fragments.flatMap(fragment => fragment.stops.map(placed => placed.stop)));
+  assert.equal(printed.length, route.stops.length);
+  printed.forEach((item, index) => assert.equal(item, route.stops[index]));
+});
+test('one exceptionally tall stop blocks printing explicitly instead of dropping or clipping any information', () => {
+  assert.throws(() => paginateRoutePrint([measuredRoute([1200])], measuredLayout()), /past niet op één A4/);
 });
