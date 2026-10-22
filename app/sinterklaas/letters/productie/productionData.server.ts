@@ -1,4 +1,6 @@
 import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { B2BProductionAssignment } from "./b2bProductionPlanning";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 import { addProductionOrderQuantity, productionOrderSource } from "./productionSources";
 import type { ProductionBatchSeed, ProductionSeedRow, StoreOrderRow, StoreStockOrder } from "./ProductionPlanningClient";
@@ -12,6 +14,7 @@ type Product = {
 
 type OrderInfo = {
   channel: "ONLINE" | "STORE" | "B2B";
+  id: string; order_number: string; customer_name: string; company_name: string | null; pickup_location: string | null; notes: string;
   requested_date: string;
   fulfillment_status: string;
 };
@@ -91,7 +94,7 @@ function storeOrderRow(letter: string, flavour: string, size: string, style: str
 
 
 export async function loadCentralProduction(season: string) {
-  const db = createAdminClient();
+  const db = createAdminClient() as unknown as SupabaseClient;
   const batchesRequest = (async () => {
     const extendedResult = await db
       .from("letter_production_batches")
@@ -109,11 +112,12 @@ export async function loadCentralProduction(season: string) {
       .neq("status", "CLOSED")
       .order("production_date");
   })();
-  const [batchesResult, allocationsResult, targetsResult, partsResult, itemsResult, storeOrdersResult] = await Promise.all([
+  const [batchesResult, allocationsResult, targetsResult, partsResult, itemsResult, storeOrdersResult, assignmentsResult] = await Promise.all([
     batchesRequest,
+
     db
       .from("letter_production_allocations")
-      .select("id,batch_id,planned_quantity,letter_order_items(id,quantity,logo,notes,letter_products(letter,flavour,size,style),letter_orders(requested_date,fulfillment_status,channel))"),
+      .select("id,batch_id,planned_quantity,letter_order_items(id,quantity,logo,notes,letter_products(letter,flavour,size,style),letter_orders(id,order_number,customer_name,company_name,pickup_location,notes,requested_date,fulfillment_status,channel))"),
     db
       .from("letter_stock_targets")
       .select("id,batch_id,planned_quantity,letter_products(letter,flavour,size,style)"),
@@ -122,12 +126,13 @@ export async function loadCentralProduction(season: string) {
       .select("allocation_id,stock_target_id,quantity"),
     db
       .from("letter_order_items")
-      .select("id,quantity,letter_orders(requested_date,fulfillment_status,channel)"),
+      .select("id,quantity,letter_orders(id,order_number,customer_name,company_name,pickup_location,notes,requested_date,fulfillment_status,channel)"),
     db
       .from("letter_store_stock_order_items")
       .select("batch_id,location_code,quantity,letter_products(letter,flavour,size,style)"),
+    db.from("letter_b2b_production_assignments").select("order_id,season,batch_id,revision").eq("season",Number(season)),
   ]);
-  const loadError = [batchesResult, allocationsResult, targetsResult, partsResult, itemsResult, storeOrdersResult]
+  const loadError = [batchesResult, allocationsResult, targetsResult, partsResult, itemsResult, storeOrdersResult, assignmentsResult]
     .find((result) => result.error)?.error;
   const batchRows = (batchesResult.data || []) as unknown as Array<{
     id: string;
@@ -208,7 +213,7 @@ export async function loadCentralProduction(season: string) {
           stock: 0,
           produced: 0,
         };
-        const updated = addProductionOrderQuantity(current, productionOrderSource(item?.letter_orders?.channel), allocation.planned_quantity);
+        const updated = addProductionOrderQuantity(current, productionOrderSource(item?.letter_orders?.channel), allocation.planned_quantity, {id:`central:${item?.letter_orders?.id || allocation.id}`,customerName:item?.letter_orders?.company_name || item?.letter_orders?.customer_name || "Klantnaam ontbreekt",code:item?.letter_orders?.order_number,shop:item?.letter_orders?.pickup_location || "",date:item?.letter_orders?.requested_date,notes:item?.letter_orders?.notes});
         updated.produced += producedForAllocation.get(allocation.id) || 0;
         rows.set(identity.key, updated);
       });
@@ -223,6 +228,17 @@ export async function loadCentralProduction(season: string) {
           produced: 0,
         };
         current.stock += target.planned_quantity;
+        const destinations = [...storeOrdersByShop].map(([shop, shopRows]) => ({
+          shop,
+          quantity: shopRows.filter(row => row.key === identity.key).reduce((sum, row) => sum + row.quantity, 0),
+        })).filter(item => item.quantity > 0);
+        // A conflicting stock plan must be checked, never silently assigned to the first shop.
+        if (destinations.reduce((sum, item) => sum + item.quantity, 0) <= target.planned_quantity) {
+          current.recipients = [...(current.recipients || []), ...destinations.map(item => ({
+            id: `stock:${item.shop}`, source: "voorraad" as const, quantity: item.quantity,
+            customerName: "Winkelvoorraad", shop: item.shop,
+          }))];
+        }
         current.produced += producedForStock.get(target.id) || 0;
         rows.set(identity.key, current);
       });
@@ -244,5 +260,5 @@ export async function loadCentralProduction(season: string) {
   });
 
   if (loadError) throw new Error(loadError.message);
-  return { batches: batchSeeds, centralUnplannedCount };
+  return { batches: batchSeeds, centralUnplannedCount, assignments:(assignmentsResult.data||[]) as B2BProductionAssignment[] };
 }

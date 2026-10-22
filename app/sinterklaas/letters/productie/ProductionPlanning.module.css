@@ -185,3 +185,17 @@
 /* Keep the existing printed headings independent of the compact screen headings. */
 .page :global(.start-distribution-print-page) h2,
 .page :global(.letter-distribution-print) h2 { font-size: 30px; font-weight: 900; line-height: 1.2; }
+
+.b2bPlanning { border:1px solid #d7dfd2; border-radius:12px; padding:18px 20px; margin:20px 0; background:#fffefa; font-size:12px; color:#4e5d50; }
+.b2bPlanning summary { cursor:pointer; font-weight:800; color:#294b3d; }
+.b2bPlanning summary span { margin-left:12px; font-weight:400; }
+.b2bPlanning > p { margin:14px 0; line-height:1.8; }
+.b2bPlanningRow { display:grid; grid-template-columns:minmax(0,1fr) minmax(260px,360px); gap:24px; padding:18px 0; border-top:1px solid #e0e5da; }
+.b2bPlanningRow strong { color:#293e32; font-size:14px; }
+.b2bPlanningRow p { margin:8px 0; line-height:1.7; }
+.b2bPlanningRow small { display:block; font-size:11px; line-height:1.7; }
+.b2bPlanningRow label { display:grid; gap:7px; font-size:11px; }
+.b2bPlanningRow select { width:100%; min-height:42px; border:1px solid #d4ddcc; border-radius:7px; padding:9px; background:#fff; color:#294b3d; font:inherit; }
+.b2bPlanningRow button { margin:10px 0; }
+.b2bPlanningRow button:disabled { opacity:.45; }
+@media(max-width:700px){.b2bPlanningRow{grid-template-columns:1fr;gap:12px;}.b2bPlanningRow select{font-size:16px;}.b2bPlanning summary span{display:block;margin:6px 0 0;}}

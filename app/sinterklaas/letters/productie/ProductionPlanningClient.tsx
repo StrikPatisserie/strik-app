@@ -4,8 +4,11 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { productionDeadlinePassed, productionRemaining, productionTotals as totalsFor, type ProductionChecklist } from "./productionChecklist";
 import styles from "./ProductionPlanning.module.css";
 import ProductionPrintPreviewDialog from "./ProductionPrintPreview";
+import ProductionDistributionPrint from "./ProductionDistributionPrint";
+import B2BProductionPlanning from "./B2BProductionPlanner";
+import type { B2BProductionPlan } from "./b2bProductionPlanning";
 import { compareProductionRows, productionRowIsComplete, productionSections, productionValueLabel, productionVariant } from "./productionPresentation";
-import { aggregateProductionRows, productionSourceBreakdown, type ProductionSeedRow } from "./productionSources";
+import { aggregateProductionRows, productionRecipientsFor, productionSourceBreakdown, type ProductionSeedRow } from "./productionSources";
 export type { ProductionSeedRow } from "./productionSources";
 
 export type StoreOrderRow = {
@@ -296,7 +299,7 @@ function ProductionTable({
                       </td>
                       <td className={styles.sourceCell}>
                         <div className={styles.sourceBadges}>
-                          {productionSourceBreakdown(row).filter(({ id }) => id !== "voorraad").map(({ id, label, quantity }) => <span key={id} className={styles.sourceBadge} data-source={id} title={`${label}: ${quantity} ${quantity === 1 ? "letter" : "letters"}`}>
+                          {productionSourceBreakdown(row).filter(({ id }) => id !== "voorraad").map(({ id, label, quantity }) => <span key={id} className={styles.sourceBadge} data-source={id} title={`${label}: ${quantity} ${quantity === 1 ? "letter" : "letters"}\n${productionRecipientsFor(row,id).map(item=>`${item.quantity}× ${item.customerName}`).join("\n")}`}>
                             <span>{label}</span><b>{quantity}</b>
                           </span>)}
                         </div>
@@ -1194,15 +1197,16 @@ function PrintOptionsDialog({
         <div className="grid gap-2.5 p-3 sm:grid-cols-2 sm:p-5">
           <button type="button" onClick={() => onSelect("production")} className="group rounded-2xl border border-[#bdd0b8] bg-[#edf4eb] p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#24551d] text-xl font-black text-white" aria-hidden="true">✓</span>
-            <strong className="mt-3 block text-base text-[#263b2b]">Productielijst bakkerij</strong>
+            <strong className="mt-3 block text-base text-[#263b2b]">1. Productie</strong>
             <span className="mt-1 block text-xs font-semibold leading-relaxed text-[#657063]">Alle letters per smaak, soort en alfabet om tijdens de productie af te werken.</span>
           </button>
-          <button type="button" onClick={() => onSelect("distribution")} className="group rounded-2xl border border-[#d7c4cf] bg-[#f3edf1] p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md">
+          <button type="button" disabled={Boolean(batch.checklist?.changes.length)} onClick={() => onSelect("distribution")} className="group rounded-2xl border border-[#d7c4cf] bg-[#f3edf1] p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#7b5970] text-lg font-black text-white" aria-hidden="true">↗</span>
-            <strong className="mt-3 block text-base text-[#4b352f]">Verdeellijst logistiek</strong>
-            <span className="mt-1 block text-xs font-semibold leading-relaxed text-[#75686f]">Klantbonnen en winkelvoorraad, per vestiging op een aparte pagina.</span>
+            <strong className="mt-3 block text-base text-[#4b352f]">2. Verdelen</strong>
+            <span className="mt-1 block text-xs font-semibold leading-relaxed text-[#75686f]">Per krat, smaak, formaat en letter: de aantallen per klant of vestiging.</span>
           </button>
         </div>
+        {!!batch.checklist?.changes.length && <p className="px-5 pb-5 text-sm font-bold">Neem eerst de gewijzigde bestellingen over voordat je de verdeellijst print.</p>}
       </section>
     </div>
   );
@@ -1349,6 +1353,7 @@ export default function ProductionPlanningClient({
   demoMode?: boolean;
 }>) {
   const [liveBatches, setLiveBatches] = useState<ProductionBatchSeed[] | null>(null);
+  const [b2bPlans,setB2bPlans]=useState<B2BProductionPlan[]>([]);
   const [liveUnplanned, setLiveUnplanned] = useState<string[]>([]);
   const [liveUnplannedCount, setLiveUnplannedCount] = useState(centralUnplannedCount);
   const [refreshVersion, setRefreshVersion] = useState(0);
@@ -1394,6 +1399,7 @@ export default function ProductionPlanningClient({
         if (!response.ok) throw new Error(result.message || "Productiegegevens laden is mislukt.");
         if (active && version === productionMutationVersion.current) {
           setLiveBatches(result.batches);
+          setB2bPlans(result.b2bPlanning || []);
           setLiveUnplanned(result.unplanned || []);
           setLiveUnplannedCount(result.centralUnplannedCount || 0);
           setStockRowsByBatch({});
@@ -1618,6 +1624,8 @@ export default function ProductionPlanningClient({
         )}
       </section>
 
+      {!demoMode && liveBatches && !warning && <B2BProductionPlanning plans={b2bPlans} batches={overview.batches} season={season} onSaved={()=>setRefreshVersion(value=>value+1)}/>}
+
       {(liveUnplannedCount > 0 || overview.unplanned.length > 0) && <section className={styles.attention}>
         <h2>Nog niet aan een productiedag gekoppeld</h2>
         {liveUnplannedCount > 0 && <p>{liveUnplannedCount} centrale orderregel(s) zijn nog niet volledig ingepland.</p>}
@@ -1639,7 +1647,7 @@ export default function ProductionPlanningClient({
               <span className={styles.roundState} data-planned={Boolean(batch.checklist) || batchIsPlanned(batch.status)}>{batch.checklist ? productionRemaining(batch.rows) === 0 ? "Productie gereed" : "Vastgezet · afvinken mogelijk" : batchIsPlanned(batch.status) ? "Ingepland" : "Nog niet ingepland"}</span>
               <div className={styles.roundActions}>
                 {demoMode && <button type="button" onClick={() => setPrintOptionsBatch(batch)} className={styles.button}>Printlijsten</button>}
-                {!demoMode && <button type="button" disabled={loading || Boolean(warning) || !liveBatches} onClick={() => setProductionPrintBatch(batch)} className={styles.button}>{batch.checklist ? "Productielijst printen" : "Voorbeeld printen"}</button>}
+                {!demoMode && <button type="button" disabled={loading || Boolean(warning) || !liveBatches} onClick={() => setPrintOptionsBatch(batch)} className={styles.button}>Printlijsten</button>}
                 <button type="button" onClick={() => { setStoreOrderInitialShop(DISTRIBUTION_SHOPS[0]); setStoreOrderBatch(batch); }} className={styles.button}>
                   {storeOrdersLocked ? "Bekijk winkelvoorraad" : storeStockTotal > 0 ? "Winkelvoorraad wijzigen" : "+ Winkelvoorraad per winkel"}
                 </button>
@@ -1704,7 +1712,7 @@ export default function ProductionPlanningClient({
         />
       )}
       {distributionBatch && (
-        <DistributionPreviewDialog batch={distributionBatch} onClose={() => setDistributionBatch(null)} />
+        demoMode ? <DistributionPreviewDialog batch={distributionBatch} onClose={() => setDistributionBatch(null)} /> : <ProductionDistributionPrint batch={distributionBatch} onClose={() => setDistributionBatch(null)} />
       )}
       {productionPrintBatch && (
         <ProductionPrintPreviewDialog batch={productionPrintBatch} onClose={() => setProductionPrintBatch(null)} />

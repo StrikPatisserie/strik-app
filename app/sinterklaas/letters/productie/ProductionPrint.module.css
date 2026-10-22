@@ -90,3 +90,42 @@
   .table thead { display: table-header-group; break-inside: avoid; break-after: avoid; }
   .row > th, .row > td { border-bottom-color: #000; }
 }
+
+/* Logistics uses the same monochrome paper system, with customer-level detail. */
+.distributionOverview { margin: 4mm 0 7mm; }
+.distributionOverview th:first-child { width: 32%; text-align: left; }
+.distributionOverview tbody th { padding: 2mm; font-size: 9pt; font-weight: 400; }
+.crateSection { margin-top: 7mm; }
+.sheet .crateTitle { display: flex; justify-content: space-between; align-items: baseline; gap: 4mm; margin: 0 0 4mm; padding: 3mm 0; border-block: 2pt solid #111; font-size: 16pt; break-after: avoid; }
+.crateTitle span { font-size: 11pt; white-space: nowrap; }
+.distributionTable { margin-bottom: 4mm; }
+.distributionDoneCol { width: 15mm; }
+.distributionQuantityCol { width: 20mm; }
+.distributionDestinationCol { width: 47mm; }
+.distributionTable .columns th { text-align: left; padding-left: 2mm; }
+.distributionTable .columns th:nth-child(-n+2) { text-align: center; }
+.distributionTable .groupHeading h3 > strong { margin-right: 3mm; font-size: 19pt; }
+.distributionTable td { padding: 2mm; }
+.distributionCustomer { font-size: 11pt; overflow-wrap: anywhere; }
+.distributionCustomer small { display: block; margin-top: 1mm; font-size: 8pt; }
+.distributionCustomer .recipientNotes { margin-top: 1.5mm; font-size: 9pt; white-space: pre-wrap; }
+.distributionDestination { font-size: 9pt; overflow-wrap: anywhere; }
+.distributionDestination > * { display: block; }
+.distributionDestination > * + * { margin-top: 1mm; }
+.distributionSpecial { margin-top: 2mm !important; border: 1pt solid #111; padding: 1.5mm 2mm; font-size: 10pt; font-weight: 700; overflow-wrap: anywhere; white-space: pre-wrap; }
+.row[data-unresolved] td { border-top: 1pt dashed #111; border-bottom: 1pt dashed #111; }
+@media print {
+  .crateSection { break-before: page; margin-top: 0; }
+  .distributionTable { break-inside: auto; }
+  .distributionOverview thead,.distributionTable thead { display: table-header-group; }
+}
+
+@page letter-distribution {
+  size: A4 landscape;
+  margin: 12mm;
+  @bottom-left { content: "Strik Patisserie / Verdeellijst chocoladeletters"; font: 8pt Arial, sans-serif; color: #111; }
+  @bottom-right { content: "Pagina " counter(page) " / " counter(pages); font: 8pt Arial, sans-serif; color: #111; }
+}
+@media print {
+  .distributionSheet { page: letter-distribution; }
+}

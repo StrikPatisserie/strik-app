@@ -5,7 +5,7 @@ import { getCurrentProfile } from "@/app/lib/auth/session";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 import { loadProductionWordPressOrders } from "@/app/sinterklaas/sinterklaasServerApi";
 import { loadCentralProduction } from "@/app/sinterklaas/letters/productie/productionData.server";
-import { combineProductionOrders, productionChanges, productionDeadlinePassed, productionPlanVersion, reviseProductionRows, setProductionQuantity } from "@/app/sinterklaas/letters/productie/productionChecklist";
+import { combineProductionOrders, hydrateProductionRecipients, productionChanges, productionDeadlinePassed, productionPlanVersion, reviseProductionRows, setProductionQuantity } from "@/app/sinterklaas/letters/productie/productionChecklist";
 import type { ProductionSeedRow } from "@/app/sinterklaas/letters/productie/productionSources";
 
 export const runtime = "nodejs";
@@ -18,7 +18,7 @@ const jsonError = (message: string, status = 400) => Response.json({ message }, 
 
 async function loadCurrent(season: string) {
   const [central, wordpress] = await Promise.all([loadCentralProduction(season), loadProductionWordPressOrders(season)]);
-  return { ...combineProductionOrders(central.batches, wordpress.letters, wordpress.b2b), centralUnplannedCount: central.centralUnplannedCount };
+  return { ...combineProductionOrders(central.batches, wordpress.letters, wordpress.b2b, central.assignments || []), centralUnplannedCount: central.centralUnplannedCount };
 }
 
 async function readLists(season: string, actorId: string | null) {
@@ -41,7 +41,8 @@ async function readLists(season: string, actorId: string | null) {
       list = locked.data as SavedChecklist;
     }
     if (!list) return { ...batch, checklist: undefined };
-    return { ...batch, rows: list.rows, checklist: { revision: list.revision, planRevision: list.plan_revision, planVersion: productionPlanVersion(batch.rows), lockedAt: list.locked_at, updatedAt: list.updated_at, changes: productionChanges(list.rows, batch.rows) } };
+    const frozenRows=hydrateProductionRecipients(list.rows,batch.rows);
+    return { ...batch, rows: frozenRows, checklist: { revision: list.revision, planRevision: list.plan_revision, planVersion: productionPlanVersion(batch.rows), lockedAt: list.locked_at, updatedAt: list.updated_at, changes: productionChanges(frozenRows, batch.rows) } };
   }));
   return { ...current, batches: views };
 }
