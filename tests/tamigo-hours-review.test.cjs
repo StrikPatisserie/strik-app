@@ -289,3 +289,40 @@ test('the new Tamigo source adapter only uses GET and never calls a wage or muta
  assert.equal(calls.length,4);assert(calls.every(call=>call.method==='GET'));assert(calls.every(call=>!/(?:close\/day|open\/day|employee|payroll|wage|export)/i.test(call.url)));
  assert(!calls.find(call=>call.url.includes('/v2/Shifts/')).url.includes('shiftStatus='));
 });
+
+const presentation=load(base+'reviewPresentation.ts');
+const demo=load(base+'demo.ts');
+test('the review opens on work alerts only; other registrations remain available without approval',()=>{
+ const rows=rules.buildHoursReview(demo.createHoursReviewDemo('2026-10'),types.DEFAULT_REVIEW_CONFIG);
+ const before=JSON.stringify(rows);
+ const selection=presentation.selectReviewRows(rows);
+ assert.equal(presentation.DEFAULT_REVIEW_VIEW,'attention');
+ assert.equal(selection.rows.length,6);
+ assert(selection.rows.every(row=>row.flags.length&&row.status!=='niet_werk'));
+ const noFlags=presentation.selectReviewRows(rows,{view:'no_flags'});
+ assert.equal(noFlags.rows.length,2);assert(noFlags.rows.every(row=>row.status==='geen_melding'));
+ assert.equal(presentation.selectReviewRows(rows,{view:'all'}).rows.length,8);
+ assert.equal(presentation.selectReviewRows(rows,{view:'all',showNonWork:true}).rows.length,9);
+ assert.equal(JSON.stringify(rows),before);
+});
+test('blocking missing data is placed before routine rounding, and every explanation is retained',()=>{
+ const rows=rules.buildHoursReview(demo.createHoursReviewDemo('2026-10'),types.DEFAULT_REVIEW_CONFIG);
+ const selected=presentation.selectReviewRows(rows).rows;
+ assert.equal(presentation.focusFlags(selected[0])[0].type,'eindtijd_ontbreekt');
+ const early=selected.find(row=>row.actual?.id==='a1');
+ assert.equal(presentation.focusFlags(early)[0].type,'pauze_ontbreekt');
+ assert.equal(presentation.focusFlags(early).length,early.flags.length);
+ assert.equal(early.actual.start.raw,'2026-10-05T07:50:00');
+ const exception=selected.find(row=>row.actual?.id==='a2');
+ assert.equal(exception.actual.comments[0],'Geen pauze want druk');
+ assert.equal(exception.proposal.breakMinutes,0);assert.equal(exception.status,'uitzondering');
+});
+test('department, employee and alert filters combine using IDs and counts follow the selected location',()=>{
+ const rows=rules.buildHoursReview(demo.createHoursReviewDemo('2026-10'),types.DEFAULT_REVIEW_CONFIG);
+ const other='22222222-2222-2222-2222-222222222222';
+ const selection=presentation.selectReviewRows(rows,{department:other});
+ assert.equal(selection.counts.all,1);assert.equal(selection.rows[0].actual.id,'a8');
+ assert.equal(presentation.selectReviewRows(rows,{employee:'demo-2',flagType:'pauze_uitzondering'}).rows[0].actual.id,'a2');
+ assert.equal(presentation.selectReviewRows(rows,{department:other,employee:'demo-2'}).rows.length,0);
+ assert.deepEqual(Array.from(presentation.selectReviewRows(rows,{flagType:'pauze_ontbreekt'}).rows,row=>row.actual.id),['a6','a1']);
+});

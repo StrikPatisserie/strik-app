@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
 import { buildHoursReview, effectiveRules, validateConfig } from "./reviewRules";
+import { DEFAULT_REVIEW_VIEW, focusFlags, selectReviewRows, type ReviewView } from "./reviewPresentation";
 import { createHoursReviewDemo } from "./demo";
 import { formatMinutes, formatStamp, formatTime, localDate } from "./reviewTime";
 import { DEFAULT_REVIEW_CONFIG, FLAG_LABELS, TIME_ZONE, type DayStatus, type FlagType, type ReviewConfig, type ReviewDataset, type ReviewRow, type ReviewShift, type ReviewThresholds } from "./reviewTypes";
@@ -42,8 +43,9 @@ function RulesEditor({ config, departments, onChange }: { config: ReviewConfig; 
       setError(""); setRevision(revision + 1);
     } catch (failure) { setError(failure instanceof Error ? failure.message : "Controleer de drempels."); }
   }
-  return <details className={styles.panel}>
-    <summary>Regels & drempels <span className={styles.muted}>Pauze: gepland strikt meer dan {formatMinutes(config.fullDayMinutes)} · minimum {config.minimumBreakMinutes} min</span></summary>
+  return <details className={styles.utility}>
+    <summary>Regels & drempels</summary>
+    <p className={styles.muted}>Pauze: gepland strikt meer dan {formatMinutes(config.fullDayMinutes)} · minimum {config.minimumBreakMinutes} min</p>
     <div className={styles.rulesIntro}>
       <p>Vóór de geplande start: voorstel op de geplande start. Later begonnen: omhoog naar het volgende kwartier. Eindtijd: omlaag naar het vorige kwartier. Exacte kwartieren blijven gelijk. Zonder betrouwbare planning blijft de start behouden.</p>
       <p>De pauzecontrole gebruikt de geplande duur vóór pauzeaftrek. Precies {formatMinutes(values.fullDayMinutes)} valt niet onder de regel. Een expliciete verklaring dat geen pauze is genomen krijgt geen automatische aftrek. Een kortere geregistreerde pauze wordt alleen gemarkeerd.</p>
@@ -95,19 +97,33 @@ function SourceDetails({ row, demo }: { row: ReviewRow; demo: boolean }) {
     </div>
   </details>;
 }
-function ReviewCard({ row, demo }: { row: ReviewRow; demo: boolean }) {
+function ReviewCard({ row, demo, expanded, onToggle }: { row: ReviewRow; demo: boolean; expanded: boolean; onToggle: () => void }) {
   const source = row.actual || row.planned!;
+  const flags = focusFlags(row);
+  const commentCount = row.actual?.comments.filter(comment => comment?.trim()).length || 0;
+  const detailId = `review-detail-${row.id}`;
+  const proposalTimes = row.proposal ? <strong title={`${formatStamp(row.proposal.start)} — ${formatStamp(row.proposal.end)}`}>{formatTime(row.proposal.start)} – {formatTime(row.proposal.end)}{localDate(Date.parse(row.proposal.start)) !== localDate(Date.parse(row.proposal.end)) ? " (+1 dag)" : ""}</strong> : <strong>Te beoordelen</strong>;
   return <article className={`${styles.reviewRow} ${row.flags.length ? styles.hasFlags : ""}`} data-review-row={row.id}>
-    <div className={styles.rowGrid}>
-      <div className={styles.identity}><strong>{source.employeeName}</strong><span>{row.date ? new Intl.DateTimeFormat("nl-NL", { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" }).format(new Date(`${row.date}T12:00:00Z`)) : "Datum onbekend"}</span><span>{source.departmentName}</span></div>
-      <div className={styles.timeCell}><small>Gepland</small><SourceTimes shift={row.planned} />{row.planned && row.planned.departmentId !== source.departmentId ? <span>{row.planned.departmentName}</span> : null}</div>
-      <div className={styles.timeCell}><small>Oorspronkelijk geregistreerd</small><SourceTimes shift={row.actual} />{row.actual?.date && row.actual.date !== row.date ? <span>Start op {new Intl.DateTimeFormat("nl-NL", { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" }).format(new Date(`${row.actual.date}T12:00:00Z`))}</span> : null}<b>Netto {formatMinutes(row.originalNetMinutes)}</b></div>
-      <div className={`${styles.timeCell} ${styles.proposed}`}><small>Voorstel · beoordelen</small>{row.proposal ? <><strong title={`${formatStamp(row.proposal.start)} — ${formatStamp(row.proposal.end)}`}>{formatTime(row.proposal.start)} – {formatTime(row.proposal.end)}{localDate(Date.parse(row.proposal.start)) !== localDate(Date.parse(row.proposal.end)) ? " (+1 dag)" : ""}</strong><span>{pauseText(row.proposal.breakMinutes)}</span><b>Netto {formatMinutes(row.proposal.netMinutes)}</b></> : <span>Geen volledig voorstel</span>}</div>
-      <div className={styles.difference}><small>Netto verschil</small><strong>{row.deltaMinutes === null ? "—" : formatMinutes(row.deltaMinutes, true)}</strong><span>{STATUS_LABELS[row.status]}</span></div>
+    <button type="button" className={`${styles.rowSummary} ${styles.rowGrid}`} aria-expanded={expanded} aria-controls={detailId} aria-label={`${expanded ? "Sluit" : "Bekijk"} dienst ${source.employeeName}, ${row.date || "datum onbekend"}`} onClick={onToggle}>
+      <span className={styles.identity}><strong>{source.employeeName}</strong><span>{row.date ? new Intl.DateTimeFormat("nl-NL", { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" }).format(new Date(`${row.date}T12:00:00Z`)) : "Datum onbekend"} · {source.departmentName}</span></span>
+      <span className={`${styles.timeCell} ${styles.planSummary}`}><small className={styles.mobileLabel}>Gepland</small><SourceTimes shift={row.planned} /></span>
+      <span className={styles.timeCell}><small className={styles.mobileLabel}>Geregistreerd</small>{row.actual ? <><strong title={`${formatStamp(row.actual.start.iso)} — ${formatStamp(row.actual.end.iso)}`}>{originalTime(row.actual.start)} – {originalTime(row.actual.end)}{row.actual.start.ms !== null && row.actual.end.ms !== null && localDate(row.actual.start.ms) !== localDate(row.actual.end.ms) ? " (+1 dag)" : ""}</strong><span>{formatMinutes(row.originalNetMinutes)} netto · {pauseText(row.actual.breakMinutes)}</span></> : <strong>Ontbreekt</strong>}</span>
+      <span className={`${styles.timeCell} ${styles.proposed}`}><small className={styles.mobileLabel}>Voorstel</small>{proposalTimes}{row.proposal ? <span>{formatMinutes(row.proposal.netMinutes)} netto · {pauseText(row.proposal.breakMinutes)}</span> : <span>Geen volledig voorstel</span>}</span>
+      <span className={styles.difference}><small className={styles.mobileLabel}>Verschil</small><strong className={row.deltaMinutes ? styles.changed : ""}>{row.deltaMinutes === null ? "—" : formatMinutes(row.deltaMinutes, true)}</strong></span>
+      <span className={styles.focus}><strong>{flags[0] ? FLAG_LABELS[flags[0].type] : row.status === "nog_gepland" ? "Nog gepland" : row.status === "niet_werk" ? "Verlof / andere activiteit" : "Geen melding"}{flags.length > 1 ? <span className={styles.moreFlags}>+{flags.length - 1}</span> : null}</strong><span>{row.status === "uitzondering" ? "Verklaring aanwezig · beoordelen" : row.flags.length ? "Ter beoordeling" : "Niet beoordeeld"}{commentCount ? " · opmerking" : ""}</span></span>
+      <span className={`${styles.chevron} ${expanded ? styles.chevronOpen : ""}`} aria-hidden="true">⌄</span>
+    </button>
+    <div id={detailId} className={styles.rowDetail} hidden={!expanded}>
+    <div className={styles.detailHeading}><strong>{STATUS_LABELS[row.status]}</strong><span>Oorspronkelijke registratie blijft behouden</span></div>
+    <div className={styles.comparison}>
+      <div className={styles.timeCell}><small>Gepland</small><SourceTimes shift={row.planned} />{row.planned ? <span>{row.planned.departmentName}</span> : null}</div>
+      <div className={styles.timeCell}><small>Oorspronkelijk geregistreerd</small><SourceTimes shift={row.actual} /><b>Netto {formatMinutes(row.originalNetMinutes)}</b>{row.actual?.date && row.actual.date !== row.date ? <span>Startdatum {row.actual.date}</span> : null}</div>
+      <div className={`${styles.timeCell} ${styles.proposed}`}><small>Voorstel · beoordelen</small>{proposalTimes}{row.proposal ? <><span>{pauseText(row.proposal.breakMinutes)}</span><b>Netto {formatMinutes(row.proposal.netMinutes)} · verschil {formatMinutes(row.deltaMinutes, true)}</b></> : <span>Geen volledig voorstel</span>}</div>
     </div>
     {row.actual?.comments.some(comment => comment?.trim()) ? <div className={styles.comments}>{row.actual.comments.map((comment, index) => comment?.trim() ? <blockquote key={index}><strong>Oorspronkelijke {index ? "extra opmerking" : "opmerking"}</strong>{comment}</blockquote> : null)}</div> : null}
-    {row.flags.length ? <ul className={styles.flags}>{row.flags.map((flag, index) => <li key={`${flag.type}:${index}`}><strong>{FLAG_LABELS[flag.type]}:</strong> {flag.message}</li>)}</ul> : <p className={styles.noFlags}>{row.status === "nog_gepland" ? "Deze dienst is nog niet afgelopen. Geen ontbrekende gewerkte uren vastgesteld." : "Geen melding volgens de huidige regels. Deze registratie is niet automatisch goedgekeurd."}</p>}
+    {flags.length ? <ul className={styles.flags}>{flags.map((flag, index) => <li key={`${flag.type}:${index}`}><strong>{FLAG_LABELS[flag.type]}:</strong> {flag.message}</li>)}</ul> : <p className={styles.noFlags}>{row.status === "nog_gepland" ? "Deze dienst is nog niet afgelopen. Geen ontbrekende gewerkte uren vastgesteld." : "Geen melding volgens de huidige regels. Deze registratie is niet automatisch goedgekeurd."}</p>}
     <SourceDetails row={row} demo={demo} />
+    </div>
   </article>;
 }
 export default function HoursReview({ demo = false }: { demo?: boolean }) {
@@ -120,6 +136,8 @@ export default function HoursReview({ demo = false }: { demo?: boolean }) {
   const [department, setDepartment] = useState("");
   const [employee, setEmployee] = useState("");
   const [flagType, setFlagType] = useState("");
+  const [view, setView] = useState<ReviewView>(DEFAULT_REVIEW_VIEW);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showNonWork, setShowNonWork] = useState(false);
   const [page, setPage] = useState(1);
   useEffect(() => {
@@ -153,40 +171,44 @@ export default function HoursReview({ demo = false }: { demo?: boolean }) {
     }
     return [...people.entries()].sort((a, b) => a[1].localeCompare(b[1], "nl"));
   }, [rows, department]);
-  const filtered = rows.filter(row => {
-    const source = row.actual || row.planned!;
-    return (!department || source.departmentId === department) && (!employee || source.employeeId === employee) && (showNonWork || row.status !== "niet_werk") && (!flagType || (flagType === "alerts" ? row.flags.length > 0 : flagType === "none" ? !row.flags.length : row.flags.some(flag => flag.type === flagType)));
-  });
+  const { rows: filtered, counts } = selectReviewRows(rows, { department, employee, flagType, showNonWork, view });
   const pages = Math.max(1, Math.ceil(filtered.length / 25)), currentPage = Math.min(page, pages);
   const shown = filtered.slice((currentPage - 1) * 25, currentPage * 25);
   const unavailable = dataset?.checks.filter(check => check.state === "unavailable" || check.state === "partial").length || 0;
-  return <StrikShell wide><div className={styles.root}>
+  return <StrikShell extraWide backHref="/management"><div className={styles.root}>
     <StrikPageHeader title="Urencontrole" icon={strikIcons.managementSchedule} />
-    {demo ? <p className={styles.demo}>Lokale preview · uitsluitend fictieve voorbeelden · geen Tamigo-verzoeken</p> : null}
+    {demo ? <p className={styles.demo}>Preview met fictieve diensten · geen Tamigo-verzoeken</p> : null}
     <section className={styles.panel}>
-      <div className={styles.heading}><div><h2>Rooster naast geregistreerde uren</h2><p>Alleen-lezen. Je beoordeelt de voorstellen zelf; Tamigo en de daadwerkelijk geregistreerde werktijd blijven ongewijzigd.</p></div><button type="button" disabled={loading} onClick={() => setRefresh(refresh + 1)}>Opnieuw ophalen</button></div>
+      <div className={styles.heading}><p><strong>Meldingen eerst.</strong> Open een dienst voor de details.</p><button type="button" disabled={loading} onClick={() => { setRefresh(refresh + 1); setExpandedId(null); }}>Vernieuwen</button></div>
       <div className={styles.filters}>
         <label>Maand<input type="month" min="2000-01" max="2100-12" value={month} onChange={event => { setMonth(event.target.value); setPage(1); if (!event.target.value) setDataset(null); }} /></label>
         <label>Afdeling / winkel<select value={department} onChange={event => { setDepartment(event.target.value); setEmployee(""); setPage(1); }}><option value="">Alle afdelingen</option>{departments.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         <label>Medewerker<select value={employee} onChange={event => { setEmployee(event.target.value); setPage(1); }}><option value="">Alle medewerkers</option>{employees.map(([id, name]) => <option key={id} value={id}>{name} · {id.slice(-6)}</option>)}</select></label>
-        <label>Meldingstype<select value={flagType} onChange={event => { setFlagType(event.target.value); setPage(1); }}><option value="">Alle registraties · meldingen bovenaan</option><option value="alerts">Met melding</option><option value="none">Zonder melding · niet beoordeeld</option>{Object.entries(FLAG_LABELS).map(([id, label]) => <option key={id} value={id as FlagType}>{label}</option>)}</select></label>
+        <label>Meldingstype<select value={flagType} onChange={event => { setFlagType(event.target.value); if (event.target.value) setView("attention"); setPage(1); setExpandedId(null); }}><option value="">Alle meldingen</option>{Object.entries(FLAG_LABELS).map(([id, label]) => <option key={id} value={id as FlagType}>{label}</option>)}</select></label>
       </div>
-      <label className={styles.check}><input type="checkbox" checked={showNonWork} onChange={event => { setShowNonWork(event.target.checked); setPage(1); }} />Ook verlof en andere niet-productieve activiteiten tonen ({rows.filter(row => row.status === "niet_werk").length})</label>
-      <p className={styles.muted}>Tijdzone {TIME_ZONE}. Een melding is een controlepunt, geen bewijs van een fout. Geen melding betekent niet goedgekeurd.</p>
-    </section>
+      <div className={styles.tools}>
+      <label className={styles.check}><input type="checkbox" checked={showNonWork} onChange={event => { setShowNonWork(event.target.checked); setPage(1); }} />Verlof / andere activiteiten ({rows.filter(row => row.status === "niet_werk").length})</label>
     <RulesEditor config={config} departments={departments} onChange={next => { setConfig(next); setPage(1); }} />
-    {unavailable ? <div role="note" className={styles.demo}><strong>{unavailable} bronnen niet volledig beschikbaar.</strong>{dataset?.checks.filter(check => check.state === "unavailable" || check.state === "partial").slice(0, 3).map(check => <p key={check.key}>{check.label}: {check.message}</p>)}{unavailable > 3 ? <p>Bekijk de overige beperkingen onder API-toegang & volledigheid.</p> : null}</div> : null}
-    {dataset ? <details className={styles.panel}>
-      <summary>API-toegang & volledigheid {unavailable ? `· ${unavailable} bronnen niet volledig` : "· bronnen opgehaald; statusbeperkingen hieronder"}</summary>
-      <p className={styles.muted}>Opgehaald {formatStamp(dataset.generatedAt)} · regelversie {dataset.sourceVersion}. Velden hieronder zijn aanwezig in het API-antwoord; lege waarden blijven onbekend.</p>
+    {dataset ? <details className={styles.utility}>
+      <summary>API-toegang{unavailable ? ` · ${unavailable} onvolledig` : ""}</summary>
+      <p className={styles.muted}>Opgehaald {formatStamp(dataset.generatedAt)} · {TIME_ZONE} · regelversie {dataset.sourceVersion}. Lege bronwaarden blijven onbekend. Handmatige invoer en managersgoedkeuring worden niet door de API bevestigd.</p>
       <div className={styles.sourceChecks}>{dataset.checks.map(check => <div key={check.key}><strong>{check.label} · {check.state === "available" ? "beschikbaar" : check.state === "partial" ? "gedeeltelijk" : check.state === "unknown" ? "niet bevestigd" : "niet beschikbaar"}</strong><p>{check.message}</p>{check.fields?.length ? <small>Aanwezige velden: {check.fields.join(", ")}</small> : null}</div>)}</div>
     </details> : null}
+      </div>
+    </section>
+    {unavailable ? <p role="note" className={styles.warning}><strong>Bronnen onvolledig:</strong> {dataset?.checks.filter(check => check.state === "unavailable" || check.state === "partial").map(check => check.label).join(" · ")}. Zie API-toegang; ontbrekende gegevens zijn geen bewijs van ontbrekende uren.</p> : null}
     {error ? <p role="alert" className={styles.error}>{error}</p> : null}
     {loading ? <p role="status" className={styles.panel}>Rooster en werkelijke registraties alleen-lezen ophalen…</p> : dataset ? <>
-      <div className={styles.resultHeader}><strong>{filtered.length} diensten in dit overzicht · {filtered.filter(row => row.flags.length).length} met melding</strong><span>Alle voorstellen wachten op beoordeling</span></div>
-      {shown.length ? <div className={styles.rows}>{shown.map(row => <ReviewCard key={`${dataset.generatedAt}:${row.id}`} row={row} demo={demo} />)}</div> : <p className={styles.panel}>{unavailable ? "Geen passende registraties getoond. Er ontbreken brongegevens; dit betekent niet dat er geen diensten of afwijkingen zijn." : "Geen diensten voor deze selectie. Pas de filters aan."}</p>}
-      <p className={styles.muted}>Werkelijke diensten zijn bevestigd als bron; handmatige invoer en managersgoedkeuring worden niet door de API bevestigd.</p>
-      <nav className={styles.pagination} aria-label="Pagina's van het urenoverzicht"><button type="button" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>Vorige</button><span>Pagina {currentPage} van {pages} · 25 diensten per pagina</span><button type="button" disabled={currentPage >= pages} onClick={() => setPage(currentPage + 1)}>Volgende</button></nav>
+      <div className={styles.resultHeader}>
+        <div className={styles.views} role="group" aria-label="Diensten selecteren">{([["attention", "Te controleren"], ["no_flags", "Zonder melding"], ["all", "Alle"]] as const).map(([key, label]) => <button key={key} type="button" aria-pressed={view === key} onClick={() => { setView(key); setFlagType(""); setPage(1); setExpandedId(null); }}>{label}<b>{counts[key]}</b></button>)}</div>
+        <span>Alleen-lezen · niets wordt gewijzigd in Tamigo</span>
+      </div>
+      {shown.length ? <div className={styles.rows}>
+        <div className={`${styles.listHeader} ${styles.rowGrid}`} aria-hidden="true"><span>Medewerker / dienst</span><span>Gepland</span><span>Geregistreerd</span><span>Voorstel</span><span>Verschil</span><span>Controlepunt</span><span /></div>
+        {shown.map(row => <ReviewCard key={`${dataset.generatedAt}:${row.id}`} row={row} demo={demo} expanded={expandedId === row.id} onToggle={() => setExpandedId(expandedId === row.id ? null : row.id)} />)}
+      </div> : <p className={styles.panel}>{unavailable ? "Geen passende registraties getoond. Er ontbreken brongegevens; dit betekent niet dat er geen diensten of afwijkingen zijn." : "Geen diensten voor deze selectie. Pas de filters aan."}</p>}
+      <div className={styles.footer}><p className={styles.muted}>Geen melding is geen goedkeuring. Voorstellen vragen altijd beoordeling; een melding is geen bewijs van een fout.</p><span className={styles.muted}>{filtered.length} {filtered.length === 1 ? "dienst" : "diensten"}{flagType ? ` · ${FLAG_LABELS[flagType as FlagType]}` : ""} · belangrijkste controlepunten eerst</span></div>
+      {pages > 1 ? <nav className={styles.pagination} aria-label="Pagina's van het urenoverzicht"><button type="button" disabled={currentPage <= 1} onClick={() => { setPage(currentPage - 1); setExpandedId(null); }}>Vorige</button><span>Pagina {currentPage} van {pages} · 25 diensten per pagina</span><button type="button" disabled={currentPage >= pages} onClick={() => { setPage(currentPage + 1); setExpandedId(null); }}>Volgende</button></nav> : null}
     </> : null}
   </div></StrikShell>;
 }
