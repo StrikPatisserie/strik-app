@@ -7,8 +7,8 @@
  */
 if (!defined('ABSPATH')) exit;
 
-// Set true after verifying both ?strik-wedding-preview=1 pages as an admin.
-if (!defined('STRIK_WEDDING_WEBSITE_LIVE')) define('STRIK_WEDDING_WEBSITE_LIVE', false);
+// Both pages have been verified; false restores admin-only preview mode.
+if (!defined('STRIK_WEDDING_WEBSITE_LIVE')) define('STRIK_WEDDING_WEBSITE_LIVE', true);
 
 function strik_wedding_website_route($uri) {
     $path = parse_url($uri, PHP_URL_PATH);

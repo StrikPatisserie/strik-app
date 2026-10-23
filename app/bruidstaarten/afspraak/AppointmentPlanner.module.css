@@ -8,11 +8,6 @@
 .preview { display:flex; align-items:center; flex-wrap:wrap; justify-content:center; gap:7px 18px; padding:10px 24px; background:#e9edde; color:var(--green); font-size:11px; line-height:1.5; }
 .preview strong { font-weight:800; }
 .preview a { margin-left:auto; text-decoration:underline; }
-.brandBar { max-width:1220px; margin:auto; padding:22px 34px; display:flex; align-items:center; gap:20px; border-bottom:1px solid var(--line); }
-.brandBar img { width:66px; height:66px; object-fit:contain; }
-.brandBar > span { font-size:11px; color:var(--muted); }
-.brandBar > a:last-child { margin-left:auto; font-size:11px; font-weight:800; }
-.brandBar > .homeBack { display:inline-flex; align-items:center; padding:12px 16px; border:1px solid #d6d9cc; border-radius:7px; background:#fffefa; color:var(--green); text-decoration:none; }
 .calendarHelp { padding:12px 0 20px; font-size:11px; color:var(--muted); line-height:1.8; }
 .calendarHelp a { text-decoration:underline; text-underline-offset:3px; color:var(--green); }
 .bookingError { margin-bottom:22px!important; padding:14px; border:1px solid #d8b69c; background:#fcf2e7; color:#784323; font-size:12px; line-height:1.7; border-radius:8px; }
@@ -89,7 +84,7 @@
 .demoNotice { margin:20px 0 !important; border:1px dashed #a2ab98; padding:13px 16px; font-size:11px; line-height:1.7; }
 .footer { text-align:center; font-size:10px; color:var(--muted); padding:35px 0 10px; }
 @media(max-width:1000px) { .layout { grid-template-columns:210px minmax(0,1fr); gap:22px; } .dateLayout { grid-template-columns:minmax(0,1fr) 140px; gap:16px; } .bookingBody { padding:26px 22px; } .timePanel { padding-left:16px; } .cake { margin-right:0; } }
-@media(max-width:760px) { .preview { padding:9px 18px; gap:3px 12px; font-size:10px; justify-content:flex-start; } .preview > span { width:100%; order:2; } .brandBar { padding:18px 20px; gap:13px; } .brandBar img { width:53px; height:53px; } .brandBar > span { display:none; } .brandBar > a:last-child { font-size:10px; max-width:155px; text-align:right; line-height:1.7; } .main { padding:30px 18px 20px; } .intro { margin-bottom:25px; gap:12px; } .intro h1 { font-size:37px; } .intro .eyebrow { font-size:9px; } .intro > div > p:last-child { font-size:12px; line-height:1.8; } .cake { width:76px; height:76px; align-self:flex-start; margin-top:30px; } .layout { display:flex; flex-direction:column; gap:22px; } .booking { width:100%; order:-1; } .info { padding:5px 4px; width:100%; } .info h2 { font-size:24px; margin-bottom:22px; } .info dl { grid-template-columns:1fr 1fr; gap:20px; } .info dl > div:last-child { grid-column:1/-1; } .steps { padding:15px 16px; gap:15px; justify-content:space-between; } .steps li { font-size:9px; gap:5px; } .steps li > span { width:20px; height:20px; font-size:9px; } .bookingBody { padding:25px 18px 20px; } .bookingBody > h2,.confirmation h2 { font-size:26px; } .dateLayout { grid-template-columns:1fr; margin-top:24px; gap:22px; } .days { gap:5px; } .days button { min-height:42px; font-size:12px; } .timePanel { border-left:0; border-top:1px solid var(--line); padding:18px 0 0; } .times { display:flex; flex-wrap:wrap; gap:10px; margin-top:12px; } .times button { min-width:136px; } .next { flex-direction:column; align-items:stretch; gap:14px; } .next > p { max-width:none; } .primary { width:100%; } .formRow { grid-template-columns:1fr; gap:20px; } .form input,.form textarea { font-size:16px; } .footer { font-size:9px; } }
+@media(max-width:760px) { .preview { padding:9px 18px; gap:3px 12px; font-size:10px; justify-content:flex-start; } .preview > span { width:100%; order:2; } .main { padding:30px 18px 20px; } .intro { margin-bottom:25px; gap:12px; } .intro h1 { font-size:37px; } .intro .eyebrow { font-size:9px; } .intro > div > p:last-child { font-size:12px; line-height:1.8; } .cake { width:76px; height:76px; align-self:flex-start; margin-top:30px; } .layout { display:flex; flex-direction:column; gap:22px; } .booking { width:100%; order:-1; } .info { padding:5px 4px; width:100%; } .info h2 { font-size:24px; margin-bottom:22px; } .info dl { grid-template-columns:1fr 1fr; gap:20px; } .info dl > div:last-child { grid-column:1/-1; } .steps { padding:15px 16px; gap:15px; justify-content:space-between; } .steps li { font-size:9px; gap:5px; } .steps li > span { width:20px; height:20px; font-size:9px; } .bookingBody { padding:25px 18px 20px; } .bookingBody > h2,.confirmation h2 { font-size:26px; } .dateLayout { grid-template-columns:1fr; margin-top:24px; gap:22px; } .days { gap:5px; } .days button { min-height:42px; font-size:12px; } .timePanel { border-left:0; border-top:1px solid var(--line); padding:18px 0 0; } .times { display:flex; flex-wrap:wrap; gap:10px; margin-top:12px; } .times button { min-width:136px; } .next { flex-direction:column; align-items:stretch; gap:14px; } .next > p { max-width:none; } .primary { width:100%; } .formRow { grid-template-columns:1fr; gap:20px; } .form input,.form textarea { font-size:16px; } .footer { font-size:9px; } }
 @media(prefers-reduced-motion:reduce) { .page * { scroll-behavior:auto !important; } }
 
 .confirmActions { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
@@ -108,7 +103,6 @@
 @media(max-width:760px) { .intro > div > p:last-child,.description,.preparation p { font-size:14px; } .smallPrint { font-size:11px; } }
 
 @media(max-width:760px) {
-  .brandBar > .homeBack { min-height:44px; font-size:12px; max-width:210px; text-align:left; line-height:1.5; }
   .intro h1 { font-size:clamp(30px,8vw,38px); overflow-wrap:break-word; }
   .cake { display:none; }
   .intro .eyebrow,.eyebrow { font-size:11px; }

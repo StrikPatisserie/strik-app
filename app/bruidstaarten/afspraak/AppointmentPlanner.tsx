@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "../BridalImage";
+import BridalHeader from "../BridalHeader";
 import { WEDDING_APP_ORIGIN, WEDDING_WEBSITE_ORIGIN, WEDDING_WEBSITE_PATH } from "../../lib/weddingPublicSite";
 import { useEffect, useRef, useState } from "react";
 import type { WeddingReceipt, WeddingSlotDay } from "../../lib/weddingAppointments";
@@ -81,7 +82,7 @@ export default function AppointmentPlanner({ today, preview = true, website = fa
 
   return <div className={styles.page}>
     {preview && <div className={styles.preview}><strong>Ontwerpvoorbeeld</strong><span>Voorbeeldtijden · er wordt niets geboekt of gemaild</span></div>}
-    <header className={styles.brandBar}><a href={home}><Image website={website} src="/strik-logo.png" alt="Strik Patisserie" width={76} height={76} /></a><span>Strik Patisserie · Nijmegen</span><a className={styles.homeBack} href={home}>← Terug naar bruidstaarten</a></header>
+    <BridalHeader website={website} preview={preview} booking />
     <main className={styles.main}>
       <section className={styles.intro}><div><p className={styles.eyebrow}>Afspraak bij Strik</p><h1>Plan jullie<br /><em>bruidstaartafspraak.</em></h1><p>Bespreek het formaat, de smaken en de afwerking met ons. De afspraak duurt een halfuur en is vrijblijvend.</p></div><Image website={website} className={styles.cake} src="/icons_strik_bruidstaart.svg" alt="" width={140} height={140} /></section>
       <div className={styles.layout}>

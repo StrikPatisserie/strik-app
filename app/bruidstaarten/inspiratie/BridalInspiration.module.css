@@ -12,14 +12,6 @@
 .preview { display:flex; justify-content:center; flex-wrap:wrap; align-items:center; gap:6px 20px; padding:9px 24px; background:#eae4d8; color:#625b4c; font-size:11px; }
 .preview strong { font-weight:800; }
 .preview a { margin-left:12px; text-decoration:underline; text-underline-offset:3px; }
-.header { max-width:1360px; margin:auto; min-height:110px; padding:20px 48px; display:flex; align-items:center; justify-content:space-between; gap:26px; border-bottom:1px solid var(--line); }
-.brand { display:flex; align-items:center; gap:18px; }
-.brand img { width:auto; height:64px; object-fit:contain; }
-.brand>span { padding-left:18px; border-left:1px solid var(--line); font:24px/1.4 Georgia,"Times New Roman",serif; }
-.brand small { display:block; font:10px/1.8 StrikGotham,Arial,sans-serif; color:var(--muted); letter-spacing:.035em; }
-.header nav { display:flex; gap:25px; font-size:12px; }
-.header nav a { transition:color .2s; }
-.header nav a:hover { color:var(--gold); }
 .button { display:inline-flex; align-items:center; justify-content:center; gap:26px; padding:16px 23px; background:var(--green); color:#fffdf6!important; border:1px solid var(--green); border-radius:3px; font-size:12px; font-weight:800; line-height:1.5; transition:background .2s,transform .2s; }
 .button:hover { background:#203e32; transform:translateY(-2px); }
 .button>span[aria-hidden="true"] { font-size:18px; font-weight:400; }
@@ -44,7 +36,6 @@
 .note { max-width:360px; font-size:10px; color:var(--muted); margin-top:18px!important; }
 .heroVisual { position:relative; min-width:0; margin-left:10px; }
 .heroFrame { position:relative; }
-.mobileBookingLabel { display:none; }
 .heroPhoto { position:relative; aspect-ratio:4 / 5; border-radius:240px 240px 4px 4px; overflow:hidden; background:#e8ded1; box-shadow:0 22px 42px -28px #68513c55; }
 .heroPhoto img { object-fit:cover; object-position:50% 58%; }
 .heroFrame::before { content:""; position:absolute; inset:-12px -12px 12px 12px; border:1px solid #cbb995; border-radius:250px 250px 4px 4px; pointer-events:none; }
@@ -159,12 +150,6 @@
 .lightboxCaption>span { font-size:11px; white-space:nowrap; color:#987650; }
 @media (min-width:1600px) { .hero { padding-top:60px; padding-bottom:95px; } }
 @media (max-width:1100px) {
-  .header { padding:18px 30px; }
-  .brand>span { font-size:21px; padding-left:12px; }
-  .brand { gap:12px; }
-  .brand small { display:none; }
-  .header nav { gap:18px; font-size:11px; }
-  .header .button { gap:15px; padding:14px 17px; font-size:11px; }
   .hero { gap:35px; padding:45px 44px 75px 30px; }
   .hero h1 { font-size:clamp(59px,7.2vw,80px); }
   .heroIntro { font-size:23px; }
@@ -192,16 +177,6 @@
   .preview { font-size:10px; padding:6px 16px; gap:3px 12px; }
   .preview>span { display:none; }
   .preview a { margin-left:0; min-height:32px; display:inline-flex; align-items:center; }
-  .header { min-height:90px; padding:14px 20px 6px; gap:12px; flex-wrap:wrap; }
-  .brand { gap:10px; }
-  .brand img { width:auto; height:46px; }
-  .brand>span { font-size:21px; padding-left:10px; }
-  .header nav { order:3; width:100%; justify-content:space-between; gap:12px; border-top:1px solid var(--line); padding-top:3px; font-size:12px; }
-  .header nav a { display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding-inline:5px; }
-  .desktopBookingLabel { display:none; }
-  .mobileBookingLabel { display:inline; }
-  .header .button { margin-left:auto; min-height:44px; padding:11px 12px; font-size:12px; gap:10px; }
-  .header .button>span[aria-hidden="true"] { font-size:14px; }
   .hero { grid-template-columns:1fr; gap:34px; padding:32px 24px 58px; }
   .heroText { max-width:500px; }
   .hero h1 { font-size:clamp(50px,13vw,72px); margin:20px 0; }
@@ -287,10 +262,6 @@
   .lightboxCaption>span { font-size:11px; }
 }
 @media (max-width:370px) {
-  .header { padding-inline:16px; gap:10px; }
-  .brand>span { font-size:18px; }
-  .brand img { height:38px; }
-  .header .button { font-size:11px; padding-inline:10px; }
   .hero { padding-inline:22px; }
   .heroActions { gap:12px; }
   .heroActions .textLink { font-size:12px; }

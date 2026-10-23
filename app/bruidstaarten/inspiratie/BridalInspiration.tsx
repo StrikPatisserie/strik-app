@@ -4,6 +4,7 @@ import Link from "next/link";
 import { cakeStyles } from "../../bruidstaart-studio/data";
 import BridalAtmosphere from "./BridalAtmosphere";
 import BridalGallery from "./BridalGallery";
+import BridalHeader from "../BridalHeader";
 import styles from "./BridalInspiration.module.css";
 
 const euro = (value: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(value);
@@ -18,11 +19,7 @@ export default function BridalInspiration({ preview = false, website = false }: 
 
   return <div className={styles.page}>
     {preview && <div className={styles.preview}><strong>Ontwerpvoorbeeld</strong><span>Inspiratie & afspraken · de bestaande website is nog niet vervangen</span><Link href="/bruidstaarten">Terug naar de app ↗</Link></div>}
-    <header className={styles.header}>
-      <a className={styles.brand} href="https://strik-patisserie.nl/" aria-label="Strik Patisserie, naar de website"><Image website={website} src="/strik-logo.png" width={64} height={64} alt="Strik Patisserie" /><span>Bruidstaarten<small>Een bijzonder moment, van Strik.</small></span></a>
-      <nav aria-label="Bruidstaartinformatie"><a href="#inspiratie">De basis</a><a href="#voorbeelden">Inspiratie</a><a href="#werkwijze">Zo werkt het</a></nav>
-      <a className={styles.button} href={book}><span className={styles.desktopBookingLabel}>Plan jullie afspraak</span><span className={styles.mobileBookingLabel}>Afspraak</span><span aria-hidden="true">↗</span></a>
-    </header>
+    <BridalHeader website={website} preview={preview} />
     <main>
       <div className={styles.heroWrap}>
         <BridalAtmosphere />

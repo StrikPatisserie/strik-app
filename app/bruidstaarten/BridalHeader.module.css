@@ -1,0 +1,55 @@
+.header { position:relative; z-index:5; background:#fff; color:#181818; font-family:StrikGotham,Arial,sans-serif; }
+.header * { box-sizing:border-box; }
+.header a { text-decoration:none; }
+.mainBar { max-width:1360px; min-height:124px; margin:auto; padding:15px 48px; display:flex; align-items:center; justify-content:space-between; gap:38px; }
+.brand { display:flex; align-items:center; flex-shrink:0; }
+.brand img { display:block; width:90px; height:90px; object-fit:contain; }
+.desktopNav { display:flex; justify-content:center; align-items:center; gap:24px; margin-left:28px; }
+.desktopNav a,.mobileNav a { font-size:11px; font-weight:800; line-height:1.6; text-transform:uppercase; letter-spacing:.015em; transition:color .2s; }
+.desktopNav a:hover,.desktopNav a[aria-current],.mobileNav a:hover,.mobileNav a[aria-current] { color:#ae8b57; }
+.actions { display:flex; align-items:center; gap:20px; }
+.header .shop { display:inline-flex; align-items:center; justify-content:center; gap:12px; min-height:43px; padding:8px 13px; border:1px solid #9c8491; color:#927888; font-size:11px; line-height:1.5; font-weight:800; text-transform:uppercase; }
+.shop svg { width:22px; height:25px; }
+.header .menuButton { display:none; align-items:center; gap:7px; padding:9px 0 9px 8px; min-height:44px; border:0; background:transparent; color:#252525; font:700 11px/1.5 StrikGotham,Arial,sans-serif; cursor:pointer; }
+.menuButton svg { width:22px; height:22px; }
+.mobileNav { display:none; }
+.sectionBar { border-block:1px solid #e9e4da; background:#faf8f3; }
+.sectionBar>div { max-width:1360px; min-height:57px; padding:9px 48px; margin:auto; display:flex; align-items:center; justify-content:space-between; gap:24px; }
+.header .sectionTitle { color:#726b5f; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.1em; white-space:nowrap; }
+.sectionTitle span { color:#8a847b; font-weight:400; letter-spacing:.03em; }
+.sectionNav { display:flex; align-items:center; justify-content:center; gap:27px; font-size:11px; color:#766e61; }
+.sectionNav a:hover { color:#987650; }
+.header .appointment { display:inline-flex; justify-content:center; align-items:center; gap:20px; padding:7px 0; min-height:36px; color:#294b3e; font-size:11px; font-weight:800; line-height:1.6; white-space:nowrap; }
+.appointment span { font-size:17px; font-weight:400; }
+.header a:focus-visible,.header button:focus-visible { outline:2px solid #987650; outline-offset:5px; }
+@media(max-width:1100px) {
+  .mainBar { min-height:103px; padding:13px 30px; gap:25px; }
+  .brand img { width:76px; height:76px; }
+  .desktopNav { gap:15px; margin-left:0; }
+  .desktopNav a { font-size:10px; }
+  .sectionBar>div { padding-inline:30px; }
+}
+@media(max-width:900px) {
+  .desktopNav { display:none; }
+  .header .menuButton { display:inline-flex; }
+  .mobileNav { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 22px; padding:4px 30px 18px; border-top:1px solid #eee9e2; }
+  .mobileNav a { padding:15px 0; border-bottom:1px solid #eee9e2; }
+}
+@media(max-width:600px) {
+  .mainBar { min-height:91px; padding:11px 20px; gap:18px; }
+  .brand img { width:68px; height:68px; }
+  .actions { gap:14px; }
+  .header .shop { min-height:37px; padding:6px 9px; font-size:10px; gap:8px; }
+  .shop svg { width:17px; height:21px; }
+  .header .menuButton { font-size:10px; gap:5px; }
+  .menuButton svg { width:21px; height:21px; }
+  .mobileNav { padding:0 20px 17px; gap:0 20px; }
+  .mobileNav a { font-size:10px; }
+  .sectionBar>div { min-height:50px; padding:7px 20px; gap:12px; flex-wrap:wrap; }
+  .header .sectionTitle { font-size:9px; letter-spacing:.07em; }
+  .sectionNav { order:3; flex-basis:100%; justify-content:flex-start; gap:23px; padding:1px 0 6px; font-size:10px; }
+  .header .appointment { font-size:10px; gap:10px; min-height:31px; padding-block:4px; }
+  .appointment span { font-size:15px; }
+  .sectionTitle span { display:none; }
+}
+@media(prefers-reduced-motion:reduce) { .desktopNav a,.mobileNav a { transition:none; } }
