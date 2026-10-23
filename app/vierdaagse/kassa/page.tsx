@@ -546,7 +546,7 @@ export default function VierdaagseKassaPage() {
   const activeLineOptions = detailOptionsForProduct(activeLineProduct);
 
   return (
-    <main className="min-h-screen bg-[#faf8f5] px-2 py-2 pb-20 text-[#1a1815] md:pb-6 lg:px-5">
+    <main data-app-background="default" className="min-h-screen bg-[#faf8f5] px-2 py-2 pb-20 text-[#1a1815] md:pb-6 lg:px-5">
       <div className="mx-auto grid max-w-7xl gap-2 sm:gap-3">
         <header className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#d6e5d8] bg-white p-2 shadow-sm sm:p-3">
           <div className="min-w-0">

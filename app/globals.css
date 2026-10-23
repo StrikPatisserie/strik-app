@@ -211,6 +211,23 @@ body {
   min-height: 100dvh;
 }
 
+/* Continue the page surface behind the rounded navigation rail and beneath
+ * mobile content. The page owns its tone, so navigation updates it without JS.
+ * Only the outer page is considered; cards and dialogs cannot change it.
+ */
+.app-frame {
+  --app-page-background: #c3d3bc;
+  background-color: var(--app-page-background);
+}
+
+.app-frame:has([data-app-content] > [data-app-background="default"]) {
+  --app-page-background: #faf8f5;
+}
+
+.app-frame:has([data-app-content] > [data-app-background="sand"]) {
+  --app-page-background: #f7f4ed;
+}
+
 /*
  * A dialog taller than the viewport must scroll from its very first line to
  * its last action. Safe centering falls back to top alignment on older Safari.

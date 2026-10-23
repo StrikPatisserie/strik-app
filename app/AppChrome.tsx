@@ -46,7 +46,7 @@ export default function AppChrome({
     <>
       <NotificationMonitor />
       <LogoutButton profile={profile} />
-      <div className="min-h-dvh bg-[#c3d3bc]">
+      <div data-app-frame className="app-frame min-h-dvh">
         <div className="flex min-h-dvh flex-row">
           <WinkelSidebar
             profile={profile}

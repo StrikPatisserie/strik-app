@@ -646,7 +646,7 @@ export default function KraamrekenaarPage() {
   }, [entries.length, lastActivityAt]);
 
   return (
-    <main className="min-h-dvh bg-[#f7f4ed] text-[#1a1815]">
+    <main data-app-background="sand" className="min-h-dvh bg-[#f7f4ed] text-[#1a1815]">
       <div className="mx-auto flex min-h-dvh w-full max-w-7xl flex-col gap-1.5 px-1.5 py-1.5 tracking-normal sm:gap-2 sm:px-3 sm:py-2">
         <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5 border border-[#d8d0c5] bg-white p-1.5 shadow-sm">
           <div className="min-w-0">

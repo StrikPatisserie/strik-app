@@ -269,6 +269,7 @@ export function StrikShell({
 }>) {
   return (
     <main
+      data-app-background={tone}
       className={`relative min-h-screen overflow-clip px-4 py-5 pb-24 text-[#1a1815] sm:px-6 lg:px-7 ${
         tone === "mint" ? "bg-[#c3d3bc]" : "bg-[#faf8f5]"
       }`}
