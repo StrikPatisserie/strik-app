@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "../BridalImage";
+import StrikWebsiteIcon from "../../StrikWebsiteIcon";
 import { useEffect, useRef, useState } from "react";
 import styles from "./BridalInspiration.module.css";
 
@@ -41,7 +42,7 @@ function GalleryDialog({ index, onChange, onClose, website }: { website: boolean
   }}>
     <div className={styles.lightbox}>
       <div className={styles.lightboxHeader}><p>Strik · Bruidstaartinspiratie</p><button type="button" onClick={close} autoFocus aria-label="Fotogalerij sluiten">Sluiten <span aria-hidden="true">×</span></button></div>
-      <div className={styles.lightboxPhoto}><Image website={website} src={`/bruidstaarten/voorbeeld-${index + 1}.webp`} alt={example.alt} fill sizes="(max-width: 700px) 95vw, 750px" /><button type="button" className={styles.previousPhoto} onClick={previous} aria-label="Vorige bruidstaart">‹</button><button type="button" className={styles.nextPhoto} onClick={next} aria-label="Volgende bruidstaart">›</button></div>
+      <div className={styles.lightboxPhoto}><Image website={website} src={`/bruidstaarten/voorbeeld-${index + 1}.webp`} alt={example.alt} fill sizes="(max-width: 700px) 95vw, 750px" /><button type="button" className={styles.previousPhoto} onClick={previous} aria-label="Vorige bruidstaart"><StrikWebsiteIcon name="chevron-left" size={24} /></button><button type="button" className={styles.nextPhoto} onClick={next} aria-label="Volgende bruidstaart"><StrikWebsiteIcon name="chevron-right" size={24} /></button></div>
       <div className={styles.lightboxCaption} aria-live="polite"><div><h3 id="bridal-example-title">{example.title}</h3><dl className={styles.exampleSpecs}><div><dt>Basistaart</dt><dd>{example.base}</dd></div><div><dt>Formaat</dt><dd>{example.people}</dd></div></dl><p className={styles.exampleBuild}>{example.build}</p><p>{example.detail}</p></div><span>{String(index + 1).padStart(2, "0")} / 09</span></div>
     </div>
   </dialog>;
@@ -52,7 +53,7 @@ export default function BridalGallery({ website = false }: { website?: boolean }
   const lastTrigger = useRef<HTMLButtonElement | null>(null);
   return <>
     <div className={styles.galleryGrid}>{examples.map((example, index) => <figure key={example.title}>
-      <button className={styles.galleryPhoto} type="button" onClick={event => { lastTrigger.current = event.currentTarget; setSelected(index); }} aria-label={`Vergroot voorbeeld ${index + 1}: ${example.title}`} aria-haspopup="dialog"><Image website={website} src={`/bruidstaarten/voorbeeld-${index + 1}.webp`} alt={example.alt} fill sizes="(max-width: 700px) 50vw, 350px" /><span className={styles.enlarge} aria-hidden="true">↗</span></button>
+      <button className={styles.galleryPhoto} type="button" onClick={event => { lastTrigger.current = event.currentTarget; setSelected(index); }} aria-label={`Vergroot voorbeeld ${index + 1}: ${example.title}`} aria-haspopup="dialog"><Image website={website} src={`/bruidstaarten/voorbeeld-${index + 1}.webp`} alt={example.alt} fill sizes="(max-width: 700px) 50vw, 350px" /><span className={styles.enlarge} aria-hidden="true"><StrikWebsiteIcon name="expand" size={17} /></span></button>
       <figcaption><span className={styles.exampleNumber}>0{index + 1}</span><div><h3>{example.title}</h3><p>{example.base} · {example.people}</p></div></figcaption>
     </figure>)}</div>
     {selected !== null && <GalleryDialog website={website} index={selected} onChange={setSelected} onClose={() => { setSelected(null); lastTrigger.current?.focus({ preventScroll: true }); }} />}

@@ -1,4 +1,5 @@
 import Image from "../BridalImage";
+import StrikWebsiteIcon from "../../StrikWebsiteIcon";
 import { WEDDING_WEBSITE_ORIGIN, WEDDING_WEBSITE_PATH } from "../../lib/weddingPublicSite";
 import Link from "next/link";
 import { cakeStyles } from "../../bruidstaart-studio/data";
@@ -18,7 +19,7 @@ export default function BridalInspiration({ preview = false, website = false }: 
   const book = preview ? "/bruidstaarten/agenda/voorbeeld" : website ? `${WEDDING_WEBSITE_ORIGIN}${WEDDING_WEBSITE_PATH}/afspraak` : "/bruidstaart/afspraak";
 
   return <div className={styles.page}>
-    {preview && <div className={styles.preview}><strong>Ontwerpvoorbeeld</strong><span>Inspiratie & afspraken · de bestaande website is nog niet vervangen</span><Link href="/bruidstaarten">Terug naar de app ↗</Link></div>}
+    {preview && <div className={styles.preview}><strong>Ontwerpvoorbeeld</strong><span>Inspiratie & afspraken · de bestaande website is nog niet vervangen</span><Link href="/bruidstaarten">Terug naar de app</Link></div>}
     <BridalHeader website={website} preview={preview} />
     <main>
       <div className={styles.heroWrap}>
@@ -28,7 +29,7 @@ export default function BridalInspiration({ preview = false, website = false }: 
             <p className={styles.eyebrow}><span className={styles.fineLine} /> Strik Patisserie · Nijmegen</p>
             <h1 id="bridal-title">Bruidstaarten<br />op <em>maat.</em></h1>
             <p className={styles.heroIntro}>Klassiek, naked of crème, met de hand gemaakt in onze eigen bakkerij. Samen kiezen we formaat, smaak en afwerking.</p>
-            <div className={styles.heroActions}><a className={styles.button} href={book}>Plan een afspraak <span aria-hidden="true">→</span></a><a className={styles.textLink} href="#inspiratie">Ontdek de taarten <span aria-hidden="true">↓</span></a></div>
+            <div className={styles.heroActions}><a className={styles.button} href={book}>Plan een afspraak <StrikWebsiteIcon name="arrow-right" /></a><a className={styles.textLink} href="#inspiratie">Ontdek de taarten</a></div>
             <p className={styles.note}>Vrijblijvend · een halfuur samen aan de Ziekerstraat in Nijmegen</p>
           </div>
           <div className={styles.heroVisual}>
@@ -56,10 +57,10 @@ export default function BridalInspiration({ preview = false, website = false }: 
         <div><p className={styles.eyebrow}>De binnenkant van de taart</p><h2 id="flavour-title">Kies jullie <em>vulling.</em></h2><p>Bijvoorbeeld witte chocolade met framboos, chipolata of peer met champagne. Tijdens de afspraak bespreken we het volledige aanbod.</p></div>
         <div className={styles.tasting}><h3>Vooraf proeven?</h3><p>Bestel een proeftaartje apart, minimaal twee werkdagen voor jullie afspraak.</p></div>
       </div></section>
-      <section className={styles.preparation} aria-labelledby="prepare-title"><div><p className={styles.eyebrow}>Voor het gesprek</p><h2 id="prepare-title">Voorbereid op de <em>afspraak.</em></h2><p>Neem jullie ideeën mee; een uitgewerkt plan is niet nodig. Na het gesprek maken we een passend voorstel.</p><a className={styles.button} href={book}>Boek hier jullie afspraak <span aria-hidden="true">→</span></a></div><ul><li><span>01</span><div><h3>De trouwdatum & locatie</h3><p>En, als jullie dat al weten, het gewenste moment van aansnijden.</p></div></li><li><span>02</span><div><h3>Een idee van het aantal gasten</h3><p>We denken mee over het formaat en de verdeling.</p></div></li><li><span>03</span><div><h3>Inspiratie & favoriete smaken</h3><p>Neem foto’s of kleuren mee. Ook dieetwensen en een budgetindicatie bespreken we graag.</p></div></li></ul></section>
+      <section className={styles.preparation} aria-labelledby="prepare-title"><div><p className={styles.eyebrow}>Voor het gesprek</p><h2 id="prepare-title">Voorbereid op de <em>afspraak.</em></h2><p>Neem jullie ideeën mee; een uitgewerkt plan is niet nodig. Na het gesprek maken we een passend voorstel.</p><a className={styles.button} href={book}>Boek hier jullie afspraak <StrikWebsiteIcon name="arrow-right" /></a></div><ul><li><span>01</span><div><h3>De trouwdatum & locatie</h3><p>En, als jullie dat al weten, het gewenste moment van aansnijden.</p></div></li><li><span>02</span><div><h3>Een idee van het aantal gasten</h3><p>We denken mee over het formaat en de verdeling.</p></div></li><li><span>03</span><div><h3>Inspiratie & favoriete smaken</h3><p>Neem foto’s of kleuren mee. Ook dieetwensen en een budgetindicatie bespreken we graag.</p></div></li></ul></section>
       <section className={styles.faq} id="vragen" aria-labelledby="faq-title"><div><p className={styles.eyebrow}>Nog even dit</p><h2 id="faq-title">Goed om te <em>weten.</em></h2></div><div><details><summary>Waar en hoe lang is de afspraak?</summary><p>We ontvangen jullie bij Strik aan de Ziekerstraat 124 in Nijmegen. Het vrijblijvende gesprek duurt een halfuur.</p></details><details><summary>Kunnen jullie op onze trouwlocatie bezorgen?</summary><p>We bezorgen in en rondom Nijmegen van maandag tot en met zaterdag. Bespreek de locatie en het gewenste moment tijdens jullie afspraak; we stemmen de mogelijkheden en bezorgkosten samen af.</p></details><details><summary>Ons gewenste afspraakmoment staat er niet bij.</summary><p>Mail naar <a href="mailto:info@strik-patisserie.nl">info@strik-patisserie.nl</a>. Dan kijken we samen naar een passend moment.</p></details></div></section>
-      <section className={styles.finalCta}><div><h2>Bespreek jullie <em>bruidstaart.</em></h2><p>Een halfuur aan de Ziekerstraat 124 in Nijmegen.</p></div><a className={styles.button} href={book}>Plan een afspraak <span aria-hidden="true">→</span></a></section>
+      <section className={styles.finalCta}><div><h2>Bespreek jullie <em>bruidstaart.</em></h2><p>Een halfuur aan de Ziekerstraat 124 in Nijmegen.</p></div><a className={styles.button} href={book}>Plan een afspraak <StrikWebsiteIcon name="arrow-right" /></a></section>
     </main>
-    <footer className={styles.footer}><Image website={website} src="/strik-logo.png" alt="Strik Patisserie" width={55} height={55} /><span>Ambachtelijk familiebedrijf sinds 1937.</span><a href="mailto:info@strik-patisserie.nl">info@strik-patisserie.nl</a><a href="https://strik-patisserie.nl/">Terug naar Strik ↗</a></footer>
+    <footer className={styles.footer}><Image website={website} src="/strik-logo.png" alt="Strik Patisserie" width={55} height={55} /><span>Ambachtelijk familiebedrijf sinds 1937.</span><a href="mailto:info@strik-patisserie.nl">info@strik-patisserie.nl</a><a href="https://strik-patisserie.nl/">Terug naar Strik</a></footer>
   </div>;
 }

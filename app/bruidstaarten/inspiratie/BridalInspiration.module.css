@@ -14,9 +14,8 @@
 .preview a { margin-left:12px; text-decoration:underline; text-underline-offset:3px; }
 .button { display:inline-flex; align-items:center; justify-content:center; gap:26px; padding:16px 23px; background:var(--green); color:#fffdf6!important; border:1px solid var(--green); border-radius:3px; font-size:12px; font-weight:800; line-height:1.5; transition:background .2s,transform .2s; }
 .button:hover { background:#203e32; transform:translateY(-2px); }
-.button>span[aria-hidden="true"] { font-size:18px; font-weight:400; }
-.textLink { display:inline-flex; align-items:center; gap:18px; width:fit-content; padding:7px 0; font-size:12px; font-weight:800; border-bottom:1px solid var(--line); }
-.textLink:hover { color:var(--gold); border-color:currentColor; }
+.page .textLink { display:inline-flex; align-items:center; gap:10px; width:fit-content; padding:7px 0; font-size:12px; font-weight:800; color:var(--green); text-decoration:underline; text-underline-offset:4px; }
+.page .textLink:hover { text-decoration-thickness:2px; }
 .heroWrap { position:relative; isolation:isolate; }
 .atmosphere { position:absolute; inset:0; z-index:-1; overflow:hidden; pointer-events:none; }
 .ambientLight { position:absolute; inset:-10%; background:radial-gradient(ellipse at 20% 34%,#ead9ba77,transparent 48%),radial-gradient(ellipse at 75% 75%,#e6bfac44,transparent 46%); animation:lightDrift 24s ease-in-out infinite alternate; }
@@ -100,12 +99,13 @@
 .faq summary::after { content:"+"; font-size:22px; color:var(--gold); font-weight:400; }
 .faq details[open] summary::after { content:"−"; }
 .faq details p { color:var(--muted); font-size:12px; line-height:1.9; padding:13px 27px 0 0; }
-.faq details a { text-decoration:underline; overflow-wrap:anywhere; }
+.faq details a { color:var(--green); text-decoration:underline; text-underline-offset:3px; overflow-wrap:anywhere; }
 .finalCta { padding:28px max(24px,calc((100vw - 1264px) / 2)); display:flex; justify-content:space-between; align-items:center; gap:22px; background:radial-gradient(ellipse at 50% 100%,#e8d5bc77,transparent 65%),#f2ebe2; border-top:1px solid var(--line); }
 .finalCta h2 { margin:0 0 10px; font-size:34px; }
 .finalCta p { font-size:12px; color:var(--muted); }
 .finalCta .button { flex-shrink:0; }
 .footer { max-width:1360px; margin:auto; padding:27px 48px; display:flex; justify-content:space-between; align-items:center; gap:25px; font-size:10px; color:var(--muted); }
+.footer a { color:var(--green); text-decoration:underline; text-underline-offset:4px; }
 .footer img { width:auto; height:50px; object-fit:contain; }
 .galleryDialog { overflow:hidden; position:fixed; inset:0; margin:auto; width:min(900px,calc(100vw - 40px)); max-width:none; max-height:calc(100dvh - 40px); border:1px solid #d8cbb6; border-radius:4px; padding:0; background:#fbf8f1; color:#403c32; box-shadow:0 20px 80px #0c120d66; }
 .galleryDialog::backdrop { background:#1e2a25d9; backdrop-filter:blur(5px); }
@@ -161,7 +161,7 @@
   .heroIntro { font:400 15px/1.8 StrikGotham,Arial,sans-serif; max-width:420px; letter-spacing:0; }
   .heroActions { margin-top:24px; gap:18px; }
   .heroActions .button { min-height:48px; font-size:12px; padding:15px 17px; }
-  .heroActions .textLink { min-height:44px; font-size:12px; gap:10px; }
+  .page .heroActions .textLink { min-height:44px; font-size:12px; gap:10px; }
   .note { font-size:11px; line-height:1.7; margin-top:14px!important; max-width:330px; }
   .heroVisual { margin:4px 12px 0 15px; }
   .heroPhoto { height:330px; border-radius:180px 180px 3px 3px; }
@@ -229,11 +229,11 @@
 @media (max-width:370px) {
   .hero { padding-inline:22px; }
   .heroActions { gap:12px; }
-  .heroActions .textLink { font-size:12px; }
+  .page .heroActions .textLink { font-size:12px; }
   .page h2 { font-size:32px; }
 }
 @media (max-width:700px) {
-  .button,.textLink { min-height:44px; font-size:13px; }
+  .button,.page .textLink { min-height:44px; font-size:13px; }
   .preparation>div>p:not(.eyebrow),.preparation li p { font-size:14px; line-height:1.8; }
   .styleTitle>span { font-size:12px; }
   .footer { font-size:11px; }
