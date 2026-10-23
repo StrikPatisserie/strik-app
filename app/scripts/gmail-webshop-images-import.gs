@@ -15,7 +15,7 @@ const WEBSHOP_IMAGE_CONFIG = {
   CLEANUP_MAX_THREADS: 25,
   MAX_IMAGE_ATTACHMENTS: 4,
   MAX_IMAGE_ATTACHMENT_BYTES: 1500000,
-  IMPORT_VERSION: 'strict-match-v4',
+  IMPORT_VERSION: 'multi-photo-v5',
   SCRIPT_VERSION: 'gmail-window-v3-early-prognose',
   MIN_RUN_INTERVAL_MINUTES: 30,
   CLEANUP_INTERVAL_HOURS: 24,
@@ -44,18 +44,27 @@ function maakWebshopAfbeeldingenTriggerAan() {
   Logger.log('Webshopafbeeldingen: één 30-minutentrigger, Gmail-controle 07:00–09:00, 11:00–13:00 en 20:00–22:00 (Europe/Amsterdam).');
 }
 
-function importWebshopAfbeeldingen() {
+// Optioneel herstel: zet WEBSHOP_RECOVERY_ORDER in Script Properties en voer deze functie uit.
+// Herleest uitsluitend de betreffende bestelling, inclusief eerder als ingelezen gemarkeerde mail.
+function herleesWebshopAfbeeldingenVoorBestelling() {
+  const orderNumber = PropertiesService.getScriptProperties().getProperty('WEBSHOP_RECOVERY_ORDER') || '';
+  if (!/^\d{3,12}$/.test(orderNumber)) throw new Error('Zet eerst WEBSHOP_RECOVERY_ORDER op het bestelnummer.');
+  importWebshopAfbeeldingen(orderNumber);
+}
+
+function importWebshopAfbeeldingen(orderNumber) {
   const props = PropertiesService.getScriptProperties();
-  if (isWebshopGmailBackoffActive_(props) || !claimWebshopImportRun_(props)) {
+  const recovery = typeof orderNumber === 'string' && /^\d{3,12}$/.test(orderNumber);
+  if (isWebshopGmailBackoffActive_(props) || (!recovery && !claimWebshopImportRun_(props))) {
     return;
   }
 
   let threads = [];
   try {
     threads = GmailApp.search(
-      WEBSHOP_IMAGE_CONFIG.QUERY,
+      recovery ? `label:"${WEBSHOP_IMAGE_CONFIG.SOURCE_LABEL}" "${orderNumber}" newer_than:30d` : WEBSHOP_IMAGE_CONFIG.QUERY,
       0,
-      WEBSHOP_IMAGE_CONFIG.MAX_THREADS
+      recovery ? WEBSHOP_IMAGE_CONFIG.RECOVERY_MAX_THREADS : WEBSHOP_IMAGE_CONFIG.MAX_THREADS
     );
   } catch (error) {
     if (handleWebshopGmailQuotaError_(props, error)) return;
@@ -103,7 +112,7 @@ function importWebshopAfbeeldingen() {
 
       try {
         const importId = `webshop-image:${WEBSHOP_IMAGE_CONFIG.IMPORT_VERSION}:${message.getId()}`;
-        if (props.getProperty(importId)) return;
+        if (!recovery && props.getProperty(importId)) return;
 
         const bodyHtml = message.getBody();
         const bodyText = message.getPlainBody();
@@ -135,8 +144,12 @@ function importWebshopAfbeeldingen() {
         });
 
         const status = response.getResponseCode();
-        if (status < 200 || status >= 300) {
-          throw new Error(response.getContentText());
+        let result;
+        try { result = JSON.parse(response.getContentText()); } catch { throw new Error('Geen geldige importbevestiging ontvangen; mail niet als verwerkt gemarkeerd.'); }
+        if (status < 200 || status >= 300 || result.ok !== true || result.complete !== true ||
+            !Array.isArray(result.images) || !result.images.length ||
+            result.expectedPhotoCount !== result.importedPhotoCount || result.images.length !== result.importedPhotoCount) {
+          throw new Error(result.message || 'Foto-import niet compleet; mail niet als verwerkt gemarkeerd.');
         }
 
         props.setProperty(importId, new Date().toISOString());
@@ -155,11 +168,15 @@ function importWebshopAfbeeldingen() {
     if (quotaFailed) return;
 
     try {
-      if (imported) {
+      if (imported && !failed) {
+        thread.removeLabel(errorLabel);
         thread.addLabel(processedLabel);
         thread.moveToArchive();
       }
-      if (failed) thread.addLabel(errorLabel);
+      if (failed) {
+        thread.removeLabel(processedLabel);
+        thread.addLabel(errorLabel);
+      }
     } catch (error) {
       if (handleWebshopGmailQuotaError_(props, error)) {
         quotaFailed = true;

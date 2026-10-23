@@ -133,7 +133,7 @@ const dashboard = load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx', 
   react: React, 'react/jsx-runtime': require('react/jsx-runtime'),
   '../../StrikUI': {}, './routePrintWindow': {}, './routePrintPagination': {}, './arendPrintSession': {},
   './specialSchoolDelivery': {}, './specialProCollegeDelivery': {}, './receiptDelivery': delivery,
-  './BusinessDeliveries': {}, './PhotoPrintChoiceModal': {}, './usePhotoPrintHistory': {}, './photoPrintTracking': {},
+  './webshopPhotoIdentity': load('app/bakkerij/logistiek/webshopPhotoIdentity.ts'), './BusinessDeliveries': {}, './PhotoPrintChoiceModal': {}, './usePhotoPrintHistory': {}, './photoPrintTracking': {},
 }, 'exports.normalize = normalizeImportedReceipt; exports.notes = visibleReceiptNotes; exports.print = createReceiptPrintHtml; exports.Row = ReceiptRow; exports.fulfillment = receiptFulfillment; exports.filter = receiptMatchesFilter; exports.overrides = applyReceiptOverrides;');
 
 test('screen and print retain original note lines and show the delivery warning in the delivery list', () => {
@@ -163,7 +163,7 @@ test('a deliberate manager override to pickup takes precedence over the automati
 
 test('reimporting the corrected source replaces legacy parsing artifacts even when they inflated the old line count', () => {
   const { merge } = load('app/lib/bakeryLogisticsStorage.ts', {
-    '@/app/bakkerij/logistiek/sinterklaasAcquisitionCampaign': {}, './supabase/admin': {},
+    '@/app/bakkerij/logistiek/sinterklaasAcquisitionCampaign': {}, './supabase/admin': {}, '@/app/bakkerij/logistiek/webshopPhotoIdentity': load('app/bakkerij/logistiek/webshopPhotoIdentity.ts'),
   }, 'exports.merge = mergeReceipt;');
   const incoming = parsedReceipt();
   const existing = { ...incoming, originalNotes: undefined, fulfillment: 'afhalen', deliveryWarning: undefined, lines: [...incoming.lines, { quantity: '1', description: 'Onjuist extra artikel' }], customerNote: 'Onjuist samengevoegde tekst' };
@@ -178,4 +178,15 @@ test('reimporting the corrected source replaces legacy parsing artifacts even wh
   assert.equal(mergedPickup.deliveryWarning, undefined);
   assert.equal(mergedPickup.alternativeAddress, undefined);
   assert(!mergedPickup.tags.includes('bezorgen'));
+});
+
+test('two equal cake rows with different photos stay two cakes while the repeated PDF table is merged once per occurrence',()=>{
+ const first='Cremetaart Confetti 10-12p € 30.000\t1\nFOTO/LOGO: foto-een.jpeg € 7.500\t1\nVULLING: witte chocolade framboos € 1.000\t1\nCremetaart Confetti 10-12p € 30.000\t1\nFOTO/LOGO: foto-twee.jpeg € 7.500\t1\nVULLING: witte chocolade framboos € 1.000\t1';
+ const repeated=first.replace(/30.000\t1/g,'30.000\t1 25250');
+ const page=parser.page(`${header}\n${first}\n${totals}\n${repeated}\n${totals}\n${footer}`);
+ for(const pickupFirst of [false,true]){
+  const draft=pickupFirst?{...parser.page(`${header}\nWordt gehaald\n${footer}`),pageCount:1}:{...page,lines:page.lines.map(line=>({...line})),pageCount:1};
+  parser.merge(draft,page);const receipt=parser.receipt(draft,0);
+  assert.equal(receipt.lines.filter(line=>line.description.startsWith('Cremetaart')).length,2);assert.equal(receipt.lines.filter(line=>line.description.startsWith('VULLING')).length,2);assert.equal(receipt.lines.filter(line=>line.description.startsWith('FOTO')).length,2);
+ }
 });
