@@ -332,6 +332,7 @@ type PreparationRule = {
 };
 
 type PreparationSource = {
+  kind: "besteld" | "winkel";
   receiptNumber: string;
   customerName: string;
   quantity: number;
@@ -4497,6 +4498,9 @@ function buildPreparationItems(
   const itemsByKey = new Map<string, PreparationItem>();
 
   receipts.forEach((receipt) => {
+    const sourceKind = isShopReceipt(receipt) || isStoreReceiptCustomer(receipt)
+      ? "winkel"
+      : "besteld";
     const displayLines = receipt.lines
       .map(normalizeKnownReceiptLine)
       .filter((line) => !shouldDropReceiptLine(line));
@@ -4512,7 +4516,8 @@ function buildPreparationItems(
 
         const key = preparationItemKeyFor(rule, line, rules);
         const { articleNumber, subcode } = receiptLineArticleParts(line, rules);
-        const source = {
+        const source: PreparationSource = {
+          kind: sourceKind,
           receiptNumber: receipt.receiptNumber || receipt.id,
           customerName: receipt.customer || "Klant controleren",
           quantity,
@@ -4578,7 +4583,7 @@ function preparationSourcesFor(item: PreparationItem) {
   const sourceByKey = new Map<string, PreparationSource>();
 
   item.sources.forEach((source) => {
-    const key = `${source.receiptNumber}|${source.customerName}`;
+    const key = `${source.kind}|${source.receiptNumber}|${source.customerName}`;
     const existing = sourceByKey.get(key);
     if (existing) {
       existing.quantity += source.quantity;
@@ -4603,30 +4608,31 @@ function createPreparationPrintHtml(input: {
   const rowsHtml = input.items
     .map((item, index) => {
       const sources = preparationSourcesFor(item);
-      const sourceHtml = sources
-        .slice(0, 8)
-        .map(
-          (source) =>
-            `<span>${escapeHtml(formatPreparationQuantity(source.quantity))}x ${escapeHtml(
-              source.customerName
-            )}${source.receiptNumber ? ` · bon ${escapeHtml(source.receiptNumber)}` : ""}</span>`
-        )
-        .join("");
-      const moreLabel =
-        sources.length > 8
-          ? `<span>+ ${sources.length - 8} extra bon${sources.length - 8 === 1 ? "" : "nen"}</span>`
-          : "";
+      const orderedSources = sources.filter((source) => source.kind === "besteld");
+      const shopSources = sources.filter((source) => source.kind === "winkel");
+      const orderedQuantity = orderedSources.reduce((total, source) => total + source.quantity, 0);
+      const shopQuantity = shopSources.reduce((total, source) => total + source.quantity, 0);
+      const sourceHtml = [
+        { label: "Besteld", sources: orderedSources },
+        { label: "Winkelbestellingen", sources: shopSources },
+      ].filter((group) => group.sources.length > 0).map((group) => `
+        <div class="source-group"><b>${group.label}</b>${group.sources.map((source) =>
+          `<span>${escapeHtml(formatPreparationQuantity(source.quantity))}x ${escapeHtml(source.customerName)}${source.receiptNumber ? ` · bon ${escapeHtml(source.receiptNumber)}` : ""}</span>`
+        ).join("")}</div>
+      `).join("");
 
       return `
         <tr>
           <td class="check"><span></span></td>
           <td class="number">${index + 1}</td>
-          <td class="quantity">${escapeHtml(formatPreparationQuantity(item.quantity))}</td>
           <td>
             <strong>${escapeHtml(item.description)}</strong>
             <small>${escapeHtml(item.rule.label)} · ${escapeHtml(preparationCodeLabelFor(item))}</small>
           </td>
-          <td class="sources">${sourceHtml}${moreLabel}</td>
+          <td class="split-quantity${orderedQuantity === 0 ? " empty" : ""}">${escapeHtml(formatPreparationQuantity(orderedQuantity))}</td>
+          <td class="split-quantity${shopQuantity === 0 ? " empty" : ""}">${escapeHtml(formatPreparationQuantity(shopQuantity))}</td>
+          <td class="quantity">${escapeHtml(formatPreparationQuantity(item.quantity))}</td>
+          <td class="sources">${sourceHtml}</td>
         </tr>
       `;
     })
@@ -4697,6 +4703,11 @@ function createPreparationPrintHtml(input: {
         font-weight: 700;
         margin: 0;
       }
+      .sheet-legend {
+        font-size: 8pt;
+        line-height: 1.4;
+        margin: -3mm 0 4mm;
+      }
       table {
         border-collapse: collapse;
         font-size: 10pt;
@@ -4714,8 +4725,10 @@ function createPreparationPrintHtml(input: {
         padding: 2mm;
         vertical-align: top;
       }
+      thead { display: table-header-group; }
+      tr { break-inside: avoid; page-break-inside: avoid; }
       .check {
-        width: 9mm;
+        width: 7mm;
       }
       .check span {
         border: 1.4px solid #111;
@@ -4727,14 +4740,32 @@ function createPreparationPrintHtml(input: {
         color: #666;
         font-size: 8pt;
         font-weight: 800;
-        width: 10mm;
+        width: 6mm;
+      }
+      .split-quantity {
+        text-align: right;
+        width: 23mm;
+      }
+      td.split-quantity {
+        font-size: 12pt;
+        font-weight: 700;
+      }
+      th.split-quantity {
+        font-size: 7pt;
+        line-height: 1.3;
+      }
+      .split-quantity.empty {
+        color: #777;
       }
       .quantity {
         font-size: 15pt;
         font-weight: 900;
         text-align: right;
-        width: 18mm;
+        width: 17mm;
+        border-left: 1px solid #bbb;
+        border-right: 1px solid #bbb;
       }
+      th.quantity { font-size: 8pt; }
       strong {
         display: block;
         font-size: 11pt;
@@ -4751,11 +4782,14 @@ function createPreparationPrintHtml(input: {
         color: #333;
         font-size: 8pt;
         line-height: 1.28;
-        width: 58mm;
+        width: 52mm;
+        overflow-wrap: anywhere;
       }
       .sources span {
         display: block;
       }
+      .source-group + .source-group { margin-top: 2mm; }
+      .source-group b { display: block; color: #111; margin-bottom: .5mm; }
       @media print {
         .screen-actions { display: none; }
         main {
@@ -4778,13 +4812,16 @@ function createPreparationPrintHtml(input: {
         <h1>${escapeHtml(title)}</h1>
         <p>${input.items.length} voorbereidregel${input.items.length === 1 ? "" : "s"}</p>
       </div>
+      <p class="sheet-legend">Besteld = klantbonnen · Winkelbestellingen = voorraad voor de eigen winkels.</p>
       <table>
         <thead>
           <tr>
             <th></th>
             <th>#</th>
-            <th>Aantal</th>
             <th>Product</th>
+            <th class="split-quantity">Besteld</th>
+            <th class="split-quantity">Winkel-<br>bestellingen</th>
+            <th class="quantity">Totaal</th>
             <th>Bonnen</th>
           </tr>
         </thead>
