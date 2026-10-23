@@ -52,7 +52,7 @@ export default function BridalGallery({ website = false }: { website?: boolean }
   const lastTrigger = useRef<HTMLButtonElement | null>(null);
   return <>
     <div className={styles.galleryGrid}>{examples.map((example, index) => <figure key={example.title}>
-      <button className={styles.galleryPhoto} type="button" onClick={event => { lastTrigger.current = event.currentTarget; setSelected(index); }} aria-label={`Vergroot voorbeeld ${index + 1}: ${example.title}`} aria-haspopup="dialog"><Image website={website} src={`/bruidstaarten/voorbeeld-${index + 1}.webp`} alt={example.alt} fill sizes={index === 0 ? "(max-width: 700px) 100vw, 33vw" : "(max-width: 700px) 50vw, 33vw"} /><span className={styles.enlarge} aria-hidden="true">↗</span></button>
+      <button className={styles.galleryPhoto} type="button" onClick={event => { lastTrigger.current = event.currentTarget; setSelected(index); }} aria-label={`Vergroot voorbeeld ${index + 1}: ${example.title}`} aria-haspopup="dialog"><Image website={website} src={`/bruidstaarten/voorbeeld-${index + 1}.webp`} alt={example.alt} fill sizes="(max-width: 700px) 50vw, 350px" /><span className={styles.enlarge} aria-hidden="true">↗</span></button>
       <figcaption><span className={styles.exampleNumber}>0{index + 1}</span><div><h3>{example.title}</h3><p>{example.base} · {example.people}</p></div></figcaption>
     </figure>)}</div>
     {selected !== null && <GalleryDialog website={website} index={selected} onChange={setSelected} onClose={() => { setSelected(null); lastTrigger.current?.focus({ preventScroll: true }); }} />}
