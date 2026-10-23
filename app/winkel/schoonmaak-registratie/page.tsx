@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useDeviceOrder } from "./useDeviceOrder";
 import { useDeviceInventory } from "./useDeviceInventory";
-import { configuredDeviceId, inventoryForDate, isConfiguredDevice } from "./deviceInventory";
+import { configuredDeviceId, configuredDevicesForDate, inventoryForDate, isConfiguredDevice } from "./deviceInventory";
 import DeviceEditorDialog, { RemoveDeviceDialog } from "./DeviceEditorDialog";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
@@ -615,7 +615,10 @@ export function TemperatureRegistrationPage({
   const [deviceDialogOpen, setDeviceDialogOpen] = useState(false);
   const [promotingDevice, setPromotingDevice] = useState<TemperatureRegistration | null>(null);
   const [removingDevice, setRemovingDevice] = useState<TemperatureRegistration | null>(null);
-  const rowsByLocation = useMemo(() => manageDevices ? { ...baseRowsByLocation, [winkelId]: inventoryForDate(baseRowsByLocation[winkelId] || [], inventory.changes, datum, winkelId) } : baseRowsByLocation, [baseRowsByLocation, manageDevices, winkelId, inventory.changes, datum]);
+  const rowsByLocation = useMemo(() => {
+    const datedRows = Object.fromEntries(Object.entries(baseRowsByLocation).map(([location, devices]) => [location, configuredDevicesForDate(devices, datum, location)]));
+    return manageDevices ? { ...datedRows, [winkelId]: inventoryForDate(baseRowsByLocation[winkelId] || [], inventory.changes, datum, winkelId) } : datedRows;
+  }, [baseRowsByLocation, manageDevices, winkelId, inventory.changes, datum]);
   const [form, setForm] = useState<FormState>({
     naam: "",
     opmerking: "",

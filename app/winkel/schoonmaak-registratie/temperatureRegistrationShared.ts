@@ -66,10 +66,34 @@ export type TemperatureDeviceConfig =
       department?: string;
       deviceType?: TemperatureDeviceType;
       maxTemperature?: number;
+      activeFrom?: string;
+      activeUntil?: string;
     };
 
 export function getTemperatureDeviceName(device: TemperatureDeviceConfig) {
   return typeof device === "string" ? device : device.name;
+}
+
+// Keep the previous Lent inventory available when viewing older registrations.
+// Reuse the original device IDs for the same equipment, regardless of row order.
+const winkelInventoryStart = "2026-10-23";
+const previousLentDevices = [
+  "zelfbedienings vriezer winkel",
+  "zelfbedieningskoeling winkel",
+  "gebaksvitrine winkel",
+  "vrieskast ijs achter",
+  "vriescel achter",
+  "koelcen achter",
+  "koelwerkbank achter",
+];
+
+function winkelDevice(id: string, name: string, seasonal = false): TemperatureDeviceConfig {
+  return {
+    id,
+    name,
+    activeFrom: winkelInventoryStart,
+    ...(seasonal ? { department: "In gebruik tijdens het ijsseizoen" } : {}),
+  };
 }
 
 export const temperatureRowsByWinkel: Record<WinkelId, TemperatureDeviceConfig[]> = {
@@ -83,33 +107,35 @@ export const temperatureRowsByWinkel: Record<WinkelId, TemperatureDeviceConfig[]
     "koelcel gebak achter",
   ],
   ziekerstraat: [
-    "zelfbedienings vriezer winkel",
-    "zelfbedieningskoeling winkel",
-    "gebaksvitrine winkel",
-    "koelkast keuken",
-    "vriescel gang",
-    "koelcel gang",
-    "koelwerkbank achter",
-    "vrieskast enkel achter",
-    "vrieskast dubbel achter",
+    winkelDevice("ziekerstraat-vriezer-1", "Vriezer 1"),
+    winkelDevice("ziekerstraat-vriezer-2", "Vriezer 2"),
+    winkelDevice("ziekerstraat-vriezer-3", "Vriezer 3"),
+    winkelDevice("ziekerstraat-vriescel", "Vriescel"),
+    winkelDevice("ziekerstraat-winkelvriezer", "Winkelvriezer"),
+    winkelDevice("ziekerstraat-gebakskoeling", "Gebakskoeling"),
+    winkelDevice("ziekerstraat-zelfbedienskoeling", "Zelfbedienskoeling"),
   ],
   daalseweg: [
-    "zelfbedienings vriezer winkel",
-    "zelfbedieningskoeling winkel",
-    "gebaksvitrine winkel",
-    "vriescel achter",
-    "koelcel achter",
-    "vrieskast ijs",
-    "vrieskast achter",
+    winkelDevice("daalseweg-vriescel", "Vriescel"),
+    winkelDevice("daalseweg-koelcel", "Koelcel"),
+    winkelDevice("daalseweg-ijsvriezer", "IJsvriezer", true),
+    winkelDevice("daalseweg-gebakskoeling", "Gebakskoeling"),
+    winkelDevice("daalseweg-koeling-hartig", "Koeling hartig"),
+    winkelDevice("daalseweg-winkelvriezer", "Winkelvriezer"),
+    winkelDevice("daalseweg-zelfbedieningskoeling", "Zelfbedieningskoeling"),
   ],
   lent: [
-    "zelfbedienings vriezer winkel",
-    "zelfbedieningskoeling winkel",
-    "gebaksvitrine winkel",
-    "vrieskast ijs achter",
-    "vriescel achter",
-    "koelcen achter",
-    "koelwerkbank achter",
+    ...previousLentDevices.map((name, index) => ({
+      id: `lent-${index + 1}`,
+      name,
+      activeUntil: winkelInventoryStart,
+    })),
+    winkelDevice("lent-5", "Vriescel"),
+    winkelDevice("lent-6", "Koelcel"),
+    winkelDevice("lent-4", "IJsvriezer", true),
+    winkelDevice("lent-3", "Gebakskoeling"),
+    winkelDevice("lent-1", "Winkelvriezer"),
+    winkelDevice("lent-2", "Zelfbedieningskoeling"),
   ],
 };
 

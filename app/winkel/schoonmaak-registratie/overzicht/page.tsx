@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useDeviceInventory } from "../useDeviceInventory";
-import { configuredDeviceId, inventoryForDate, type InventoryChange } from "../deviceInventory";
+import { configuredDeviceId, configuredDevicesForDate, inventoryForDate, type InventoryChange } from "../deviceInventory";
 import { dateInput, weekRange, periodDates, daySummary, recordedDays } from "./overviewPeriod";
 import { useEffect, useMemo, useState } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../../StrikUI";
@@ -359,7 +359,7 @@ function buildRows(
     const dates = periodDates(periodStart, periodEnd, dateInput(new Date()));
     selectedLocationIds.forEach((locationId) => {
       dates.forEach((date) => {
-        const expectedDevices = locationId === "bakkerij" ? inventoryForDate(rowsByLocation[locationId] || [], inventoryChanges, date, locationId) : rowsByLocation[locationId] || [];
+        const expectedDevices = locationId === "bakkerij" ? inventoryForDate(rowsByLocation[locationId] || [], inventoryChanges, date, locationId) : configuredDevicesForDate(rowsByLocation[locationId] || [], date, locationId);
         expectedDevices.forEach((device, index) => {
           const deviceName = getTemperatureDeviceName(device);
           const deviceType = typeof device === "string" ? inferDeviceType(deviceName) : device.deviceType || inferDeviceType(deviceName);

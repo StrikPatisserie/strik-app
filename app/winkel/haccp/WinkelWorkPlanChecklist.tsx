@@ -108,6 +108,7 @@ function getVisibleSections(definition: WinkelWorkPlanDefinition, date: string) 
   if (!isItemVisible(weekDay, definition.visibleOnWeekdays)) return [];
 
   return definition.sections
+    .filter((section) => isItemVisible(weekDay, section.visibleOnWeekdays))
     .map((section) => ({
       ...section,
       items: section.items.filter((item) =>
@@ -562,6 +563,12 @@ export default function WinkelWorkPlanChecklist({
                             {item.detail}
                           </span>
                         )}
+                        {item.steps?.length ? (
+                          <span role="list" className="mt-2 grid gap-1.5 text-xs font-semibold leading-relaxed text-[#6b645b]">
+                            {item.steps.map((step, index) => <span role="listitem" key={step} className="grid grid-cols-[1rem_minmax(0,1fr)] gap-1"><span aria-hidden="true">{index + 1}.</span><span>{step}</span></span>)}
+                          </span>
+                        ) : null}
+                        {item.warning ? <span className="mt-2 block border-l-2 border-[#a0382f] bg-[#fff2e9] px-2 py-1.5 text-xs font-bold leading-relaxed text-[#813827]">{item.warning}</span> : null}
                         {check?.checkedByName && (
                           <span className="mt-1 block text-[0.62rem] font-black uppercase tracking-[0.08em] text-[#3f6b36]">
                             {check.checkedByName}

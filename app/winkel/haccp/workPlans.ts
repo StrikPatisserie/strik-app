@@ -11,6 +11,8 @@ export type WinkelWorkPlanItem = {
   id: string;
   label: string;
   detail?: string;
+  steps?: string[];
+  warning?: string;
   visibleOnWeekdays?: number[];
 };
 
@@ -18,6 +20,7 @@ export type WinkelWorkPlanSection = {
   id: string;
   title: string;
   subtitle?: string;
+  visibleOnWeekdays?: number[];
   items: WinkelWorkPlanItem[];
 };
 
@@ -42,7 +45,7 @@ export const WINKEL_WORK_PLAN_STORE_LABELS: Record<
   lent: "Lent",
 };
 
-const allWeekdays = [1, 2, 3, 4, 5, 6];
+const allWeekdays = [0, 1, 2, 3, 4, 5, 6];
 const mondayThroughFriday = [1, 2, 3, 4, 5];
 
 const heyendaalDailyCleaningItems: WinkelWorkPlanItem[] = [
@@ -65,7 +68,11 @@ const heyendaalDailyCleaningItems: WinkelWorkPlanItem[] = [
   { id: "dag-choco-schap", label: "Choco schap voor kassa's schoon" },
   { id: "dag-bonbons", label: "Bonbons aanvullen" },
   { id: "dag-bladeren", label: "Bladeren buiten voor aanvegen" },
-].map((item) => ({ ...item, visibleOnWeekdays: allWeekdays }));
+].map((item) => ({
+  ...item,
+  // Saturday's vacuuming is listed once in the after-closing block.
+  visibleOnWeekdays: item.id === "dag-stofzuig" ? [0, 1, 2, 3, 4, 5] : allWeekdays,
+}));
 
 export const winkelWorkPlanDefinitions: WinkelWorkPlanDefinition[] = [
   {
@@ -73,8 +80,8 @@ export const winkelWorkPlanDefinitions: WinkelWorkPlanDefinition[] = [
     storeId: "heyendaal",
     storeLabel: "Heyendaal",
     title: "Schoonmaakrooster Heyendaal",
-    subtitle: "Weektaak per dag plus vaste dagtaken.",
-    cadenceLabel: "per werkdag",
+    subtitle: "Weektaak per dag, weekendtaken per tijdblok en vaste dagtaken.",
+    cadenceLabel: "per dag",
     sections: [
       {
         id: "week-maandag",
@@ -169,23 +176,126 @@ export const winkelWorkPlanDefinitions: WinkelWorkPlanDefinition[] = [
       {
         id: "week-zaterdag",
         title: "Weektaak zaterdag",
+        visibleOnWeekdays: [6],
+        items: [
+          { id: "za-oven", label: "Oven schoon", visibleOnWeekdays: [6] },
+        ],
+      },
+      {
+        id: "zaterdag-voor-13",
+        title: "Zaterdag · vóór 13:00",
+        subtitle: "Schoonmaak achter. Vergeet ook de algemene dagtaken niet.",
+        visibleOnWeekdays: [6],
+        items: [
+          { id: "za-werkbanken", label: "Alle werkbanken schoon en kruimelvrij" },
+          { id: "za-stofzuig-achter", label: "Achter stofzuigen, inclusief het chocohok" },
+          {
+            id: "za-schrobben-achter",
+            label: "Achter schrobben en het water wegtrekken, inclusief het chocohok",
+            detail: "Haal de werkbanken aan de kant, zodat je ook eronder kunt schoonmaken.",
+          },
+          { id: "za-nadweilen", label: "Indien nodig nadweilen" },
+          { id: "za-zondag-klaarleggen", label: "Croissants, broodjes en VGB-broden klaarleggen voor zondag" },
+        ],
+      },
+      {
+        id: "zaterdag-na-17",
+        title: "Zaterdag · na 17:00",
+        visibleOnWeekdays: [6],
         items: [
           {
-            id: "za-vitrine",
-            label: "Vitrine schoon",
-            detail: "Alles eruit, ramen, stellage en daaronder.",
-            visibleOnWeekdays: [6],
+            id: "za-broodmachine-compressor",
+            label: "Snijmachine uitspuiten",
+            detail: "Haal de snijmachine naar achteren, open de achterkant met de sleutel en spuit de machine uit met de compressor.",
           },
-          { id: "za-oven", label: "Oven schoon", visibleOnWeekdays: [6] },
+          {
+            id: "za-vitrine",
+            label: "Gebakskoeling leeg én schoon",
+            steps: [
+              "Haal alle gebaksplaten eruit en was ze apart af.",
+              "Maak alle richeltjes van de gebaksplaten apart schoon; er mogen geen gebaksresten zichtbaar zijn.",
+              "Haal alle witte rekjes aan de onderkant eruit en was ze apart af.",
+              "Maak de binnenkant van de vitrine schoon.",
+              "Haal de vitrine aan de voorkant naar voren en neem de binnenkant van het glaswerk af.",
+              "Maak de voorkanten van de gebaksvitrine schoon; er mogen geen gebaksresten zichtbaar zijn.",
+              "Plaats de roosters en gebaksplaatjes terug, inclusief het gebak voor verkoop op zondag.",
+            ],
+          },
+        ],
+      },
+      {
+        id: "zaterdag-na-sluiting",
+        title: "Zaterdag · na sluitingstijd",
+        visibleOnWeekdays: [6],
+        items: [
+          { id: "dag-stofzuig", label: "Winkel stofzuigen" },
           {
             id: "za-schrobben-plinten",
-            label: "Schrobben en daarna plinten schoon",
-            visibleOnWeekdays: [6],
+            label: "Winkelvloer schrobben en plinten afnemen",
+            steps: ["Schrob de winkelvloer en trek het water naar buiten.", "Neem de plinten af."],
+          },
+        ],
+      },
+      {
+        id: "zondag-na-sluiting",
+        title: "Zondag · na sluitingstijd",
+        subtitle: "Extra weekendtaken, naast de reguliere schoonmaaktaken. Gebruik het FIFO-plan bij het leeghalen.",
+        visibleOnWeekdays: [0],
+        items: [
+          {
+            id: "zo-zelfbedieningskoeling",
+            label: "Zelfbedieningskoeling leeg en schoon",
+            steps: [
+              "Zet de koeling uit met de knop aan de onderzijde.",
+              "Leg alle producten in winkelmandjes en doe de FIFO-check: welke producten gaan retour? Check het FIFO-plan.",
+              "Haal alle witte plaatjes eruit, was ze per stuk af en leg ze in de keuken te drogen.",
+              "Maak de koeling schoon.",
+              "Til de plaat omhoog en maak ook de onderkant van de koeling schoon.",
+            ],
           },
           {
-            id: "za-broodmachine-compressor",
-            label: "Broodmachine achter met compressor uitspuiten",
-            visibleOnWeekdays: [6],
+            id: "zo-gebakskoeling",
+            label: "Gebakskoeling leeg en schoon",
+            steps: [
+              "Haal het gebak uit de koeling en check het FIFO-plan. Zet gebak dat door kan naar maandag in de koelcel.",
+              "Zet de koeling uit met de knop aan de onderkant.",
+              "Maak gebruikte plaatjes schoon.",
+              "Maak het glaswerk van de deurtjes schoon met Glassex.",
+            ],
+          },
+        ],
+      },
+      {
+        id: "zondag-fifo",
+        title: "Zondag · FIFO-plan",
+        subtitle: "Controleer de datum onder het karton van alle taarten en vlaaien, zodat maandag met vers gebak begint.",
+        visibleOnWeekdays: [0],
+        items: [
+          {
+            id: "zo-fifo-retour",
+            label: "Retour selecteren",
+            steps: [
+              "Al het gebak van vrijdag of ouder gaat retour. Houd bij om welke producten het gaat.",
+              "Bossche bollen en tompoucen van zaterdag of ouder gaan retour.",
+              "Vlaaien van zaterdag: beoordeel kritisch of ze nog representatief zijn voor verkoop. Alleen goed uitziende vlaaien mogen maandag nog verkocht worden; de overige gaan retour.",
+            ],
+            warning: "Maak voor je collega's duidelijk welke vlaaien na maandag retour moeten. Vlaaien van vrijdag of ouder gaan altijd retour.",
+          },
+          {
+            id: "zo-fifo-invriezen",
+            label: "Invriezen · alleen gebak van zaterdag",
+            detail: "Herfstparel, brownie tresor, hazelino, passiebombe, framboos slagroom, steventje, carrot rondo, red velvet punt en cheesecake punt.",
+            warning: "Vries deze producten alleen in als ze van zaterdag zijn.",
+          },
+          {
+            id: "zo-fifo-maandag",
+            label: "Door naar maandag",
+            steps: [
+              "Appelpunt, appel carré, nougatine vanille en pistache slofje.",
+              "Sloffen, appelfleur en petit gateau: alleen met een houdbaarheidsdatum tot maandag of later.",
+              "Zet het gebak dat door kan naar maandag in de koelcel.",
+            ],
+            warning: "Geef alle producten die tot maandag goed zijn bij het afsluiten alvast een 20%- of 50%-sticker.",
           },
         ],
       },
