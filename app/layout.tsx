@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import "./globals.css";
 import AppChrome from "./AppChrome";
 import AutoUpdateRefresh from "./AutoUpdateRefresh";
@@ -31,6 +32,12 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const weddingPage = (await headers()).get("x-strik-wedding-page");
+  if (weddingPage === "inspiration" || weddingPage === "appointment") {
+    // WordPress requests only our two public pages, without forwarding a
+    // visitor's cookies. Keep the public document independent of app chrome.
+    return <html lang="nl" className="bg-[#faf8f5]"><body data-strik-wedding-site={weddingPage} className="min-h-dvh bg-[#faf8f5] text-[#1a1815]">{children}</body></html>;
+  }
   const [profile, featureVisibility] = await Promise.all([
     getCurrentProfile(),
     getFeatureVisibilitySettings(),

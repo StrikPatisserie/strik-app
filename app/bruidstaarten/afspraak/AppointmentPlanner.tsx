@@ -1,6 +1,7 @@
 "use client";
 
-import Image from "next/image";
+import Image from "../BridalImage";
+import { WEDDING_APP_ORIGIN, WEDDING_WEBSITE_ORIGIN, WEDDING_WEBSITE_PATH } from "../../lib/weddingPublicSite";
 import { useEffect, useRef, useState } from "react";
 import type { WeddingReceipt, WeddingSlotDay } from "../../lib/weddingAppointments";
 import styles from "./AppointmentPlanner.module.css";
@@ -11,7 +12,7 @@ const formatDate = (date: string) => new Intl.DateTimeFormat("nl-NL", { weekday:
 const dateKey = (date: Date) => date.toISOString().slice(0, 10);
 const endTime = (time: string) => { const [hour, minute] = time.split(":").map(Number); return `${String(hour + Math.floor((minute + 30) / 60)).padStart(2, "0")}:${String((minute + 30) % 60).padStart(2, "0")}`; };
 
-export default function AppointmentPlanner({ today, preview = true }: Readonly<{ today: string; preview?: boolean }>) {
+export default function AppointmentPlanner({ today, preview = true, website = false }: Readonly<{ today: string; preview?: boolean; website?: boolean }>) {
   const [year, month] = today.split("-").map(Number);
   const [monthOffset, setMonthOffset] = useState(0);
   const [selectedDate, setSelectedDate] = useState("");
@@ -28,7 +29,8 @@ export default function AppointmentPlanner({ today, preview = true }: Readonly<{
   const [previewBookings, setPreviewBookings] = useState<{date: string; time: string}[]>([]);
   const submitting = useRef(false);
   const request = useRef<{key: string; id: string} | null>(null);
-  const home = preview ? "/bruidstaarten/voorbeeld" : "/bruidstaart";
+  const home = preview ? "/bruidstaarten/voorbeeld" : website ? `${WEDDING_WEBSITE_ORIGIN}${WEDDING_WEBSITE_PATH}` : "/bruidstaart";
+  const apiOrigin = website ? WEDDING_APP_ORIGIN : "";
   const displayMonth = new Date(Date.UTC(year, month - 1 + monthOffset, 1, 12));
   const leading = (displayMonth.getUTCDay() + 6) % 7;
   const monthDays = new Date(Date.UTC(displayMonth.getUTCFullYear(), displayMonth.getUTCMonth() + 1, 0)).getUTCDate();
@@ -38,7 +40,7 @@ export default function AppointmentPlanner({ today, preview = true }: Readonly<{
     if (preview) return;
     const abort = new AbortController();
     setLoading(true);
-    void fetch(`/api/wedding-appointments/availability?from=${from}&to=${to}`, {cache: "no-store", signal: abort.signal}).then(async response => {
+    void fetch(`${apiOrigin}/api/wedding-appointments/availability?from=${from}&to=${to}`, {cache: "no-store", signal: abort.signal}).then(async response => {
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "De vrije tijden konden niet worden geladen.");
       setAvailability(data.days || []);
@@ -46,7 +48,7 @@ export default function AppointmentPlanner({ today, preview = true }: Readonly<{
     }).catch(reason => { if (!abort.signal.aborted) { setAvailability([]); setBookingError(reason instanceof Error ? reason.message : "De vrije tijden konden niet worden geladen."); } })
       .finally(() => { if (!abort.signal.aborted) setLoading(false); });
     return () => abort.abort();
-  }, [from, to, preview, refresh]);
+  }, [from, to, preview, refresh, apiOrigin]);
   const availableTimes = (date: string) => preview
     ? date > today && [2,3,4,5,6].includes(new Date(`${date}T12:00:00Z`).getUTCDay()) ? times.filter(time => !previewBookings.some(item => item.date === date && item.time === time)) : []
     : loading ? [] : availability.find(day => day.date === date)?.times || [];
@@ -66,7 +68,7 @@ export default function AppointmentPlanner({ today, preview = true }: Readonly<{
     const key = JSON.stringify({date: selectedDate, time: selectedTime, contact});
     if (request.current?.key !== key) request.current = {key, id: crypto.randomUUID()};
     try {
-      const response = await fetch("/api/wedding-appointments/book", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({date: selectedDate, time: selectedTime, contact, requestId: request.current.id})});
+      const response = await fetch(`${apiOrigin}/api/wedding-appointments/book`, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({date: selectedDate, time: selectedTime, contact, requestId: request.current.id})});
       const data = await response.json();
       if (!response.ok || !data.receipt?.reference) {
         if (response.status === 409) { setSelectedTime(""); setRefresh(value => value + 1); go("choose"); }
@@ -79,9 +81,9 @@ export default function AppointmentPlanner({ today, preview = true }: Readonly<{
 
   return <div className={styles.page}>
     {preview && <div className={styles.preview}><strong>Ontwerpvoorbeeld</strong><span>Voorbeeldtijden · er wordt niets geboekt of gemaild</span></div>}
-    <header className={styles.brandBar}><a href={home}><Image src="/strik-logo.png" alt="Strik Patisserie" width={76} height={76} /></a><span>Strik Patisserie · Nijmegen</span><a className={styles.homeBack} href={home}>← Terug naar bruidstaarten</a></header>
+    <header className={styles.brandBar}><a href={home}><Image website={website} src="/strik-logo.png" alt="Strik Patisserie" width={76} height={76} /></a><span>Strik Patisserie · Nijmegen</span><a className={styles.homeBack} href={home}>← Terug naar bruidstaarten</a></header>
     <main className={styles.main}>
-      <section className={styles.intro}><div><p className={styles.eyebrow}>Afspraak bij Strik</p><h1>Plan jullie<br /><em>bruidstaartafspraak.</em></h1><p>Bespreek het formaat, de smaken en de afwerking met ons. De afspraak duurt een halfuur en is vrijblijvend.</p></div><Image className={styles.cake} src="/icons_strik_bruidstaart.svg" alt="" width={140} height={140} /></section>
+      <section className={styles.intro}><div><p className={styles.eyebrow}>Afspraak bij Strik</p><h1>Plan jullie<br /><em>bruidstaartafspraak.</em></h1><p>Bespreek het formaat, de smaken en de afwerking met ons. De afspraak duurt een halfuur en is vrijblijvend.</p></div><Image website={website} className={styles.cake} src="/icons_strik_bruidstaart.svg" alt="" width={140} height={140} /></section>
       <div className={styles.layout}>
         <aside className={styles.info}><p className={styles.eyebrow}>Bruidstaartgesprek</p><h2>De afspraak<br />in het kort.</h2><dl><div><dt>Waar</dt><dd>Strik Ziekerstraat<span>Ziekerstraat 124, Nijmegen</span></dd></div><div><dt>Duur</dt><dd>30 minuten<span>Een vrijblijvend gesprek</span></dd></div><div><dt>Na het boeken</dt><dd>Direct bevestigd<span>Een bevestiging in jullie mailbox</span></dd></div></dl><div className={styles.help}><strong>Geen passend moment?</strong><p>Staat jullie gewenste dag of tijd er niet bij? Mail de bakkerij; we kijken samen naar een ander moment.</p><a href="mailto:info@strik-patisserie.nl">info@strik-patisserie.nl ↗</a></div></aside>
         <section className={styles.booking} aria-label="Een bruidstaartafspraak plannen">

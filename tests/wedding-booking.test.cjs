@@ -11,6 +11,7 @@ function load(file, dependencies = {}, globals = {}) {
   return exports;
 }
 const dates = load('app/lib/weddingAppointments.ts');
+const publicSite = load('app/lib/weddingPublicSite.ts');
 const settings = { enabled: true, weekdays: [2, 3, 4, 5, 6], times: ['10:30','11:30'], minimum_notice_minutes: 0, advance_days: 365 };
 const now = new Date('2026-10-22T07:00:00Z');
 const contact = { names:'Voorbeeld & Test', email:'EXAMPLE@example.com', phone:'0612345678', weddingDate:'2027-05-21',guests:'60',notes:'Geen echte boeking' };
@@ -61,7 +62,7 @@ test('migration preserves all original rows, names, local times, trash, and the 
 const server={ weddingSameOrigin:request=>request.headers.get('origin')===new URL(request.url).origin,weddingJson:(body,status=200)=>Response.json(body,{status}) };
 const request=(body,origin='https://app.strik-patisserie.nl')=>new Request('https://app.strik-patisserie.nl/api/wedding-appointments/book',{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify(body)});
 const payload={date:'2026-11-03',time:'10:30',requestId:'11111111-1111-4111-8111-111111111111',contact};
-function bookRoute(rpc) { const after=[];return {...load('app/api/wedding-appointments/book/route.ts',{'node:crypto':crypto,'next/server':{after:fn=>after.push(fn)},'@/app/lib/weddingAppointments':dates,'@/app/lib/weddingServer':{...server,weddingDb:()=>({rpc})},'@/app/lib/weddingMail.server':{sendWeddingMails:async()=>{}}}),after}; }
+function bookRoute(rpc) { const after=[];return {...load('app/api/wedding-appointments/book/route.ts',{'node:crypto':crypto,'next/server':{after:fn=>after.push(fn)},'@/app/lib/weddingAppointments':dates,'@/app/lib/weddingPublicSite':publicSite,'@/app/lib/weddingServer':{...server,weddingDb:()=>({rpc})},'@/app/lib/weddingMail.server':{sendWeddingMails:async()=>{}}}),after}; }
 test('public booking rejects wrong origins, oversized/invalid input and conflicts without acknowledging success',async()=>{
   let calls=0;const route=bookRoute(async()=>{calls++;return {error:{code:'P0001',message:'Tijdvak bezet'}};});
   assert.equal((await route.POST(request(payload,'https://other.example'))).status,403);
@@ -74,6 +75,15 @@ test('confirmed response exposes only a receipt, and retries retain the request 
   const received=[];const route=bookRoute(async(name,args)=>{received.push(args);return {data:{id:'booking',reference:'BA-TEST',appointment_date:args.p_date,start_time:args.p_time,end_time:'11:00',names:'Test',email:'test@example.com',status:'confirmed',raw_source:{private:true},rate_key:'private'}};});
   for(let i=0;i<2;i++){const response=await route.POST(request(payload));assert.equal(response.status,200);const result=await response.json();assert.equal(result.receipt.reference,'BA-TEST');assert.equal(result.receipt.raw_source,undefined);assert.equal(result.receipt.rate_key,undefined);}
   assert.equal(received[0].p_request_id,received[1].p_request_id);assert.equal(received[0].p_rate_key.length,64);assert.equal(route.after.length,2);
+});
+test('booking from the WordPress page uses the same deduplication, conflict checks and durable mail jobs',async()=>{
+  const received=[];const route=bookRoute(async(name,args)=>{received.push(args);return {data:{id:'booking',reference:'BA-TEST',appointment_date:args.p_date,start_time:args.p_time,end_time:'11:00',names:'Test',email:'test@example.com',status:'confirmed'}};});
+  const response=await route.POST(request(payload,'https://strik-patisserie.nl'));
+  assert.equal(response.status,200);
+  assert.equal(response.headers.get('Access-Control-Allow-Origin'),'https://strik-patisserie.nl');
+  assert.equal(received[0].p_request_id,payload.requestId);
+  assert.equal(received[0].p_rate_key.length,64);
+  assert.equal(route.after.length,1);
 });
 test('private agenda enforces staff access and accepts arbitrary free day/time with revision checks',async()=>{
   let profile=null,calls=0,args;const route=load('app/api/wedding-appointments/manage/route.ts',{'next/server':{after:()=>{}},'@/app/lib/auth/session':{getCurrentProfile:async()=>profile},'@/app/lib/auth/access':{canAccessWeddingCakes:p=>p.role==='staff',hasFullAccess:()=>false},'@/app/lib/weddingArchive.server':archive,'@/app/lib/weddingAppointments':dates,'@/app/lib/weddingServer':{...server,weddingDb:()=>({rpc:async(name,input)=>{calls++;args=input;return {data:{id:'test'}};}})},'@/app/lib/weddingMail.server':{sendWeddingMails:async()=>{}}});
@@ -96,7 +106,7 @@ function mailWorker(options={}) {
   const booking={id:'appointment-1',reference:'BA-TEST',appointment_date:'2026-10-23',start_time:'10:30',end_time:'11:00',status:'confirmed',names:'Test',email:'test@example.com',phone:'',notes:'',source:'app',revision:1,...options.booking};
   const db={from(table){let op='read',patch,filters=[];const query={select(){return query;},update(value){op='update';patch=value;return query;},eq(key,value){filters.push([key,value]);return query;},in(){return query;},lt(){return query;},lte(){return query;},order(){return query;},limit(){return query;},single(){return Promise.resolve({data:booking});},maybeSingle(){return Promise.resolve({data: options.claimLost?null:{id:'job-1'}});},then(resolve,reject){if(op==='update')updates.push({patch,filters});return Promise.resolve(table==='wedding_appointment_mail_outbox'&&op==='read'?{data:jobs}:{data:null}).then(resolve,reject);}};return query;}};
   class Clock extends Date {constructor(...args){super(...(args.length?args:['2026-10-22T07:00:00Z']));}static now(){return new Date('2026-10-22T07:00:00Z').getTime();}}
-  const worker=load('app/lib/weddingMail.server.ts',{'server-only':{},'./weddingServer':{weddingDb:()=>db,weddingSettings:async()=>({enabled:options.enabled!==false}),weddingWordPress:async(path,payload)=>{sent.push(payload);return options.receipt||{sent:true};}},'./weddingAppointments':dates,'./weddingMail':{weddingConfirmationMail:(b,internal,reminder)=>({subject:reminder?'Reminder':'Confirmation',html:'Test'})}},{Date:Clock});
+  const worker=load('app/lib/weddingMail.server.ts',{'server-only':{},'./weddingServer':{weddingDb:()=>db,weddingSettings:async()=>({enabled:options.enabled!==false}),weddingWordPress:async(path,payload)=>{sent.push(payload);return options.receipt||{sent:true};}},'./weddingAppointments':{...dates,weddingLocalDate:()=>dates.weddingLocalDate(new Clock())},'./weddingMail':{weddingConfirmationMail:(b,internal,reminder)=>({subject:reminder?'Reminder':'Confirmation',html:'Test'})}},{Date:Clock});
   return {...worker,sent,updates};
 }
 test('reminder worker sends tomorrow only, and ignores cancelled or superseded appointments',async()=>{
