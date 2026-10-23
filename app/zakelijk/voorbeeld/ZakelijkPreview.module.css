@@ -39,11 +39,11 @@
 .assortmentGrid figcaption { padding-top:10px; font:20px/1.3 Georgia,serif; }
 .swipeHint { display:none; }
 .assortmentGrid:focus-visible { outline:2px solid var(--gold); outline-offset:6px; }
-.gifts { background:var(--green); color:var(--paper); }
+.gifts { --gift-red:#6b302d; background:var(--gift-red); color:var(--paper); }
 .gifts .sectionHeading { margin-bottom:24px; }
 .gifts h2 { font-size:38px; }
 .gifts em { color:#e1c798; }
-.gifts .sectionHeading>p { max-width:365px; color:#e1e7da; font-size:13px; }
+.gifts .sectionHeading>p { max-width:365px; color:#f1e4d8; font-size:13px; }
 .giftsInner { max-width:1280px; padding:32px 40px 24px; margin:auto; }
 .giftGrid { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
 .page .giftCard { display:grid; grid-template-columns:170px 1fr; gap:22px; align-items:center; min-width:0; background:var(--paper); color:var(--ink); border:1px solid #c5b391; border-radius:4px; overflow:hidden; }
@@ -53,8 +53,8 @@
 .giftCopy { padding:20px 20px 20px 0; }
 .giftCopy h3 { font:32px/1.2 Georgia,serif; }
 .giftCopy p { color:var(--muted); font-size:12px; margin-top:8px; }
-.giftAction { display:inline-flex; align-items:center; justify-content:center; gap:14px; min-height:44px; max-width:100%; margin-top:14px; padding:10px 13px; background:var(--green); border-radius:3px; font-size:11px; font-weight:800; line-height:1.5; color:var(--paper); }
-.giftCard:hover .giftAction { background:#203e32; }
+.giftAction { display:inline-flex; align-items:center; justify-content:center; gap:14px; min-height:44px; max-width:100%; margin-top:14px; padding:10px 13px; background:var(--gift-red); border-radius:3px; font-size:11px; font-weight:800; line-height:1.5; color:var(--paper); }
+.giftCard:hover .giftAction { background:#4e211f; }
 .otherOccasions { display:inline-flex; gap:12px; align-items:center; min-height:44px; margin-top:10px; font-size:11px; text-decoration:underline!important; text-underline-offset:4px; }
 .practical { max-width:1280px; padding:12px 40px; margin:auto; }
 .practical summary { display:flex; align-items:center; justify-content:space-between; gap:20px; list-style:none; cursor:pointer; min-height:50px; padding:12px 0; font-size:12px; font-weight:800; }

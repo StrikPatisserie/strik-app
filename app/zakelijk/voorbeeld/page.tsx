@@ -51,7 +51,7 @@ export default function BusinessPreviewPage() {
       </section>
 
       <section className={styles.assortment} id="assortiment" aria-labelledby="assortment-title">
-        <div className={styles.sectionHeading}><h2 id="assortment-title">Taart & <em>kleine patisserie.</em></h2><p>Voor bij de koffie, als dessert of in de vitrine. Van taarten en kleine gebakjes tot chocolade en bonbons. Formaat, smaak en dieetwensen bespreken we samen.</p></div>
+        <div className={styles.sectionHeading}><h2 id="assortment-title">Een greep uit <em>ons assortiment.</em></h2><p>Taarten, kleine patisserie, chocolade en bonbons: er is nog veel meer dan u hier ziet. Formaat, smaak en dieetwensen bespreken we graag samen.</p></div>
         <p className={styles.swipeHint}>Schuif door het assortiment</p>
         <div className={styles.assortmentGrid} role="region" aria-label="Foto’s van het assortiment" tabIndex={0}>{assortment.map(item => <figure key={item.image}><div className={styles.assortmentImage}><Image src={`/zakelijk/${item.image}.webp`} alt={item.alt} fill sizes="(max-width: 420px) 75vw, (max-width: 1100px) 300px, 15vw" /></div><figcaption>{item.title}</figcaption></figure>)}</div>
       </section>
