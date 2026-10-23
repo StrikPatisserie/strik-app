@@ -33,6 +33,10 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const weddingPage = (await headers()).get("x-strik-wedding-page");
+  const businessPage = (await headers()).get("x-strik-business-page");
+  if (businessPage === "business") {
+    return <html lang="nl" className="bg-[#fbf8f1]"><body data-strik-business-site="business" className="min-h-dvh bg-[#fbf8f1] text-[#403c32]">{children}</body></html>;
+  }
   if (weddingPage === "inspiration" || weddingPage === "appointment") {
     // WordPress requests only our two public pages, without forwarding a
     // visitor's cookies. Keep the public document independent of app chrome.
