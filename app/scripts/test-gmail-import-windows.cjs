@@ -91,14 +91,14 @@ test('dagomzet instelfunctie vervangt alleen de dagomzettriggers', () => {
 });
 
 test('webshopafbeeldingen zoeken alleen rond de bonnenmomenten', () => {
-  for (const hour of [0, 4, 6, 9, 11, 14, 19, 22, 23]) {
+  for (const hour of [0, 4, 6, 9, 10, 13, 14, 19, 22, 23]) {
     const run = loadScript('gmail-webshop-images-import.gs', hour);
     let imports = 0;
     run.context.importWebshopAfbeeldingen = () => { imports += 1; };
     run.context.importWebshopAfbeeldingenTijdvensters();
     assert.equal(imports, 0, `uur ${hour}`);
   }
-  for (const hour of [7, 8, 12, 13, 20, 21]) {
+  for (const hour of [7, 8, 11, 12, 20, 21]) {
     const run = loadScript('gmail-webshop-images-import.gs', hour);
     let imports = 0;
     run.context.importWebshopAfbeeldingen = () => { imports += 1; };
@@ -115,4 +115,20 @@ test('afbeeldingen instelfunctie vervangt alleen de afbeeldingentriggers', () =>
   run.context.maakWebshopAfbeeldingenTriggerAan();
   assert.deepEqual(run.deleted, ['importWebshopAfbeeldingen', 'importWebshopAfbeeldingenTijdvensters']);
   assert.deepEqual(run.created, [{ name: 'importWebshopAfbeeldingenTijdvensters', minutes: 30 }]);
+});
+
+// Een lege controle vlak voor 11:10 mag de volgende halfuurcontrole niet blokkeren.
+test('webshopafbeeldingen kunnen na een halfuur opnieuw controleren, zonder dubbel te lopen', () => {
+  const run = loadScript('gmail-webshop-images-import.gs', 11);
+  const properties = new Map();
+  const props = {
+    getProperty: key => properties.get(key),
+    setProperty: (key, value) => properties.set(key, value),
+  };
+  const key = 'webshop-image:last-run-started-at';
+  properties.set(key, new Date(Date.now() - 31 * 60 * 1000).toISOString());
+  assert.equal(run.context.claimWebshopImportRun_(props), true);
+  assert.equal(run.context.claimWebshopImportRun_(props), false);
+  properties.set(key, new Date(Date.now() - 29 * 60 * 1000).toISOString());
+  assert.equal(run.context.claimWebshopImportRun_(props), false);
 });

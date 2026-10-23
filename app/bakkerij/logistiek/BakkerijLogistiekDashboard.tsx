@@ -637,7 +637,7 @@ function operationsDraftToPayload(
 }
 
 const DEFINITIVE_BATCH_START_MINUTE_OF_DAY = 20 * 60 + 30;
-const TOMORROW_PROGNOSE_START_MINUTE_OF_DAY = 12 * 60 + 30;
+const TOMORROW_PROGNOSE_START_MINUTE_OF_DAY = 11 * 60 + 15;
 const SATURDAY_MONDAY_PROGNOSE_START_MINUTE_OF_DAY = 7 * 60 + 15;
 
 function minuteOfDay(hour: number, minute: number) {
@@ -732,7 +732,7 @@ function tomorrowPrognoseGate(dateState: DateState) {
 
   return saturday
     ? "De voorlopige prognose voor maandag is zaterdag vanaf 07:15 beschikbaar."
-    : "De voorlopige prognose voor morgen wordt rond 12:30 verwacht.";
+    : "De contantbonmails komen vanaf 11:10 binnen. De voorlopige prognose voor morgen wordt rond 11:15 verwacht, zodra de bonnen zijn ingelezen.";
 }
 
 function futurePlanGateMessage(dateState: DateState, hasBatch: boolean) {
@@ -1209,7 +1209,7 @@ function sourceLabelFor(status: BatchStatus) {
 }
 
 function batchLabelFor(status: BatchStatus) {
-  if (status === "prognose") return "Prognose 12:30";
+  if (status === "prognose") return "Prognose";
   if (status === "definitief") return "Definitief 20:00";
   if (status === "handmatig") return "Upload";
   if (status === "historie") return "Archief";
@@ -11478,7 +11478,7 @@ export default function BakkerijLogistiekDashboard() {
             {futureGateLoading
               ? `Planning voor ${planTitleForDate(dateState).toLowerCase()} laden...`
               : tomorrowPrognoseGate(dateState)
-                ? `Planning voor ${planTitleForDate(dateState).toLowerCase()} verwacht vanaf ${dayOfWeekForDate(dateState.today) === 6 ? "07:15" : "circa 12:30"}`
+                ? `Planning voor ${planTitleForDate(dateState).toLowerCase()} verwacht vanaf ${dayOfWeekForDate(dateState.today) === 6 ? "07:15" : "circa 11:15"}`
                 : `De planning voor ${planTitleForDate(dateState).toLowerCase()} is nog niet beschikbaar`}
           </h2>
           <p id="tomorrow-prognose-message" className="mt-3 text-sm font-semibold text-[#6b645b]">

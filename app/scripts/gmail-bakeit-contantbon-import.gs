@@ -30,7 +30,7 @@ const BAKEIT_CONTANTBON_CONFIG = {
   DEFINITIVE_MAIL_START_HOUR: 20,
   DEFINITIVE_MAIL_START_MINUTE: 15,
   IMPORT_VERSION: 'split-mails-v1',
-  SCRIPT_VERSION: 'gmail-archive-v9-custom-subjects',
+  SCRIPT_VERSION: 'gmail-archive-v10-early-prognose',
 };
 
 function importBakeItContantbonnen() {
@@ -141,11 +141,11 @@ function importBakeItContantbonnenMiddagCheck() {
 }
 
 // Koppel alleen deze functie aan een Apps Script-trigger "elke 5 minuten".
-// Buiten 07:00-08:00, 12:00-13:00 en 20:00-21:00 (Amsterdam) geen Gmail/API.
+// Buiten 07:00-08:00, 11:00-12:00 en 20:00-21:00 (Amsterdam) geen Gmail/API.
 function importBakeItContantbonnenTijdvensters() {
   const now = new Date();
   const hour = Number(Utilities.formatDate(now, 'Europe/Amsterdam', 'H'));
-  if (hour !== 7 && hour !== 12 && hour !== 20) return;
+  if (hour !== 7 && hour !== 11 && hour !== 20) return;
   importBakeItContantbonnen();
 }
 
@@ -769,7 +769,7 @@ function maakBakeItImportTriggerAan() {
     .create();
 
   logBakeIt_(
-    'Bake-it importtrigger aangemaakt: elke 5 minuten; importeert alleen tussen 07:00-08:00, 12:00-13:00 en 20:00-21:00 (Europe/Amsterdam).'
+    'Bake-it importtrigger aangemaakt: elke 5 minuten; importeert alleen tussen 07:00-08:00, 11:00-12:00 en 20:00-21:00 (Europe/Amsterdam).'
   );
 }
 

@@ -44,12 +44,12 @@ function makeContext(hour, triggerNames = [], minute = 0) {
 }
 
 test('vijfminutencheck importeert alleen in de drie Amsterdamse uren', () => {
-  for (const hour of [0, 6, 8, 11, 13, 19, 21, 23]) {
+  for (const hour of [0, 6, 8, 12, 13, 19, 21, 23]) {
     const run = makeContext(hour);
     run.context.importBakeItContantbonnenTijdvensters();
     assert.equal(run.imports, 0, `uur ${hour}`);
   }
-  for (const hour of [7, 12, 20]) {
+  for (const hour of [7, 11, 20]) {
     const run = makeContext(hour);
     run.context.importBakeItContantbonnenTijdvensters();
     assert.equal(run.imports, 1, `uur ${hour}`);
@@ -57,14 +57,15 @@ test('vijfminutencheck importeert alleen in de drie Amsterdamse uren', () => {
 });
 
 test('oude middagcheck gebruikt dezelfde nieuwe tijdvensters', () => {
-  const run = makeContext(20);
+  const run = makeContext(11, [], 15);
   run.context.importBakeItContantbonnenMiddagCheck();
   assert.equal(run.imports, 1);
 });
 
-test('zaterdagprognose en avondbon houden hun juiste status', () => {
+test('prognosemails van 11:10, zaterdagprognose en avondbon houden hun juiste status', () => {
   const mail = { getDate: () => new Date() };
   assert.equal(makeContext(7, [], 15).context.inferBakeItMailTimeStatus_(mail), 'prognose');
+  assert.equal(makeContext(11, [], 10).context.inferBakeItMailTimeStatus_(mail), 'prognose');
   assert.equal(makeContext(20, [], 30).context.inferBakeItMailTimeStatus_(mail), 'definitief');
 });
 
