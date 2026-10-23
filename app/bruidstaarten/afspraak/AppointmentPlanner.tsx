@@ -84,6 +84,7 @@ export default function AppointmentPlanner({ today, preview = true, website = fa
     {preview && <div className={styles.preview}><strong>Ontwerpvoorbeeld</strong><span>Voorbeeldtijden · er wordt niets geboekt of gemaild</span></div>}
     <BridalHeader website={website} preview={preview} booking />
     <main className={styles.main}>
+      <a className={styles.backToInspiration} href={home}>← Terug naar bruidstaarten</a>
       <section className={styles.intro}><div><p className={styles.eyebrow}>Afspraak bij Strik</p><h1>Plan jullie<br /><em>bruidstaartafspraak.</em></h1><p>Bespreek het formaat, de smaken en de afwerking met ons. De afspraak duurt een halfuur en is vrijblijvend.</p></div><Image website={website} className={styles.cake} src="/icons_strik_bruidstaart.svg" alt="" width={140} height={140} /></section>
       <div className={styles.layout}>
         <aside className={styles.info}><p className={styles.eyebrow}>Bruidstaartgesprek</p><h2>De afspraak<br />in het kort.</h2><dl><div><dt>Waar</dt><dd>Strik Ziekerstraat<span>Ziekerstraat 124, Nijmegen</span></dd></div><div><dt>Duur</dt><dd>30 minuten<span>Een vrijblijvend gesprek</span></dd></div><div><dt>Na het boeken</dt><dd>Direct bevestigd<span>Een bevestiging in jullie mailbox</span></dd></div></dl><div className={styles.help}><strong>Geen passend moment?</strong><p>Staat jullie gewenste dag of tijd er niet bij? Mail de bakkerij; we kijken samen naar een ander moment.</p><a href="mailto:info@strik-patisserie.nl">info@strik-patisserie.nl ↗</a></div></aside>

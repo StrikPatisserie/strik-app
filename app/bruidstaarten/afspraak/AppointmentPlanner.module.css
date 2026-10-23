@@ -12,7 +12,8 @@
 .calendarHelp a { text-decoration:underline; text-underline-offset:3px; color:var(--green); }
 .bookingError { margin-bottom:22px!important; padding:14px; border:1px solid #d8b69c; background:#fcf2e7; color:#784323; font-size:12px; line-height:1.7; border-radius:8px; }
 .bookingError a { text-decoration:underline; }
-.main { max-width:1220px; margin:auto; padding:50px 34px 24px; }
+.main { max-width:1220px; margin:auto; padding:75px 34px 24px; }
+.backToInspiration { display:inline-flex; align-items:center; min-height:44px; margin-bottom:24px; font-size:12px; color:var(--green); text-decoration:none; }
 .intro { display:flex; align-items:center; justify-content:space-between; gap:40px; max-width:900px; margin-bottom:40px; }
 .eyebrow { font-size:10px; line-height:1.5; font-weight:800; letter-spacing:.15em; text-transform:uppercase; color:#7b795d; }
 .intro h1 { font:400 clamp(36px,4.3vw,54px)/1.13 Georgia,serif; letter-spacing:-.04em; margin:12px 0 18px; }

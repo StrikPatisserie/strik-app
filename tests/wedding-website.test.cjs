@@ -10,6 +10,35 @@ function load(file, dependencies = {}) {
   return exports;
 }
 const site = load('app/lib/weddingPublicSite.ts');
+const seo = load('app/lib/weddingSeo.ts', {'./weddingPublicSite': site});
+test('both wedding documents identify the website URL, share image and indexable canonical metadata', () => {
+  for (const appointment of [false, true]) {
+    const metadata = seo.weddingPageMetadata(appointment);
+    const url = 'https://strik-patisserie.nl/bruidstaarten' + (appointment ? '/afspraak' : '');
+    assert.equal(metadata.alternates.canonical, url);
+    assert.equal(metadata.openGraph.url, url);
+    assert.equal(metadata.openGraph.locale, 'nl_NL');
+    assert.equal(metadata.openGraph.images[0].url, 'https://app.strik-patisserie.nl/bruidstaarten/voorbeeld-1.webp');
+    assert.equal(metadata.twitter.card, 'summary_large_image');
+    assert.equal(metadata.robots.index, true);
+    assert.equal(metadata.manifest, null);
+    assert.match(metadata.title, /Strik Patisserie Nijmegen/);
+  }
+  assert.notEqual(seo.weddingPageMetadata().title, seo.weddingPageMetadata(true).title);
+});
+test('structured data connects to the existing website organization and canonical breadcrumb destinations', () => {
+  for (const appointment of [false, true]) {
+    const graph = seo.weddingPageSchema(appointment)['@graph'];
+    const page = graph.find(item => item['@type'] === 'WebPage');
+    const service = graph.find(item => item['@type'] === 'Service');
+    const crumbs = graph.find(item => item['@type'] === 'BreadcrumbList');
+    assert.equal(page.url, seo.weddingPageMetadata(appointment).alternates.canonical);
+    assert.equal(page.isPartOf['@id'], 'https://strik-patisserie.nl/#website');
+    assert.equal(service.provider['@id'], 'https://strik-patisserie.nl/#organization');
+    assert.equal(crumbs.itemListElement.at(-1).item, page.url);
+    assert.equal(crumbs.itemListElement.length, appointment ? 3 : 2);
+  }
+});
 const request = origin => new Request('https://app.strik-patisserie.nl/api/wedding-appointments/book', {headers:origin?{origin}:{}});
 test('only the exact Strik website and the API own origin can book; private APIs keep their existing guard', () => {
   for (const origin of ['https://strik-patisserie.nl','https://app.strik-patisserie.nl']) assert.equal(site.weddingPublicOriginAllowed(request(origin)),true);

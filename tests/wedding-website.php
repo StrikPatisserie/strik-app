@@ -1,7 +1,9 @@
 <?php
 define('ABSPATH', __DIR__);
 $cache = array(); $remote = array(); $calls = array();
+$filters = array();
 function add_action() {}
+function add_filter($name, $callback) { global $filters; $filters[$name] = $callback; }
 function get_transient($key) { global $cache; return isset($cache[$key]) ? $cache[$key] : false; }
 function set_transient($key, $value, $ttl) { global $cache; assert_same(30, $ttl); $cache[$key] = $value; }
 function wp_remote_get($url, $args) { global $calls, $remote; $calls[] = array($url, $args); return $remote; }
@@ -20,6 +22,16 @@ foreach (array('/bruidstaarten/agenda', '/api/wedding-appointments/manage', '/wp
 assert_same('https://app.strik-patisserie.nl/_next/static/chunks/app/bruidstaart/page-abc123.js', strik_wedding_website_asset('/_next/static/chunks/app/bruidstaart/page-abc123.js?ignored=1'));
 foreach (array('/_next/server/app.js', '/_next/static/../server/app.js', '/_next/static/chunks/a.js.map', '/_next/static/%2e%2e/server.js', '/api/app-version', '/_next/static//attacker.example/file.php') as $path) assert_same(null, strik_wedding_website_asset($path));
 echo "Public routes and asset allowlist passed.\n";
+assert_same(true, strik_wedding_website_route('/bruidstaarten-sitemap.xml')['sitemap']);
+assert_same(2, substr_count(strik_wedding_website_sitemap(), '<url>'));
+assert_same(true, strpos($filters['wpseo_sitemap_index']('existing'), 'bruidstaarten-sitemap.xml') !== false);
+assert_same(false, $filters['wpseo_sitemap_entry'](array('loc'=>'https://strik-patisserie.nl/bruiloften/')));
+assert_same(array('loc'=>'https://strik-patisserie.nl/contact/'), $filters['wpseo_sitemap_entry'](array('loc'=>'https://strik-patisserie.nl/contact/')));
+$robots = $filters['robots_txt']("User-agent: *\nDisallow: /wp-admin/\n", true);
+assert_same(2, substr_count($robots, 'Sitemap:'));
+assert_same($robots, $filters['robots_txt']($robots, true));
+assert_same('unchanged', $filters['robots_txt']('unchanged', false));
+echo "Sitemap entries, canonical destinations and robots discovery passed.\n";
 $route = strik_wedding_website_route('/bruidstaarten?private=never-forward');
 $html = '<html><head><link href="/_next/static/styles.css"></head><body data-strik-wedding-site="inspiration"><script src="/_next/static/page.js"></script><a href="#voorbeelden">Voorbeelden</a></body></html>';
 $remote = array('status'=>200,'type'=>'text/html; charset=utf-8','body'=>$html);

@@ -17,11 +17,37 @@ function strik_wedding_website_route($uri) {
     $routes = array(
         '/bruidstaarten' => array('page' => 'inspiration', 'source' => '/bruidstaart'),
         '/bruidstaarten/afspraak' => array('page' => 'appointment', 'source' => '/bruidstaart/afspraak'),
+        '/bruidstaarten-sitemap.xml' => array('sitemap' => true),
         '/bruiloften' => array('redirect' => '/bruidstaarten'),
         '/afspraakbruidstaart' => array('redirect' => '/bruidstaarten/afspraak'),
     );
     return isset($routes[$path]) ? $routes[$path] : null;
 }
+
+function strik_wedding_website_sitemap() {
+    return '<?xml version="1.0" encoding="UTF-8"?>' . "\n" .
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' .
+        '<url><loc>https://strik-patisserie.nl/bruidstaarten</loc></url>' .
+        '<url><loc>https://strik-patisserie.nl/bruidstaarten/afspraak</loc></url>' .
+        '</urlset>';
+}
+
+add_filter('wpseo_sitemap_index', function ($index) {
+    if (!STRIK_WEDDING_WEBSITE_LIVE) return $index;
+    return $index . '<sitemap><loc>https://strik-patisserie.nl/bruidstaarten-sitemap.xml</loc></sitemap>';
+});
+add_filter('wpseo_sitemap_entry', function ($entry) {
+    if (!STRIK_WEDDING_WEBSITE_LIVE || !is_array($entry)) return $entry;
+    $path = rtrim((string) parse_url(isset($entry['loc']) ? $entry['loc'] : '', PHP_URL_PATH), '/');
+    return in_array($path, array('/bruiloften', '/afspraakbruidstaart'), true) ? false : $entry;
+});
+add_filter('robots_txt', function ($text, $public) {
+    if (!STRIK_WEDDING_WEBSITE_LIVE || !$public) return $text;
+    foreach (array('https://strik-patisserie.nl/sitemap_index.xml', 'https://strik-patisserie.nl/bruidstaarten-sitemap.xml') as $url) {
+        if (strpos($text, $url) === false) $text .= "\nSitemap: " . $url . "\n";
+    }
+    return $text;
+}, 10, 2);
 
 function strik_wedding_website_asset($uri) {
     $path = parse_url($uri, PHP_URL_PATH);
@@ -83,6 +109,14 @@ add_action('init', function () {
     }
     if (isset($route['redirect'])) {
         wp_safe_redirect(home_url($route['redirect']), 301, 'Strik bruidstaarten'); exit;
+    }
+    if (isset($route['sitemap'])) {
+        status_header(200);
+        header('Content-Type: application/xml; charset=UTF-8');
+        header('X-Content-Type-Options: nosniff');
+        header('X-Robots-Tag: noindex, follow');
+        if ($method !== 'HEAD') echo strik_wedding_website_sitemap();
+        exit;
     }
     $html = strik_wedding_website_document($route);
     nocache_headers();

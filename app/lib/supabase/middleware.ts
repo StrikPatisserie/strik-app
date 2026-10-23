@@ -8,6 +8,7 @@ import { hasRecentMfa } from "../auth/mfa";
 import { hasCronAuthorization } from "../auth/cron";
 
 const PUBLIC_PATHS = new Set([
+  "/robots.txt",
   "/login",
   "/reset-password",
   "/update-password",
