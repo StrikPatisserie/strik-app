@@ -178,6 +178,7 @@ export function normalizeB2BOrder(value: unknown): SinterklaasB2BOrder | null {
     phone: textFrom(value.phone),
     deliveryWindowType,
     deliveryDate: textFrom(value.deliveryDate),
+    sourceDeliveryDate: textFrom(value.sourceDeliveryDate),
     deliveryDateEnd:
       textFrom(value.deliveryDateEnd) || deliveryFallback?.deliveryDateEnd || "",
     deliveryWeek:

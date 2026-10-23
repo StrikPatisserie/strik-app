@@ -7,6 +7,7 @@ import B2BProductText from "./B2BProductText";
 import B2BConfirmationDialog, { customerConfirmationSent, shouldOfferCustomerConfirmation } from "./B2BConfirmationDialog";
 import B2BApprovalDialog from "./B2BApprovalDialog";
 import { editableFolderOrderText } from "../../lib/businessFolderOrderText";
+import { parseBusinessDate } from "../../lib/businessDeliveryMoment";
 import { B2B_ORDER_BACK_EVENT, businessSeasonColors, businessSeasons, orderBelongsToSeason, seasonLabel, type BusinessSeason } from "../../lib/businessSeasons";
 import { christmasProducts } from "../../kerst-voor-bedrijven/christmasProducts";
 import { BUSINESS_FOLDER_PRICE_TIERS } from "../../lib/business-folder-pricing";
@@ -591,15 +592,19 @@ function formStateFromOrder(order: SinterklaasB2BOrder | null | undefined, seaso
 
 function formatDate(date: string) {
   if (!date) return "geen datum";
+  const parsed = parseBusinessDate(date);
+  if (!parsed) return date;
 
   return new Intl.DateTimeFormat("nl-NL", {
     weekday: "short",
     day: "2-digit",
     month: "2-digit",
-  }).format(new Date(`${date}T12:00:00`));
+    timeZone: "UTC",
+  }).format(parsed);
 }
 
-function deliveryWindowLabel(order: Pick<SinterklaasB2BOrder, "deliveryWindowType" | "deliveryDate" | "deliveryDateEnd" | "deliveryWeek">) {
+function deliveryWindowLabel(order: Pick<SinterklaasB2BOrder, "deliveryWindowType" | "deliveryDate" | "deliveryDateEnd" | "deliveryWeek" | "sourceDeliveryDate">) {
+  if (!parseBusinessDate(order.deliveryDate) && order.sourceDeliveryDate) return order.sourceDeliveryDate;
   if (order.deliveryWindowType === "week" && order.deliveryWeek) {
     const week = Number(order.deliveryWeek.slice(-2));
     return `Week ${week}`;
@@ -614,29 +619,32 @@ function deliveryWindowLabel(order: Pick<SinterklaasB2BOrder, "deliveryWindowTyp
   return formatDate(order.deliveryDate);
 }
 
-function compactDeliveryWindow(order: Pick<SinterklaasB2BOrder, "deliveryWindowType" | "deliveryDate" | "deliveryDateEnd" | "deliveryWeek">) {
-  if (!order.deliveryDate) return "In overleg";
+function compactDeliveryWindow(order: Pick<SinterklaasB2BOrder, "deliveryWindowType" | "deliveryDate" | "deliveryDateEnd" | "deliveryWeek" | "sourceDeliveryDate">) {
+  const start = parseBusinessDate(order.deliveryDate);
+  if (!start) return order.sourceDeliveryDate || order.deliveryDate || "In overleg";
   if (order.deliveryWindowType === "week") return deliveryWindowLabel(order);
-  const start = new Date(`${order.deliveryDate}T12:00:00`);
   if (order.deliveryWindowType === "range" && order.deliveryDateEnd) {
-    const end = new Date(`${order.deliveryDateEnd}T12:00:00`);
-    const short = (date: Date) => new Intl.DateTimeFormat("nl-NL", { day: "numeric", month: "short" }).format(date);
+    const end = parseBusinessDate(order.deliveryDateEnd);
+    if (!end) return deliveryWindowLabel(order);
+    const short = (date: Date) => new Intl.DateTimeFormat("nl-NL", { day: "numeric", month: "short", timeZone: "UTC" }).format(date);
     return order.deliveryDate.slice(0, 7) === order.deliveryDateEnd.slice(0, 7)
-      ? `${start.getDate()}–${short(end)}`
+      ? `${start.getUTCDate()}–${short(end)}`
       : `${short(start)} – ${short(end)}`;
   }
-  return new Intl.DateTimeFormat("nl-NL", { weekday: "short", day: "numeric", month: "short" }).format(start);
+  return new Intl.DateTimeFormat("nl-NL", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }).format(start);
 }
 
 function formatDateTime(value: string) {
   if (!value) return "";
+  const parsed = new Date(value);
+  if (!Number.isFinite(parsed.getTime())) return value;
 
   return new Intl.DateTimeFormat("nl-NL", {
     day: "2-digit",
     month: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(new Date(value));
+  }).format(parsed);
 }
 
 function normalizeHeader(value: unknown) {
@@ -711,17 +719,19 @@ function findColumn(headers: string[], patterns: RegExp[]) {
 }
 
 function monthKey(date: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return "zonder-datum";
+  if (!parseBusinessDate(date)) return "zonder-datum";
   return date.slice(0, 7);
 }
 
 function monthLabel(key: string) {
-  if (key === "zonder-datum") return "Zonder datum";
+  const parsed = parseBusinessDate(`${key}-01`);
+  if (!parsed) return "Zonder datum";
 
   return new Intl.DateTimeFormat("nl-NL", {
     month: "long",
     year: "numeric",
-  }).format(new Date(`${key}-01T12:00:00`));
+    timeZone: "UTC",
+  }).format(parsed);
 }
 
 function compareOrdersByDeliveryDate(
@@ -1585,6 +1595,9 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
   const priceBreakdowns = linePriceBreakdowns(parsedOrder.productLines);
   const orderTotal = effectiveOrderTotal(order);
   const archived = order.id.startsWith("historie-");
+  const deliveryDateHint = !parseBusinessDate(order.deliveryDate)
+    ? order.sourceDeliveryDate ? "Historische notatie" : order.deliveryDate ? "Datum controleren" : "Nog af te spreken"
+    : order.deliveryWindowType === "date" ? "Vaste datum" : order.deliveryWindowType === "week" ? "Leverweek" : "Gewenste periode";
   const warnings = orderWarnings(order);
   const confirmationNeedsAttention = order.status === "akkoord" && (!order.confirmationEmailedAt || Boolean(order.confirmationEmailError)) && Boolean(order.deliveryDate) && order.deliveryDate >= todayIso() && !archived;
   const folderProductsText = order.orderText.match(/(?:GEKOZEN SINTERKLAASPRODUCTEN|LOSSE KERSTCADEAUS|KERSTPAKKET OP MAAT)\s+([\s\S]*?)(?:PRIJSINDICATIE|GEWENSTE LEVERING|WENSEN|$)/i)?.[1]?.trim();
@@ -1600,7 +1613,7 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
 
   return <article className={`${styles.order} ${order.cancelled ? styles.archived : ""}`}>
     <div className={styles.orderMain}>
-      <div className={styles.date}>{compactDeliveryWindow(order)}<small>{!order.deliveryDate ? "Nog af te spreken" : order.deliveryWindowType === "date" ? "Vaste datum" : order.deliveryWindowType === "week" ? "Leverweek" : "Gewenste periode"}</small>{dueSoon(order) && <small className={styles.warning}>Binnen 2 dagen</small>}</div>
+      <div className={styles.date}>{compactDeliveryWindow(order)}<small>{deliveryDateHint}</small>{dueSoon(order) && <small className={styles.warning}>Binnen 2 dagen</small>}</div>
       <div className={styles.customer}>
         <h3>{order.customerName}</h3>
         <p className={styles.orderProduct}><B2BProductText text={orderSummary || "Bestelling nog invullen"} /></p>
@@ -1729,6 +1742,7 @@ export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ sea
         order.letterOrderText,
         order.letterLines.map(b2bLetterLineLabel).join(" "),
         order.deliveryDate,
+        order.sourceDeliveryDate,
         order.deliveryDateEnd,
         order.deliveryWeek,
         deliveryWindowLabel(order),

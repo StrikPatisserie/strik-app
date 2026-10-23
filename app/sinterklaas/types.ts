@@ -70,6 +70,7 @@ export type SinterklaasB2BOrder = {
   phone: string;
   deliveryWindowType: "date" | "range" | "week";
   deliveryDate: string;
+  sourceDeliveryDate?: string;
   deliveryDateEnd: string;
   deliveryWeek: string;
   productionDate: string;

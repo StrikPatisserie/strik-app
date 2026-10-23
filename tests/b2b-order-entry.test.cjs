@@ -40,6 +40,7 @@ function entry(season = 'sint', initialOrder = null) {
       useRef(initial) { return refs[refCursor++] ||= { current: initial }; } },
     '../../sint-voor-bedrijven/sintProducts': sint, '../../kerst-voor-bedrijven/christmasProducts': kerst, '../../lib/business-folder-pricing': pricing,
     '../../lib/businessFolderOrderText': folderOrderText,
+    '../../lib/businessDeliveryMoment': load('app/lib/businessDeliveryMoment.ts'),
     '../b2bLetterLines': letters,
     '../sinterklaasApi': { saveB2BOrder: async data => { calls.push(data); return { ...data, id: 'saved' }; } },
     './B2BOrders.module.css': { default: new Proxy({}, { get: (_, key) => key }) },
