@@ -23,6 +23,7 @@ const PUBLIC_PATHS = new Set([
   "/Kerst/bonbons-zo-maken-we-ze.mp4",
   "/lettershop",
   "/menu-preview",
+  "/zakelijk/voorbeeld",
   "/bruidstaart",
   "/bruidstaart/afspraak",
 ]);
