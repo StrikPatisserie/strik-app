@@ -2147,3 +2147,38 @@ export function getTamigoStatusCode(error: unknown) {
 
   return 502;
 }
+
+// Read-only hours review. Keep these separate from roster/payroll consumers.
+// The application department endpoint is distinct from the user-context /Departments/ route.
+export async function fetchTamigoHoursReviewSource(input:
+  | { kind: "departments"; includeParents: boolean }
+  | { kind: "shifts"; departmentId: string; from: string; to: string }
+  | { kind: "breakcodes" }
+  | { kind: "day-status"; departmentId: string; date: string }
+): Promise<unknown> {
+  let path: string;
+  let params: Record<string, string> | undefined;
+  switch (input.kind) {
+    case "departments": path = "/departments/application/"; params = { includeParents: String(input.includeParents) }; break;
+    case "shifts":
+      // No status filter: documented PlanStatusCodeId 1/2 = planning, 3/5 = actual/closed.
+      // Original (4) and attendance/clock entries (6) must not become duplicate worked shifts.
+      path = "/v2/Shifts/"; params = { departmentId: input.departmentId, from: input.from, to: input.to }; break;
+    case "breakcodes": path = "/Breakcodes/"; break;
+    case "day-status": path = `/actualshifts/status/day/${input.date}/`; params = { departmentId: input.departmentId }; break;
+  }
+  const response = await fetch(createTamigoUrl(path, params), {
+    method: "GET",
+    headers: { Accept: "application/json", "x-tamigo-token": await getTamigoAccessToken() },
+    cache: "no-store",
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!response.ok) throw new TamigoApiError("Tamigo-urenbron niet beschikbaar.", response.status);
+  const data = parseJson(await response.text());
+  if (data === null || data === undefined) throw new TamigoApiError("Tamigo gaf geen geldige JSON voor de urenbron.");
+  return data;
+}
+
+export function getKnownTamigoHoursReviewDepartments() {
+  return [...SHOP_DEPARTMENTS, ICE_LOKET_DEPARTMENT].map(department => ({ id: department.departmentId, name: department.departmentName }));
+}

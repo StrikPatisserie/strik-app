@@ -48,7 +48,7 @@ function middleware(user, aal, options = {}) {
     'next/server': { NextResponse: { next: () => responseCookies({ kind: 'next', headers: new Headers() }), json: (...args) => responseCookies(Response.json(...args)), redirect: url => responseCookies({ kind: 'redirect', url: url.href, headers: new Headers() }) } },
     './config': { getSupabasePublicConfig: () => ({ isConfigured: true, url: 'https://example.invalid', publishableKey: 'public' }) },
     '../auth/access': access,
-    '../auth/mfa': mfa,
+    '../auth/mfa': mfa, '../auth/cron': { hasCronAuthorization: () => false },
   }, { Headers, process: { env: { NODE_ENV: 'production' } } });
 }
 function request(path) {
@@ -89,7 +89,7 @@ test('AAL1 managers cannot reach pages, APIs, or server-action POST paths', asyn
 test('AAL2 manager proceeds; staff cannot call financial or personnel APIs directly', async () => {
   assert.equal((await middleware(profile('manager'), 'aal2').updateSession(request('/management/dashboard'))).kind, 'next');
   const m = middleware(profile('bakkerij'), 'aal1');
-  for (const path of ['/api/management-revenue', '/api/tamigo-labor-costs', '/api/tamigo-week-schedule', '/api/tamigo-employees?view=management', '/api/christmas-letters', '/api/recepturen/data-import']) {
+  for (const path of ['/api/management-revenue', '/api/tamigo-labor-costs', '/api/tamigo-week-schedule', '/api/tamigo-hours-review', '/api/tamigo-employees?view=management', '/api/christmas-letters', '/api/recepturen/data-import']) {
     assert.equal((await m.updateSession(request(path))).status, 403, path);
   }
   assert.equal((await m.updateSession(request('/bakkerij/recepturen'))).kind, 'next');

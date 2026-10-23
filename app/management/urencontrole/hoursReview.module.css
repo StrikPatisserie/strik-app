@@ -1,0 +1,82 @@
+.root { display:grid; gap:14px; min-width:0; color:#263c30; }
+.root h2 { font-size:1.25rem; font-weight:800; line-height:1.3; }
+.root h4 { font-size:.85rem; font-weight:800; margin-bottom:8px; }
+.root p { line-height:1.55; }
+.root button, .root select, .root input, .root textarea { font:inherit; }
+.root button, .root select, .root input:not([type=checkbox]) { min-height:44px; border:1px solid #d3dace; border-radius:9px; background:white; padding:8px 11px; }
+.root button { cursor:pointer; touch-action:manipulation; font-size:.8rem; font-weight:750; }
+.root button:disabled { opacity:.45; cursor:default; }
+.root button:hover:not(:disabled) { background:#edf3e9; }
+.root :is(button,input,select):focus-visible { outline:2px solid #4a6d5a; outline-offset:2px; }
+.panel { min-width:0; border:1px solid #d4dfcf; border-radius:15px; background:#fff; padding:16px; }
+.panel > summary { cursor:pointer; font-size:.85rem; font-weight:800; min-height:44px; align-content:center; }
+.panel > summary span { display:block; margin-top:5px; font-weight:500; }
+.heading { display:flex; align-items:flex-start; justify-content:space-between; gap:15px; }
+.heading p { margin-top:6px; max-width:800px; font-size:.8rem; color:#586a5d; }
+.heading button { flex-shrink:0; }
+.filters { margin-top:18px; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+.filters label,.settingsGrid label,.settingTarget { display:grid; gap:5px; min-width:0; font-size:.75rem; font-weight:750; }
+.filters :is(input,select), .settingsGrid input, .settingTarget select { width:100%; min-width:0; font-size:1rem; font-weight:500; }
+.check { display:flex; min-height:44px; gap:9px; align-items:center; font-size:.8rem; margin:13px 0 8px; line-height:1.5; }
+.check input { width:20px; height:20px; flex-shrink:0; accent-color:#315e42; }
+.muted { color:#657467; font-size:.75rem; }
+.demo { padding:10px 14px; background:#fff3d4; color:#73531f; border-radius:10px; font-size:.8rem; font-weight:750; }
+.rulesIntro { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:14px 0; font-size:.8rem; }
+.settingTarget { max-width:480px; margin:12px 0; }
+.settingsGrid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin:18px 0; }
+.settingsGrid label span { font-weight:400; color:#657467; }
+.actions { display:flex; flex-wrap:wrap; gap:9px; margin:12px 0; }
+.error { border:1px solid #e6b2a7; background:#fff3ed; color:#9d352d; padding:13px; border-radius:10px; }
+.sourceChecks { display:grid; gap:12px; margin-top:14px; }
+.sourceChecks > div { border-top:1px solid #e5e9e2; padding-top:10px; font-size:.8rem; }
+.sourceChecks small { display:block; overflow-wrap:anywhere; color:#657467; font-size:.68rem; margin-top:5px; }
+.resultHeader { display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; font-size:.85rem; }
+.resultHeader span { color:#657467; font-size:.75rem; }
+.rows { display:grid; gap:12px; }
+.reviewRow { min-width:0; border:1px solid #d4dfcf; border-left:4px solid #b5c7ae; border-radius:12px; background:white; padding:14px; }
+.hasFlags { border-left-color:#b99148; }
+.rowGrid { display:grid; grid-template-columns:minmax(140px,1.2fr) repeat(3,minmax(130px,1fr)) minmax(115px,.8fr); gap:12px; align-items:start; }
+.identity,.timeCell,.difference { display:grid; gap:4px; font-size:.78rem; min-width:0; overflow-wrap:anywhere; }
+.identity strong { font-size:.9rem; }
+.identity span,.timeCell span { color:#657467; font-size:.72rem; }
+.timeCell small,.difference small { color:#657467; font-size:.65rem; font-weight:750; }
+.timeCell strong { font-size:.88rem; }
+.proposed { border-left:2px solid #d3ddcc; padding-left:10px; }
+.difference strong { font-size:1rem; }
+.difference span { background:#f8f0dc; border-radius:5px; padding:4px 6px; font-size:.65rem; line-height:1.45; width:fit-content; }
+.comments { margin:12px 0; display:grid; gap:7px; }
+.comments blockquote { white-space:pre-wrap; overflow-wrap:anywhere; border-left:2px solid #b5c7ae; background:#f5f7f1; padding:8px 10px; font-size:.8rem; line-height:1.55; }
+.comments strong { display:block; font-size:.65rem; color:#657467; margin-bottom:3px; }
+.flags { margin:12px 0 10px; border-top:1px solid #e9e8de; padding-top:9px; display:grid; gap:5px; font-size:.75rem; line-height:1.5; }
+.flags li { list-style:none; }
+.noFlags { color:#657467; margin:10px 0; font-size:.72rem; }
+.sourceDetails { border-top:1px solid #e8e9e1; padding-top:8px; }
+.sourceDetails > summary { min-height:44px; display:list-item; align-content:center; cursor:pointer; font-size:.75rem; font-weight:750; }
+.sourceGrid { display:grid; grid-template-columns:1fr 1fr; gap:20px; padding-top:12px; font-size:.76rem; line-height:1.6; }
+.sourceGrid dl { display:grid; grid-template-columns:minmax(100px,.75fr) minmax(0,1.2fr); gap:5px 10px; }
+.sourceGrid dt { color:#657467; }
+.sourceGrid dd { overflow-wrap:anywhere; }
+.sourceGrid ul { margin:8px 0 12px; padding-left:18px; list-style:disc; }
+.sourceGrid li { margin:4px 0; list-style:disc; }
+.sourceGrid button { margin-top:10px; }
+.pagination { display:flex; justify-content:center; align-items:center; flex-wrap:wrap; gap:14px; font-size:.75rem; padding:10px 0; }
+@media (max-width:1050px) {
+ .filters,.settingsGrid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .rowGrid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+ .identity { grid-column:1 / -1; display:flex; flex-wrap:wrap; gap:6px 12px; align-items:center; }
+ .difference { grid-column:1 / -1; display:flex; flex-wrap:wrap; gap:7px 12px; align-items:center; border-top:1px solid #edf0e9; padding-top:8px; }
+}
+@media (max-width:600px) {
+ .heading,.rulesIntro,.sourceGrid { display:grid; grid-template-columns:minmax(0,1fr); }
+ .heading button { justify-self:start; }
+ .filters { grid-template-columns:minmax(0,1fr); gap:10px; }
+ .panel { padding:13px; }
+ .settingsGrid { grid-template-columns:minmax(0,1fr); }
+ .rowGrid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+ .rowGrid .identity { display:grid; gap:3px; }
+ .timeCell:first-of-type { grid-column:1 / -1; }
+ .timeCell { font-size:.78rem; }
+ .proposed { grid-column:1 / -1; border:0; background:#f3f6ef; padding:10px; border-radius:7px; }
+ .sourceGrid dl { grid-template-columns:minmax(85px,.7fr) minmax(0,1fr); }
+ .sourceGrid button { text-align:left; }
+}

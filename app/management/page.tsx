@@ -10,6 +10,14 @@ const managementIconAppearance = {
 
 const managementItems = [
   {
+    href: "/management/urencontrole",
+    label: "Tamigo",
+    title: "Urencontrole",
+    description: "Maandcontrole van rooster en geregistreerde uren, met voorstellen ter beoordeling.",
+    icon: strikIcons.managementSchedule,
+    ...managementIconAppearance,
+  },
+  {
     href: "/management/dashboard",
     label: "Personeel",
     title: "Loonkostenpercentage",
