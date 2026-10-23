@@ -22,6 +22,7 @@ export type ReviewShift = {
   planStatusCode: string | null;
   issues: string[];
   alternatives?: ReviewShift[];
+  sourceRevision?: string;
 };
 export type ReviewThresholds = {
   deviationMinutes: number;

@@ -3,6 +3,7 @@ import { fetchTamigoHoursReviewSource, getKnownTamigoHoursReviewDepartments, get
 import { dedupeReviewShifts, isRecord, normalizeReviewShift, sourceRecords } from "./reviewSource";
 import { monthBounds } from "./reviewTime";
 import { REVIEW_VERSION, type DayStatus, type ReviewDataset, type SourceCheck } from "./reviewTypes";
+import { correctionRevision } from "./correctionRevision";
 
 function errorCheck(key: string, label: string, error: unknown): SourceCheck {
   const status = getTamigoStatusCode(error);
@@ -47,6 +48,7 @@ export async function getTamigoHoursReviewMonth(month: string): Promise<ReviewDa
         const code = String(raw.PlanStatusCodeId ?? "");
         if (code === "4" || code === "6") continue;
         const row = normalizeReviewShift(raw, department.id, rowIndex);
+        row.sourceRevision = correctionRevision(raw);
         if (code === "1") row.issues.push("Deze planning is een concept; geen geautoriseerde roosterbasis voor correcties.");
         if (code === "1" || code === "2") data.planned.push(row);
         else if (code === "3" || code === "5") data.actual.push(row);

@@ -2182,3 +2182,19 @@ export async function fetchTamigoHoursReviewSource(input:
 export function getKnownTamigoHoursReviewDepartments() {
   return [...SHOP_DEPARTMENTS, ICE_LOKET_DEPARTMENT].map(department => ({ id: department.departmentId, name: department.departmentName }));
 }
+
+// Corrections have their own explicit gate; never call from the read-only adapter.
+export function tamigoHoursWritesEnabled() {
+  return process.env.TAMIGO_HOURS_WRITE_ENABLED === "1";
+}
+export async function updateTamigoActualShift(payload: import("./management/urencontrole/correctionTypes").TamigoShiftUpdate): Promise<unknown> {
+  if (!tamigoHoursWritesEnabled()) throw new TamigoConfigurationError("Terugschrijven van uren is nog niet ingeschakeld.");
+  const response = await fetch(createTamigoUrl(`/Shifts/${encodeURIComponent(payload.ShiftId)}/`), {
+    method: "PUT",
+    headers: { Accept: "application/json", "Content-Type": "application/json", "x-tamigo-token": await getTamigoAccessToken() },
+    body: JSON.stringify(payload), cache: "no-store", signal: AbortSignal.timeout(20000),
+  });
+  // No automatic retries: a timed-out request may already have changed Tamigo.
+  if (!response.ok) throw new TamigoApiError("Tamigo kon de correctie niet bevestigen.", response.status);
+  return parseJson(await response.text());
+}

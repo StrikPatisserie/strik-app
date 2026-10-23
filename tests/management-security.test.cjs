@@ -84,12 +84,13 @@ test('AAL1 managers cannot reach pages, APIs, or server-action POST paths', asyn
   const result = await m.updateSession(request('/api/management-dashboard'));
   assert.equal(result.status, 403);
   assert.equal((await result.json()).code, 'MFA_REQUIRED');
+  assert.equal((await m.updateSession(request('/api/tamigo-hours-review/corrections'))).status, 403);
   assert.equal((await m.updateSession(request('/auth/mfa'))).kind, 'next');
 });
 test('AAL2 manager proceeds; staff cannot call financial or personnel APIs directly', async () => {
   assert.equal((await middleware(profile('manager'), 'aal2').updateSession(request('/management/dashboard'))).kind, 'next');
   const m = middleware(profile('bakkerij'), 'aal1');
-  for (const path of ['/api/management-revenue', '/api/tamigo-labor-costs', '/api/tamigo-week-schedule', '/api/tamigo-hours-review', '/api/tamigo-employees?view=management', '/api/christmas-letters', '/api/recepturen/data-import']) {
+  for (const path of ['/api/management-revenue', '/api/tamigo-labor-costs', '/api/tamigo-week-schedule', '/api/tamigo-hours-review', '/api/tamigo-hours-review/corrections', '/api/tamigo-employees?view=management', '/api/christmas-letters', '/api/recepturen/data-import']) {
     assert.equal((await m.updateSession(request(path))).status, 403, path);
   }
   assert.equal((await m.updateSession(request('/bakkerij/recepturen'))).kind, 'next');

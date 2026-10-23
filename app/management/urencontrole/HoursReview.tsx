@@ -5,6 +5,7 @@ import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
 import { buildHoursReview, effectiveRules, validateConfig } from "./reviewRules";
 import { DEFAULT_REVIEW_VIEW, focusFlags, selectReviewRows, type ReviewView } from "./reviewPresentation";
 import { createHoursReviewDemo } from "./demo";
+import CorrectionEditor from "./CorrectionEditor";
 import { formatMinutes, formatStamp, formatTime, localDate } from "./reviewTime";
 import { DEFAULT_REVIEW_CONFIG, FLAG_LABELS, TIME_ZONE, type DayStatus, type FlagType, type ReviewConfig, type ReviewDataset, type ReviewRow, type ReviewShift, type ReviewThresholds } from "./reviewTypes";
 import styles from "./hoursReview.module.css";
@@ -97,7 +98,7 @@ function SourceDetails({ row, demo }: { row: ReviewRow; demo: boolean }) {
     </div>
   </details>;
 }
-function ReviewCard({ row, demo, expanded, onToggle }: { row: ReviewRow; demo: boolean; expanded: boolean; onToggle: () => void }) {
+function ReviewCard({ row, demo, expanded, onToggle, config, reviewMonth, onChanged }: { row: ReviewRow; demo: boolean; expanded: boolean; onToggle: () => void; config: ReviewConfig; reviewMonth: string; onChanged: () => void }) {
   const source = row.actual || row.planned!;
   const flags = focusFlags(row);
   const commentCount = row.actual?.comments.filter(comment => comment?.trim()).length || 0;
@@ -120,6 +121,7 @@ function ReviewCard({ row, demo, expanded, onToggle }: { row: ReviewRow; demo: b
       <div className={styles.timeCell}><small>Oorspronkelijk geregistreerd</small><SourceTimes shift={row.actual} /><b>Netto {formatMinutes(row.originalNetMinutes)}</b>{row.actual?.date && row.actual.date !== row.date ? <span>Startdatum {row.actual.date}</span> : null}</div>
       <div className={`${styles.timeCell} ${styles.proposed}`}><small>Voorstel · beoordelen</small>{proposalTimes}{row.proposal ? <><span>{pauseText(row.proposal.breakMinutes)}</span><b>Netto {formatMinutes(row.proposal.netMinutes)} · verschil {formatMinutes(row.deltaMinutes, true)}</b></> : <span>Geen volledig voorstel</span>}</div>
     </div>
+    <CorrectionEditor row={row} config={config} reviewMonth={reviewMonth} demo={demo} onChanged={onChanged} />
     {row.actual?.comments.some(comment => comment?.trim()) ? <div className={styles.comments}>{row.actual.comments.map((comment, index) => comment?.trim() ? <blockquote key={index}><strong>Oorspronkelijke {index ? "extra opmerking" : "opmerking"}</strong>{comment}</blockquote> : null)}</div> : null}
     {flags.length ? <ul className={styles.flags}>{flags.map((flag, index) => <li key={`${flag.type}:${index}`}><strong>{FLAG_LABELS[flag.type]}:</strong> {flag.message}</li>)}</ul> : <p className={styles.noFlags}>{row.status === "nog_gepland" ? "Deze dienst is nog niet afgelopen. Geen ontbrekende gewerkte uren vastgesteld." : "Geen melding volgens de huidige regels. Deze registratie is niet automatisch goedgekeurd."}</p>}
     <SourceDetails row={row} demo={demo} />
@@ -201,11 +203,11 @@ export default function HoursReview({ demo = false }: { demo?: boolean }) {
     {loading ? <p role="status" className={styles.panel}>Rooster en werkelijke registraties alleen-lezen ophalen…</p> : dataset ? <>
       <div className={styles.resultHeader}>
         <div className={styles.views} role="group" aria-label="Diensten selecteren">{([["attention", "Te controleren"], ["no_flags", "Zonder melding"], ["all", "Alle"]] as const).map(([key, label]) => <button key={key} type="button" aria-pressed={view === key} onClick={() => { setView(key); setFlagType(""); setPage(1); setExpandedId(null); }}>{label}<b>{counts[key]}</b></button>)}</div>
-        <span>Alleen-lezen · niets wordt gewijzigd in Tamigo</span>
+        <span>Voorstellen · pas na controle en bevestiging opslaan</span>
       </div>
       {shown.length ? <div className={styles.rows}>
         <div className={`${styles.listHeader} ${styles.rowGrid}`} aria-hidden="true"><span>Medewerker / dienst</span><span>Gepland</span><span>Geregistreerd</span><span>Voorstel</span><span>Verschil</span><span>Controlepunt</span><span /></div>
-        {shown.map(row => <ReviewCard key={`${dataset.generatedAt}:${row.id}`} row={row} demo={demo} expanded={expandedId === row.id} onToggle={() => setExpandedId(expandedId === row.id ? null : row.id)} />)}
+        {shown.map(row => <ReviewCard key={`${dataset.generatedAt}:${row.id}`} row={row} demo={demo} expanded={expandedId === row.id} onToggle={() => setExpandedId(expandedId === row.id ? null : row.id)} config={config} reviewMonth={month} onChanged={() => { setExpandedId(null); setRefresh(value => value + 1); }} />)}
       </div> : <p className={styles.panel}>{unavailable ? "Geen passende registraties getoond. Er ontbreken brongegevens; dit betekent niet dat er geen diensten of afwijkingen zijn." : "Geen diensten voor deze selectie. Pas de filters aan."}</p>}
       <div className={styles.footer}><p className={styles.muted}>Geen melding is geen goedkeuring. Voorstellen vragen altijd beoordeling; een melding is geen bewijs van een fout.</p><span className={styles.muted}>{filtered.length} {filtered.length === 1 ? "dienst" : "diensten"}{flagType ? ` · ${FLAG_LABELS[flagType as FlagType]}` : ""} · belangrijkste controlepunten eerst</span></div>
       {pages > 1 ? <nav className={styles.pagination} aria-label="Pagina's van het urenoverzicht"><button type="button" disabled={currentPage <= 1} onClick={() => { setPage(currentPage - 1); setExpandedId(null); }}>Vorige</button><span>Pagina {currentPage} van {pages} · 25 diensten per pagina</span><button type="button" disabled={currentPage >= pages} onClick={() => { setPage(currentPage + 1); setExpandedId(null); }}>Volgende</button></nav> : null}

@@ -64,7 +64,7 @@ export function dedupeReviewShifts(shifts: ReviewShift[]) {
     const existing = byId.get(shift.id);
     if (!existing) { byId.set(shift.id, { ...shift, sourceDepartments: [...shift.sourceDepartments], issues: [...shift.issues] }); continue; }
     const issues = [...existing.issues];
-    const conflict = fingerprint(existing) !== fingerprint(shift);
+    const conflict = fingerprint(existing) !== fingerprint(shift) || existing.sourceRevision !== shift.sourceRevision;
     if (conflict) issues.push("Dezelfde dienst-ID heeft tegenstrijdige brongegevens; slechts eenmaal opgenomen en geen automatisch voorstel.");
     byId.set(shift.id, { ...existing, sourceDepartments: [...new Set([...existing.sourceDepartments, ...shift.sourceDepartments])], issues: [...new Set(issues)], ...(conflict ? { alternatives: [...(existing.alternatives || []), { ...shift, alternatives: undefined }] } : {}) });
   }

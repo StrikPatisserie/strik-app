@@ -171,7 +171,7 @@ export async function updateSession(request: NextRequest) {
     const managementApi =
       pathname === "/api/management-dashboard" ||
       pathname === "/api/management-revenue" || pathname.startsWith("/api/management-revenue/") ||
-      pathname === "/api/tamigo-labor-costs" || pathname === "/api/tamigo-week-schedule" || pathname === "/api/tamigo-hours-review" ||
+      pathname === "/api/tamigo-labor-costs" || pathname === "/api/tamigo-week-schedule" || pathname === "/api/tamigo-hours-review" || pathname.startsWith("/api/tamigo-hours-review/") ||
       pathname === "/api/christmas-letters" || pathname.startsWith("/api/christmas-letters/") ||
       (pathname === "/api/price-cards" || pathname.startsWith("/api/price-cards/")) ||
       pathname === "/api/leat-insights" || pathname === "/api/wordpress-status" ||
