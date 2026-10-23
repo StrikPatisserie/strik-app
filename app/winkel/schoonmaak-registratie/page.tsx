@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import TemperatureValueInput from "./TemperatureValueInput";
+import ShopTemperatureRow from "./ShopTemperatureRow";
 import { useDeviceOrder } from "./useDeviceOrder";
 import { useDeviceInventory } from "./useDeviceInventory";
 import { configuredDeviceId, configuredDevicesForDate, inventoryForDate, isConfiguredDevice } from "./deviceInventory";
@@ -104,19 +106,6 @@ function createTemperatureRow(
   };
 }
 
-function temperatureValueIsNegative(value: string) {
-  return value.trim().startsWith("-");
-}
-
-function setTemperatureSign(value: string, sign: "+" | "-") {
-  const trimmedValue = value.trim();
-  const valueWithoutSign = trimmedValue.replace(/^[+-]/, "");
-
-  if (!valueWithoutSign) return sign === "-" ? "-" : "";
-
-  return sign === "-" ? `-${valueWithoutSign}` : valueWithoutSign;
-}
-
 function createDefaultTemperatureRows(
   locationId: string,
   rowsByLocation: Record<string, TemperatureDeviceConfig[]>
@@ -135,6 +124,7 @@ function isDefaultTemperatureRow(
 
   return (rowsByLocation[locationId] || []).some(
     (device) =>
+      (typeof device !== "string" && device.id === item.id) ||
       normalizeDeviceName(normalizeDeviceConfig(device).name) === itemName
   );
 }
@@ -469,70 +459,6 @@ function temperatureBorderClass(
   return "border-l-[#d8d0c7]";
 }
 
-function TemperatureValueInput({
-  label,
-  value,
-  onChange,
-  disabled = false,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  disabled?: boolean;
-}) {
-  const isNegative = temperatureValueIsNegative(value);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  function updateSign(sign: "+" | "-") {
-    onChange(setTemperatureSign(value, sign));
-    window.requestAnimationFrame(() => inputRef.current?.focus());
-  }
-
-  return (
-    <label className="flex min-w-0 flex-1 items-center gap-2">
-      <span className="sr-only">{label}</span>
-      <input
-        ref={inputRef}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        disabled={disabled}
-        inputMode="decimal"
-        placeholder="0,0"
-        className="h-12 min-w-0 flex-1 rounded-xl border border-[#e8e4de] bg-white px-3 text-base font-black normal-case tracking-normal text-[#1a1815] outline-none focus:ring-2 focus:ring-[#6d9caf] disabled:cursor-not-allowed disabled:bg-[#f3f0eb] disabled:text-[#2d2a26]/35"
-      />
-      <span className="shrink-0 text-base font-black text-[#6b645b]" aria-hidden="true">
-        °C
-      </span>
-      <span className="flex shrink-0 gap-1">
-          <button
-            type="button"
-            onClick={() => updateSign("+")}
-            aria-label={`${label} positief maken`}
-            className={`h-11 w-11 rounded-xl border border-[#dbe9ee] text-lg font-black leading-none ${
-              isNegative
-                ? "bg-white text-[#2d2a26]/45"
-                : "bg-[#dbe9ee] text-[#214456]"
-            }`}
-          >
-            +
-          </button>
-          <button
-            type="button"
-            onClick={() => updateSign("-")}
-            aria-label={`${label} negatief maken`}
-            className={`h-11 w-11 rounded-xl border border-[#e7e0d8] text-lg font-black leading-none ${
-              isNegative
-                ? "bg-[#dbe9ee] text-[#214456]"
-                : "bg-white text-[#2d2a26]/45"
-            }`}
-          >
-            -
-          </button>
-      </span>
-    </label>
-  );
-}
-
 function readLocalDraft(locationId: string, datum: string) {
   if (typeof window === "undefined") return null;
 
@@ -854,6 +780,7 @@ export function TemperatureRegistrationPage({
       ...form,
       temperatuurRegistraties: [...form.temperatuurRegistraties, nextRow],
     });
+    setOpenRowDetails((current) => ({ ...current, [nextRow.id]: true }));
     setAddFeedback("Meetpunt toegevoegd.");
 
     if (addFeedbackTimerRef.current) {
@@ -868,7 +795,7 @@ export function TemperatureRegistrationPage({
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
         const nextElement = registrationRowRefs.current[nextRow.id];
-        const firstInput = nextElement?.querySelector<HTMLInputElement>("input");
+        const firstInput = nextElement?.querySelector<HTMLInputElement>("[data-device-name]") || nextElement?.querySelector<HTMLInputElement>("input");
 
         nextElement?.scrollIntoView({ behavior: "smooth", block: "center" });
         firstInput?.focus({ preventScroll: true });
@@ -1148,7 +1075,7 @@ export function TemperatureRegistrationPage({
               <span className="pb-2 text-sm font-black text-[#1a1815]">
                 {formatCompactDate(datum)}
               </span>
-              <label className="relative flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg border border-[#d8d0c7] bg-white text-[#6b645b]">
+              <label className="relative flex h-11 w-11 cursor-pointer items-center justify-center rounded-lg border border-[#d8d0c7] bg-white text-[#6b645b]">
                 <span
                   aria-hidden="true"
                   className="h-5 w-5 bg-[#6b645b]"
@@ -1176,14 +1103,14 @@ export function TemperatureRegistrationPage({
             </div>
           </div>
 
-          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(10rem,1fr)_minmax(12rem,1fr)_auto]">
+          <div className={`mt-3 grid gap-2 sm:grid-cols-2 ${allowedLocationOptions.length > 1 && !lockLocation ? "lg:grid-cols-[minmax(10rem,1fr)_minmax(12rem,1fr)_auto]" : "lg:grid-cols-[minmax(12rem,24rem)_1fr]"}`}>
             {allowedLocationOptions.length > 1 && !lockLocation ? (
               <label className="grid gap-1 text-[0.58rem] font-black uppercase tracking-[0.12em] text-[#8b8278]">
                 Locatie
                 <select
                   value={winkelId}
                   onChange={(event) => setWinkelId(event.target.value)}
-                  className="h-10 rounded-xl border border-[#e8e4de] bg-white px-3 text-sm font-black normal-case tracking-normal text-[#1a1815] outline-none focus:ring-2 focus:ring-[#8fb184]"
+                  className="h-11 rounded-xl border border-[#e8e4de] bg-white px-3 text-base font-bold normal-case tracking-normal text-[#1a1815] outline-none focus:ring-2 focus:ring-[#8fb184]"
                 >
                   {allowedLocationOptions.map((winkel) => (
                     <option key={winkel.id} value={winkel.id}>
@@ -1193,7 +1120,7 @@ export function TemperatureRegistrationPage({
                 </select>
               </label>
             ) : (
-              <div className="hidden lg:block" />
+              null
             )}
             <label className="grid gap-1 text-[0.58rem] font-black uppercase tracking-[0.12em] text-[#8b8278]">
               Medewerker
@@ -1203,10 +1130,10 @@ export function TemperatureRegistrationPage({
                   updateForm({ ...form, naam: event.target.value })
                 }
                 placeholder="Naam medewerker"
-                className="h-10 rounded-xl border border-[#e8e4de] bg-white px-3 text-sm font-black normal-case tracking-normal text-[#1a1815] outline-none focus:ring-2 focus:ring-[#8fb184]"
+                className="h-11 rounded-xl border border-[#e8e4de] bg-white px-3 text-base font-bold normal-case tracking-normal text-[#1a1815] outline-none focus:ring-2 focus:ring-[#8fb184]"
               />
             </label>
-            <div className="flex items-end justify-between gap-2 sm:col-span-2 lg:col-span-1 lg:justify-end">
+            <div className={`flex items-end justify-between gap-2 sm:justify-end ${allowedLocationOptions.length > 1 && !lockLocation ? "sm:col-span-2 lg:col-span-1" : ""}`}>
               <span className={`rounded-full border px-3 py-2 text-xs font-black ${
                 problemRegistrationCount
                   ? "border-[#efb4aa] bg-[#fff0ed] text-[#a0382f]"
@@ -1220,7 +1147,7 @@ export function TemperatureRegistrationPage({
                 type="button"
                 disabled={manageDevices && !inventory.ready}
                 onClick={() => manageDevices ? setDeviceDialogOpen(true) : addRegistrationRow()}
-                className="rounded-full bg-[#1a1815] px-4 py-2.5 text-xs font-black text-white"
+                className="min-h-11 touch-manipulation rounded-full bg-[#1a1815] px-4 py-2.5 text-xs font-black text-white"
               >
                 {manageDevices ? "+ Koeling / vriezer" : "+ Meetpunt"}
               </button>
@@ -1260,6 +1187,20 @@ export function TemperatureRegistrationPage({
                 Boolean(openRowDetails[item.id]) ||
                 Boolean(item.note?.trim()) ||
                 isActionRequiredStatus(evaluation.status);
+
+              if (!manageDevices) return (
+                <ShopTemperatureRow
+                  key={item.id}
+                  item={item}
+                  isDefault={isDefaultRow}
+                  open={Boolean(openRowDetails[item.id])}
+                  onToggleDetails={() => setOpenRowDetails((current) => ({ ...current, [item.id]: !current[item.id] }))}
+                  onChange={(field, value) => updateRegistration(item.id, field, value)}
+                  onToggleInactive={() => toggleRegistrationInactive(item.id)}
+                  onRemove={() => removeRegistrationRow(item.id)}
+                  rowRef={(element) => { registrationRowRefs.current[item.id] = element; }}
+                />
+              );
 
               return (
                 <div
@@ -1440,7 +1381,7 @@ export function TemperatureRegistrationPage({
                 updateForm({ ...form, opmerking: event.target.value })
               }
               placeholder="Afwijkingen, acties of bijzonderheden"
-              className="min-h-16 rounded-xl border border-[#e8e4de] bg-white p-2.5 text-sm font-semibold normal-case tracking-normal text-[#2d2a26] outline-none focus:ring-2 focus:ring-[#6d9caf]"
+              className="min-h-16 rounded-xl border border-[#e8e4de] bg-white p-2.5 text-base font-semibold normal-case tracking-normal text-[#2d2a26] outline-none focus:ring-2 focus:ring-[#6d9caf]"
             />
           </label>
 
@@ -1454,7 +1395,7 @@ export function TemperatureRegistrationPage({
             type="button"
             onClick={() => void submitPayload(createPayload())}
             disabled={opslaanBezig}
-            className="sticky bottom-40 mt-3 w-full rounded-full bg-[#d95749] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#c8493d] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55 md:w-auto lg:static"
+            className="mt-3 min-h-12 w-full touch-manipulation rounded-xl bg-[#d95749] px-4 py-3 text-base font-bold text-white shadow-sm transition hover:bg-[#c8493d] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55 md:w-auto"
           >
             {opslaanBezig ? "Opslaan..." : "Opslaan"}
           </button>

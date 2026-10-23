@@ -72,7 +72,7 @@ test('Sunday FIFO separates returns, the approved Saturday-vlaai exception, free
 
 const shared=load('app/winkel/schoonmaak-registratie/temperatureRegistrationShared.ts');
 const inventory=load('app/winkel/schoonmaak-registratie/deviceInventory.ts',{'./temperatureRegistrationShared':shared});
-const {normalize}=load('app/winkel/schoonmaak-registratie/page.tsx',{'./temperatureRegistrationShared':shared},'exports.normalize=normalizeRegistrations;');
+const {normalize,isDefault}=load('app/winkel/schoonmaak-registratie/page.tsx',{'./temperatureRegistrationShared':shared},'exports.normalize=normalizeRegistrations; exports.isDefault=isDefaultTemperatureRow;');
 test('new shop lists contain exactly the requested equipment and seasonal notes',()=>{
   const names={
     ziekerstraat:['Vriezer 1','Vriezer 2','Vriezer 3','Vriescel','Winkelvriezer','Gebakskoeling','Zelfbedienskoeling'],
@@ -125,4 +125,10 @@ test('managed bakery inventory changes keep working with dated default devices',
   const changes=[{deviceId:'a',effectiveFrom:'2026-10-24',device:null},{deviceId:'extra',effectiveFrom:'2026-10-24',device:{name:'Extra vriezer',deviceType:'vriezer'}}];
   assert.equal(inventory.inventoryForDate(defaults,changes,'2026-10-23','bakkerij').map(item=>item.name).join('|'),'Koeling|Vriezer');
   assert.equal(inventory.inventoryForDate(defaults,changes,'2026-10-24','bakkerij').map(item=>item.name).join('|'),'Vriezer|Extra vriezer');
+});
+
+test('renaming an existing shop device does not turn it into a removable extra reading',()=>{
+  const devices=inventory.configuredDevicesForDate(shared.temperatureRowsByWinkel.lent,'2026-10-23','lent');
+  assert.equal(isDefault('lent',{id:'lent-5',naam:'Vriescel keuken'},{lent:devices}),true);
+  assert.equal(isDefault('lent',{id:'extra-1',naam:'Extra koeling'},{lent:devices}),false);
 });
