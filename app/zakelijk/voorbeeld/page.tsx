@@ -36,7 +36,6 @@ export default function BusinessPreviewPage() {
       <div className={styles.heroWrap}>
         <section className={styles.hero} aria-labelledby="business-title">
           <div>
-            <p className={styles.eyebrow}>Strik voor bedrijven · sinds 1937</p>
             <h1 id="business-title">Patisserie voor<br />uw <em>bedrijf.</em></h1>
             <p className={styles.heroDescription}>Voor uw gasten, team of relaties. Dagvers uit onze bakkerij in Malden, gekoeld geleverd in Nijmegen en omgeving.</p>
             <a className={styles.button} href="#contact">Bespreek uw wensen <Arrow /></a>

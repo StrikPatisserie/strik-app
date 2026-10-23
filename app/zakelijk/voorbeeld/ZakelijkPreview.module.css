@@ -10,7 +10,6 @@
 .page section { scroll-margin-top:24px; }
 .preview { display:flex; align-items:center; justify-content:center; gap:22px; padding:6px 24px; background:#eae4d8; color:#625b4c; font-size:10px; }
 .preview a { text-decoration:underline; text-underline-offset:3px; }
-.eyebrow { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.15em; color:var(--gold); }
 .page .button { display:inline-flex; align-items:center; justify-content:center; gap:24px; min-height:48px; padding:13px 20px; margin-top:22px; background:var(--green); color:#fffdf6; border:1px solid var(--green); border-radius:3px; font-size:12px; font-weight:800; line-height:1.5; transition:background .2s; }
 .page .button:hover { background:#203e32; }
 .button>span,.textLink>span { font-size:18px; font-weight:400; }
@@ -18,8 +17,8 @@
 .textLink small { font-size:10px; font-weight:400; color:var(--muted); }
 .textLink:hover { color:var(--gold); border-color:currentColor; }
 .heroWrap { background:radial-gradient(ellipse at 10% 40%,#e7d8bc50,transparent 60%); }
-.hero { display:grid; grid-template-columns:.94fr 1.06fr; align-items:center; gap:55px; max-width:1280px; margin:auto; padding:85px 40px 35px; }
-.hero h1 { margin:15px 0 18px; font-size:clamp(52px,5.5vw,72px); line-height:1.04; }
+.hero { display:grid; grid-template-columns:.94fr 1.06fr; align-items:center; gap:55px; max-width:1280px; margin:auto; padding:96px 40px 35px; }
+.hero h1 { margin:0 0 18px; font-size:clamp(52px,5.5vw,72px); line-height:1.04; }
 .heroDescription { max-width:410px; font-size:14px; color:var(--muted); }
 .customerLink { display:flex; align-items:center; gap:8px; width:fit-content; min-height:44px; margin-top:6px; font-size:11px; font-weight:800; }
 .customerLink>span:first-child { color:var(--muted); font-weight:400; }
@@ -86,8 +85,8 @@
 @media(max-width:740px) {
  .page h2 { font-size:30px; }
  .preview { justify-content:space-between; padding:6px 20px; font-size:9px; }
- .hero { grid-template-columns:1fr; gap:24px; padding:70px 24px 24px; }
- .hero h1 { font-size:clamp(48px,12vw,68px); margin:12px 0 16px; }
+ .hero { grid-template-columns:1fr; gap:24px; padding:96px 24px 24px; }
+ .hero h1 { font-size:clamp(48px,12vw,68px); margin:0 0 16px; }
  .heroDescription { font-size:14px; }
  .page .button { margin-top:18px; }
  .customerLink { margin-top:4px; font-size:11px; }
