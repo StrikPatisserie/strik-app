@@ -10,7 +10,6 @@ export const metadata: Metadata = {
   manifest: null,
 };
 
-const folder = "https://strik-patisserie.nl/wp-content/uploads/2023/04/B2B_acquisitiefolder_txtoutline_2023.pdf";
 const certificate = "https://strik-patisserie.nl/wp-content/uploads/2025/01/20230213-Foodbase-hygiene-certificaat-geldig-tot-31-12-2025.pdf";
 const portal = "https://evstrikb2b.extravestiging.nl";
 const mail = "mailto:info@strik-patisserie.nl?subject=Zakelijk%20bij%20Strik";
@@ -50,25 +49,30 @@ export default function BusinessPreviewPage() {
       </section>
 
       <section className={styles.assortment} id="assortiment" aria-labelledby="assortment-title">
-        <div className={styles.sectionHeading}><h2 id="assortment-title">Taart & <em>kleine patisserie.</em></h2><a className={styles.textLink} href={folder} target="_blank" rel="noopener noreferrer">Bedrijfsfolder <small>· editie 2023</small> <Arrow /></a></div>
+        <div className={styles.sectionHeading}><h2 id="assortment-title">Taart & <em>kleine patisserie.</em></h2><p>Voor bij de koffie, als dessert of in de vitrine. Van taarten en kleine gebakjes tot chocolade en bonbons. Formaat, smaak en dieetwensen bespreken we samen.</p></div>
         <p className={styles.swipeHint}>Veeg door het assortiment <span aria-hidden="true">→</span></p>
         <div className={styles.assortmentGrid} role="region" aria-label="Foto’s van het assortiment" tabIndex={0}>{assortment.map(item => <figure key={item.image}><div className={styles.assortmentImage}><Image src={`/zakelijk/${item.image}.webp`} alt={item.alt} fill sizes="(max-width: 420px) 75vw, (max-width: 740px) 50vw, 25vw" /></div><figcaption>{item.title}</figcaption></figure>)}</div>
       </section>
 
       <section className={styles.gifts} aria-labelledby="gifts-title">
         <div className={styles.giftsInner}>
-          <div className={styles.sectionHeading}><h2 id="gifts-title">Zakelijke <em>geschenken.</em></h2><p>Chocoladeletters, patisserie en pakketten op maat.</p></div>
+          <div className={styles.sectionHeading}><h2 id="gifts-title">Geschenken voor<br /><em>de feestdagen.</em></h2><p>Voor collega’s, klanten en relaties. Kies uit chocoladeletters, feestelijke patisserie en geschenkpakketten op maat.</p></div>
           <div className={styles.giftGrid}>
-            <a className={styles.giftCard} href="https://app.strik-patisserie.nl/sint-voor-bedrijven"><div className={styles.giftImage}><Image src="/sinterklaas/Pakket op maat.jpg" alt="Een Sinterklaasgeschenk met chocoladeletters en speculaas van Strik" fill sizes="(max-width: 740px) 110px, 160px" /></div><div className={styles.giftCopy}><h3>Sint voor bedrijven</h3><p>Chocoladeletters & personeelspakketten</p><span className={styles.giftAction}>Bekijk het assortiment <Arrow /></span></div></a>
-            <a className={styles.giftCard} href="https://app.strik-patisserie.nl/kerst-voor-bedrijven"><div className={styles.giftImage}><Image src="/Kerst/Pastelgroene patisseriedoos met kerstdecoratie.png" alt="Een groene Strik geschenkdoos met kerstdecoratie" fill sizes="(max-width: 740px) 110px, 160px" /></div><div className={styles.giftCopy}><h3>Kerst voor bedrijven</h3><p>Feestelijke patisserie & geschenken</p><span className={styles.giftAction}>Bekijk het assortiment <Arrow /></span></div></a>
+            <a className={styles.giftCard} href="https://app.strik-patisserie.nl/sint-voor-bedrijven" aria-label="Bekijk Sinterklaasgeschenken">
+              <div className={styles.giftImage}><Image src="/sinterklaas/Pakket op maat.jpg" alt="Een Sinterklaasgeschenk met chocoladeletters en speculaas van Strik" fill sizes="(max-width: 740px) 110px, 170px" /></div>
+              <div className={styles.giftCopy}><h3>Sinterklaas</h3><p>Chocoladeletters, speculaas & geschenkpakketten.</p><span className={styles.giftAction}>Bekijk de geschenken <Arrow /></span></div>
+            </a>
+            <a className={styles.giftCard} href="https://app.strik-patisserie.nl/kerst-voor-bedrijven" aria-label="Bekijk Kerstgeschenken">
+              <div className={styles.giftImage}><Image src="/Kerst/Pastelgroene patisseriedoos met kerstdecoratie.png" alt="Een groene Strik geschenkdoos met kerstdecoratie" fill sizes="(max-width: 740px) 110px, 170px" /></div>
+              <div className={styles.giftCopy}><h3>Kerst</h3><p>Feestelijke patisserie, chocolade & geschenkpakketten.</p><span className={styles.giftAction}>Bekijk de geschenken <Arrow /></span></div>
+            </a>
           </div>
-          <a className={styles.easter} href="https://strik-patisserie.nl/wp-content/uploads/2026/02/STRIKpatisserie_Pasen_2026_DGTL.pdf" target="_blank" rel="noopener noreferrer">Ook voor Pasen · bekijk de folder van 2026 ter inspiratie <Arrow /></a>
+          <a className={styles.otherOccasions} href={mail}>Ook voor Pasen of een ander moment? Bespreek uw geschenk <Arrow /></a>
         </div>
       </section>
 
       <section className={styles.practical} aria-label="Bedrijfsinformatie">
         <details><summary>Bedrijfsinformatie & documenten<span aria-hidden="true">+</span></summary><div className={styles.documents}>
-          <div><h3>Bedrijfsfolder · editie 2023</h3><p>Liever een exemplaar op papier? <a href={mail}>Vraag de folder aan.</a></p><a className={styles.textLink} href={folder} target="_blank" rel="noopener noreferrer">Bekijk de folder <Arrow /></a></div>
           <div><h3>Hygiëne & voedselveiligheid</h3><p>De nieuwe versie van het certificaat volgt eind dit jaar.</p><a className={styles.textLink} href={certificate} target="_blank" rel="noopener noreferrer">Hygiënecertificaat · versie 2025 <Arrow /></a></div>
           <div><h3>Patisserie College</h3><p>Strik is aangesloten bij het Patisserie College.</p><a className={styles.textLink} href="https://www.banket.nl/" target="_blank" rel="noopener noreferrer">Meer informatie <Arrow /></a></div>
         </div></details>

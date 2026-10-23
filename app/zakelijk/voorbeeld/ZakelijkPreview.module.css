@@ -14,7 +14,6 @@
 .page .button:hover { background:#203e32; }
 .button>span,.textLink>span { font-size:18px; font-weight:400; }
 .textLink { display:inline-flex; align-items:center; gap:12px; min-height:44px; width:fit-content; padding:7px 0; border-bottom:1px solid var(--line); font-size:11px; font-weight:800; }
-.textLink small { font-size:10px; font-weight:400; color:var(--muted); }
 .textLink:hover { color:var(--gold); border-color:currentColor; }
 .heroWrap { background:radial-gradient(ellipse at 10% 40%,#e7d8bc50,transparent 60%); }
 .hero { display:grid; grid-template-columns:.94fr 1.06fr; align-items:center; gap:55px; max-width:1280px; margin:auto; padding:96px 40px 35px; }
@@ -32,7 +31,7 @@
 .audiences p { margin-top:8px; font-size:12px; color:var(--muted); }
 .assortment { max-width:1280px; margin:auto; padding:35px 40px; }
 .sectionHeading { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px 30px; margin-bottom:20px; }
-.sectionHeading>p { font-size:12px; color:var(--muted); }
+.sectionHeading>p { max-width:430px; font-size:12px; color:var(--muted); }
 .assortmentGrid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:20px; }
 .assortmentGrid figure { min-width:0; margin:0; }
 .assortmentImage { position:relative; height:225px; overflow:hidden; border-radius:3px; background:#e5ded2; }
@@ -40,25 +39,30 @@
 .assortmentGrid figcaption { padding-top:10px; font:23px/1.3 Georgia,serif; }
 .swipeHint { display:none; }
 .assortmentGrid:focus-visible { outline:2px solid var(--gold); outline-offset:6px; }
-.gifts { background:#e9ede3; border-block:1px solid #d9e0d2; }
-.giftsInner { max-width:1280px; padding:30px 40px 22px; margin:auto; }
+.gifts { background:var(--green); color:var(--paper); }
+.gifts .sectionHeading { margin-bottom:24px; }
+.gifts h2 { font-size:38px; }
+.gifts em { color:#e1c798; }
+.gifts .sectionHeading>p { max-width:365px; color:#e1e7da; font-size:13px; }
+.giftsInner { max-width:1280px; padding:32px 40px 24px; margin:auto; }
 .giftGrid { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
-.giftCard { display:grid; grid-template-columns:150px 1fr; gap:20px; align-items:center; min-width:0; background:#fbf8f180; border:1px solid #d9e0d2; border-radius:3px; overflow:hidden; }
-.giftImage { position:relative; height:150px; background:#dfe2d8; }
+.page .giftCard { display:grid; grid-template-columns:170px 1fr; gap:22px; align-items:center; min-width:0; background:var(--paper); color:var(--ink); border:1px solid #c5b391; border-radius:4px; overflow:hidden; }
+.giftImage { position:relative; height:100%; min-height:205px; background:#dfe2d8; }
 .giftImage img { object-fit:cover; object-position:center 65%; transition:transform .4s; }
 .giftCard:hover .giftImage img { transform:scale(1.03); }
-.giftCopy { padding:16px 18px 16px 0; }
-.giftCopy h3 { font:25px/1.2 Georgia,serif; }
-.giftCopy p { color:var(--muted); font-size:11px; margin-top:7px; }
-.giftAction { display:inline-flex; align-items:center; gap:14px; margin-top:10px; border-bottom:1px solid #c4cdbb; font-size:10px; font-weight:800; color:var(--green); }
+.giftCopy { padding:20px 20px 20px 0; }
+.giftCopy h3 { font:32px/1.2 Georgia,serif; }
+.giftCopy p { color:var(--muted); font-size:12px; margin-top:8px; }
+.giftAction { display:inline-flex; align-items:center; justify-content:center; gap:14px; min-height:44px; max-width:100%; margin-top:14px; padding:10px 13px; background:var(--green); border-radius:3px; font-size:11px; font-weight:800; line-height:1.5; color:var(--paper); }
+.giftCard:hover .giftAction { background:#203e32; }
 .giftAction>span { font-size:17px; }
-.easter { display:inline-flex; gap:12px; margin-top:18px; font-size:10px; text-decoration:underline!important; text-underline-offset:4px; color:var(--muted)!important; }
+.otherOccasions { display:inline-flex; gap:12px; align-items:center; min-height:44px; margin-top:10px; font-size:11px; text-decoration:underline!important; text-underline-offset:4px; }
 .practical { max-width:1280px; padding:12px 40px; margin:auto; }
 .practical summary { display:flex; align-items:center; justify-content:space-between; gap:20px; list-style:none; cursor:pointer; min-height:50px; padding:12px 0; font-size:12px; font-weight:800; }
 .practical summary::-webkit-details-marker { display:none; }
 .practical summary>span { font-size:22px; font-weight:400; color:var(--gold); }
 .practical details[open] summary>span { transform:rotate(45deg); }
-.documents { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:30px; padding:12px 0 22px; }
+.documents { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:30px; padding:12px 0 22px; }
 .documents h3 { font-size:12px; }
 .documents p { font-size:11px; color:var(--muted); margin:8px 0; }
 .documents p a { text-decoration:underline; }
@@ -77,9 +81,9 @@
  .hero { gap:30px; }
  .hero h1 { font-size:57px; }
  .photoFrame { height:335px; }
- .giftCard { grid-template-columns:110px 1fr; gap:14px; }
- .giftImage { height:150px; }
- .giftCopy h3 { font-size:23px; }
+ .page .giftCard { grid-template-columns:110px 1fr; gap:14px; }
+ .giftImage { min-height:205px; }
+ .giftCopy h3 { font-size:29px; }
  .assortmentImage { height:190px; }
 }
 @media(max-width:740px) {
@@ -101,15 +105,17 @@
  .assortmentGrid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px 16px; }
  .assortmentGrid figcaption { font-size:22px; }
  .assortmentImage { height:200px; }
- .giftsInner { padding:26px 24px 20px; }
+ .giftsInner { padding:28px 24px 20px; }
+ .gifts h2 { font-size:32px; }
+ .sectionHeading>p { font-size:13px; }
  .giftGrid { grid-template-columns:1fr; gap:14px; }
- .giftCard { grid-template-columns:110px 1fr; gap:14px; }
- .giftImage { height:145px; }
- .giftCopy { padding-right:12px; }
- .giftCopy h3 { font-size:23px; }
- .giftCopy p { font-size:11px; }
- .giftAction { font-size:11px; min-height:30px; margin-top:5px; }
- .easter { font-size:11px; line-height:1.7; }
+ .page .giftCard { grid-template-columns:110px 1fr; gap:14px; }
+ .giftImage { min-height:195px; }
+ .giftCopy { padding:18px 12px 18px 0; }
+ .giftCopy h3 { font-size:29px; }
+ .giftCopy p { font-size:12px; }
+ .giftAction { gap:10px; padding-inline:10px; margin-top:12px; font-size:10px; }
+ .otherOccasions { font-size:11px; line-height:1.7; }
  .practical { padding:10px 24px; }
  .documents { grid-template-columns:1fr; gap:20px; }
  .documents h3 { font-size:14px; }
@@ -128,5 +134,9 @@
  .assortmentGrid { display:flex; gap:16px; overflow-x:auto; overscroll-behavior-x:contain; scroll-snap-type:x mandatory; margin-right:-24px; padding:0 24px 10px 0; }
  .assortmentGrid figure { flex:0 0 75%; scroll-snap-align:start; }
  .assortmentImage { height:230px; }
+}
+@media(max-width:370px) {
+ .page .giftCard { grid-template-columns:90px 1fr; gap:12px; }
+ .giftCopy h3 { font-size:27px; }
 }
 @media(prefers-reduced-motion:reduce) { .page *, .page *::before, .page *::after { transition:none!important; scroll-behavior:auto!important; } }
