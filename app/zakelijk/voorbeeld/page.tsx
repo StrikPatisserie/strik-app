@@ -19,6 +19,12 @@ const audiences = [
   { title: "Winkels & supermarkten", description: "Een lokaal assortiment voor uw winkel, met de mogelijkheden van het Strik private label." },
   { title: "Bedrijven & instellingen", description: "Voor de vergadertafel, een bedankje of een bijzonder moment. Eenmalig of op vaste basis." },
 ];
+const assortment = [
+  { image: "appeltaart-horeca", title: "Appeltaart", alt: "Een aangesneden appeltaart in een horecavitrine" },
+  { image: "kersenvlaai-bedrijf", title: "Kersenvlaai", alt: "Een punt kersenvlaai met koffie op een houten tafel" },
+  { image: "red-velvet", title: "Red velvet", alt: "Red velvet gebakjes met crème en fruit, geserveerd met koffie" },
+  { image: "petit-fours-bedrijf", title: "Petit fours", alt: "Een schaal petit fours met Strik-logo op een vergadertafel" },
+];
 
 function Arrow({ down = false }: { down?: boolean }) { return <span aria-hidden="true">{down ? "↓" : "↗"}</span>; }
 
@@ -38,7 +44,7 @@ export default function BusinessPreviewPage() {
             <a className={styles.customerLink} href={portal} target="_blank" rel="noopener noreferrer"><span>Al klant bij Strik?</span> Naar het bestelportaal <Arrow /></a>
           </div>
           <div className={styles.heroVisual}>
-            <div className={styles.photoFrame}><Image src="/zakelijk/huidige-zakelijk.jpg" alt="Een etagère met kleine gebakjes en patisserie van Strik" fill sizes="(max-width: 740px) 100vw, (max-width: 1100px) 52vw, 650px" preload /></div>
+            <div className={styles.photoFrame}><Image src="/zakelijk/gateau-bedrijf.webp" alt="Een schaal met verschillende kleine gebakjes van Strik, klaar voor een zakelijke bijeenkomst" fill sizes="(max-width: 740px) 100vw, (max-width: 1100px) 52vw, 650px" preload /></div>
             <div className={styles.photoCaption}><span className={styles.captionLine} /><span>Met de hand gemaakt.<br /><strong>Uit onze eigen bakkerij.</strong></span><span className={styles.since}>Sinds<br /><b>1937</b></span></div>
           </div>
         </section>
@@ -49,6 +55,8 @@ export default function BusinessPreviewPage() {
         <div className={styles.sectionIntro}><p className={styles.eyebrow}>Voor uw zaak, team of gasten</p><h2 id="audiences-title">Goed gebak.<br /><em>Passend bij uw zaak.</em></h2><p>Van vaste afname tot een eenmalige bestelling. We denken mee over wat past bij uw bedrijf.</p><a className={styles.textLink} href={folder} target="_blank" rel="noopener noreferrer">Bekijk de bedrijfsfolder <Arrow /></a><small>Algemeen assortiment · editie 2023</small></div>
         <div className={styles.audienceList}>{audiences.map((audience, index) => <article key={audience.title}><span className={styles.number}>0{index + 1}</span><div><h3>{audience.title}</h3><p>{audience.description}</p></div></article>)}</div>
       </section>
+
+      <section className={styles.assortment} aria-labelledby="assortment-title"><div className={styles.sectionHeading}><div><p className={styles.eyebrow}>Uit onze eigen bakkerij</p><h2 id="assortment-title">Van een punt taart<br /><em>tot kleine patisserie.</em></h2></div><a className={styles.textLink} href="#contact">Bespreek uw assortiment <Arrow /></a></div><p className={styles.swipeHint}>Veeg door het assortiment <span aria-hidden="true">→</span></p><div className={styles.assortmentGrid} role="region" aria-label="Foto’s van het assortiment" tabIndex={0}>{assortment.map(item => <figure key={item.image}><div className={styles.assortmentImage}><Image src={`/zakelijk/${item.image}.webp`} alt={item.alt} fill sizes="(max-width: 420px) 85vw, (max-width: 740px) 50vw, 25vw" /></div><figcaption>{item.title}</figcaption></figure>)}</div></section>
 
       <section className={styles.gifts} id="geschenken" aria-labelledby="gifts-title">
         <div className={styles.giftsInner}>

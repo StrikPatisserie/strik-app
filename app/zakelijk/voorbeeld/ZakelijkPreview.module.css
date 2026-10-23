@@ -31,7 +31,7 @@
 .heroVisual { min-width:0; position:relative; padding-top:9px; }
 .heroVisual::before { content:""; position:absolute; top:-3px; left:12px; right:-12px; bottom:66px; border:1px solid #c6b391; border-radius:4px 120px 4px 4px; pointer-events:none; }
 .photoFrame { position:relative; height:435px; border-radius:4px 110px 4px 4px; overflow:hidden; background:#e6ded1; }
-.photoFrame img { object-fit:cover; object-position:63% 50%; }
+.photoFrame img { object-fit:cover; object-position:50% 66%; }
 .photoCaption { display:flex; align-items:center; gap:14px; margin-top:21px; min-height:45px; font:15px/1.4 Georgia,"Times New Roman",serif; }
 .photoCaption strong { font-weight:400; color:var(--gold); }
 .captionLine { width:35px; height:1px; background:#c2ad88; }
@@ -39,7 +39,7 @@
 .since b { font:24px/1.3 Georgia,serif; letter-spacing:0; color:var(--green); }
 .values { display:flex; justify-content:center; align-items:center; flex-wrap:wrap; gap:12px 44px; padding:22px 24px; border-top:1px solid var(--line); border-bottom:1px solid var(--line); color:var(--green); font-size:10px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
 .values i { font-size:19px; font-style:normal; font-weight:400; color:var(--gold); }
-.audiences { display:grid; grid-template-columns:1fr 1fr; gap:105px; max-width:1280px; margin:auto; padding:105px 40px; }
+.audiences { display:grid; grid-template-columns:1fr 1fr; gap:105px; max-width:1280px; margin:auto; padding:105px 40px 70px; }
 .sectionIntro h2 { margin:18px 0 24px; }
 .sectionIntro>p:last-of-type { max-width:340px; color:var(--muted); font-size:13px; }
 .sectionIntro .textLink { margin-top:22px; }
@@ -49,6 +49,15 @@
 .audienceList article:first-child { border-top:1px solid var(--line); }
 .number { font:italic 24px/1.3 Georgia,serif; color:var(--gold); }
 .audienceList p { max-width:385px; margin-top:10px; color:var(--muted); font-size:12px; }
+.assortment { max-width:1280px; margin:auto; padding:15px 40px 90px; }
+.assortment h2 { font-size:44px; }
+.assortmentGrid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:22px; }
+.assortmentGrid figure { min-width:0; margin:0; }
+.assortmentImage { position:relative; aspect-ratio:3/4; overflow:hidden; border-radius:3px; background:#e5ded2; }
+.assortmentImage img { object-fit:cover; }
+.assortmentGrid figcaption { padding-top:14px; font:23px/1.3 Georgia,serif; }
+.swipeHint { display:none; }
+.assortmentGrid:focus-visible { outline:2px solid var(--gold); outline-offset:6px; }
 .gifts { background:#e9ede3; border-block:1px solid #d9e0d2; }
 .giftsInner { max-width:1280px; padding:80px 40px 34px; margin:auto; }
 .sectionHeading { display:flex; justify-content:space-between; align-items:flex-end; gap:50px; margin-bottom:40px; }
@@ -129,7 +138,7 @@
  .heroVisual { margin:0 9px 0 0; }
  .heroVisual::before { right:-9px; left:9px; border-top-right-radius:90px; bottom:65px; }
  .photoFrame { height:auto; aspect-ratio:1.15; border-top-right-radius:83px; }
- .photoFrame img { object-position:63% 50%; }
+ .photoFrame img { object-position:50% 66%; }
  .photoCaption { gap:12px; font-size:14px; }
  .captionLine { width:20px; }
  .since { padding-left:14px; }
@@ -143,6 +152,9 @@
  .audienceList article { padding:22px 0; grid-template-columns:28px 1fr; gap:14px; }
  .audienceList h3 { font-size:17px; }
  .audienceList p { font-size:13px; }
+ .assortment { padding:0 24px 50px; }
+ .assortmentGrid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:27px 17px; }
+ .assortmentGrid figcaption { font-size:21px; padding-top:11px; }
  .sectionHeading { display:block; margin-bottom:30px; }
  .sectionHeading>div:last-child:not(:first-child),.sectionHeading>p { margin-top:22px; max-width:none; font-size:13px; }
  .giftsInner { padding:50px 24px 26px; }
@@ -173,5 +185,10 @@
  .footer { padding:23px 24px; gap:15px; font-size:9px; }
  .footer>span { max-width:150px; }
  .footer>a:last-child { margin-left:0; }
+}
+@media(max-width:420px) {
+ .swipeHint { display:flex; justify-content:space-between; gap:20px; margin-bottom:16px!important; font-size:10px; color:var(--green); }
+ .assortmentGrid { display:flex; gap:17px; overflow-x:auto; overscroll-behavior-x:contain; scroll-snap-type:x mandatory; margin-right:-24px; padding:0 24px 15px 0; }
+ .assortmentGrid figure { flex:0 0 83%; scroll-snap-align:start; }
 }
 @media(prefers-reduced-motion:reduce) { .page *, .page *::before, .page *::after { transition:none!important; scroll-behavior:auto!important; } }
