@@ -15,6 +15,7 @@ function load(file, imports = {}, globals = {}, expose = '') {
   return exports;
 }
 const tracking = load('app/bakkerij/logistiek/photoPrintTracking.ts');
+const photoIdentity = load('app/bakkerij/logistiek/webshopPhotoIdentity.ts');
 const copies = (n, extra = {}) => Array.from({ length: n }, (_, i) => ({
   id: `item-${i}`, imageId: 'logo-a', printKey: `logo-a:${i + 1}`, photoUrl: 'https://example.com/logo.jpg',
   customerName: 'Voorbeeldklant', product: 'Petit fours met logo', receiptNumber: '62000', shape: 'square', sizeCm: 3.78,
@@ -68,14 +69,14 @@ test('selection keeps different customers and different print formats separate',
 });
 
 const dashboard = load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx', {
-  react: React, '../../StrikUI': {}, './routePrintWindow': {}, './receiptDelivery': {}, './arendPrintSession': {},
+  react: React, '../../StrikUI': {}, './BusinessDeliveries': {}, './routePrintPagination': load('app/bakkerij/logistiek/routePrintPagination.ts'), './routePrintWindow': {}, './receiptDelivery': {}, './arendPrintSession': {}, './webshopPhotoIdentity': photoIdentity,
   './specialSchoolDelivery': {}, './specialProCollegeDelivery': {}, './PhotoPrintChoiceModal': {}, './usePhotoPrintHistory': {}, './photoPrintTracking': tracking,
-}, {}, 'exports.sheet = createMarzipanPhotoPrintHtml; exports.pushCopies = pushMarzipanPrintCopies; exports.open = openMarzipanPhotoSheet;');
+}, {}, 'exports.sheet = createMarzipanPhotoPrintHtml; exports.pushCopies = pushMarzipanPrintCopies; exports.open = openMarzipanPhotoSheet; exports.buildItems = buildMarzipanPrintItems; exports.photoBlock = WebshopImageBlock;');
 
 test('confirming the same sheet twice registers one job, while a failed save can be retried', async () => {
   const sheet = { document: { open() {}, write() {}, close() {} }, focus() {} };
   const { open } = load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx', {
-    react: React, '../../StrikUI': {}, './routePrintWindow': {}, './receiptDelivery': {}, './arendPrintSession': {},
+    react: React, '../../StrikUI': {}, './BusinessDeliveries': {}, './routePrintPagination': load('app/bakkerij/logistiek/routePrintPagination.ts'), './routePrintWindow': {}, './receiptDelivery': {}, './arendPrintSession': {}, './webshopPhotoIdentity': photoIdentity,
     './specialSchoolDelivery': {}, './specialProCollegeDelivery': {}, './PhotoPrintChoiceModal': {}, './usePhotoPrintHistory': {}, './photoPrintTracking': tracking,
   }, { window: { open: () => sheet } }, 'exports.open = openMarzipanPhotoSheet;');
   let saves = 0;
@@ -230,4 +231,19 @@ test('existing browser print history migrates and a sheet confirms its captured 
   const history = harness.render('2026-10-23').historyByDate;
   assert.equal(history['2026-10-22'].printedKeys.length, 2);
   assert.equal(history['2026-10-23'], undefined);
+});
+
+const photo = (id, extra = {}) => ({ id, messageId:'mail', orderNumber:'79000', deliveryDate:'2026-10-24', customerName:'Voorbeeldklant', photoUrl:`https://shop.invalid/${id}.jpg`, sourceUrl:'', fileName:`${id}.jpg`, productSummary:'Cremetaart Confetti 10-12p', productQuantity:1, receivedAt:'', importedAt:'', notes:[], confidence:'hoog', ...extra });
+const photoReceipt = () => ({ id:'receipt', receiptNumber:'79000', customer:'Voorbeeldklant', lines:[{description:'Cremetaart Confetti 10-12p met foto',quantity:'1'},{description:'Cremetaart Confetti 10-12p met foto',quantity:'1'}], tags:[], note:'', customerNote:'', internalNote:'' });
+test('two identical cake rows produce one copy of each different photo, including legacy photo records',()=>{
+ for(const photos of [[photo('one',{sourceLineId:'line-1'}),photo('two',{sourceLineId:'line-2'})],[photo('one',{productQuantity:undefined}),photo('two',{productQuantity:undefined})]]){
+  const items=dashboard.buildItems([photoReceipt()],photos);assert.equal(items.length,2);assert.equal(items.filter(item=>item.imageId==='one').length,1);assert.equal(items.filter(item=>item.imageId==='two').length,1);
+ }
+});
+test('new order-line quantities determine copies without sharing one photo over other cake rows',()=>{
+ const items=dashboard.buildItems([photoReceipt()],[photo('one',{productQuantity:3})]);assert.equal(items.length,3);
+});
+test('an incomplete photo import blocks every sibling from the same order in the print selection',()=>{
+ const items=dashboard.buildItems([photoReceipt()],[photo('one',{expectedPhotoCount:2,importedPhotoCount:1,importWarnings:['Tweede foto ontbreekt']}),photo('two')]);assert.equal(items.length,0);
+ const html=renderToStaticMarkup(React.createElement(dashboard.photoBlock,{images:[photo('one',{expectedPhotoCount:2,importedPhotoCount:1,importWarnings:['Tweede foto ontbreekt']})],receipt:photoReceipt(),onDelete(){},onUnlink(){}}));assert.match(html,/Foto-import onvolledig/);assert.match(html,/printen voor deze bestelling geblokkeerd/);assert.match(html,/Foto 1 van 2/);
 });

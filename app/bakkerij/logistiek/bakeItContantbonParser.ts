@@ -243,6 +243,16 @@ function parseDutchNumber(value: string) {
   return Number.isFinite(number) ? number : undefined;
 }
 
+// Match a repeated PDF text layer occurrence by occurrence. Two equal rows in
+// the original table are two items, not evidence of a duplicate text layer.
+function mergeRepeatedLine(target: LogisticsReceiptLine[], line: LogisticsReceiptLine, claimed: Set<LogisticsReceiptLine>) {
+  const available = target.filter(item => !claimed.has(item));
+  const merged = uniqueLinePush(available, line);
+  if (!target.includes(merged)) target.push(merged);
+  claimed.add(merged);
+  return merged;
+}
+
 function pickUnitPrice(priceTexts: string[], quantityText: string) {
   const prices = priceTexts
     .map(parseDutchNumber)
@@ -1545,6 +1555,8 @@ function parsePage(pageText: string): ParsedPage | null {
       /\b(?:afhaaltijd|bezorgtijd|tijdvak|levering|wordt bezorgd)\b/i.test(line)
   );
   const parsedLines: LogisticsReceiptLine[] = [];
+  const repeatedClaims = new Set<LogisticsReceiptLine>();
+  function appendOriginalLine(line: LogisticsReceiptLine) { parsedLines.push(line); return line; }
   const remarks: string[] = [];
   let currentLine: LogisticsReceiptLine | null = null;
   let pendingSplitProductDescription = "";
@@ -1562,6 +1574,7 @@ function parsePage(pageText: string): ParsedPage | null {
 
     if (isReceiptPaymentBlockLine(line) && !isEmailLine(line)) {
       productSectionOpen = false;
+      repeatedClaims.clear();
       currentLine = null;
       const totalMatch =
         line.match(/^€\s*([\d.,:]+)\s+totaalprijs\b/i) ||
@@ -1594,7 +1607,7 @@ function parsePage(pageText: string): ParsedPage | null {
     if (!productSectionOpen) {
       const repeatedProductLine = parseProductLine(line);
       if (repeatedProductLine) {
-        currentLine = uniqueLinePush(parsedLines, repeatedProductLine);
+        currentLine = mergeRepeatedLine(parsedLines, repeatedProductLine, repeatedClaims);
         continue;
       }
 
@@ -1603,7 +1616,7 @@ function parsePage(pageText: string): ParsedPage | null {
         currentLine?.quantity || "1"
       );
       if (repeatedOptionLine) {
-        currentLine = uniqueLinePush(parsedLines, repeatedOptionLine);
+        currentLine = mergeRepeatedLine(parsedLines, repeatedOptionLine, repeatedClaims);
         continue;
       }
     }
@@ -1633,7 +1646,7 @@ function parsePage(pageText: string): ParsedPage | null {
             [pricedSplitLine.priceText],
             pricedSplitLine.quantityText
           );
-          currentLine = uniqueLinePush(parsedLines, {
+          currentLine = appendOriginalLine({
             ...articleFieldsForReceiptDescription(article, description),
             quantity: pricedSplitLine.quantityText,
             description,
@@ -1654,7 +1667,7 @@ function parsePage(pageText: string): ParsedPage | null {
       const productLine = parseProductLine(line);
       if (productLine) {
         pendingSplitProductDescription = "";
-        currentLine = uniqueLinePush(parsedLines, productLine);
+        currentLine = appendOriginalLine(productLine);
         continue;
       }
 
@@ -1664,7 +1677,7 @@ function parsePage(pageText: string): ParsedPage | null {
       );
       if (productOptionLine) {
         pendingSplitProductDescription = "";
-        currentLine = uniqueLinePush(parsedLines, productOptionLine);
+        currentLine = appendOriginalLine(productOptionLine);
         continue;
       }
 
@@ -1685,7 +1698,7 @@ function parsePage(pageText: string): ParsedPage | null {
       const productStartLine = parseProductStartLine(line);
       if (productStartLine) {
         pendingSplitProductDescription = "";
-        currentLine = uniqueLinePush(parsedLines, productStartLine);
+        currentLine = appendOriginalLine(productStartLine);
         continue;
       }
 
@@ -1741,7 +1754,8 @@ function parsePage(pageText: string): ParsedPage | null {
 }
 
 function mergePageIntoDraft(draft: ReceiptDraft, page: ParsedPage) {
-  for (const line of page.lines) uniqueLinePush(draft.lines, line);
+  const claimed = new Set<LogisticsReceiptLine>();
+  for (const line of page.lines) mergeRepeatedLine(draft.lines, line, claimed);
   for (const remark of page.remarks) uniquePush(draft.remarks, remark);
   for (const timeLine of page.timeLines) uniquePush(draft.timeLines, timeLine);
   for (const deliveryLine of page.deliveryBlock) uniquePush(draft.deliveryBlock, deliveryLine);

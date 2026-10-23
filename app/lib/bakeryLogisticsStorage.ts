@@ -1,4 +1,5 @@
 import "server-only";
+import { webshopPhotoDuplicateKey } from "@/app/bakkerij/logistiek/webshopPhotoIdentity";
 
 import type {
   LogisticsAcquisitionCampaign,
@@ -435,21 +436,7 @@ function correctProCollegeAdvancePhoto(image: LogisticsWebshopImage) {
 }
 
 function logisticsWebshopImageDuplicateKey(image: LogisticsWebshopImage) {
-  const photoKey = image.photoUrl.startsWith("data:")
-    ? image.photoUrl.slice(0, 4000)
-    : image.photoUrl;
-
-  return [
-    image.deliveryDate,
-    image.matchedReceiptId || image.matchedReceiptNumber || image.orderNumber,
-    image.customerName,
-    image.fileName,
-    image.productSummary || "",
-    photoKey,
-  ]
-    .filter(Boolean)
-    .map((part) => part.trim().toLowerCase())
-    .join("|");
+  return webshopPhotoDuplicateKey(image);
 }
 
 function shouldPreferWebshopImageCandidate(
@@ -2179,37 +2166,49 @@ export async function upsertLogisticsWebshopImage(
   image: LogisticsWebshopImage,
   options: { preserveManualMatch?: boolean } = {}
 ) {
+  return (await upsertLogisticsWebshopImages([image], options))[0];
+}
+
+/** One read and one write for all photos in a mail; photos never replace siblings by message-ID. */
+export async function upsertLogisticsWebshopImages(
+  incoming: LogisticsWebshopImage[],
+  options: { preserveManualMatch?: boolean } = {}
+) {
+  if (!incoming.length) return [];
+  if (new Set(incoming.map(image => image.id)).size !== incoming.length) throw new Error("Dubbele foto-identiteit in dezelfde import; controleer de bestelregels.");
   const state = await readLogisticsWebshopImagesState();
-  const existing =
-    state.images.find((item) => item.id === image.id) ||
-    state.images.find(
+  let images = [...state.images];
+  const saved: LogisticsWebshopImage[] = [];
+  for (const image of incoming) {
+    const existing =
+    images.find((item) => item.id === image.id) ||
+    images.find((item) => image.messageId && image.sourceLineId && item.messageId === image.messageId && item.sourceLineId === image.sourceLineId && item.deliveryDate === image.deliveryDate) ||
+    images.find(
       (item) =>
         logisticsWebshopImageDuplicateKey(item) ===
         logisticsWebshopImageDuplicateKey(image)
     ) ||
-    state.images.find(
+    images.find(
       (item) =>
-        item.messageId === image.messageId &&
+        Boolean(image.messageId) && item.messageId === image.messageId &&
         item.photoUrl === image.photoUrl &&
-        item.deliveryDate === image.deliveryDate
-    ) ||
-    state.images.find(
-      (item) =>
-        item.messageId === image.messageId &&
-        item.deliveryDate === image.deliveryDate
+        item.deliveryDate === image.deliveryDate &&
+        (!item.sourceLineId || !image.sourceLineId || item.sourceLineId === image.sourceLineId)
     );
-  const nextImage = mergeStoredWebshopImage(image, existing, options);
-  const images = limitWebshopImages([
+    const stableImage = existing?.photoUrl === image.photoUrl ? { ...image, id: existing.id } : image;
+    const nextImage = mergeStoredWebshopImage(stableImage, existing, options);
+    images = [
     nextImage,
-    ...state.images.filter(
+    ...images.filter(
       (item) => item.id !== image.id && item.id !== existing?.id
     ),
-  ]);
-
-  const nextState = { images };
-  await writeLogisticsWebshopImagesState(nextState);
-
-  return nextImage;
+    ];
+    saved.push(nextImage);
+  }
+  const limited = limitWebshopImages(images);
+  if (saved.some(image => !limited.some(item => item.id === image.id))) throw new Error("Niet alle foto's passen in de opslag. Import niet voltooid; geen foto's als volledig verwerkt gemarkeerd.");
+  await writeLogisticsWebshopImagesState({ images: limited });
+  return saved;
 }
 
 export async function deleteLogisticsWebshopImage(imageId: string) {

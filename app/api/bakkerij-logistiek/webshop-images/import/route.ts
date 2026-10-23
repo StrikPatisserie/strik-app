@@ -5,7 +5,9 @@ import type {
   LogisticsWebshopImageConfidence,
 } from "@/app/bakkerij/logistiek/logisticsTypes";
 import { canAccessLogisticsRequest } from "@/app/lib/bakeryLogisticsAuth";
-import { upsertLogisticsWebshopImage } from "@/app/lib/bakeryLogisticsStorage";
+import { upsertLogisticsWebshopImages } from "@/app/lib/bakeryLogisticsStorage";
+
+import { extractWebshopPhotos } from "@/app/lib/webshopPhotoExtraction";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,6 +29,7 @@ type WebshopImageInput = {
   bodyHtml: string;
   links: string[];
   imageAttachments: WebshopImageAttachmentInput[];
+  inputTruncated: boolean;
 };
 
 type WebshopImageAttachmentInput = {
@@ -135,76 +138,6 @@ function cleanPhotoReference(value: unknown) {
   return cleanUrl(value) || cleanDataImageUrl(value);
 }
 
-function isDataImageUrl(value: string) {
-  return /^data:image\/(?:jpeg|png|webp);base64,/i.test(value);
-}
-
-function extractLinks(input: Pick<WebshopImageInput, "bodyHtml" | "bodyText" | "links">) {
-  const htmlLinks = Array.from(
-    input.bodyHtml.matchAll(/\b(?:href|src)=["']([^"']+)["']/gi)
-  ).map((match) => cleanUrl(match[1]));
-  const textLinks = Array.from(
-    `${input.bodyText}\n${input.bodyHtml}`.matchAll(/https?:\/\/[^\s"'<>]+/gi)
-  ).map((match) => cleanUrl(match[0]));
-
-  return unique([...input.links.map(cleanUrl), ...htmlLinks, ...textLinks]);
-}
-
-function normalizedFileNameForMatch(value: string) {
-  return cleanPhotoFileName(value)
-    .toLowerCase()
-    .replace(/[^a-z0-9.]+/g, "");
-}
-
-function photoUrlMatchesFileName(value: string, fileName: string) {
-  const expected = normalizedFileNameForMatch(fileName);
-  if (!expected) return false;
-
-  let decoded = value;
-  try {
-    decoded = decodeURIComponent(value);
-  } catch {
-    // Keep the original URL when decoding is not possible.
-  }
-
-  return (
-    normalizedFileNameForMatch(value) === expected ||
-    decoded.toLowerCase().replace(/[^a-z0-9.]+/g, "").includes(expected)
-  );
-}
-
-function scorePhotoUrl(value: string, fileName = "") {
-  if (isDataImageUrl(value)) return 100;
-
-  const lower = value.toLowerCase();
-  let score = 0;
-
-  if (/\.(jpe?g|png|webp)(\?|#|$)/i.test(value)) score += 8;
-  if (fileName && photoUrlMatchesFileName(value, fileName)) score += 30;
-  if (/foto|photo|image|afbeeld|upload|media|download|bestand|file/i.test(value)) {
-    score += 5;
-  }
-  if (/marsepein|taart|webshop|order|bestelling/i.test(value)) score += 2;
-  if (/unsubscribe|uitschrijven|facebook|instagram|linkedin|privacy|voorwaarden/i.test(lower)) {
-    score -= 10;
-  }
-  if (/strik-patisserie\.nl\/?$/i.test(lower)) score -= 6;
-
-  return score;
-}
-
-function pickPhotoUrl(input: WebshopImageInput, fileName = "") {
-  const directPhotoUrl = cleanPhotoReference(input.photoUrl);
-  if (isDataImageUrl(directPhotoUrl)) return directPhotoUrl;
-
-  const links = unique([directPhotoUrl, ...extractLinks(input)])
-    .map((url) => ({ url, score: scorePhotoUrl(url, fileName) }))
-    .sort((first, second) => second.score - first.score);
-  const likelyPhoto = links.find((item) => item.score > 0);
-
-  return likelyPhoto?.url || directPhotoUrl || "";
-}
-
 function cleanPhotoFileName(value: unknown) {
   let clean = decodeHtmlEntities(String(value || ""))
     .split(/[?#]/)[0]
@@ -228,33 +161,6 @@ function cleanPhotoFileName(value: unknown) {
     .slice(0, 240);
 }
 
-function extractPhotoFileName(
-  input: WebshopImageInput,
-  text: string,
-  photoUrl: string
-) {
-  const direct = cleanPhotoFileName(input.fileName);
-  if (direct) return direct;
-
-  const uploadMatch = text.match(
-    /\b(?:foto|photo|afbeelding|bestand|file)\s*(?:geupload|geüpload|uploaded|upload)?\s*:?\s*([^\r\n]{0,220}\.(?:jpe?g|png|webp))/i
-  );
-  if (uploadMatch) {
-    const fileName = cleanPhotoFileName(uploadMatch[1]);
-    if (fileName) return fileName;
-  }
-
-  const anyFileMatch = text.match(
-    /([A-Za-z0-9][^<>"|\\/\r\n]{0,180}\.(?:jpe?g|png|webp))/i
-  );
-  if (anyFileMatch) {
-    const fileName = cleanPhotoFileName(anyFileMatch[1]);
-    if (fileName) return fileName;
-  }
-
-  return cleanPhotoFileName(photoUrl);
-}
-
 function cleanImageAttachment(value: unknown): WebshopImageAttachmentInput | null {
   if (!value || typeof value !== "object") return null;
 
@@ -269,42 +175,6 @@ function cleanImageAttachment(value: unknown): WebshopImageAttachmentInput | nul
     size: Buffer.from(dataUrl.split(",")[1] || "", "base64").length,
     dataUrl,
   };
-}
-
-function scoreImageAttachment(
-  attachment: WebshopImageAttachmentInput,
-  fileName: string
-) {
-  let score = attachment.size > 20_000 ? 5 : 0;
-
-  if (attachment.fileName) score += 4;
-  if (fileName && normalizedFileNameForMatch(attachment.fileName) === normalizedFileNameForMatch(fileName)) {
-    score += 60;
-  } else if (
-    fileName &&
-    normalizedFileNameForMatch(attachment.fileName).includes(normalizedFileNameForMatch(fileName))
-  ) {
-    score += 35;
-  }
-  if (/logo|foto|photo|image|afbeeld|upload|petit|taart/i.test(attachment.fileName)) {
-    score += 8;
-  }
-
-  return score;
-}
-
-function pickImageAttachment(
-  attachments: WebshopImageAttachmentInput[],
-  fileName: string
-) {
-  const scored = attachments
-    .map((attachment) => ({
-      attachment,
-      score: scoreImageAttachment(attachment, fileName),
-    }))
-    .sort((first, second) => second.score - first.score);
-
-  return scored.find((item) => item.score > 0)?.attachment || null;
 }
 
 function parseDateParts(day: string, month: string, year: string) {
@@ -465,6 +335,7 @@ function imageIdFor(input: {
   deliveryDate: string;
   customerName: string;
   photoUrl: string;
+  sourceLineId: string;
 }) {
   const hash = createHash("sha1")
     .update(
@@ -474,6 +345,7 @@ function imageIdFor(input: {
         input.deliveryDate,
         input.customerName,
         input.photoUrl,
+        input.sourceLineId,
       ].join("|")
     )
     .digest("hex")
@@ -498,8 +370,9 @@ async function readJsonInput(request: Request): Promise<WebshopImageInput | Resp
     sourceUrl: cleanUrl(body.sourceUrl),
     fileName: cleanText(body.fileName, 240),
     productSummary: cleanText(body.productSummary, 500),
-    bodyText: cleanText(body.bodyText, 12000),
-    bodyHtml: String(body.bodyHtml || "").slice(0, 60000),
+    bodyText: String(body.bodyText || "").slice(0, 100000),
+    bodyHtml: String(body.bodyHtml || "").slice(0, 200000),
+    inputTruncated: String(body.bodyHtml || "").length > 200000 || String(body.bodyText || "").length > 100000,
     links: Array.isArray(body.links)
       ? body.links.map((link) => cleanUrl(link)).filter(Boolean)
       : [],
@@ -528,81 +401,47 @@ export async function POST(request: Request) {
     }
 
     const text = `${input.subject}\n${input.bodyText}\n${htmlToText(input.bodyHtml)}`;
-    const initialPhotoUrl = pickPhotoUrl(input);
-    const initialAttachment = pickImageAttachment(input.imageAttachments, "");
-    const fileName =
-      extractPhotoFileName(
-        input,
-        text,
-        initialPhotoUrl || initialAttachment?.fileName || ""
-      ) ||
-      initialAttachment?.fileName ||
-      "";
-    const matchedAttachment = pickImageAttachment(input.imageAttachments, fileName);
-    const photoUrl =
-      pickPhotoUrl(input, fileName) ||
-      matchedAttachment?.dataUrl ||
-      initialPhotoUrl ||
-      "";
+    const extracted = extractWebshopPhotos(input);
     const deliveryDate = extractDeliveryDate(input, text);
     const orderNumber = extractOrderNumber(input, text);
     const customerName = extractCustomerName(input, text);
     const productSummary = extractProductSummary(input, text);
     const notes: string[] = [];
 
-    if (!photoUrl) notes.push("Geen duidelijke fotolink gevonden.");
+    if (!extracted.entries.length) notes.push("Geen duidelijke klantfoto gevonden.");
     if (!deliveryDate) notes.push("Geen leverdatum gevonden.");
     if (!customerName) notes.push("Geen klantnaam gevonden.");
     if (!orderNumber) notes.push("Geen bestelnummer gevonden.");
-    if (matchedAttachment && photoUrl === matchedAttachment.dataUrl) {
-      notes.push("Foto uit mailbijlage gelezen.");
-    }
-
-    if (!photoUrl || !deliveryDate) {
+    if (!extracted.entries.length || !deliveryDate) {
       return jsonError(
-        notes.length ? notes.join(" ") : "Webshopfoto kon niet worden gelezen.",
+        [...notes, ...extracted.warnings].join(" ") || "Webshopfoto kon niet worden gelezen.",
         422
       );
     }
 
-    const image: LogisticsWebshopImage = {
-      id: imageIdFor({
-        messageId: input.messageId,
-        orderNumber,
-        deliveryDate,
-        customerName,
-        photoUrl,
-      }),
-      messageId: input.messageId,
-      orderNumber,
-      deliveryDate,
-      customerName,
-      photoUrl,
-      sourceUrl: input.sourceUrl,
-      fileName,
-      productSummary,
-      subject: input.subject,
-      from: input.from,
-      receivedAt: input.receivedAt,
-      importedAt: new Date().toISOString(),
-      confidence: confidenceFor({
-        orderNumber,
-        deliveryDate,
-        customerName,
-        photoUrl,
-      }),
-      notes,
-    };
-
-    if (new URL(request.url).searchParams.get("dryRun") !== "1") {
-      await upsertLogisticsWebshopImage(image, { preserveManualMatch: true });
-    }
-
+    const warnings = [...extracted.warnings];
+    if (input.inputTruncated) warnings.push("De bronmail is te groot en kon niet volledig worden gelezen. Controleer alle foto's in de oorspronkelijke mail.");
+    const complete = extracted.complete && !input.inputTruncated;
+    const importedAt = new Date().toISOString();
+    const images: LogisticsWebshopImage[] = extracted.entries.map(entry => ({
+      id: imageIdFor({ messageId: input.messageId, orderNumber, deliveryDate, customerName, photoUrl: entry.photoUrl, sourceLineId: entry.sourceLineId }),
+      messageId: input.messageId, orderNumber, deliveryDate, customerName,
+      photoUrl: entry.photoUrl, sourceUrl: input.sourceUrl, fileName: entry.fileName,
+      productSummary: entry.productSummary || productSummary,
+      sourceLineId: entry.sourceLineId || undefined, sourceLineNumber: entry.sourceLineNumber,
+      productQuantity: entry.productQuantity,
+      expectedPhotoCount: extracted.expectedCount, importedPhotoCount: extracted.entries.length, importWarnings: warnings,
+      subject: input.subject, from: input.from, receivedAt: input.receivedAt, importedAt,
+      confidence: confidenceFor({ orderNumber, deliveryDate, customerName, photoUrl: entry.photoUrl }),
+      notes: [...notes, ...(entry.photoUrl.startsWith("data:") ? ["Foto uit mailbijlage gelezen."] : []), ...warnings],
+    }));
+    const saved = new URL(request.url).searchParams.get("dryRun") === "1" ? images : await upsertLogisticsWebshopImages(images, { preserveManualMatch: true });
     return NextResponse.json({
-      ok: true,
-      image,
-      generatedAt: new Date().toISOString(),
-    });
+      ok: complete, complete, image: saved[0], images: saved,
+      expectedPhotoCount: extracted.expectedCount, importedPhotoCount: saved.length,
+      warnings, message: complete ? `${saved.length} foto('s) verwerkt.` : warnings.join(" "), generatedAt: importedAt,
+    }, { status: complete ? 200 : 422 });
+
   } catch (error) {
     return NextResponse.json(
       {

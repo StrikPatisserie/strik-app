@@ -257,6 +257,12 @@ export type LogisticsWebshopImage = {
   sourceUrl: string;
   fileName: string;
   productSummary?: string;
+  sourceLineId?: string;
+  sourceLineNumber?: number;
+  productQuantity?: number;
+  expectedPhotoCount?: number;
+  importedPhotoCount?: number;
+  importWarnings?: string[];
   matchedReceiptId?: string;
   matchedReceiptNumber?: string;
   matchedReceiptCustomer?: string;

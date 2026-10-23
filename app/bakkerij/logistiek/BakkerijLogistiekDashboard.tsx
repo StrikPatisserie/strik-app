@@ -6,6 +6,7 @@ import { getRoutePrintBlockedReason, openRoutePrintWindow } from "./routePrintWi
 import { routePrintPaginationScript } from "./routePrintPagination";
 import { normalizeReceiptDelivery } from "./receiptDelivery";
 import BusinessDeliveries from "./BusinessDeliveries";
+import { hasIncompleteWebshopPhotos, webshopPhotoDuplicateKey } from "./webshopPhotoIdentity";
 import { PhotoPrintChoiceModal } from "./PhotoPrintChoiceModal";
 import { usePhotoPrintHistory } from "./usePhotoPrintHistory";
 import { buildPhotoPrintGroups, selectPhotoPrintItems, type PhotoPrintGroup, type PhotoPrintMode, type PhotoPrintSelection } from "./photoPrintTracking";
@@ -1751,22 +1752,7 @@ function imageMatchesReceipt(
 }
 
 function webshopImageDuplicateKey(image: WebshopImageSummary) {
-  const photoKey = image.photoUrl.startsWith("data:")
-    ? image.photoUrl.slice(0, 4000)
-    : image.photoUrl;
-
-  return normalizeMatchText(
-    [
-      image.deliveryDate,
-      image.matchedReceiptId || image.matchedReceiptNumber || image.orderNumber,
-      image.customerName,
-      image.fileName,
-      image.productSummary || "",
-      photoKey,
-    ]
-      .filter(Boolean)
-      .join(" ")
-  );
+  return webshopPhotoDuplicateKey(image);
 }
 
 function uniqueWebshopImages(images: WebshopImageSummary[]) {
@@ -2523,7 +2509,7 @@ function nearbyProductLineForPhoto(
 
 function addPhotoProductPlan(input: {
   plans: PhotoProductPlan[];
-  seen: Set<string>;
+  seen: Set<ReceiptLine>;
   line: ReceiptLine;
   forceRound?: boolean;
   needsCheck?: boolean;
@@ -2561,12 +2547,10 @@ function addPhotoProductPlan(input: {
           copies,
           needsCheck: Boolean(input.needsCheck),
         };
-  const key = normalizeMatchText(
-    [plan.shape, plan.product, plan.sizeCm, plan.copies].join(" ")
-  );
-
-  if (input.seen.has(key)) return;
-  input.seen.add(key);
+  // A second identical product row is still a second cake. Only avoid reading
+  // the same source row twice through its product and photo-option signals.
+  if (input.seen.has(input.line)) return;
+  input.seen.add(input.line);
   input.plans.push(plan);
 }
 
@@ -2575,7 +2559,7 @@ function photoProductPlansForReceipt(
   options: { requirePhotoSignal?: boolean } = {}
 ): PhotoProductPlan[] {
   const plans: PhotoProductPlan[] = [];
-  const seen = new Set<string>();
+  const seen = new Set<ReceiptLine>();
   let currentProduct: ReceiptLine | null = null;
 
   receipt.lines.forEach((line, index) => {
@@ -2920,7 +2904,7 @@ function addMarzipanPrintItemsForReceipt(input: {
       ? strictProductPlans
       : inferredPhotoProductPlansForReceipt(input.receipt);
 
-  if (input.images.length === 1 && productPlans.length > 1) {
+  if (input.images.length === 1 && input.images[0].productQuantity === undefined && productPlans.length > 1) {
     productPlans.forEach((plan, planIndex) => {
       pushMarzipanPrintCopies({
         items: input.items,
@@ -2936,13 +2920,14 @@ function addMarzipanPrintItemsForReceipt(input: {
   }
 
   input.images.forEach((image, imageIndex) => {
-    const plan =
-      productPlans[Math.min(imageIndex, productPlans.length - 1)] ||
-      fallbackPhotoProductPlan();
-    const copyTotal =
-      productPlans.length === 1
-        ? distributedCopyCount(plan.copies, imageIndex, input.images.length)
-        : plan.copies;
+    const sourcePlans: PhotoProductPlan[] = [];
+    if (image.productQuantity !== undefined && image.productSummary) {
+      addPhotoProductPlan({ plans: sourcePlans, seen: new Set<ReceiptLine>(), line: { description: image.productSummary, quantity: String(image.productQuantity) } });
+    }
+    const plan = sourcePlans[0] || productPlans[Math.min(imageIndex, productPlans.length - 1)] || fallbackPhotoProductPlan();
+    const copyTotal = image.productQuantity !== undefined
+      ? sourcePlans[0]?.copies ?? image.productQuantity
+      : productPlans.length === 1 ? distributedCopyCount(plan.copies, imageIndex, input.images.length) : plan.copies;
 
     pushMarzipanPrintCopies({
       items: input.items,
@@ -2951,7 +2936,7 @@ function addMarzipanPrintItemsForReceipt(input: {
       receipt: input.receipt,
       copyTotal,
       planIndex: imageIndex,
-      needsCheck: input.inferredMatch,
+      needsCheck: input.inferredMatch || (image.productQuantity !== undefined && !sourcePlans.length),
     });
   });
 }
@@ -2996,10 +2981,12 @@ function buildMarzipanPrintItems(
   webshopImages: WebshopImageSummary[]
 ) {
   const items: MarzipanPrintItem[] = [];
+  const blockedImages = webshopImages.filter(hasIncompleteWebshopPhotos);
+  const eligibleImages = webshopImages.filter(image => !blockedImages.some(blocked => blocked.deliveryDate === image.deliveryDate && (blocked.id === image.id || (blocked.messageId && blocked.messageId === image.messageId) || (blocked.orderNumber && blocked.orderNumber === image.orderNumber))));
   const claimedImageIds = new Set<string>();
 
   receipts.forEach((receipt) => {
-    let matchedImages = imageMatchesForReceipt(receipt, webshopImages).filter(
+    let matchedImages = imageMatchesForReceipt(receipt, eligibleImages).filter(
       (image) => !claimedImageIds.has(image.id)
     );
     const douglasDefaultLogo = douglasDefaultLogoForReceipt(receipt);
@@ -3019,7 +3006,7 @@ function buildMarzipanPrintItems(
     matchedImages.forEach((image) => claimedImageIds.add(image.id));
   });
 
-  const unclaimedImages = webshopImages.filter(
+  const unclaimedImages = eligibleImages.filter(
     (image) => !claimedImageIds.has(image.id)
   );
 
@@ -9975,6 +9962,7 @@ export default function BakkerijLogistiekDashboard() {
     () => buildMarzipanPrintItems(receiptSummaries, webshopImages),
     [receiptSummaries, webshopImages]
   );
+  const incompletePhotoImports = webshopImages.filter(hasIncompleteWebshopPhotos);
   const { historyByDate: photoPrintHistoryByDate, recordPrint, syncMessage: photoPrintSyncMessage, refresh: refreshPhotoPrintHistory, loading: photoPrintHistoryLoading } = usePhotoPrintHistory(selectedPlan.date, batchReloadCounter);
   const photoPrintHistory = photoPrintHistoryByDate[selectedPlan.date] || null;
   const printedPhotoKeys = useMemo(
@@ -11687,7 +11675,7 @@ export default function BakkerijLogistiekDashboard() {
               />
               <MarzipanPhotoPrintButton
                 count={newMarzipanPrintItems.length + arendNumberPrintCount}
-                allPrinted={!photoPrintHistoryLoading && marzipanPrintItems.length > 0 && newMarzipanPrintItems.length === 0 && arendNumberPrintCount === 0}
+                allPrinted={incompletePhotoImports.length === 0 && !photoPrintHistoryLoading && marzipanPrintItems.length > 0 && newMarzipanPrintItems.length === 0 && arendNumberPrintCount === 0}
                 disabled={
                   marzipanPrintItems.length === 0 &&
                   arendNumberPrintOrders.length === 0
@@ -11754,6 +11742,10 @@ export default function BakkerijLogistiekDashboard() {
         </div>
       </section>
 
+      {incompletePhotoImports.length > 0 && <div role="alert" className="mt-2 rounded-xl border-2 border-[#a13227] bg-[#fff0ed] p-3 text-sm font-bold text-[#8c241d]">
+        Foto-import onvolledig: {Array.from(new Set(incompletePhotoImports.map(image => `${image.customerName || "Klant controleren"}${image.orderNumber ? ` · ${image.orderNumber}` : ""}`))).join(", ")}. De foto&apos;s van deze bestellingen blijven uit de printselectie tot de import compleet is.
+        <button type="button" className="ml-2 min-h-11 underline underline-offset-2" onClick={() => setActiveTab("bonnen")}>Bonnen bekijken</button>
+      </div>}
       <section className="mt-2 grid grid-cols-3 overflow-hidden rounded-xl border border-[#e8e4de] bg-white/95 shadow-sm sm:grid-cols-[minmax(7.5rem,0.9fr)_minmax(6.5rem,0.72fr)_minmax(7rem,0.75fr)_minmax(21rem,2.35fr)]">
         {stats.map((stat, index) => (
           <div
@@ -13731,6 +13723,9 @@ function WebshopImageBlock({
   receipt: ReceiptSummary;
 }>) {
   if (images.length === 0) return null;
+  const expectedCount = Math.max(images.length, ...images.map(image => image.expectedPhotoCount || 0));
+  const importWarnings = Array.from(new Set(images.flatMap(image => [...(image.importWarnings || []), ...(image.expectedPhotoCount && (image.importedPhotoCount || 0) < image.expectedPhotoCount ? [`Slechts ${image.importedPhotoCount || 0} van ${image.expectedPhotoCount} foto's beschikbaar.`] : [])])));
+
 
   return (
     <div className="border-b border-dashed border-[#d7d7d7] bg-white p-3">
@@ -13739,11 +13734,16 @@ function WebshopImageBlock({
           Marsepeinfoto
         </p>
         <span className="text-[0.68rem] font-black tracking-normal text-[#555]">
-          {images.length}
+          {expectedCount > images.length ? `${images.length} van ${expectedCount}` : images.length}
         </span>
       </div>
+      {importWarnings.length > 0 && <div role="alert" className="mt-2 rounded-lg border-2 border-[#a13227] bg-[#fff0ed] p-3 text-sm font-bold text-[#8c241d]">
+        <p>Foto-import onvolledig · printen voor deze bestelling geblokkeerd</p>
+        {importWarnings.map(warning => <p key={warning} className="mt-1">{warning}</p>)}
+        <p className="mt-1">Controleer de oorspronkelijke webshopmail en lees deze opnieuw in.</p>
+      </div>}
       <div className="mt-2 grid gap-1.5">
-        {images.map((image) => {
+        {images.map((image, imageIndex) => {
           const imagePrintGroups = printGroups?.filter(group => group.imageId === image.id && group.receiptNumber === (receipt.receiptNumber || receipt.id));
           const pendingCount = imagePrintGroups?.reduce((sum, group) => sum + group.newItemCount, 0) || 0;
           const totalCount = imagePrintGroups?.reduce((sum, group) => sum + group.itemCount, 0) || 0;
@@ -13777,7 +13777,7 @@ function WebshopImageBlock({
                 />
                 <span className="min-w-0">
                   <span className="block truncate text-xs font-black tracking-normal text-[#111]">
-                    {displayCustomerName}
+                    Foto {imageIndex + 1} van {expectedCount} · {displayCustomerName}
                   </span>
                   <span className="mt-0.5 block truncate text-[0.68rem] font-normal tracking-normal text-[#555]">
                     {image.orderNumber || "zonder bestelnummer"} · match{" "}
@@ -13790,7 +13790,7 @@ function WebshopImageBlock({
                   </span>}
                   {image.productSummary && (
                     <span className="mt-0.5 block truncate text-[0.65rem] font-normal tracking-normal text-[#555]">
-                      {image.productSummary}
+                      {image.productQuantity !== undefined ? `${image.productQuantity}× ` : ""}{image.productSummary}
                     </span>
                   )}
                   {image.fileName && (
