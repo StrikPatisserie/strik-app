@@ -18,7 +18,7 @@ function find(node, predicate) {
 function order(overrides = {}) {
   return { id: 'example', status: 'akkoord', season: 'kerst', customerName: 'Voorbeeld BV', customerEmail: 'sanne@example.invalid', orderText: '25 kerststollen', totalExVat: '347,50', deliveryDate: '2026-12-18', deliveryDateEnd: '', confirmationEmailedAt: '2026-10-21T10:00:00+02:00', confirmationEmailError: '', confirmationMail: { version: 'v1', backupVersion: 'b1' }, ...overrides };
 }
-function dialog(initial = order(), sendResponse) {
+function dialog(initial = order(), sendResponse, mode = 'confirmation') {
   const states = [], refs = [], effects = [];
   let cursor = 0, refCursor = 0, effectCursor = 0, closed = 0;
   const pendingEffects = [], calls = [], updates = [];
@@ -33,11 +33,13 @@ function dialog(initial = order(), sendResponse) {
       previewB2BCustomerConfirmation: async id => { calls.push({ kind: 'preview', id }); return { order: latest, html: '<html><body>Geteste bevestiging</body></html>' }; },
       sendB2BCustomerConfirmation: async (id, version) => { calls.push({ kind: 'send', id, version }); return sendResponse ? await sendResponse(latest) : { ...latest, confirmationMail: { ...latest.confirmationMail, customer: { version, state: 'sent', email: latest.customerEmail, sentAt: 'now', error: '' } } }; },
       retryB2BConfirmation: async id => { calls.push({ kind: 'backup', id }); return latest; },
+      previewB2BCustomerQuotation: async id => { calls.push({kind:'quote-preview',id});return {order:latest,html:'<html><body>Geteste offerte</body></html>',subject:'Offerte Strik'}; },
+      sendB2BCustomerQuotation: async (id,version) => { calls.push({kind:'quote-send',id,version});return sendResponse ? await sendResponse(latest) : {...latest,quotationMail:{...latest.quotationMail,customer:{version,state:'sent',email:latest.customerEmail,sentAt:'2026-10-27T13:00:00+01:00',error:''}}}; },
     },
   }, { document: { activeElement: null }, HTMLElement: class {} });
   return {
     ...loaded, calls, updates,
-    render() { cursor = refCursor = effectCursor = 0; return loaded.default({ order: initial, onClose() { closed++; }, onEdit() {}, onUpdated(next) { updates.push(next); } }); },
+    render() { cursor = refCursor = effectCursor = 0; return loaded.default({ order: initial, mode, onClose() { closed++; }, onEdit() {}, onUpdated(next) { updates.push(next); } }); },
     async flush() { while (pendingEffects.length) pendingEffects.shift()(); await new Promise(setImmediate); },
     setLatest(next) { latest = next; }, get closed() { return closed; },
   };
@@ -71,8 +73,10 @@ test('the explicit send uses the reviewed version and guards rapid double clicks
 test('failed sends stay visible and retry keeps the exact version without sending a separate backup request', async () => {
   const ui = dialog(order(), async () => { throw new Error('Verbinding verbroken'); }); ui.render(); await ui.flush();
   for (let attempt = 0; attempt < 2; attempt++) {
+    if(attempt) { find(ui.render(),node=>node.type==='button' && node.props.children==='Gegevens en mailvoorbeeld opnieuw ophalen').props.onClick();ui.render();await ui.flush(); }
     find(ui.render(), node => node.type === 'button' && node.props.children === 'Ja, mail de klant →').props.onClick(); await ui.flush();
     assert.ok(find(ui.render(), node => node.props?.role === 'alert'));
+    assert.equal(find(ui.render(),node=>node.type==='button' && node.props.children==='Ja, mail de klant →').props.disabled,true);
   }
   assert.deepEqual(ui.calls.filter(call => call.kind === 'send').map(call => call.version), ['v1', 'v1']);
   assert.equal(ui.calls.filter(call => call.kind === 'backup').length, 0);
@@ -95,6 +99,41 @@ test('the API reads the preview and sends only an order ID and reviewed version,
   assert.equal(preview.order.confirmationMail.version, 'v1');
   await api.sendB2BCustomerConfirmation('example', 'v1');
   assert.deepEqual(calls, [{ id: 'example', previewCustomerConfirmation: true }, { id: 'example', sendCustomerConfirmation: true, confirmationVersion: 'v1' }]);
+});
+
+function quoteOrder(overrides={}) {return order({status:'offerte',quotationMail:{version:'q1'},...overrides});}
+test('inquiries and quotations have their own preview, open status and explicit send without a final backup',async()=>{
+ for(const stage of ['aanvraag','offerte']) {
+  const ui=dialog(quoteOrder({status:stage}),undefined,'quotation');ui.render();await ui.flush();
+  assert.equal(ui.calls.length,1);assert.equal(ui.calls[0].kind,'quote-preview');
+  assert.equal(find(ui.render(),n=>n.type==='iframe').props.sandbox,'');
+  assert.equal(find(ui.render(),n=>n.type==='button'&&n.props.children==='Back-up opnieuw proberen'),undefined);
+  const send=()=>find(ui.render(),n=>n.type==='button'&&n.props.children===`Mail ${stage} →`);
+  assert.equal(send().props.disabled,false);const button=send();button.props.onClick();button.props.onClick();await ui.flush();
+  assert.equal(ui.calls.filter(c=>c.kind==='quote-send').length,1);assert.equal(ui.updates[0].status,stage);assert.equal(pure.customerQuotationSent(ui.updates[0]),true);
+  assert.equal(ui.calls.filter(c=>c.kind==='send'||c.kind==='backup').length,0);
+ }
+});
+test('declining the offer mail sends nothing, and quote history never suppresses the definitive confirmation',async()=>{
+ const ui=dialog(quoteOrder(),undefined,'quotation');ui.render();await ui.flush();
+ find(ui.render(),n=>n.type==='button'&&n.props['aria-label']==='Bevestigingsvenster sluiten').props.onClick();assert.equal(ui.closed,1);assert.equal(ui.calls.length,1);
+ const sent=quoteOrder({quotationMail:{version:'q1',customer:{version:'q1',state:'sent',sentAt:'2026-10-27T12:00:00+01:00'}}});
+ assert.equal(pure.customerQuotationSent(sent),true);assert.equal(pure.customerConfirmationSent(sent),false);
+ assert.equal(pure.customerQuotationSent({...sent,quotationMail:{...sent.quotationMail,version:'q2'}}),false);
+ for(const blocked of [{status:'akkoord'},{status:'afgewezen'},{cancelled:true},{id:'historie-one'}]) assert.equal(pure.canMailQuotation(quoteOrder(blocked)),false);
+});
+test('changed stages, missing email and uncertain quotation delivery disable sending',async()=>{
+ for(const latest of [quoteOrder({status:'akkoord'}),quoteOrder({customerEmail:''}),quoteOrder({quotationMail:{version:'q1',customer:{version:'q1',state:'sending',sentAt:'',error:'Mailbox controleren'}}})]){
+  const ui=dialog(quoteOrder(),undefined,'quotation');ui.setLatest(latest);ui.render();await ui.flush();
+  const button=find(ui.render(),n=>n.type==='button'&&/^Mail /.test(n.props.children));assert.equal(button.props.disabled,true);button.props.onClick();await ui.flush();assert.equal(ui.calls.filter(c=>c.kind==='quote-send').length,0);
+ }
+});
+test('quotation API uses only saved ID and reviewed quote version, retaining separate receipt fields',async()=>{
+ const calls=[];
+ const api=load('app/sinterklaas/sinterklaasApi.ts',{}, {fetch:async(url,options)=>{const body=JSON.parse(options.body);calls.push(body);return {ok:true,json:async()=>body.previewCustomerQuotation?{order:quoteOrder(),html:'<html>offerte</html>',subject:'Offerte Strik'}:quoteOrder({quotationMail:{version:'q1',customer:{version:'q1',state:'sent',email:'sanne@example.invalid',sentAt:'2026-10-27',error:''}}})};}});
+ const preview=await api.previewB2BCustomerQuotation('example');assert.equal(preview.order.quotationMail.version,'q1');assert.equal(preview.subject,'Offerte Strik');
+ const sent=await api.sendB2BCustomerQuotation('example','q1');assert.equal(sent.quotationMail.customer.state,'sent');
+ assert.deepEqual(calls,[{id:'example',previewCustomerQuotation:true},{id:'example',sendCustomerQuotation:true,quotationVersion:'q1'}]);
 });
 
 function approvalDialog(latest, failure) {

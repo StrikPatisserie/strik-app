@@ -54,6 +54,10 @@ export type ChocolateLetterOrder = {
 };
 
 export type SinterklaasB2BOrder = {
+  quotationMail?: {
+    version: string;
+    customer?: B2BConfirmationReceipt;
+  };
   confirmationMail?: {
     version: string;
     backupVersion: string;

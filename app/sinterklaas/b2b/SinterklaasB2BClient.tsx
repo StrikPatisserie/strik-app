@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import styles from "./B2BOrders.module.css";
 import B2BProductText from "./B2BProductText";
-import B2BConfirmationDialog, { customerConfirmationSent, shouldOfferCustomerConfirmation } from "./B2BConfirmationDialog";
+import B2BConfirmationDialog, { canMailQuotation, customerConfirmationSent, customerQuotationSent, shouldOfferCustomerConfirmation } from "./B2BConfirmationDialog";
 import B2BApprovalDialog from "./B2BApprovalDialog";
 import { editableFolderOrderText } from "../../lib/businessFolderOrderText";
 import { parseBusinessDate } from "../../lib/businessDeliveryMoment";
@@ -1613,7 +1613,7 @@ function B2BOrderEditor({ order, season, onClose, onSaved }: Readonly<{
   </>;
 }
 
-function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryConfirmation, onCustomerConfirmation, onApprove }: Readonly<{
+function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryConfirmation, onCustomerConfirmation, onQuotation, onApprove }: Readonly<{
   order: SinterklaasB2BOrder;
   updatingId: string;
   onToggle: (order: SinterklaasB2BOrder, key: "entered" | "productionScheduled" | "productionDone" | "letterProductionDone" | "packed" | "delivered" | "logoChecked" | "textChecked" | "packagingChecked") => void;
@@ -1621,6 +1621,7 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
   onDelete: (order: SinterklaasB2BOrder) => void;
   onRetryConfirmation: (order: SinterklaasB2BOrder) => void;
   onCustomerConfirmation: (order: SinterklaasB2BOrder) => void;
+  onQuotation: (order: SinterklaasB2BOrder) => void;
   onApprove: (order: SinterklaasB2BOrder) => void;
 }>) {
   const [expanded, setExpanded] = useState(false);
@@ -1659,6 +1660,7 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
         {!archived && !order.cancelled && (order.status === "aanvraag" || order.status === "offerte") && <button type="button" className={styles.approveLink} aria-label={`Aanvraag goedkeuren van ${order.customerName}`} onClick={() => onApprove(order)}>Goedkeuren →</button>}
         {order.status === "akkoord" && !order.cancelled && <p className={styles.next} style={order.entered ? { color: "#52725c" } : undefined}>{order.entered ? "✓ Ingevoerd" : "! Nog invoeren"}</p>}
         {order.confirmationMail?.customer?.sentAt && <p className={`${styles.next} ${customerConfirmationSent(order) ? styles.sent : ""}`}>{customerConfirmationSent(order) ? "✓ Klant gemaild" : "Mail bijwerken"}</p>}
+        {canMailQuotation(order) && <button type="button" className={styles.mailLink} onClick={() => onQuotation(order)}>{customerQuotationSent(order) ? "✓ Klantmail bekijken" : `${order.status === "offerte" ? "Offerte" : "Aanvraag"} mailen…`}</button>}
       </div>
       <div className={styles.amount}>{order.totalExVat.trim() || priceBreakdowns.length > 0 ? <>{money(orderTotal)}<small>excl. btw</small></> : "—"}</div>
       <div className={styles.rowActions}>
@@ -1691,6 +1693,7 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
           {confirmationNeedsAttention && <p className={styles.warning}>{order.confirmationEmailError || "Interne back-up nog niet bevestigd."}</p>}
           {order.confirmationEmailedAt && <p className={styles.contact} style={{ marginTop: 8 }}>Interne back-up: {formatDateTime(order.confirmationEmailedAt)}</p>}
           {order.confirmationMail?.customer?.sentAt && <p className={styles.contact}>Klantbevestiging: {formatDateTime(order.confirmationMail.customer.sentAt)}</p>}
+          {order.quotationMail?.customer?.sentAt && <p className={styles.contact}>Aanvraag / offerte gemaild: {formatDateTime(order.quotationMail.customer.sentAt)}{customerQuotationSent(order) ? "" : " · inhoud inmiddels gewijzigd"}</p>}
           {order.reminderEmailError && <p className={styles.warning}>{order.reminderEmailError}</p>}
           {order.reminderEmailedAt && <p className={styles.contact}>Reminder: {formatDateTime(order.reminderEmailedAt)}</p>}
           {order.invoiceInfo && <details><summary>Factuurgegevens</summary><div><p>{order.invoiceInfo}</p></div></details>}
@@ -1706,6 +1709,7 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
       </div>
       {!archived && <div className={styles.detailTools}>
         <button type="button" className={styles.button} onClick={() => onEdit(order)}>Bestelling wijzigen</button>
+        {canMailQuotation(order) && <button type="button" className={styles.button} onClick={() => onQuotation(order)}>{customerQuotationSent(order) ? "Klantmail bekijken" : `${order.status === "offerte" ? "Offerte" : "Aanvraag"} mailen…`}</button>}
         {order.status === "akkoord" && !order.cancelled && <button type="button" className={styles.button} onClick={() => onCustomerConfirmation(order)}>{customerConfirmationSent(order) ? "Klantbevestiging bekijken" : "Klantbevestiging mailen…"}</button>}
         {confirmationNeedsAttention && <button type="button" className={styles.button} disabled={updatingId === `${order.id}-confirmation`} onClick={() => onRetryConfirmation(order)}>Back-up opnieuw proberen</button>}
         <button type="button" className={`${styles.quiet} ${styles.danger}`} disabled={updatingId === `${order.id}-delete`} onClick={() => onDelete(order)}>Verwijderen…</button>
@@ -1730,6 +1734,7 @@ export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ sea
     null
   );
   const [confirmationTarget, setConfirmationTarget] = useState<SinterklaasB2BOrder | null>(null);
+  const [quotationTarget, setQuotationTarget] = useState<SinterklaasB2BOrder | null>(null);
   const [approvalTarget, setApprovalTarget] = useState<SinterklaasB2BOrder | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SinterklaasB2BOrder | null>(null);
   const [deleteReason, setDeleteReason] = useState("");
@@ -2018,7 +2023,7 @@ export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ sea
             <div className={styles.month}><h2>{monthLabel(key)}</h2><span>{group.length} {group.length === 1 ? "bestelling" : "bestellingen"}</span></div>
             {group.map(order => <B2BOrderRow key={order.id} order={order} updatingId={updatingId} onToggle={toggleStatus} onEdit={openEditOrderDialog}
               onDelete={nextOrder => { setError(""); setDeleteTarget(nextOrder); setDeleteReason(""); setDeleteReasonNote(""); }}
-              onRetryConfirmation={nextOrder => void resendConfirmation(nextOrder)} onCustomerConfirmation={setConfirmationTarget} onApprove={setApprovalTarget} />)}
+              onRetryConfirmation={nextOrder => void resendConfirmation(nextOrder)} onCustomerConfirmation={setConfirmationTarget} onQuotation={setQuotationTarget} onApprove={setApprovalTarget} />)}
           </section>)}
           {!loading && visibleOrders.length < 1 && <p className={styles.empty}>Geen B2B-bestellingen gevonden.</p>}
         </section>
@@ -2026,6 +2031,7 @@ export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ sea
       </>}
       </div>
       {confirmationTarget && <B2BConfirmationDialog key={confirmationTarget.id} order={confirmationTarget} onClose={() => setConfirmationTarget(null)} onEdit={nextOrder => { setConfirmationTarget(null); openEditOrderDialog(nextOrder); }} onUpdated={nextOrder => { setOrders(current => updateOrderList(current, nextOrder)); setSaveNotice(customerConfirmationSent(nextOrder) ? `Klantbevestiging voor ${nextOrder.customerName} verstuurd.` : `Mailstatus voor ${nextOrder.customerName} bijgewerkt.`); }}/>}
+      {quotationTarget && <B2BConfirmationDialog key={`quotation-${quotationTarget.id}`} mode="quotation" order={quotationTarget} onClose={() => setQuotationTarget(null)} onEdit={nextOrder => { setQuotationTarget(null); openEditOrderDialog(nextOrder); }} onUpdated={nextOrder => { setOrders(current => updateOrderList(current, nextOrder)); setSaveNotice(customerQuotationSent(nextOrder) ? `${nextOrder.status === "offerte" ? "Offerte" : "Aanvraag"} voor ${nextOrder.customerName} verstuurd.` : `Mailstatus voor ${nextOrder.customerName} bijgewerkt.`); }}/>}
       {approvalTarget && <B2BApprovalDialog key={approvalTarget.id} order={approvalTarget} productText={nextOrder => compactOrderText(nextOrder.orderText)} totalLabel={nextOrder => money(effectiveOrderTotal(nextOrder))} onClose={() => setApprovalTarget(null)} onEdit={nextOrder => { setApprovalTarget(null); openEditOrderDialog(nextOrder); }} onApprove={approveOrder} />}
       {deleteTarget && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[#1a1815]/50 p-4" role="dialog" aria-modal="true" aria-label="Bestelling verwijderen">
         <div className="w-full max-w-lg space-y-3 border border-[#e4ded5] bg-white p-4 shadow-2xl">

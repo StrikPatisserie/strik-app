@@ -225,6 +225,13 @@ export function normalizeB2BOrder(value: unknown): SinterklaasB2BOrder | null {
     reminderEmailError: textFrom(value.reminderEmailError),
     confirmationEmailedAt: textFrom(value.confirmationEmailedAt),
     confirmationEmailError: textFrom(value.confirmationEmailError),
+    ...(isRecord(value.quotationMail) ? { quotationMail: {
+      version: textFrom(value.quotationMail.version),
+      ...(isRecord(value.quotationMail.customer) ? { customer: {
+        version: textFrom(value.quotationMail.customer.version), email: textFrom(value.quotationMail.customer.email),
+        state: textFrom(value.quotationMail.customer.state), sentAt: textFrom(value.quotationMail.customer.sentAt), error: textFrom(value.quotationMail.customer.error),
+      } } : {}),
+    } } : {}),
     ...(isRecord(value.confirmationMail) ? { confirmationMail: {
       version: textFrom(value.confirmationMail.version),
       backupVersion: textFrom(value.confirmationMail.backupVersion),
@@ -480,6 +487,27 @@ export async function sendB2BCustomerConfirmation(id: string, confirmationVersio
   }, "De bevestiging kon nog niet worden verstuurd. Probeer opnieuw; dezelfde versie wordt niet dubbel verstuurd.");
   const order = normalizeB2BOrder(data);
   if (!order) throw new Error("WordPress gaf geen geldige bestelling terug.");
+  return order;
+}
+
+export async function previewB2BCustomerQuotation(id: string) {
+  const data = await requestJson<unknown>(ENDPOINTS.b2b, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, previewCustomerQuotation: true }),
+  }, "Het offertevoorbeeld kon niet worden geladen.");
+  if (!isRecord(data) || typeof data.html !== "string") throw new Error("De offertemail is nog niet beschikbaar. De WordPress-mailfunctie moet eerst worden bijgewerkt.");
+  const order = normalizeB2BOrder(data.order);
+  if (!order?.quotationMail?.version) throw new Error("Het offertevoorbeeld bevat geen geldige mailversie. Vernieuw de gegevens.");
+  return { order, html: data.html, subject: textFrom(data.subject) };
+}
+
+export async function sendB2BCustomerQuotation(id: string, quotationVersion: string) {
+  const data = await requestJson<unknown>(ENDPOINTS.b2b, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, sendCustomerQuotation: true, quotationVersion }),
+  }, "Versturen is nog niet bevestigd. Haal de mailstatus opnieuw op voordat je het nogmaals probeert.");
+  const order = normalizeB2BOrder(data);
+  if (!order?.quotationMail?.version) throw new Error("WordPress gaf geen geldige offerte-mailstatus terug. Haal de gegevens opnieuw op.");
   return order;
 }
 

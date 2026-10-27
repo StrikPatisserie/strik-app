@@ -88,6 +88,8 @@
 .rowActions { display: flex; justify-content: flex-end; align-items: center; gap: 4px; }
 .approveLink { display: block; margin-top: 8px; padding: 3px 0; border: 0; background: transparent; color: var(--b2b-accent); font-size: 11px; font-weight: 600; text-align: left; }
 .approveLink:hover { text-decoration: underline; text-underline-offset: 3px; }
+.mailLink { display: block; margin-top: 8px; padding: 3px 0; background: transparent; color: #31543d; font-size: 11px; font-weight: 600; text-align: left; }
+.mailLink:hover { text-decoration: underline; text-underline-offset: 3px; }
 .page.approvalDialog { position: fixed; inset: 0; width: min(680px, calc(100vw - 28px)); max-width: none; max-height: calc(100dvh - 28px); margin: auto; padding: 0; border: 1px solid #dce3d9; border-radius: 16px; background: #fffefa; box-shadow: 0 24px 80px #15251d55; }
 .approvalDialog::backdrop { background: #15251da6; backdrop-filter: blur(4px); }
 .approvalHeader { position: relative; padding: 24px 28px; border-bottom: 1px solid var(--b2b-border); background: var(--b2b-pale); }
