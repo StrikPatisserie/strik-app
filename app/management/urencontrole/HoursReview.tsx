@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
 import { buildHoursReview, effectiveRules, validateConfig } from "./reviewRules";
 import { DEFAULT_REVIEW_VIEW, focusFlags, selectReviewRows, type ReviewView } from "./reviewPresentation";
+import { reviewAccessSummary } from "./reviewAccess";
 import { createHoursReviewDemo } from "./demo";
 import CorrectionEditor from "./CorrectionEditor";
 import { formatMinutes, formatStamp, formatTime, localDate } from "./reviewTime";
@@ -176,7 +177,7 @@ export default function HoursReview({ demo = false }: { demo?: boolean }) {
   const { rows: filtered, counts } = selectReviewRows(rows, { department, employee, flagType, showNonWork, view });
   const pages = Math.max(1, Math.ceil(filtered.length / 25)), currentPage = Math.min(page, pages);
   const shown = filtered.slice((currentPage - 1) * 25, currentPage * 25);
-  const unavailable = dataset?.checks.filter(check => check.state === "unavailable" || check.state === "partial").length || 0;
+  const { incompleteSources, dayBlocked, notice } = reviewAccessSummary(dataset?.checks || []);
   return <StrikShell extraWide backHref="/management"><div className={styles.root}>
     <StrikPageHeader title="Urencontrole" icon={strikIcons.managementSchedule} />
     {demo ? <p className={styles.demo}>Preview met fictieve diensten · geen Tamigo-verzoeken</p> : null}
@@ -192,13 +193,13 @@ export default function HoursReview({ demo = false }: { demo?: boolean }) {
       <label className={styles.check}><input type="checkbox" checked={showNonWork} onChange={event => { setShowNonWork(event.target.checked); setPage(1); }} />Verlof / andere activiteiten ({rows.filter(row => row.status === "niet_werk").length})</label>
     <RulesEditor config={config} departments={departments} onChange={next => { setConfig(next); setPage(1); }} />
     {dataset ? <details className={styles.utility}>
-      <summary>API-toegang{unavailable ? ` · ${unavailable} onvolledig` : ""}</summary>
+      <summary>Tamigo-koppeling{incompleteSources.length ? ` · ${incompleteSources.length} bronnen onvolledig` : dayBlocked ? " · correcties geblokkeerd" : ""}</summary>
       <p className={styles.muted}>Opgehaald {formatStamp(dataset.generatedAt)} · {TIME_ZONE} · regelversie {dataset.sourceVersion}. Lege bronwaarden blijven onbekend. Handmatige invoer en managersgoedkeuring worden niet door de API bevestigd.</p>
       <div className={styles.sourceChecks}>{dataset.checks.map(check => <div key={check.key}><strong>{check.label} · {check.state === "available" ? "beschikbaar" : check.state === "partial" ? "gedeeltelijk" : check.state === "unknown" ? "niet bevestigd" : "niet beschikbaar"}</strong><p>{check.message}</p>{check.fields?.length ? <small>Aanwezige velden: {check.fields.join(", ")}</small> : null}</div>)}</div>
     </details> : null}
       </div>
     </section>
-    {unavailable ? <p role="note" className={styles.warning}><strong>Bronnen onvolledig:</strong> {dataset?.checks.filter(check => check.state === "unavailable" || check.state === "partial").map(check => check.label).join(" · ")}. Zie API-toegang; ontbrekende gegevens zijn geen bewijs van ontbrekende uren.</p> : null}
+    {notice ? <p role="note" className={styles.warning}><strong>{notice.title}:</strong> {notice.message}</p> : null}
     {error ? <p role="alert" className={styles.error}>{error}</p> : null}
     {loading ? <p role="status" className={styles.panel}>Rooster en werkelijke registraties alleen-lezen ophalen…</p> : dataset ? <>
       <div className={styles.resultHeader}>
@@ -208,7 +209,7 @@ export default function HoursReview({ demo = false }: { demo?: boolean }) {
       {shown.length ? <div className={styles.rows}>
         <div className={`${styles.listHeader} ${styles.rowGrid}`} aria-hidden="true"><span>Medewerker / dienst</span><span>Gepland</span><span>Geregistreerd</span><span>Voorstel</span><span>Verschil</span><span>Controlepunt</span><span /></div>
         {shown.map(row => <ReviewCard key={`${dataset.generatedAt}:${row.id}`} row={row} demo={demo} expanded={expandedId === row.id} onToggle={() => setExpandedId(expandedId === row.id ? null : row.id)} config={config} reviewMonth={month} onChanged={() => { setExpandedId(null); setRefresh(value => value + 1); }} />)}
-      </div> : <p className={styles.panel}>{unavailable ? "Geen passende registraties getoond. Er ontbreken brongegevens; dit betekent niet dat er geen diensten of afwijkingen zijn." : "Geen diensten voor deze selectie. Pas de filters aan."}</p>}
+      </div> : <p className={styles.panel}>{incompleteSources.length ? "Geen passende registraties getoond. Er ontbreken brongegevens; dit betekent niet dat er geen diensten of afwijkingen zijn." : "Geen diensten voor deze selectie. Pas de filters aan."}</p>}
       <div className={styles.footer}><p className={styles.muted}>Geen melding is geen goedkeuring. Voorstellen vragen altijd beoordeling; een melding is geen bewijs van een fout.</p><span className={styles.muted}>{filtered.length} {filtered.length === 1 ? "dienst" : "diensten"}{flagType ? ` · ${FLAG_LABELS[flagType as FlagType]}` : ""} · belangrijkste controlepunten eerst</span></div>
       {pages > 1 ? <nav className={styles.pagination} aria-label="Pagina's van het urenoverzicht"><button type="button" disabled={currentPage <= 1} onClick={() => { setPage(currentPage - 1); setExpandedId(null); }}>Vorige</button><span>Pagina {currentPage} van {pages} · 25 diensten per pagina</span><button type="button" disabled={currentPage >= pages} onClick={() => { setPage(currentPage + 1); setExpandedId(null); }}>Volgende</button></nav> : null}
     </> : null}

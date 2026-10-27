@@ -8,6 +8,13 @@ import B2BConfirmationDialog, { customerConfirmationSent, shouldOfferCustomerCon
 import B2BApprovalDialog from "./B2BApprovalDialog";
 import { editableFolderOrderText } from "../../lib/businessFolderOrderText";
 import { parseBusinessDate } from "../../lib/businessDeliveryMoment";
+import {
+  businessAddressPostcode,
+  businessDeliveryLine,
+  businessDeliveryQuote,
+  splitBusinessDeliveryPrice,
+  type BusinessDeliveryPricing,
+} from "../../lib/businessDeliveryPricing";
 import { B2B_ORDER_BACK_EVENT, businessSeasonColors, businessSeasons, orderBelongsToSeason, seasonLabel, type BusinessSeason } from "../../lib/businessSeasons";
 import { christmasProducts } from "../../kerst-voor-bedrijven/christmasProducts";
 import { BUSINESS_FOLDER_PRICE_TIERS } from "../../lib/business-folder-pricing";
@@ -91,6 +98,7 @@ type B2BFormState = {
   totalExVat: string;
   deliveryMethod: string;
   deliveryAddress: string;
+  deliveryPricing: BusinessDeliveryPricing;
   invoiceInfo: string;
   status: SinterklaasB2BOrder["status"];
   textInstructions: string;
@@ -313,10 +321,11 @@ function letterPriceLine(line: B2BLetterLine, products: B2BProductLine[]) {
   return products.find(product => product.productId === productId && product.choice === choice && product.withLogo === Boolean(line.withLogo));
 }
 
-function serializeOrderText(lines: B2BProductLine[], otherText: string) {
+function serializeOrderText(lines: B2BProductLine[], otherText: string, deliveryLine = "") {
   const orderLines = lines
     .filter((line) => line.quantity > 0 && lineDescription(line))
     .map((line) => `${line.quantity} × ${lineDescription(line)} · ${money(moneyNumber(line.unitPriceEx))} p.s. ex btw · ${money(roundCents(line.quantity * moneyNumber(line.unitPriceEx)))}`);
+  if (deliveryLine) orderLines.push(deliveryLine);
 
   return [
     ...(orderLines.length ? [PRODUCT_SECTION_HEADING, ...orderLines] : []),
@@ -345,11 +354,13 @@ function matchCatalogDescription(description: string) {
   return null;
 }
 
-function parseOrderText(value: string, preservePrices = false): { productLines: B2BProductLine[]; otherText: string; originalProductTotal: number } {
-  if (!value.startsWith(`${PRODUCT_SECTION_HEADING}\n`)) {
+function parseOrderText(value: string, preservePrices = false): { productLines: B2BProductLine[]; otherText: string; originalProductTotal: number; delivery: ReturnType<typeof splitBusinessDeliveryPrice>["charge"] } {
+  const { text, charge } = splitBusinessDeliveryPrice(value);
+  value = text;
+  if (value !== PRODUCT_SECTION_HEADING && !value.startsWith(`${PRODUCT_SECTION_HEADING}\n`)) {
     const editable = editableFolderOrderText(value);
     if (editable) return parseOrderText(editable, true);
-    return { productLines: [] as B2BProductLine[], otherText: value, originalProductTotal: 0 };
+    return { productLines: [] as B2BProductLine[], otherText: value, originalProductTotal: 0, delivery: null };
   }
 
   const [productPart, ...otherParts] = value.split(`\n${OTHER_ORDER_HEADING}\n`);
@@ -393,6 +404,7 @@ function parseOrderText(value: string, preservePrices = false): { productLines: 
 
   return {
     productLines,
+    delivery: charge,
     originalProductTotal: productLinesTotal(savedProductLines),
     otherText: [...unparsedRows, otherParts.join(`\n${OTHER_ORDER_HEADING}\n`)].filter(Boolean).join("\n"),
   };
@@ -403,6 +415,7 @@ function compactOrderText(value: string) {
   if (parsed.productLines.length === 0) return value;
   return [
     ...parsed.productLines.map((line) => `${line.quantity}× ${lineDescription(line)} · ${money(moneyNumber(line.unitPriceEx))} p.s.`),
+    ...(parsed.delivery ? [`Bezorgkosten · ${money(parsed.delivery.amountIncl)} incl. btw${parsed.delivery.pricing.postcode ? ` · postcode ${parsed.delivery.pricing.postcode}` : ""}`] : []),
     parsed.otherText,
   ].filter(Boolean).join("\n");
 }
@@ -412,21 +425,21 @@ function usesManualTotal(order: SinterklaasB2BOrder | null | undefined) {
   const parsed = parseOrderText(order.orderText);
   if (parsed.productLines.length === 0) return true;
   const savedTotal = moneyNumber(order.totalExVat);
-  const calculatedTotal = productLinesTotal(parsed.productLines);
+  const calculatedTotal = roundCents(productLinesTotal(parsed.productLines) + (parsed.delivery?.amountEx || 0));
   return Math.abs(savedTotal - calculatedTotal) > 0.011 &&
-    Math.abs(savedTotal - parsed.originalProductTotal) > 0.011;
+    Math.abs(savedTotal - parsed.originalProductTotal - (parsed.delivery?.amountEx || 0)) > 0.011;
 }
 
 function effectiveOrderTotal(order: SinterklaasB2BOrder) {
   const savedTotal = moneyNumber(order.totalExVat);
   const parsed = parseOrderText(order.orderText);
-  const calculatedTotal = productLinesTotal(parsed.productLines);
+  const calculatedTotal = roundCents(productLinesTotal(parsed.productLines) + (parsed.delivery?.amountEx || 0));
   if (!order.totalExVat.trim() && parsed.productLines.length > 0) {
     return calculatedTotal;
   }
   if (
     parsed.productLines.length > 0 &&
-    Math.abs(savedTotal - parsed.originalProductTotal) < 0.011
+    Math.abs(savedTotal - parsed.originalProductTotal - (parsed.delivery?.amountEx || 0)) < 0.011
   ) {
     return calculatedTotal;
   }
@@ -546,6 +559,7 @@ function createFormState(): B2BFormState {
     totalExVat: "",
     deliveryMethod: "",
     deliveryAddress: "",
+    deliveryPricing: { postcode: "", mode: "automatic", manualIncl: "" },
     invoiceInfo: "",
     status: "aanvraag",
     textInstructions: "",
@@ -583,6 +597,7 @@ function formStateFromOrder(order: SinterklaasB2BOrder | null | undefined, seaso
     totalExVat: usesManualTotal(order) ? order.totalExVat : money(effectiveOrderTotal(order)),
     deliveryMethod: order.deliveryMethod,
     deliveryAddress: order.deliveryAddress,
+    deliveryPricing: parsedOrder.delivery?.pricing || { postcode: "", mode: "unpriced" as const, manualIncl: "" },
     invoiceInfo: order.invoiceInfo,
     status: order.status,
     textInstructions: order.textInstructions,
@@ -921,6 +936,7 @@ function B2BOrderForm({
   const [message, setMessage] = useState("");
   const [manualTotal, setManualTotal] = useState(() => usesManualTotal(initialOrder));
   const [manualLogoBaseline, setManualLogoBaseline] = useState(() => initialOrder ? logoTotal(parseOrderText(initialOrder.orderText).productLines) : 0);
+  const [manualDeliveryBaseline, setManualDeliveryBaseline] = useState(() => initialOrder ? parseOrderText(initialOrder.orderText).delivery?.amountEx || 0 : 0);
   const [basePriceInputs, setBasePriceInputs] = useState<Record<string, string>>({});
   const [builderOpen, setBuilderOpen] = useState(() => !initialOrder || !formStateFromOrder(initialOrder, season).productLines.length);
   const [productDraft, setProductDraft] = useState<B2BProductLine>(emptyProductDraft);
@@ -956,6 +972,7 @@ function B2BOrderForm({
         });
         setManualTotal(Boolean(draft.manualTotal));
         setManualLogoBaseline(typeof draft.manualLogoBaseline === "number" ? draft.manualLogoBaseline : logoTotal(draft.form.productLines));
+        setManualDeliveryBaseline(typeof draft.manualDeliveryBaseline === "number" ? draft.manualDeliveryBaseline : 0);
         if (draft.selectionVersion === 2 && draft.productDraft) setProductDraft(draft.productDraft);
         if (draft.selectionVersion === 2 && draft.letterDraft) setLetterDraft(draft.letterDraft);
         setDraftNotice("Je niet-opgeslagen invoer is teruggezet. Controleer deze en druk op Opslaan.");
@@ -969,11 +986,11 @@ function B2BOrderForm({
   useEffect(() => {
     if (!draftReady) return;
     try {
-      sessionStorage.setItem(draftKey, JSON.stringify({ form, manualTotal, manualLogoBaseline, productDraft, letterDraft, selectionVersion: 2, productFormatVersion: 1, orderRevision: initialOrder?.updatedAt || "" }));
+      sessionStorage.setItem(draftKey, JSON.stringify({ form, manualTotal, manualLogoBaseline, manualDeliveryBaseline, productDraft, letterDraft, selectionVersion: 2, productFormatVersion: 1, orderRevision: initialOrder?.updatedAt || "" }));
     } catch {
       setDraftNotice("Dit tabblad kan geen reserveconcept bewaren. Houd het formulier open totdat opslaan is gelukt.");
     }
-  }, [draftKey, draftReady, form, manualTotal, manualLogoBaseline, productDraft, letterDraft, initialOrder?.updatedAt]);
+  }, [draftKey, draftReady, form, manualTotal, manualLogoBaseline, manualDeliveryBaseline, productDraft, letterDraft, initialOrder?.updatedAt]);
 
   useEffect(() => {
     if (message) {
@@ -1176,11 +1193,14 @@ function B2BOrderForm({
   const logosEx = logoTotal(form.productLines);
   const logosCount = form.productLines.filter(line => line.withLogo).reduce((sum, line) => sum + line.quantity, 0);
   const productsEx = roundCents(calculatedTotalEx - logosEx);
+  const delivery = businessDeliveryQuote(form.deliveryPricing, form.deliveryMethod, form.deliveryAddress);
+  const deliveryEx = delivery.amountEx || 0;
+  const deliveryIncl = delivery.amountIncl || 0;
   // An agreed product price remains intact; adding/removing logos always adjusts
   // its payable total rather than silently disappearing into a fixed override.
-  const total = manualTotal ? roundCents(moneyNumber(form.totalExVat) + logosEx - manualLogoBaseline) : calculatedTotalEx;
-  const totalIncl = manualTotal ? roundCents(total * 1.09) : calculatedTotalIncl;
-  const displayedTotalEx = form.productLines.length || manualTotal ? decimalInput(total) : "";
+  const total = manualTotal ? roundCents(moneyNumber(form.totalExVat) + logosEx - manualLogoBaseline + deliveryEx - manualDeliveryBaseline) : roundCents(calculatedTotalEx + deliveryEx);
+  const totalIncl = manualTotal ? roundCents((total - deliveryEx) * 1.09 + deliveryIncl) : roundCents(calculatedTotalIncl + deliveryIncl);
+  const displayedTotalEx = form.productLines.length || manualTotal || deliveryEx ? decimalInput(total) : "";
   const draftProduct = catalogProduct(productDraft.productId);
   const draftChoices = draftProduct ? choicesForProduct(draftProduct) : [];
   const extraDataCount = [
@@ -1216,7 +1236,14 @@ function B2BOrderForm({
       setMessage("Vul een geldige stukprijs in.");
       return;
     }
-    const orderText = serializeOrderText(form.productLines, form.orderText);
+    if (delivery.active && form.deliveryPricing.mode !== "unpriced" && delivery.amountIncl === null) {
+      setStep(1);
+      setMessage("Vul een geldige bezorgpostcode in of geef handmatig de bezorgkosten op (inclusief btw, ook € 0 is mogelijk).");
+      return;
+    }
+    const { productLines, deliveryPricing, ...storedForm } = form;
+    const productText = serializeOrderText(productLines, form.orderText);
+    const orderText = serializeOrderText(productLines, form.orderText, businessDeliveryLine(deliveryPricing, form.deliveryMethod, form.deliveryAddress));
 
     if (!form.customerName.trim()) {
       setMessage("Vul minimaal de klantnaam in.");
@@ -1240,7 +1267,7 @@ function B2BOrderForm({
       setMessage("Kies de gewenste leverweek.");
       return;
     }
-    if (form.status === "akkoord" && (!form.deliveryDate || !orderText.trim())) {
+    if (form.status === "akkoord" && (!form.deliveryDate || !productText.trim())) {
       setMessage("Voor definitief zijn een bestelling en een leverdatum, leverperiode of leverweek nodig. Voeg gekozen producten eerst toe met + Product toevoegen of + Letter toevoegen.");
       return;
     }
@@ -1255,17 +1282,12 @@ function B2BOrderForm({
 
     setSaving(true);
     try {
-      const { productLines, ...storedForm } = form;
       const saved = await saveB2BOrder({
         id: initialOrder?.id,
         ...storedForm,
         customerName: form.customerName.trim(),
         orderText,
-        totalExVat: manualTotal
-          ? money(total)
-          : productLines.length > 0
-            ? money(calculatedTotalEx)
-            : "",
+        totalExVat: manualTotal || productLines.length > 0 || delivery.active && delivery.amountIncl !== null ? money(total) : "",
         logo: productLines.some((line) => line.withLogo) && !form.logo.trim()
           ? "Eigen logo volgens orderregels"
           : !productLines.some(line => line.withLogo) && form.logo === "Eigen logo volgens orderregels" ? "" : form.logo,
@@ -1323,6 +1345,7 @@ function B2BOrderForm({
       if (invalid) { setStep(1); setMessage(`Controleer ${invalid.getAttribute("aria-label") || invalid.closest("label")?.textContent}: ${invalid.validationMessage}`); return; }
       if (form.deliveryWindowType === "range" && (!form.deliveryDate || !form.deliveryDateEnd || form.deliveryDateEnd < form.deliveryDate)) { setStep(1); setMessage("Vul een geldige begin- en einddatum voor de leverperiode in."); return; }
       if (form.deliveryWindowType === "week" && !form.deliveryWeek) { setStep(1); setMessage("Kies de gewenste leverweek."); return; }
+      if (delivery.active && form.deliveryPricing.mode !== "unpriced" && delivery.amountIncl === null) { setStep(1); setMessage("Vul een geldige bezorgpostcode in of geef handmatig de bezorgkosten inclusief btw op."); return; }
     }
     if (next === 3 && hasInvalidBasePrice()) { setStep(2); setMessage("Vul een geldige stukprijs in."); return; }
     setStep(next);
@@ -1371,7 +1394,7 @@ function B2BOrderForm({
     </div>;
   }
 
-  const hasDelivery = /bezorg|lever/i.test(form.deliveryMethod);
+  const hasDelivery = delivery.active;
   const hasPickup = /afhal|afhaal|ophal/i.test(form.deliveryMethod);
   const steps = ["Klant & levering", "Producten", "Controleren"];
 
@@ -1401,7 +1424,7 @@ function B2BOrderForm({
           <p className={styles.field}>Hoe ontvangt de klant de bestelling?</p>
           <div className={styles.segments}>
             <button type="button" aria-pressed={hasPickup} onClick={() => setField("deliveryMethod", "Afhalen bij Strik")}>Afhalen</button>
-            <button type="button" aria-pressed={hasDelivery} onClick={() => setField("deliveryMethod", "Bezorgen")}>Bezorgen</button>
+            <button type="button" aria-pressed={hasDelivery} onClick={() => setForm(current => ({ ...current, deliveryMethod: "Bezorgen", deliveryPricing: current.deliveryPricing.mode === "unpriced" ? { ...current.deliveryPricing, mode: "automatic" } : current.deliveryPricing }))}>Bezorgen</button>
           </div>
           <div className={styles.fieldGrid}>
             {textField("deliveryMethod", "Leverafspraak / afhaallocatie")}
@@ -1435,6 +1458,15 @@ function B2BOrderForm({
               <textarea rows={3} value={form.deliveryAddress} onChange={event => setField("deliveryAddress", event.target.value)} />
             </label>}
           </div>
+          {hasDelivery && <div className={styles.deliveryPricing} aria-label="Bezorgkosten instellen">
+            <div className={styles.deliveryPricingHead}><h3>Bezorgkosten</h3><span>{form.deliveryPricing.mode === "manual" ? "Handmatig aangepast" : form.deliveryPricing.mode === "unpriced" ? "Nog niet ingesteld" : "Op basis van postcode"}</span></div>
+            <div className={styles.fieldGrid}>
+              <label className={styles.field}>Postcode bezorging<input aria-label="Postcode bezorging" autoComplete="off" placeholder="Bijv. 6511 AB" value={form.deliveryPricing.postcode || businessAddressPostcode(form.deliveryAddress)} onChange={event => setField("deliveryPricing", { ...form.deliveryPricing, postcode: event.target.value, mode: form.deliveryPricing.mode === "unpriced" ? "automatic" : form.deliveryPricing.mode })}/><small>De vier cijfers zijn voldoende.</small></label>
+              <label className={styles.field}>Bezorgkosten incl. btw<input aria-label="Bezorgkosten incl. btw" inputMode="decimal" placeholder="Vul postcode of bedrag in" value={form.deliveryPricing.mode === "manual" ? form.deliveryPricing.manualIncl : delivery.amountIncl === null ? "" : decimalInput(delivery.amountIncl)} onChange={event => setField("deliveryPricing", { ...form.deliveryPricing, mode: "manual", manualIncl: event.target.value })}/><small>{delivery.amountEx === null ? "Bedrag is inclusief 9% btw." : `${money(delivery.amountEx)} excl. btw · ${money(delivery.amountIncl!)} incl. btw`}</small></label>
+            </div>
+            <p>{form.deliveryPricing.mode === "unpriced" ? "Bij deze bestaande bestelling zijn nog geen bezorgkosten ingesteld. De oorspronkelijke prijs blijft behouden totdat je een tarief kiest." : form.deliveryPricing.mode === "manual" ? `Je eigen bedrag wordt gebruikt.${delivery.rate ? ` Postcodetarief: ${money(delivery.rate.amountIncl)} incl. btw (${delivery.rate.label}).` : ""}` : delivery.rate ? `${delivery.rate.label === "Standaardtarief" ? "Standaardtarief buiten de genoemde postcodegebieden" : `Tarief voor postcode ${delivery.rate.label}`}. Je kunt het bedrag hierboven aanpassen.` : "Vul de bezorgpostcode in voor het standaardbedrag, of geef zelf een bedrag op."}</p>
+            {form.deliveryPricing.mode !== "automatic" && <button type="button" className={styles.priceReset} onClick={() => setField("deliveryPricing", { ...form.deliveryPricing, mode: "automatic", manualIncl: "" })}>Postcodetarief gebruiken</button>}
+          </div>}
           <details className={styles.extra}>
             <summary>Factuurgegevens {form.invoiceInfo && "· ingevuld"}</summary>
             <div><label className={styles.field}>Factuuradres, referentie of inkoopnummer<textarea rows={3} value={form.invoiceInfo} onChange={event => setField("invoiceInfo", event.target.value)} /></label></div>
@@ -1522,6 +1554,7 @@ function B2BOrderForm({
           {[
             ["Klant", form.customerName], ["Contactpersoon", form.contactName], ["E-mailadres", form.customerEmail], ["Telefoon", form.phone],
             ["Levering", form.deliveryMethod], ["Levermoment", deliveryWindowLabel(form)], ["Bezorgadres", form.deliveryAddress],
+            ["Bezorgkosten", hasDelivery ? delivery.amountIncl === null ? "Nog niet ingesteld · controleer de bezorgafspraak" : `${money(deliveryIncl)} incl. btw (${money(deliveryEx)} excl. btw) · ${form.deliveryPricing.mode === "manual" ? "handmatig" : "postcodetarief"}${delivery.postcode ? ` · ${delivery.postcode}` : ""}` : ""],
             ["Fase", { aanvraag: "Aanvraag", offerte: "Offerte", akkoord: "Definitief · klant heeft akkoord gegeven", afgewezen: "Niet doorgegaan" }[form.status]],
           ].filter(([, value]) => value).map(([label, value]) => <div key={label} className={styles.reviewRow}><span>{label}</span><span>{value}</span></div>)}
           {renderOrderItems(false)}
@@ -1539,10 +1572,10 @@ function B2BOrderForm({
           </select><small>Staat los van productie en invoer.</small></label>
           <div className={styles.total}>
             <h3>Prijsopbouw <small>excl. btw</small></h3>
-            <dl className={styles.priceBreakdown}><div><dt>Producten</dt><dd>{money(productsEx)}</dd></div><div data-price-part="logos"><dt>Logo’s{logosCount > 0 && <small>{logosCount} × {money(productLogoPrice(false))}</small>}</dt><dd>{money(logosEx)}</dd></div>{manualTotal && <div><dt>Prijsafspraak</dt><dd>{money(roundCents(total - calculatedTotalEx))}</dd></div>}</dl>
+            <dl className={styles.priceBreakdown}><div><dt>Producten</dt><dd>{money(productsEx)}</dd></div><div data-price-part="logos"><dt>Logo’s{logosCount > 0 && <small>{logosCount} × {money(productLogoPrice(false))}</small>}</dt><dd>{money(logosEx)}</dd></div>{hasDelivery && <div data-price-part="delivery"><dt>Bezorgkosten<small>{delivery.amountIncl === null ? "Nog niet ingesteld" : `${money(deliveryIncl)} incl. btw`}</small></dt><dd>{delivery.amountEx === null ? "—" : money(deliveryEx)}</dd></div>}{manualTotal && <div><dt>Prijsafspraak</dt><dd>{money(roundCents(total - calculatedTotalEx - deliveryEx))}</dd></div>}</dl>
             <div className={styles.payableTotal}><span>Totaal excl. btw</span><strong>{money(total)}</strong></div>
-            <div className={styles.inclusiveTotal} data-price-part="inclusive-total"><span>Totaal incl. 9% btw</span><strong>{money(totalIncl)}</strong><small>{manualTotal || form.productLines.some(line => line.manualPrice) ? "Inclusief eventuele prijsafspraken" : "Vergelijk met de folderprijs incl. btw."}</small></div>
-            <details className={styles.totalAgreement}><summary>Totaalafspraak aanpassen</summary><label className={styles.field}>Afgesproken totaal excl. btw<input aria-label="Afgesproken totaal excl. btw" value={displayedTotalEx} onChange={event => { setManualTotal(true); setManualLogoBaseline(logosEx); setField("totalExVat", event.target.value); }} placeholder="Automatisch" /></label><p>Nieuwe logo’s worden altijd boven op de huidige productafspraak geteld.</p>{manualTotal && <button type="button" onClick={() => setManualTotal(false)}>Gebruik berekend totaal</button>}</details>
+            <div className={styles.inclusiveTotal} data-price-part="inclusive-total"><span>Totaal incl. 9% btw</span><strong>{money(totalIncl)}</strong><small>{hasDelivery && delivery.amountIncl === null ? "Bezorgkosten nog niet afzonderlijk vastgelegd." : hasDelivery ? "Inclusief bezorgkosten en eventuele prijsafspraken." : manualTotal || form.productLines.some(line => line.manualPrice) ? "Inclusief eventuele prijsafspraken" : "Vergelijk met de folderprijs incl. btw."}</small></div>
+            <details className={styles.totalAgreement}><summary>Totaalafspraak aanpassen</summary><label className={styles.field}>Afgesproken totaal excl. btw<input aria-label="Afgesproken totaal excl. btw" value={displayedTotalEx} onChange={event => { setManualTotal(true); setManualLogoBaseline(logosEx); setManualDeliveryBaseline(deliveryEx); setField("totalExVat", event.target.value); }} placeholder="Automatisch" /></label><p>Dit totaal bevat de huidige logo’s en bezorgkosten. Latere wijzigingen daarin worden bij het totaal verrekend.</p>{manualTotal && <button type="button" onClick={() => setManualTotal(false)}>Gebruik berekend totaal</button>}</details>
           </div>
         </aside></div>
         <div className={styles.feedback}>
@@ -1647,6 +1680,7 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
               <p>{price.automatic ? `Staffel ${money(price.basePrice)}${price.optionSurcharge > 0 ? ` + optie ${money(price.optionSurcharge)}` : ""}${price.logoSurcharge > 0 ? ` + logo ${money(price.logoSurcharge)}` : ""} = ${money(price.unitPrice)} p.s.` : `Afgesproken stukprijs ${money(price.unitPrice)}`}</p>
               <p>{money(price.line.quantity * price.unitPrice)} excl. btw</p>
             </div>)}
+            {parsedOrder.delivery && <div className={styles.priceLine}><strong>Bezorgkosten{parsedOrder.delivery.pricing.postcode ? ` · ${parsedOrder.delivery.pricing.postcode}` : ""}</strong><p>{money(parsedOrder.delivery.amountEx)} excl. btw · {money(parsedOrder.delivery.amountIncl)} incl. btw · {parsedOrder.delivery.pricing.mode === "manual" ? "handmatig aangepast" : "postcodetarief"}</p></div>}
           </div></details>}
         </section>
         <section>

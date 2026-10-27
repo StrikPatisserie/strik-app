@@ -48,7 +48,7 @@ export function createCorrectionService(deps: Dependencies) {
     if (others.some(shift => overlaps(after, before, shift))) blockers.push("De correctie overlapt met een andere werkelijke dienst van deze medewerker.");
     const dates = new Set([...datesFor(after.start, after.end), ...(before.start.iso && before.end.iso ? datesFor(before.start.iso, before.end.iso) : [before.date])]);
     const statuses = await Promise.all([...dates].map(async date => ({ date, status: await deps.day(reference.departmentId, date) })));
-    for (const { date, status } of statuses) if (status.state !== "open") blockers.push(status.state === "closed" ? `De urenstaat van ${date} is gesloten. Er worden geen dagen heropend.` : `De dagstatus van ${date} kan niet worden gecontroleerd${status.httpStatus ? ` (HTTP ${status.httpStatus})` : ""}. Er is niets gewijzigd.`);
+    for (const { date, status } of statuses) if (status.state !== "open") blockers.push(status.state === "closed" ? `De urenstaat van ${date} is gesloten. Er worden geen dagen heropend.` : `Dagstatus ${date} niet bevestigd${status.httpStatus ? ` (HTTP ${status.httpStatus})` : ""}. ${status.message}`);
     return { context, after, blockers: [...new Set(blockers)] };
   }
   async function prepare(actorId: string, referenceInput: unknown, draftInput: unknown, configInput: unknown): Promise<CorrectionPreview> {
@@ -57,7 +57,17 @@ export function createCorrectionService(deps: Dependencies) {
     if (draft.mode === "proposal") {
       try { config = validateConfig(configInput); } catch { throw new CorrectionError("De controleregels zijn ongeldig. Controleer de instellingen opnieuw."); }
     }
-    const { context, after, blockers } = await assess(reference, draft, config);
+    let assessment: Awaited<ReturnType<typeof assess>>;
+    try {
+      assessment = await assess(reference, draft, config);
+    } catch (error) {
+      if (error instanceof CorrectionError) throw error;
+      const status = getTamigoStatusCode(error);
+      throw new CorrectionError(status === 401 || status === 403
+        ? `Tamigo geeft geen toegang tot de broncontrole (HTTP ${status}). Controleer de toegang van de koppeling. Er is geen correctie verstuurd; de uren zijn ongewijzigd.`
+        : "De broncontrole kon niet worden voltooid. Probeer de leescontrole opnieuw. Er is geen correctie verstuurd; de uren zijn ongewijzigd.", 503);
+    }
+    const { context, after, blockers } = assessment;
     const ready = await deps.store.ready();
     if (!ready) blockers.push("De beveiligde correctiehistorie is nog niet beschikbaar. Er kan niets worden opgeslagen.");
     const net = originalNet(context.before);

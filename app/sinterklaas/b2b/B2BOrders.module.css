@@ -149,6 +149,12 @@
 .segments { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 17px; }
 .segments button { padding: 8px 13px; border: 1px solid var(--b2b-border); border-radius: 7px; background: #fff; font-size: 12px; }
 .segments button[aria-pressed="true"] { border-color: var(--b2b-accent); background: var(--b2b-pale); color: var(--b2b-accent); }
+.deliveryPricing { margin-top: 18px; padding: 16px; border: 1px solid var(--b2b-border); border-radius: 9px; background: #f4f6f0; }
+.deliveryPricingHead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 14px; margin-bottom: 14px; }
+.deliveryPricingHead h3 { font-size: 13px; }
+.deliveryPricingHead > span, .deliveryPricing > p { font-size: 11px; color: var(--b2b-muted); }
+.deliveryPricing > p { margin-top: 12px !important; line-height: 1.6; }
+.deliveryPricing > button { margin-top: 8px; }
 .extra { margin-top: 22px; font-size: 12px; color: var(--b2b-muted); }
 .extra summary { color: var(--b2b-muted); }
 .extra > div { margin-top: 15px; }

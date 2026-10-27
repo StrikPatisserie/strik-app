@@ -41,6 +41,7 @@ function entry(season = 'sint', initialOrder = null) {
     '../../sint-voor-bedrijven/sintProducts': sint, '../../kerst-voor-bedrijven/christmasProducts': kerst, '../../lib/business-folder-pricing': pricing,
     '../../lib/businessFolderOrderText': folderOrderText,
     '../../lib/businessDeliveryMoment': load('app/lib/businessDeliveryMoment.ts'),
+    '../../lib/businessDeliveryPricing': load('app/lib/businessDeliveryPricing.ts'),
     '../b2bLetterLines': letters,
     '../sinterklaasApi': { saveB2BOrder: async data => { calls.push(data); return { ...data, id: 'saved' }; } },
     './B2BOrders.module.css': { default: new Proxy({}, { get: (_, key) => key }) },
@@ -332,4 +333,86 @@ test('adding fields collapse after adding a product, and an empty agreed unit pr
   nodes(ui.render(),n=>n.props?.['aria-label']==='Prijs Stafwerk pakket')[0].props.onBlur();
   ui.button('Bestelling controleren →');await ui.submit();
   assert.equal(ui.calls.length,0);assert.match(label(ui.render()),/Vul een geldige stukprijs in/);
+});
+
+function deliveryEntry(season='sint') {
+  const ui=entry(season);ui.field('Bedrijfsnaam / klantnaam *','Bezorgvoorbeeld');ui.button('Bezorgen');
+  ui.field('Postcode bezorging','6511 AB');ui.button('Verder naar producten →');
+  if(season==='sint') addLetters(ui,25,true);
+  else { const product=kerst.christmasProducts[0];ui.field('Product',`kerst-${product.id}`);ui.field('Variant',product.detail);ui.field('Aantal producten','25');ui.button('+ Product toevoegen'); }
+  return ui;
+}
+
+test('postcode delivery is added once, survives the existing API text contract, and never increases article counts',async()=>{
+  for (const season of ['sint','kerst']) {
+    const ui=deliveryEntry(season);
+    assert.match(label(ui.render()),/25 artikelen/);
+    const productTotal=nodes(ui.render(),n=>n.props?.className==='cartFoot')[0];
+    const exclusive=Number(label(productTotal).match(/€\s*([\d.,]+) excl/)[1].replace(/\./g,'').replace(',','.'));
+    ui.button('Bestelling controleren →');await ui.submit();
+    const saved=ui.calls[0],parsed=ui.parse(saved.orderText);
+    assert.equal(saved.totalExVat.replace(/\s/g,''),new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR'}).format(exclusive+9.13).replace(/\s/g,''));
+    assert.equal(parsed.delivery.amountIncl,9.95);
+    assert.equal(parsed.productLines.reduce((sum,line)=>sum+line.quantity,0),25);
+    assert.equal((saved.orderText.match(/1 × Bezorgkosten/g)||[]).length,1);
+    // Simulate the existing WordPress sanitizer: unknown new fields are dropped.
+    const wire=JSON.parse(JSON.stringify(saved));assert.equal('deliveryPricing' in wire,false);
+    const reopened=entry(season,{...wire,id:'delivery-saved',updatedAt:'2026-10-27'});
+    assert.match(label(reopened.render()),/9,95 incl\. btw/);
+    assert.equal(nodes(reopened.render(),n=>n.props?.['aria-label']==='Bezorgkosten incl. btw')[0].props.value,'9.95');
+    reopened.button('Verder naar producten →');reopened.button('Bestelling controleren →');await reopened.submit();
+    assert.equal(reopened.calls[0].totalExVat,saved.totalExVat);
+    assert.equal(reopened.calls[0].orderText,saved.orderText);
+    if(season==='sint') assert.match(label(reopened.render()),/354,95/,'retain exact inclusive product and delivery prices');
+  }
+});
+
+test('manual delivery overrides survive postcode changes and reopening; pickup removes the charge; automatic reset uses the new postcode',async()=>{
+  const ui=deliveryEntry();
+  ui.button('✓Klant & levering');ui.field('Bezorgkosten incl. btw','12,50');ui.field('Postcode bezorging','6601');
+  ui.button('Verder naar producten →');ui.button('Bestelling controleren →');await ui.submit();
+  const saved=ui.calls[0];assert.equal(ui.parse(saved.orderText).delivery.amountIncl,12.5);
+  const re=entry('sint',{...saved,id:'manual-delivery',updatedAt:'now'});
+  re.field('Bezorgkosten incl. btw','0');re.button('Verder naar producten →');re.button('Bestelling controleren →');await re.submit();
+  assert.equal(re.parse(re.calls[0].orderText).delivery.amountIncl,0);
+  assert.equal(re.calls[0].totalExVat.replace(/\s/g,''),'€316,50');
+  const pickup=entry('sint',{...saved,id:'manual-delivery',updatedAt:'now'});
+  pickup.button('Afhalen');pickup.button('Verder naar producten →');pickup.button('Bestelling controleren →');await pickup.submit();
+  assert.equal(pickup.parse(pickup.calls[0].orderText).delivery,null);
+  assert.equal(pickup.calls[0].totalExVat.replace(/\s/g,''),'€316,50');
+  const reset=entry('sint',{...saved,id:'manual-delivery',updatedAt:'now'});
+  reset.button('Postcodetarief gebruiken');reset.button('Verder naar producten →');reset.button('Bestelling controleren →');await reset.submit();
+  assert.equal(reset.parse(reset.calls[0].orderText).delivery.amountIncl,14.95);
+});
+
+test('missing postcode and invalid overrides cannot silently save a free delivery',async()=>{
+  const ui=entry();ui.field('Bedrijfsnaam / klantnaam *','Onvolledig');ui.button('Bezorgen');ui.button('Verder naar producten →');
+  assert.match(ui.step(),/Klant & levering/);assert.match(label(ui.render()),/geldige bezorgpostcode/);
+  ui.field('Bezorgkosten incl. btw','-1');ui.button('3Controleren');await ui.submit();assert.equal(ui.calls.length,0);
+  ui.field('Bezorgkosten incl. btw','0');ui.button('Verder naar producten →');addLetters(ui,1,false);ui.button('Bestelling controleren →');await ui.submit();assert.equal(ui.calls.length,1);
+});
+
+test('existing unpriced deliveries remain unchanged until staff explicitly choose a delivery rate',async()=>{
+  const original={...entry().blank(),id:'old-delivery',customerName:'Bestaand',deliveryMethod:'Bezorgen',deliveryAddress:'Voorbeeld 1\n6511 AB Nijmegen',orderText:'PRODUCTEN EN PRIJS\n2 × Afgesproken product · € 10,00 p.s. ex btw · € 20,00',totalExVat:'20.00',updatedAt:'now'};
+  delete original.deliveryPricing;
+  const ui=entry('sint',original);assert.match(label(ui.render()),/oorspronkelijke prijs blijft behouden/);
+  ui.button('Verder naar producten →');ui.button('Bestelling controleren →');await ui.submit();
+  assert.equal(ui.calls[0].totalExVat.replace(/\s/g,''),'€20,00');assert.equal(ui.calls[0].orderText.replace(/\u00a0/g,' '),original.orderText);
+  const enabled=entry('sint',original);enabled.button('Postcodetarief gebruiken');enabled.button('Verder naar producten →');enabled.button('Bestelling controleren →');await enabled.submit();
+  assert.equal(enabled.calls[0].totalExVat.replace(/\s/g,''),'€29,13');
+});
+
+test('an agreed total includes its current delivery charge and adjusts only the delivery/logo delta',async()=>{
+  const ui=deliveryEntry();ui.field('Afgesproken totaal excl. btw','400');
+  ui.button('✓Klant & levering');ui.field('Bezorgkosten incl. btw','12,50');ui.button('Verder naar producten →');ui.button('Bestelling controleren →');await ui.submit();
+  const saved=ui.calls[0];assert.equal(saved.totalExVat.replace(/\s/g,''),'€402,34');
+  const re=entry('sint',{...saved,id:'agreed',updatedAt:'now'});re.button('Verder naar producten →');re.button('Bestelling controleren →');await re.submit();assert.equal(re.calls[0].totalExVat,saved.totalExVat);
+  const pickup=entry('sint',{...saved,id:'agreed',updatedAt:'now'});pickup.button('Afhalen');pickup.button('Verder naar producten →');pickup.button('Bestelling controleren →');await pickup.submit();assert.equal(pickup.calls[0].totalExVat.replace(/\s/g,''),'€390,87');
+});
+
+test('delivery-only inquiries retain their charge but cannot be finalized as a product order',async()=>{
+  const ui=entry();ui.field('Bedrijfsnaam / klantnaam *','Nog te bespreken');ui.button('Bezorgen');ui.field('Postcode bezorging','6511');ui.button('Verder naar producten →');ui.button('Bestelling controleren →');await ui.submit();
+  const saved=ui.calls[0];assert.equal(ui.parse(saved.orderText).delivery.amountIncl,9.95);
+  const re=entry('sint',{...saved,id:'delivery-only',updatedAt:'now'});re.button('Verder naar producten →');re.button('Bestelling controleren →');await re.submit();assert.equal(re.calls[0].totalExVat,saved.totalExVat);assert.equal(re.calls[0].orderText,saved.orderText);
+  re.field('Fase','akkoord');re.field('Vaste leverdatum','2026-11-30');await re.submit();assert.equal(re.calls.length,1);assert.match(label(re.render()),/Voeg gekozen producten eerst toe/);
 });

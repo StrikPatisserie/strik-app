@@ -4,6 +4,7 @@ import { dedupeReviewShifts, isRecord, normalizeReviewShift, sourceRecords } fro
 import { monthBounds } from "./reviewTime";
 import { REVIEW_VERSION, type DayStatus, type ReviewDataset, type SourceCheck } from "./reviewTypes";
 import { correctionRevision } from "./correctionRevision";
+import { dayAccessFailureMessage } from "./reviewAccess";
 
 function errorCheck(key: string, label: string, error: unknown): SourceCheck {
   const status = getTamigoStatusCode(error);
@@ -77,6 +78,6 @@ export async function getTamigoHoursDayStatus(departmentId: string, date: string
     return { state: "unknown", message: "Onbekend API-antwoord voor de dagstatus; niet als open of goedgekeurd aangenomen.", employeeApprovalIsNotManagerApproval: true };
   } catch (error) {
     const status = getTamigoStatusCode(error);
-    return { state: "unknown", message: `Dagstatus niet beschikbaar${status === 401 || status === 403 ? ` (HTTP ${status}; toegang ontbreekt)` : ""}. Open/gesloten en managersgoedkeuring zijn niet bevestigd.`, employeeApprovalIsNotManagerApproval: true, httpStatus: status };
+    return { state: "unknown", message: dayAccessFailureMessage(status), employeeApprovalIsNotManagerApproval: true, httpStatus: status };
   }
 }

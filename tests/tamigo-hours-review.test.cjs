@@ -244,6 +244,43 @@ test('day status uses the explicit API boolean and never maps missing access to 
  }
  const {server,department}=serverModule({read:()=>{throw Object.assign(Error('Denied'),{status:401});}});assert.equal((await server.getTamigoHoursDayStatus(department,'2026-10-05')).state,'unknown');
 });
+test('day access errors explain application access without exposing upstream replies',async()=>{
+ for(const status of [401,403]){
+  const {server,department}=serverModule({read:()=>{throw Object.assign(Error('private token and personnel reply'),{status});}});
+  const result=await server.getTamigoHoursDayStatus(department,'2026-10-05');
+  assert.equal(result.state,'unknown');assert.equal(result.httpStatus,status);
+  assert.match(result.message,/applicatiekoppeling/);assert.match(result.message,/User Services/);assert.match(result.message,/opslaan geblokkeerd/);
+  assert(!JSON.stringify(result).includes('private token'));
+ }
+});
+test('day access failure does not suggest incomplete shift data or missing worked hours',()=>{
+ const {reviewAccessSummary}=load('app/management/urencontrole/reviewAccess.ts');
+ const result=reviewAccessSummary([
+  {key:'shifts-test',label:'Testwinkel',state:'available',message:'Diensten opgehaald'},
+  {key:'day-status-access',label:'Dagstatus',state:'unavailable',httpStatus:401,message:'Toegang ontbreekt'},
+ ]);
+ assert.equal(result.incompleteSources.length,0);assert.equal(result.dayBlocked,true);
+ assert.equal(result.notice.title,'Correcties nog geblokkeerd');assert.match(result.notice.message,/Rooster en uren zijn opgehaald/);
+ assert(!result.notice.message.includes('Bronnen onvolledig'));
+});
+test('incomplete shift access remains explicit even if day access is also blocked',()=>{
+ const {reviewAccessSummary}=load('app/management/urencontrole/reviewAccess.ts');
+ const result=reviewAccessSummary([
+  {key:'shifts-test',label:'Testwinkel',state:'partial',message:'Diensten onvolledig'},
+  {key:'day-status-access',label:'Dagstatus',state:'unavailable',httpStatus:403,message:'Toegang ontbreekt'},
+ ]);
+ assert.equal(result.incompleteSources.length,1);assert.equal(result.dayBlocked,true);
+ assert.equal(result.notice.title,'Bronnen onvolledig');assert.match(result.notice.message,/Testwinkel/);
+ assert(!result.notice.message.includes('uren zijn opgehaald'));
+});
+test('unconfirmed approval is not an access failure; absent day probes do not imply write permission',()=>{
+ const {reviewAccessSummary}=load('app/management/urencontrole/reviewAccess.ts');
+ assert.equal(reviewAccessSummary([{key:'approval',label:'Goedkeuring',state:'unknown',message:'Niet bevestigd'}]).notice,null);
+ assert.equal(reviewAccessSummary([]).notice,null);
+ assert.equal(reviewAccessSummary([{key:'day-status-access',label:'Dagstatus',state:'available',message:'Steekproef beschikbaar'}]).notice,null);
+ const unknown=reviewAccessSummary([{key:'day-status-access',label:'Dagstatus',state:'unknown',message:'Onbekend antwoord'}]);
+ assert.equal(unknown.dayBlocked,true);assert.match(unknown.notice.message,/nog niet bevestigd/);
+});
 const access=load('app/lib/auth/access.ts');
 function apiRoute(profile){
  const calls=[];

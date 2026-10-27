@@ -84,6 +84,23 @@ test('missing day access, closed days, disabled writes and missing archive all b
 test('archive failure prevents all writes',async()=>{
  const f=fixture({archiveFails:true});await assert.rejects(()=>f.service.prepare(actor,f.reference,draft(),types.DEFAULT_REVIEW_CONFIG));assert.equal(f.attempts.length,0);
 });
+test('source access failure during preparation is a known non-submission, not an uncertain correction',async()=>{
+ for(const status of [401,403,502]){
+  const f=fixture();f.deps.read=async()=>{throw Error('private upstream reply');};
+  const factory=loader({'../../tamigoApi':{getTamigoStatusCode:()=>status}})(base+'correctionServer.ts').createCorrectionService;
+  await assert.rejects(()=>factory(f.deps).prepare(actor,f.reference,draft(),types.DEFAULT_REVIEW_CONFIG),error=>{
+   assert.equal(error.status,503);assert.match(error.message,/geen correctie verstuurd/);assert.match(error.message,/ongewijzigd/);
+   assert(!error.message.includes('private upstream'));if(status!==502)assert.match(error.message,new RegExp(`HTTP ${status}`));return true;
+  });
+  assert.equal(f.attempts.length,0);assert.equal(f.records.size,0);
+ }
+});
+test('day access guidance survives into the blocked confirmation without weakening the gate',async()=>{
+ const f=fixture();f.deps.day=async()=>({state:'unknown',httpStatus:401,message:'De applicatiekoppeling heeft geen toegang. Laat Tamigo de authenticatie bevestigen.',employeeApprovalIsNotManagerApproval:true});
+ const result=await createCorrectionService(f.deps).prepare(actor,f.reference,draft(),types.DEFAULT_REVIEW_CONFIG);
+ assert.equal(result.id,null);assert(result.blockers.some(message=>message.includes('Laat Tamigo de authenticatie bevestigen')));
+ assert.equal(f.attempts.length,0);assert.equal(f.records.size,0);
+});
 test('source changes between preview and confirmation stop the correction without writing',async()=>{
  const f=fixture();await f.service.prepare(actor,f.reference,draft(),types.DEFAULT_REVIEW_CONFIG);f.setRaw({Comments:'Later aangepast in Tamigo'});
  const result=await f.service.commit(actor,intentId,true);assert.equal(result.state,'rejected');assert.equal(f.attempts.length,0);
