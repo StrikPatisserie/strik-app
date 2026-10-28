@@ -12,6 +12,12 @@ function load(file, imports = {}, extra = '', environment = 'development') {
 const m = load('app/productie/planning.ts');
 const sample = load('app/preview/productie/sampleData.ts', { '../../productie/planning': m });
 const component = load('app/preview/productie/ProductionPreview.tsx', { 'react': require('react'), '../../productie/planning': m, './sampleData': sample }, '\nexports.validState=isPreviewState;');
+test('only planned leaf tasks can be removed without changing the original array or recipes',()=>{
+ const state=sample.initialPreviewState(),leaf=state.tasks.find(t=>t.status==='planned'&&!state.tasks.some(n=>n.dependsOn===t.id));
+ const next=m.removePlannedTask(state.tasks,leaf.id);assert.equal(next.length,state.tasks.length-1);assert(state.tasks.some(t=>t.id===leaf.id));
+ for(const status of ['active','done','blocked'])assert.throws(()=>m.removePlannedTask([{...leaf,status}],leaf.id),/Alleen geplande/);
+ assert.throws(()=>m.removePlannedTask([leaf,{...leaf,id:'next',dependsOn:leaf.id}],leaf.id),/vervolgstap/);
+});
 
 test('calendar weeks survive Amsterdam clock changes and ISO year boundaries', () => {
   for (const [date, expected] of [['2026-03-28', '2026-03-29'], ['2026-10-24', '2026-10-25'], ['2026-12-31', '2027-01-01']]) assert.equal(m.addDays(date, 1), expected);

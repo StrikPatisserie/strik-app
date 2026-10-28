@@ -69,6 +69,9 @@ test('Christmas navigation is on for existing settings while access still requir
   const access = load('app/lib/auth/access.ts');
   assert.equal(visibility.normalizeFeatureVisibilitySettings({ sinterklaasNavigation: true }).kerstNavigation, true);
   assert.equal(visibility.normalizeFeatureVisibilitySettings({ kerstNavigation: false }).kerstNavigation, false);
+  assert.equal(visibility.normalizeFeatureVisibilitySettings({ kerstNavigation: false }).ijsNavigation, true);
+  const hiddenIce=visibility.normalizeFeatureVisibilitySettings({ijsNavigation:false});
+  assert.deepEqual(Array.from(visibility.filterVisibleMainNavigationItems([{href:'/ijs'},{href:'/bakkerij'},{href:'/management'}],hiddenIce),item=>item.href),['/bakkerij','/management']);
   assert.equal(access.canAccessPath({ active: true, role: 'manager' }, '/kerst/b2b'), true);
   assert.equal(access.canAccessPath({ active: true, role: 'winkel', permissions: {} }, '/kerst/mailing'), false);
   assert.equal(access.canAccessPath({ active: true, role: 'bakkerij', permissions: { 'kerst.view': true } }, '/kerst/b2b'), true);

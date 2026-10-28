@@ -1,18 +1,21 @@
 export const FEATURE_VISIBILITY_SETTING_KEY = "feature_visibility";
 
 export type FeatureVisibilitySettings = {
+  ijsNavigation: boolean;
   vierdaagseNavigation: boolean;
   sinterklaasNavigation: boolean;
   kerstNavigation: boolean;
 };
 
 export const defaultFeatureVisibility: FeatureVisibilitySettings = {
+  ijsNavigation: true,
   vierdaagseNavigation: false,
   sinterklaasNavigation: true,
   kerstNavigation: true,
 };
 
 export const SEASONAL_NAVIGATION_SETTINGS = [
+  { key: "ijsNavigation", href: "/ijs", title: "IJssalons menu" },
   {
     key: "vierdaagseNavigation",
     href: "/vierdaagse",
@@ -39,6 +42,7 @@ export function normalizeFeatureVisibilitySettings(
       : {};
 
   return {
+    ijsNavigation: typeof settings.ijsNavigation === "boolean" ? settings.ijsNavigation : defaultFeatureVisibility.ijsNavigation,
     vierdaagseNavigation: Boolean(settings.vierdaagseNavigation),
     kerstNavigation: typeof settings.kerstNavigation === "boolean" ? settings.kerstNavigation : defaultFeatureVisibility.kerstNavigation,
     sinterklaasNavigation:

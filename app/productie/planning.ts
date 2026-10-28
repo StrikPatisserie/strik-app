@@ -35,7 +35,8 @@ export type DemoRecipe = {
   steps: string[]; allergens: string[];
   reviewRequired?: boolean;
 };
-export type PreviewState = { version: 1; items: Item[]; tasks: Task[] };
+export type RemovedTask = { task: Task; removedAt: string; removedBy: string };
+export type PreviewState = { version: 1; items: Item[]; tasks: Task[]; removedTasks?: RemovedTask[] };
 
 export const STATUS_LABELS: Record<TaskStatus, string> = { planned: "Gepland", active: "Bezig", done: "Klaar", blocked: "Geblokkeerd" };
 export const SOURCE_LABELS: Record<Task["source"], string> = { manual: "Handmatig", shop: "Winkelbehoefte", order: "Bestelling", routine: "Vaste taak" };
@@ -120,6 +121,13 @@ export function moveTask(tasks: Task[], id: string, date: string, departmentId: 
   if (next.some(t => t.date < date)) throw Error("Een volgende stap staat eerder. Verplaats die eerst.");
   if (task.dueDate && date > task.dueDate) throw Error("Deze datum ligt na de benodigde datum.");
   return tasks.map(t => t.id === id ? { ...t, date, departmentId } : t);
+}
+export function removePlannedTask(tasks: Task[], id: string): Task[] {
+  const task = tasks.find(t => t.id === id);
+  if (!task) throw Error("Taak niet gevonden.");
+  if (task.status !== "planned") throw Error("Alleen geplande taken kunnen worden verwijderd.");
+  if (tasks.some(t => t.dependsOn === id)) throw Error("Er is een vervolgstap gekoppeld. Verwijder die eerst.");
+  return tasks.filter(t => t.id !== id);
 }
 export function addTask(state: PreviewState, task: Task): PreviewState {
   if (state.tasks.some(t => t.id === task.id)) throw Error("Deze taak bestaat al.");

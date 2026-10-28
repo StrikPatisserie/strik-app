@@ -35,7 +35,20 @@ test('stale revisions, storage outages and duplicate output cannot overwrite the
  let r=route(manager);assert.equal((await r.api.PUT(put(r.store.planner.data,1))).status,409);assert.equal(r.counts().writes,0);
  r=route(manager,{failRead:true});assert.equal((await r.api.GET()).status,503);
  r=route(manager);const state=structuredClone(r.store.planner.data);state.tasks.push({...state.tasks[0],id:'duplicate'});assert.equal((await r.api.PUT(put(state))).status,400);assert.equal(r.counts().writes,0);
- r=route(manager);assert.equal((await r.api.PUT(put({...r.store.planner.data,tasks:[]}))).status,400);
+});
+test('managers can remove planned tasks and restore originals while recovery records cannot be erased or rewritten',async()=>{
+ const r=route(manager),original=structuredClone(r.store.planner.data.tasks[0]);
+ let response=await r.api.PUT(put({...r.store.planner.data,tasks:[],removedTasks:[]}));
+ assert.equal(response.status,200);let data=await response.json();
+ assert.equal(data.state.tasks.length,0);assert.deepEqual(data.state.removedTasks[0].task,original);assert.equal(data.state.removedTasks[0].removedBy,manager.id);
+ response=await r.api.PUT(put({...data.state,removedTasks:[]},3));assert.equal(response.status,200);data=await response.json();assert.equal(data.state.removedTasks.length,1);
+ response=await r.api.PUT(put({...data.state,tasks:[{...original,quantity:999}]},4));assert.equal(response.status,400);
+ response=await r.api.PUT(put({...data.state,tasks:[original]},4));assert.equal(response.status,200);data=await response.json();assert.equal(data.state.tasks[0].id,original.id);assert.equal(data.state.removedTasks.length,0);
+});
+test('started, completed and dependency-linked tasks cannot disappear from a bulk update',async()=>{
+ for(const status of ['active','done','blocked']){const r=route(manager);r.store.planner.data.tasks[0].status=status;assert.equal((await r.api.PUT(put({...r.store.planner.data,tasks:[]}))).status,400);assert.equal(r.counts().writes,0);}
+ const r=route(manager),state=r.store.planner.data;state.tasks.push({...state.tasks[0],id:'next',dependsOn:'task1',recordsOutput:false});
+ assert.equal((await r.api.PUT(put({...state,tasks:state.tasks.filter(t=>t.id!=='task1')}))).status,400);assert.equal(r.counts().writes,0);
 });
 test('an existing recipe without known yield keeps unscaled quantities and unknown department/stock explicit',()=>{
  const data=fixture();delete data.recipes[0].standardBatchQuantity;const views=workspace.recipeViews(data);assert.equal(views[0].yield,0);assert.equal(views[0].ingredients[0].quantity,100);

@@ -181,3 +181,10 @@
   .filtersExpanded .mobileFilterToggle { justify-self:end; width:38px; background:#e8eddf; }
   .weekSummary { padding:10px 0; }
 }
+
+.deleteTask { margin-top:24px; padding-top:18px; border-top:1px solid #e1e6d9; }
+.deleteButton { color:#9d3d36; border:1px solid #d8a69e; border-radius:6px; padding:10px 14px; min-height:44px; background:#fff7f4; font-weight:600; }
+.deleteButton:disabled { opacity:.5; cursor:not-allowed; }
+.removedTaskList > div { display:flex; align-items:center; justify-content:space-between; gap:15px; padding:12px 0; border-top:1px solid #e1e6d9; }
+.removedTaskList span { display:grid; gap:5px; }
+.removedTaskList small { color:#607154; }

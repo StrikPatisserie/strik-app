@@ -31,6 +31,7 @@ function Message({ state }: Readonly<{ state: AppSettingsActionState }>) {
 }
 
 const seasonalIcons: Record<keyof FeatureVisibilitySettings, string> = {
+  ijsNavigation: strikIcons.ijs,
   vierdaagseNavigation: strikIcons.strikAgenda,
   sinterklaasNavigation: strikIcons.sinterklaas,
   kerstNavigation: strikIcons.kerst,
@@ -100,6 +101,11 @@ export default function AppSettingsClient({
               />
             ))}
           </div>
+          <p className="border-t border-[#ebe5dc] px-3 py-3 text-sm text-[#625a50]">
+            Een menu uitzetten verbergt het op de startpagina en in de navigatie.
+            Registraties en toegangsrechten blijven behouden. Zet IJssalons bij
+            de start van het nieuwe seizoen weer aan.
+          </p>
         </details>
 
         <button

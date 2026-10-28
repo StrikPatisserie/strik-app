@@ -54,6 +54,7 @@ export async function updateFeatureVisibilityAction(
   revalidatePath("/settings");
   revalidatePath("/settings/app");
   revalidatePath("/sinterklaas");
+  revalidatePath("/ijs");
   revalidatePath("/vierdaagse");
 
   return {

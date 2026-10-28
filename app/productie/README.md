@@ -32,6 +32,8 @@ Het hoofdweekbord bevat Desserttaart & fruit, Luxe gebak, Kapseltaarten en Slagr
 
 Onderdelen kunnen zonder recept worden toegevoegd en later gekoppeld. Taken zijn te plannen, te verplaatsen en af te ronden. Vervolgstappen verwijzen naar een eerdere stap in dezelfde batch; één batch registreert hoogstens één output. Afdelingen die niet bekend zijn uit de bron krijgen 'Afdeling controleren'. Managers kunnen die indeling en opmerkingen aanpassen.
 
+Managers kunnen geplande taken verwijderen via het taakvenster. Taken met een gekoppelde vervolgstap moeten van achter naar voren worden verwijderd; actieve, afgeronde en geblokkeerde taken kunnen niet rechtstreeks verdwijnen. De server bewaart het oorspronkelijke taakrecord met verwijdermoment en actor in `removedTasks`, naast de bestaande versiehistorie. Via Instellingen → Verwijderde taken kunnen managers ook na herladen de oorspronkelijke taak herstellen. Clients mogen herstelrecords niet wijzigen of wissen; bestaande revisiecontrole voorkomt verwijderen vanuit een verouderde planning. Onderdelen en recepten worden hierbij niet verwijderd.
+
 De teller registreert productie, geen bewezen actuele voorraad. Onbekende voorraad blijft onbekend. Automatische verkoopprognoses, verbruik/uitgifte, werkelijke batchopbrengst, capaciteitsnormen en automatische orderimport zijn volgende bouwstappen. De eerdere receptuur- en managementschermen blijven beschikbaar en delen de nieuwe opslag.
 
 ## Verificatie

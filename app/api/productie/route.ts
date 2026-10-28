@@ -5,6 +5,7 @@ import { ProductionStoreError, readDocument, saveDocument } from "@/app/producti
 import { ingredientViews, recipeViews, syncRecipeCatalog, todayAmsterdam, validWorkspace } from "@/app/productie/workspaceData";
 import type { RecepturenData } from "@/app/bakkerij/recepturen/recepturenApi";
 import type { PreviewState } from "@/app/productie/planning";
+import { removePlannedTask } from "@/app/productie/planning";
 export const dynamic="force-dynamic";
 const headers={"Cache-Control":"private, no-store"};
 
@@ -35,13 +36,22 @@ export async function PUT(request:Request) {
     catch(error) { throw new ProductionStoreError((error as Error).message,403); }
     // Recipe review flags come from canonical source data, never the browser.
     next=syncRecipeCatalog(next,recipes.data);
-    // Original records and task identifiers stay available; deletion needs a
-    // separate reviewed archive flow, so a stale/malicious bulk save cannot
-    // silently remove production work or break a consumed dependency.
-    if (current.items.some(i=>!next.items.some(n=>n.id===i.id)) || current.tasks.some(t=>!next.tasks.some(n=>n.id===t.id))) throw new ProductionStoreError("Bestaande onderdelen of taken kunnen niet via deze wijziging worden verwijderd.",400);
+    if (current.items.some(i=>!next.items.some(n=>n.id===i.id))) throw new ProductionStoreError("Bestaande onderdelen kunnen niet via deze wijziging worden verwijderd.",400);
+    // Deleting a planned task removes it from the board, not from the history.
+    // The server owns the recovery records; clients cannot erase or rewrite them.
+    const removed=current.tasks.filter(t=>!next.tasks.some(n=>n.id===t.id));
+    let remaining=current.tasks;
+    for (const task of [...removed].reverse()) remaining=removePlannedTask(remaining,task.id);
+    const restored=next.tasks.filter(t=>!current.tasks.some(n=>n.id===t.id) && current.removedTasks?.some(r=>r.task.id===t.id));
+    for (const task of restored) {
+      const original=current.removedTasks!.find(r=>r.task.id===task.id)!.task;
+      if (JSON.stringify(original)!==JSON.stringify(task)) throw new ProductionStoreError("Herstel de oorspronkelijke geplande taak voordat je deze aanpast.",400);
+    }
+    next={...next,removedTasks:[...(current.removedTasks || []).filter(r=>!restored.some(t=>t.id===r.task.id)),...removed.map(task=>({task,removedAt:new Date().toISOString(),removedBy:profile.id}))]};
     for(const task of next.tasks) if(!current.tasks.some(t=>t.id===task.id) && next.items.find(i=>i.id===task.itemId)?.productionBlocked) throw new ProductionStoreError("Het bronrecept heeft ontbrekende verwijzingen en moet eerst gecontroleerd worden.",400);
     for (const task of current.tasks) {
-      const changed=next.tasks.find(t=>t.id===task.id)!;
+      const changed=next.tasks.find(t=>t.id===task.id);
+      if (!changed) continue;
       if (task.itemId!==changed.itemId || task.batchId!==changed.batchId || task.dependsOn!==changed.dependsOn || task.recordsOutput!==changed.recordsOutput) throw new ProductionStoreError("De identiteit en voorraadregistratie van bestaande productiestappen blijven behouden.",400);
       if (task.status!==changed.status) {
         // Apply the same dependency/blocking checks for managers as employees.
@@ -49,7 +59,7 @@ export async function PUT(request:Request) {
         transitionTask(current.tasks,task.id,changed.status,current.items);
       }
     }
-    const revision=await saveDocument("planner",planner.revision,next,profile.id,"Productieplanning bijgewerkt");
+    const revision=await saveDocument("planner",planner.revision,next,profile.id,removed.length ? `${removed.length} geplande taak/taken verwijderd` : restored.length ? "Geplande taak hersteld" : "Productieplanning bijgewerkt");
     return Response.json({state:visibleWorkspace(next),revision,updatedAt:new Date().toISOString()},{headers});
   } catch(error) { return Response.json({message:error instanceof Error?error.message:"Opslaan is mislukt."},{status:error instanceof ProductionStoreError?error.status:400,headers}); }
 }
