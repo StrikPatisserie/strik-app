@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { strikIcons } from "./StrikUI";
+import { ProductionAppIcon, strikIcons } from "./StrikUI";
 import {
   filterVisibleMainNavigationItems,
   type FeatureVisibilitySettings,
@@ -152,7 +152,6 @@ export default function WinkelSidebar({
           let active = isActivePath(pathname, item.href);
           if (item.href === "/winkel") active = inWinkelArea;
           if (item.href === "/ijs") active = inIjsArea;
-          if (item.href === "/bakkerij/productie") active = inBakkerijArea;
           if (item.href === "/bakkerij/logistiek") active = inLogistiekArea;
           if (item.href === "/management") active = inManagementArea;
           if (item.href === "/vierdaagse") active = inVierdaagseArea;
@@ -164,9 +163,7 @@ export default function WinkelSidebar({
               href={item.href}
               aria-label={item.label}
               className={`group relative flex h-14 w-14 items-center justify-center rounded-3xl transition ${
-                item.href === "/bakkerij/productie"
-                  ? "rounded-full bg-[#d75a48] shadow-sm ring-1 ring-[#d75a48]/30 hover:bg-[#c74c3c]"
-                  : active
+                active
                   ? "bg-white text-[#ef5737] shadow-sm ring-1 ring-white/80"
                   : "hover:bg-white/45"
               }`}
@@ -179,7 +176,19 @@ export default function WinkelSidebar({
             </Link>
           );
         })}
-        {mainItems.some(item=>item.href==="/bakkerij/productie") && <Link href="/bakkerij/productie" aria-label="Open Strik Productie" className="mt-auto -ml-4 flex h-14 w-[10.8rem] shrink-0 self-start items-center justify-center gap-3 rounded-r-full border border-[#d75a48] bg-[#d75a48] px-4 text-sm font-bold text-white shadow-sm transition hover:bg-[#c74c3c]"><span>Productie</span><img src="/icons_strik_productie-wit.svg" alt="" className="h-8 w-8 object-contain"/></Link>}
+        {mainItems.some(item => item.href === "/bakkerij/productie") && (
+          <div className="mt-auto w-full shrink-0 border-t border-[#b9c9b2]/70 pt-3">
+            <Link
+              href="/bakkerij/productie"
+              aria-label="Open Strik Productie"
+              aria-current={inBakkerijArea ? "page" : undefined}
+              className="group flex w-full flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-xs font-bold leading-4 text-[#344a39] transition hover:bg-white/45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#a63e31]"
+            >
+              <ProductionAppIcon className="h-11 w-11 shadow-sm transition group-hover:bg-[#c74c3c]" />
+              <span>Productie</span>
+            </Link>
+          </div>
+        )}
     </aside>
   );
 }
