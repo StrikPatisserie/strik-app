@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { businessProductTextParts, type BusinessProductPhoto } from "../../lib/businessProductPresentation";
 import styles from "./B2BProductText.module.css";
 
-function ProductPhotoHint({ product }: Readonly<{ product: BusinessProductPhoto }>) {
+function ProductPhotoHint({ product, icon }: Readonly<{ product: BusinessProductPhoto; icon?:"camera" }>) {
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0, width: 280 });
@@ -47,7 +47,7 @@ function ProductPhotoHint({ product }: Readonly<{ product: BusinessProductPhoto 
   return <span className={styles.hint} onMouseEnter={show} onMouseLeave={event => { if (!pinned && !(event.relatedTarget instanceof Node && popup.current?.contains(event.relatedTarget))) setOpen(false); }}>
     <button ref={owner} type="button" className={styles.button} aria-label={`Bekijk productfoto van ${product.name}`} aria-expanded={open} aria-haspopup="dialog" aria-controls={open ? id : undefined}
       onFocus={() => { if (suppressFocus.current) { suppressFocus.current = false; return; } show(); }} onBlur={() => { if (!pinned) setOpen(false); }}
-      onClick={event => { event.stopPropagation(); if (pinned) { setPinned(false); setOpen(false); } else { show(); setPinned(true); } }}>?</button>
+      onClick={event => { event.stopPropagation(); if (pinned) { setPinned(false); setOpen(false); } else { show(); setPinned(true); } }}>{icon==="camera"?<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M3 7h5l2-3h4l2 3h5v13H3Z"/><circle cx="12" cy="13" r="3"/></svg>:"?"}</button>
     {open && createPortal(<div ref={popup} id={id} role="dialog" aria-label={`Productfoto ${product.name}`} className={styles.popup} style={position} onMouseLeave={event => { if (!pinned && !(event.relatedTarget instanceof Node && owner.current?.contains(event.relatedTarget))) setOpen(false); }}>
       <div className={styles.header}><strong>{product.name}</strong><button type="button" aria-label="Productfoto sluiten" onClick={closeAndFocus}>×</button></div>
       <div className={styles.photo}><Image src={product.image} alt={`Productvoorbeeld: ${product.name}`} fill sizes="280px" /></div>
@@ -56,6 +56,6 @@ function ProductPhotoHint({ product }: Readonly<{ product: BusinessProductPhoto 
   </span>;
 }
 
-export default function B2BProductText({ text }: Readonly<{ text: string }>) {
-  return <>{businessProductTextParts(text).map((part, index) => <Fragment key={index}>{part.text}{part.product && <ProductPhotoHint product={part.product} />}</Fragment>)}</>;
+export default function B2BProductText({ text, icon }: Readonly<{ text: string; icon?:"camera" }>) {
+  return <>{businessProductTextParts(text).map((part, index) => <Fragment key={index}>{part.text}{part.product && <ProductPhotoHint product={part.product} icon={icon} />}</Fragment>)}</>;
 }

@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ProductionAppIcon, strikIcons } from "./StrikUI";
+import { strikIcons } from "./StrikUI";
 import {
   filterVisibleMainNavigationItems,
   type FeatureVisibilitySettings,
@@ -148,7 +148,7 @@ export default function WinkelSidebar({
             Home
           </span>
         </Link>
-        {mainItems.map((item) => {
+        {mainItems.filter(item=>item.href!=="/bakkerij/productie").map((item) => {
           let active = isActivePath(pathname, item.href);
           if (item.href === "/winkel") active = inWinkelArea;
           if (item.href === "/ijs") active = inIjsArea;
@@ -171,7 +171,7 @@ export default function WinkelSidebar({
                   : "hover:bg-white/45"
               }`}
             >
-              {item.href === "/bakkerij/productie" ? <ProductionAppIcon className="h-14 w-14" /> : <img src={item.icon} alt="" className="h-9 w-9 object-contain" />}
+              <img src={item.icon} alt="" className="h-9 w-9 object-contain" />
               <span className="sr-only">{item.label}</span>
               <span className="pointer-events-none absolute left-[calc(100%+0.75rem)] top-1/2 z-[100] -translate-y-1/2 translate-x-1 whitespace-nowrap rounded-lg bg-[#183d29] px-3 py-2 text-xs font-black text-white opacity-0 shadow-lg transition group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100">
                 {item.label}
@@ -179,6 +179,7 @@ export default function WinkelSidebar({
             </Link>
           );
         })}
+        {mainItems.some(item=>item.href==="/bakkerij/productie") && <Link href="/bakkerij/productie" aria-label="Open Strik Productie" className="mt-auto -ml-4 flex h-14 w-[10.8rem] shrink-0 self-start items-center justify-center gap-3 rounded-r-full border border-[#d75a48] bg-[#d75a48] px-4 text-sm font-bold text-white shadow-sm transition hover:bg-[#c74c3c]"><span>Productie</span><img src="/icons_strik_productie-wit.svg" alt="" className="h-8 w-8 object-contain"/></Link>}
     </aside>
   );
 }

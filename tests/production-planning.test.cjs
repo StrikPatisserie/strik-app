@@ -12,7 +12,7 @@ function load(file, imports = {}, extra = '', environment = 'development') {
 const m = load('app/productie/planning.ts');
 const sample = load('app/preview/productie/sampleData.ts', { '../../productie/planning': m });
 const workspace=load('app/productie/workspaceData.ts',{'./planning':m});
-const component = load('app/preview/productie/ProductionPreview.tsx', { 'react': require('react'), '../../productie/planning': m, './sampleData': sample, '../../productie/workspaceData':workspace }, '\nexports.validState=isPreviewState;');
+const component = load('app/preview/productie/ProductionPreview.tsx', { 'react': require('react'), 'next/dynamic':()=>()=>null,'../../productie/WeddingWeekLane':{__esModule:true,default:()=>null},'../../productie/weddingPlanning':{},'../../productie/planning': m, './sampleData': sample, '../../productie/workspaceData':workspace }, '\nexports.validState=isPreviewState;');
 test('only planned leaf tasks can be removed without changing the original array or recipes',()=>{
  const state=sample.initialPreviewState(),leaf=state.tasks.find(t=>t.status==='planned'&&!state.tasks.some(n=>n.dependsOn===t.id));
  const next=m.removePlannedTask(state.tasks,leaf.id);assert.equal(next.length,state.tasks.length-1);assert(state.tasks.some(t=>t.id===leaf.id));
@@ -29,7 +29,7 @@ test('calendar weeks survive Amsterdam clock changes and ISO year boundaries', (
   assert.throws(() => m.addDays('2026-02-30', 1), /datum/);
 });
 test('Bakkant combines baking and bread while patisserie, ice and chocolate keep their boards', () => {
-  assert.deepEqual(Array.from(m.departmentsFor('patisserie'), d => d.id), ['dessert', 'luxe', 'kapsel', 'slagroom']);
+  assert.deepEqual(Array.from(m.departmentsFor('patisserie'), d => d.id), ['dessert', 'luxe', 'kapsel', 'slagroom', 'bruidstaarten']);
   assert.deepEqual(Array.from(m.departmentsFor('bak'), d => d.id), ['bak', 'brood']);
   assert.equal(m.BOARDS.find(board => board.id === 'bak').name, 'Bakkant');
   assert.equal(m.BOARDS.some(board => board.id === 'brood'), false);
@@ -133,4 +133,10 @@ test('the fixed day rhythm applies only to Patisserie Monday through Friday, inc
  assert.equal(rhythm.plannedOperation('component',false,false),'Bereiden');
  assert.equal(rhythm.plannedOperation('product',false,false),'Maken');
  assert.equal(rhythm.plannedOperation('product',true,true),'Afwerken');
+});
+
+test('operational recipe search matches independent word parts, accents, article numbers and ingredient names',()=>{
+ const values=["Strik's Caramel Pécan Pie",'12345','Vanillecrème','Bakken en decoreren'];
+ for(const query of ['cara pec','PECAN strik','345','vanille cre','decore bak'])assert(m.matchesProductionSearch(query,values));
+ assert(!m.matchesProductionSearch('pecan aardbei',values));assert(m.matchesProductionSearch('',values));
 });

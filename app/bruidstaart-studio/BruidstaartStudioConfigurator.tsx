@@ -1416,10 +1416,12 @@ export function CakeVisualizer({
   config,
   compact = false,
   showDownload = true,
+  fitCake = false,
 }: {
   config: WeddingCakeConfig;
   compact?: boolean;
   showDownload?: boolean;
+  fitCake?: boolean;
 }) {
   const visualizerId = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -3368,7 +3370,7 @@ export function CakeVisualizer({
       </div>
       <svg
         ref={svgRef}
-        viewBox="0 0 260 280"
+        viewBox={fitCake ? `0 ${Math.max(0, topY - 75)} 260 ${280 - Math.max(0, topY - 75)}` : "0 0 260 280"}
         className={
           compact
             ? "mx-auto h-auto w-full max-w-[14rem] text-[#1f1d1a]"

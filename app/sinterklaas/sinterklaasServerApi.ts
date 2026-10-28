@@ -223,3 +223,21 @@ export async function proxySinterklaasMutation(
     );
   }
 }
+
+/** Operational B2B access for the guarded Productie adapter. Never return this
+ * full source to a production client; project it to production fields first. */
+export async function loadProductionB2BOrders(year:string){
+ const response=await fetch(getWordPressUrl("sinterklaas-b2b-orders",`https://app.strik-patisserie.nl/?year=${encodeURIComponent(year)}`),{cache:"no-store",signal:AbortSignal.timeout(15000)});
+ const data=await readWordPressResponse(response);
+ if(!response.ok || !data || typeof data!=="object" || !("orders" in data) || !Array.isArray(data.orders))throw Error("De B2B-bestellingen konden niet volledig worden opgehaald.");
+ return data.orders.flatMap(value=>{const order=normalizeB2BOrder(value);return order?[order]:[];});
+}
+export async function saveProductionB2BProgress(id:string,field:"productionDone"|"letterProductionDone",done:boolean){
+ const patch={id,[field]:done,...(field==="productionDone"?{productionDoneAt:done?new Date().toISOString():""}:{})};
+ const url=getWordPressUrl("sinterklaas-b2b-orders",`https://app.strik-patisserie.nl/?id=${encodeURIComponent(id)}`);
+ const response=await fetch(url,{method:"PATCH",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify(patch),signal:AbortSignal.timeout(15000)});
+ const raw=await readWordPressResponse(response),order=normalizeB2BOrder(raw);
+ if(!response.ok || !order)throw Error("De voortgang is niet bevestigd door de B2B-opslag. Ververs de lijst voordat je opnieuw probeert.");
+ if(order[field]!==done)throw Error("De B2B-opslag bevestigde een andere voortgang. Ververs de bestelling.");
+ return order;
+}

@@ -1,6 +1,6 @@
-import { addDays, addTask, dateLabel, DEPARTMENTS, type DemoRecipe, type DepartmentId, type PreviewState, type Task } from "./planning";
+import { addDays, addTask, dateLabel, DEPARTMENTS, requiredTaskIds, type DemoRecipe, type DepartmentId, type PreviewState, type Task, type PreparationChoice } from "./planning";
 
-export type PreparationChoice = { include?: boolean; date?: string; departmentId?: DepartmentId };
+export type { PreparationChoice } from "./planning";
 export type PlanCommand = {
   task: Omit<Task,"quantity"|"requires"|"generatedFor">;
   amount: number; amountMode: "quantity" | "batches";
@@ -115,6 +115,73 @@ export function buildRecipePlan(state:PreviewState,recipes:DemoRecipe[],command:
   const root:Task={id:draft.id,itemId:draft.itemId,departmentId:draft.departmentId,date:draft.date,quantity:proposal.quantity,operation:draft.operation,status:draft.status,
     note:draft.note,source:draft.source,batchId:draft.batchId,recordsOutput:draft.recordsOutput,
     ...(draft.minutes!==undefined?{minutes:draft.minutes}:{}),...(draft.dueDate?{dueDate:draft.dueDate}:{}),...(draft.dependsOn?{dependsOn:draft.dependsOn}:{}),
-    ...(included.length?{requires:included.filter(r=>directIds.has(r.recipeId)).map(r=>taskIds.get(r.recipeId)!)}:{})};
+    ...(included.length?{requires:included.filter(r=>directIds.has(r.recipeId)).map(r=>taskIds.get(r.recipeId)!)}:{}),
+    recipePlan:{amount:command.amount,amountMode:command.amountMode,...(command.preparation?{preparation:{daysBefore:command.preparation.daysBefore,choices:Object.fromEntries(proposal.rows.filter(r=>command.preparation!.choices[r.recipeId]).map(r=>{const c=command.preparation!.choices[r.recipeId];return [r.recipeId,{...(c.include!==undefined?{include:c.include}:{}),...(c.date?{date:c.date}:{}),...(c.departmentId?{departmentId:c.departmentId}:{})}];}))}}:{})}};
   return addTask(next,root);
+}
+
+/** Reconstruct older plans too. Existing dates/departments take precedence over
+ * saved preferences because a colleague may have moved a task on the board. */
+export function currentPlanCommand(state:PreviewState,task:Task):PlanCommand {
+  const saved=task.recipePlan;
+  const children=state.tasks.filter(t=>t.generatedFor===task.id);
+  const preparation=saved?.preparation || (children.length?{daysBefore:1,choices:{}}:undefined);
+  const choices={...preparation?.choices};
+  for(const child of children) {
+    const recipeId=state.items.find(i=>i.id===child.itemId)?.recipeId;
+    if(recipeId)choices[recipeId]={...choices[recipeId],include:true,date:child.date,departmentId:child.departmentId};
+  }
+  return {task:{...task},amount:saved?.amount || task.quantity,amountMode:saved?.amountMode || "quantity",...(preparation?{preparation:{daysBefore:preparation.daysBefore,choices}}:{})};
+}
+export type PlanChange={name:string;unit:string;before?:number;after?:number;detail?:string};
+export function recipePlanChanges(state:PreviewState,recipes:DemoRecipe[],task:Task,command=currentPlanCommand(state,task)) {
+  const proposal=preparationProposal(state,recipes,command),changes:PlanChange[]=[];
+  const children=state.tasks.filter(t=>t.generatedFor===task.id);
+  const rows=proposal.rows.filter(r=>r.included);
+  const item=state.items.find(i=>i.id===task.itemId);
+  if(Math.abs(proposal.quantity-task.quantity)>1e-8)changes.push({name:item?.name || "Product",unit:item?.unit || "",before:task.quantity,after:proposal.quantity});
+  for(const child of children) {
+    const row=rows.find(r=>r.itemId===child.itemId),part=state.items.find(i=>i.id===child.itemId);
+    if(!row)changes.push({name:part?.name || "Halffabricaat",unit:part?.unit || "",before:child.quantity});
+    else if(Math.abs(row.quantity-child.quantity)>1e-8)changes.push({name:row.name,unit:row.unit,before:child.quantity,after:row.quantity});
+    else {
+      const oldRequires=requiredTaskIds(child).map(id=>state.tasks.find(t=>t.id===id)?.itemId).sort();
+      const nextRequires=row.requires.map(id=>rows.find(r=>r.recipeId===id)?.itemId).sort();
+      if(JSON.stringify(oldRequires)!==JSON.stringify(nextRequires))changes.push({name:row.name,unit:row.unit,before:child.quantity,after:row.quantity,detail:"Benodigde halffabricaten gewijzigd"});
+    }
+  }
+  for(const row of rows)if(!children.some(t=>t.itemId===row.itemId))changes.push({name:row.name,unit:row.unit,after:row.quantity});
+  const direct=recipes.find(r=>r.id===item?.recipeId)?.semiFinishedItems || [];
+  const oldDirect=(task.requires || []).map(id=>state.tasks.find(t=>t.id===id)?.itemId).sort();
+  const nextDirect=rows.filter(r=>direct.some(d=>d.recipeId===r.recipeId)).map(r=>r.itemId).sort();
+  if(JSON.stringify(oldDirect)!==JSON.stringify(nextDirect) && !changes.length)changes.push({name:item?.name || "Product",unit:item?.unit || "",detail:"Volgorde van halffabricaten gewijzigd"});
+  return {changes,errors:proposal.errors,changed:!!changes.length || !!proposal.errors.length};
+}
+export function recipePlanUpdateBlock(state:PreviewState,task:Task):string|undefined {
+  const group=state.tasks.filter(t=>t.id===task.id || t.generatedFor===task.id),ids=new Set(group.map(t=>t.id));
+  if(task.generatedFor || task.dependsOn)return "Werk de eerste productiestap bij; deze taak hoort bij een andere productiestap.";
+  if(group.some(t=>t.status!=="planned"))return "Deze productie of een halffabricaat is al gestart, afgerond of geblokkeerd. De bestaande registratie blijft behouden; beoordeel de wijziging handmatig.";
+  if(state.tasks.some(t=>!ids.has(t.id) && requiredTaskIds(t).some(id=>id!==task.id && ids.has(id))))return "Een halffabricaat wordt ook door een andere productie gebruikt. Controleer die koppeling eerst.";
+}
+export function refreshRecipePlan(state:PreviewState,recipes:DemoRecipe[],id:string,command:PlanCommand):PreviewState {
+  const root=state.tasks.find(t=>t.id===id);if(!root)throw Error("De oorspronkelijke productietaak ontbreekt.");
+  const block=recipePlanUpdateBlock(state,root);if(block)throw Error(block);
+  if(command.task.id!==id || command.task.itemId!==root.itemId || command.task.batchId!==root.batchId || command.task.recordsOutput!==root.recordsOutput || command.task.status!=="planned" || command.task.dependsOn)throw Error("De oorspronkelijke productietaak en batch moeten behouden blijven.");
+  const children=state.tasks.filter(t=>t.generatedFor===id),ids=new Set([id,...children.map(t=>t.id)]);
+  // Build independently so old preparation IDs cannot collide with new ones.
+  const proposal=buildRecipePlan({...state,tasks:[]},recipes,command);
+  const used=new Set([...state.tasks.map(t=>t.id),...(state.removedTasks || []).map(r=>r.task.id)]),mapped=new Map<string,string>([[id,id]]);
+  for(const task of proposal.tasks.filter(t=>t.id!==id)) {
+    const old=children.find(t=>t.itemId===task.itemId);
+    let nextId=old?.id || `${id}:prep:update`;let n=0;
+    while(!old && used.has(nextId))nextId=`${id}:prep:update:${++n}`;
+    used.add(nextId);mapped.set(task.id,nextId);
+  }
+  const rebuilt=proposal.tasks.map(task=>{
+    const old=children.find(t=>t.itemId===task.itemId),nextId=mapped.get(task.id)!;
+    return {...task,...(old?{operation:old.operation,note:old.note.startsWith("Meegepland voor ")?task.note:old.note,minutes:old.minutes,batchId:old.batchId}:{}),id:nextId,
+      ...(task.generatedFor?{generatedFor:id}:{}),...(task.requires?{requires:task.requires.map(required=>mapped.get(required)!)}:{}),
+      ...(!old && task.id!==id?{batchId:`batch:${nextId}`}:{})};
+  });
+  return {...state,tasks:[...state.tasks.filter(t=>!ids.has(t.id)),...rebuilt]};
 }

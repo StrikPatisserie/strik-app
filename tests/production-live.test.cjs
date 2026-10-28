@@ -105,6 +105,7 @@ test('production resource routes enforce management and HACCP department access 
   const open=()=>data.default({params:Promise.resolve({section:'verpakkingen'})});
   if(who===manager)assert.equal((await open()).props.canManage,true);
   else await assert.rejects(open(),/not-found/);
+  for(const section of ['marge','factuurimport','import']){const openSection=()=>data.default({params:Promise.resolve({section})});if(who===manager)assert.equal((await openSection()).props.canManage,true);else await assert.rejects(openSection(),/not-found/);}
   const haccp=load('app/bakkerij/productie/haccp/[department]/layout.tsx',{...common,...auth});
   const own=who===ice?'ijs':'bakkerij';
   const page=await haccp.default({params:Promise.resolve({department:own}),children:'registration'});
@@ -113,4 +114,19 @@ test('production resource routes enforce management and HACCP department access 
   if(who!==manager)await assert.rejects(haccp.default({params:Promise.resolve({department:own==='ijs'?'bakkerij':'ijs'}),children:'registration'}),/not-found/);
   await assert.rejects(haccp.default({params:Promise.resolve({department:'unknown'}),children:'registration'}),/not-found/);
  }
+});
+
+test('production navigation separates operational recipes from management and keeps the return link visible',()=>{
+ const jsx=require('react/jsx-runtime'),nav=load('app/productie/ProductionNavigation.tsx',{'react/jsx-runtime':jsx,'next/link':{default:'a'},'next/navigation':{},'../StrikUI':{ProductionAppIcon:'app-icon'},'./ProductionIcon':{default:'icon'},'./navigation':load('app/productie/navigation.ts',{'./planning':planning}),'../preview/productie/production.module.css':{default:{}}});
+ const nodes=tree=>!tree || typeof tree!=='object'?[]:Array.isArray(tree)?tree.flatMap(nodes):[tree,...nodes(tree.props?.children)];
+ const text=tree=>typeof tree==='string'?tree:Array.isArray(tree)?tree.map(text).join(''):tree?.props?text(tree.props.children):'';
+ for(const canManage of [false,true]){const tree=nav.default({active:'planning',canManage,canBakery:true,boards:[],demo:false});assert(text(tree).includes('Strik-app · hoofdmenu'));assert(text(tree).includes('Recepten'));assert.equal(text(tree).includes('Receptuurbeheer'),canManage);assert(!text(tree).includes('Producten & onderdelen'));assert(!text(tree).includes('Verpakkingen'));assert(nodes(tree).some(n=>n.props?.href==='/'));}
+});
+test('the loading screen retains the role-specific production frame and a local status indicator',()=>{
+ const jsx=require('react/jsx-runtime');
+ for(const canManage of [false,true]){const component=load('app/productie/ProductionLoading.tsx',{'react/jsx-runtime':jsx,'next/navigation':{usePathname:()=>'/bakkerij/productie/beheer/recepten'},'./ProductionResourceFrame':{default:'production-frame'},'./ProductionSession':{useProductionSession:()=>({canManage,departments:['dessert']})},'../preview/productie/production.module.css':{default:{}}});const tree=component.default();assert.equal(tree.type,'production-frame');assert.equal(tree.props.canManage,canManage);assert.equal(tree.props.active,'data');assert.equal(tree.props.children.props.role,'status');}
+});
+test('the operational workspace exposes only the selected safe offer fields, never management data',async()=>{
+ const a=route(bakery);a.store.recipes.data.bakeryHome={offers:[{id:'offer',weekStart:'2026-10-26',weekEnd:'2026-11-01',label:'Voorbeeld',imageUrl:'/api/recepturen/media/test',managerSecret:'never-export'}],notes:[]};
+ const response=await a.api.GET(),result=await response.json();assert.equal(result.weeklyOffers[0].label,'Voorbeeld');assert(!JSON.stringify(result).includes('never-export'));
 });

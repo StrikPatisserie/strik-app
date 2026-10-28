@@ -1726,6 +1726,7 @@ export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ sea
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saveNotice, setSaveNotice] = useState("");
+  const [syncError, setSyncError] = useState("");
   const [updatingId, setUpdatingId] = useState("");
   const [importPreview, setImportPreview] = useState<B2BFormState[]>([]);
   const [importing, setImporting] = useState(false);
@@ -1754,6 +1755,7 @@ export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ sea
   async function loadOrders(nextYear = year) {
     setLoading(true);
     setError("");
+    setSyncError("");
     try {
       setOrders((await fetchB2BOrders(nextYear)).filter(order => orderBelongsToSeason(order, season)));
     } catch (loadError) {
@@ -1771,6 +1773,26 @@ export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ sea
     void loadOrders(year);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year, season]);
+
+  useEffect(() => {
+    // Keep the shared production checkboxes current without interrupting an
+    // order form, confirmation dialog, import or an in-flight status update.
+    if (loading || formOpen || updatingId || importing || confirmationTarget || quotationTarget || approvalTarget || deleteTarget) return;
+    let active = true, pending = false;
+    async function refreshProgress() {
+      if (document.hidden || pending) return;
+      pending = true;
+      try {
+        const current = (await fetchB2BOrders(year)).filter(order => orderBelongsToSeason(order, season));
+        if (active) { setOrders(current); setSyncError(""); }
+      } catch {
+        if (active) setSyncError("Automatisch verversen is mislukt. De productievoortgang kan verouderd zijn.");
+      } finally { pending = false; }
+    }
+    const timer = setInterval(() => void refreshProgress(), 15000);
+    window.addEventListener("focus", refreshProgress);
+    return () => { active = false; clearInterval(timer); window.removeEventListener("focus", refreshProgress); };
+  }, [year, season, loading, formOpen, updatingId, importing, confirmationTarget, quotationTarget, approvalTarget, deleteTarget]);
 
   const visibleOrders = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("nl-NL");
@@ -1991,7 +2013,7 @@ export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ sea
         <Link className={styles.newsletter} href={businessSeasons[season].mailing}>Nieuwsbrief →</Link>
       </nav>
       {saveNotice && <p role="status" className={styles.notice}>{saveNotice}<button type="button" aria-label="Melding sluiten" onClick={() => setSaveNotice("")} style={{ marginLeft: "auto" }}>×</button></p>}
-      {error && <p role="alert" className={styles.error}>{error}</p>}
+      {(error || syncError) && <p role="alert" className={styles.error}>{error || syncError}</p>}
       {formOpen ? <B2BOrderEditor order={editingOrder} season={season} onClose={closeOrderDialog} onSaved={handleSavedOrder} /> : <>
         <header className={styles.header}>
           <div><p className={styles.eyebrow}>{seasonLabel(season)} · {year}</p><h1>B2B-bestellingen</h1><p className={styles.subtitle}>Klant, levering en status in één oogopslag.</p></div>

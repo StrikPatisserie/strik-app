@@ -19,5 +19,4 @@ export const DATA_SECTIONS = [
   { id: "import", label: "Data importeren" },
   { id: "factuurimport", label: "Factuurimport" },
   { id: "marge", label: "Marges" },
-  { id: "voorpagina", label: "Weekinformatie" },
 ] as const;

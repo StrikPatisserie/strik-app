@@ -1,13 +1,16 @@
 "use client";
-import Link from "next/link";
+import ProductionLoading from "./ProductionLoading";
+import ProductionResourceFrame from "./ProductionResourceFrame";
+import { useProductionSession } from "./ProductionSession";
 import { useCallback, useEffect, useState } from "react";
 import ProductionPreview from "../preview/productie/ProductionPreview";
 import type { LiveWorkspace } from "./workspaceData";
 import type { RecipeTransferReport } from "./recipeMigration";
 import s from "../preview/productie/production.module.css";
-import type { BoardId } from "./planning";
+import type { BoardId, DepartmentId } from "./planning";
 
-export default function ProductionClient({canManage,initialView,initialBoard}:{canManage:boolean;initialView?:string;initialBoard?:BoardId}) {
+export default function ProductionClient({canManage,initialView,initialBoard,initialDepartment}:{canManage:boolean;initialView?:string;initialBoard?:BoardId;initialDepartment?:DepartmentId}) {
+  const session=useProductionSession();
   const [workspace,setWorkspace]=useState<LiveWorkspace|null>(null);
   const [error,setError]=useState("");
   const [setup,setSetup]=useState(false);
@@ -33,6 +36,7 @@ export default function ProductionClient({canManage,initialView,initialBoard}:{c
       if(data.active)await load();
     } catch(e) {setError((e as Error).message);} finally {setBusy(false);}
   }
-  if(workspace)return <>{error && <div className={s.connectionWarning} role="alert">Verbinding onderbroken: {error} De getoonde planning kan verouderd zijn. <button onClick={()=>void load()}>Opnieuw proberen</button></div>}<ProductionPreview live={workspace} onRefresh={load} initialView={initialView} initialBoard={initialBoard}/></>;
-  return <main className={s.setupPage}><Link href="/">← Terug naar Team-app</Link><span className={s.eyebrow}>STRIK PRODUCTIE</span><h1>{loading?"Je productieomgeving laden…":"Productieomgeving aansluiten"}</h1><p>{setup?"De nieuwe omgeving gebruikt één gedeelde receptenbron in Supabase. De bestaande WordPress-gegevens blijven als herstelkopie behouden.":error || "Even geduld, je gegevens worden geladen."}</p>{canManage && setup && <><button disabled={busy} className={s.secondaryButton} onClick={()=>void transfer()}>Brongegevens controleren</button>{report && <section className={s.settingCard}><h2>Controle overdracht</h2><p>{report.counts.recipes} recepten · {report.counts.semiFinished} halffabricaten · {report.counts.ingredients} grondstoffen · {report.counts.invoices} facturen</p><p>{report.errors.length} blokkerende punten · {report.warnings.length} aandachtspunten</p>{report.errors.length>0 && <ul>{report.errors.slice(0,30).map((e,i)=><li key={i}>{e.collection}{e.index!==undefined?` #${e.index+1}`:""}: {e.code}{e.field?` (${e.field})`:""}</li>)}</ul>}<button disabled={busy || !report.ready} className={s.primaryButton} onClick={()=>void transfer(true)}>{busy?"Overdracht en eindcontrole bezig…":"Recepten gecontroleerd overzetten"}</button></section>}</>}{error && !loading && <p role="alert" className={s.formError}>{error}</p>}{busy && <p role="status">Laat dit scherm open tot de overdracht is afgerond.</p>}</main>;
+  if(workspace)return <>{error && <div className={s.connectionWarning} role="alert">Verbinding onderbroken: {error} De getoonde planning kan verouderd zijn. <button onClick={()=>void load()}>Opnieuw proberen</button></div>}<ProductionPreview live={workspace} onRefresh={load} initialView={initialView} initialBoard={initialBoard} initialDepartment={initialDepartment}/></>;
+  if(loading)return <ProductionLoading/>;
+  return <ProductionResourceFrame title="Productieomgeving aansluiten" active="planning" canManage={canManage} departments={session.departments}><div className={s.settingCard}><p>{setup?"De nieuwe omgeving gebruikt één gedeelde receptenbron in Supabase. De bestaande WordPress-gegevens blijven als herstelkopie behouden.":error || "Even geduld, je gegevens worden geladen."}</p>{canManage && setup && <><button disabled={busy} className={s.secondaryButton} onClick={()=>void transfer()}>Brongegevens controleren</button>{report && <section className={s.settingCard}><h2>Controle overdracht</h2><p>{report.counts.recipes} recepten · {report.counts.semiFinished} halffabricaten · {report.counts.ingredients} grondstoffen · {report.counts.invoices} facturen</p><p>{report.errors.length} blokkerende punten · {report.warnings.length} aandachtspunten</p>{report.errors.length>0 && <ul>{report.errors.slice(0,30).map((e,i)=><li key={i}>{e.collection}{e.index!==undefined?` #${e.index+1}`:""}: {e.code}{e.field?` (${e.field})`:""}</li>)}</ul>}<button disabled={busy || !report.ready} className={s.primaryButton} onClick={()=>void transfer(true)}>{busy?"Overdracht en eindcontrole bezig…":"Recepten gecontroleerd overzetten"}</button></section>}</>}{error && !loading && <p role="alert" className={s.formError}>{error}</p>}{busy && <p role="status">Laat dit scherm open tot de overdracht is afgerond.</p>}</div></ProductionResourceFrame>;
 }

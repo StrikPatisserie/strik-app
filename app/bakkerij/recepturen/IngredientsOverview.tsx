@@ -117,7 +117,7 @@ export default function IngredientsOverview({
   const extraFilterCount = Number(allergen !== "all") + Number(priceChange !== "all") + Number(showInactive);
 
   return (
-    <Panel className="!rounded-2xl !bg-[#fffefa] !p-3 sm:!p-4">
+    <Panel className="bg-[#fffefa] p-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-2xl font-black tracking-tight text-[#2d2a26]">Grondstoffen</h2>

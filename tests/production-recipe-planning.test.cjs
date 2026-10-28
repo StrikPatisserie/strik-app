@@ -99,7 +99,7 @@ class StoreError extends Error{constructor(message,status=503){super(message);th
 function api(profile,options={}){
  const f=fixture();const source={ingredients:[],recipes:f.recipes.map(r=>({id:r.id,name:r.name,type:r.type,standardBatchQuantity:r.yield,standardBatchUnit:r.unit==='stuks'?'stuk':r.unit,ingredients:[],semiFinishedItems:r.semiFinishedItems.map(l=>({semiFinishedRecipeId:l.recipeId,quantity:l.quantity,unit:l.unit})),allergens:[]}))};
  let writes=0;const route=load('app/api/productie/plan/route.ts',{'@/app/lib/auth/session':{getCurrentProfile:async()=>profile},'@/app/lib/auth/access':{hasFullAccess:p=>p?.role==='manager'},'@/app/productie/documents.server':{ProductionStoreError:StoreError,readDocument:async key=>key==='recipes'?{data:source,revision:7}:{data:f.state,revision:3},saveRecipePlanDocument:async(revision,recipeRevision,state)=>{assert.equal(revision,3);assert.equal(recipeRevision,7);assert(workspace.validWorkspace(state,workspace.recipeViews(source)));if(options.conflict)throw new StoreError('revision-conflict',409);writes++;return 4;}},'@/app/productie/workspaceData':workspace,'@/app/productie/recipePlanning':rules});
- return{route,...f,writes:()=>writes};
+ return{route,...f,source,writes:()=>writes};
 }
 function request(command,revision=3,recipeRevision=7){return new Request('https://app.invalid/api/productie/plan',{method:'POST',body:JSON.stringify({command,revision,recipeRevision})});}
 test('the guarded command endpoint recalculates from canonical recipes and commits the entire plan once',async()=>{
@@ -114,4 +114,66 @@ test('a late preparation cannot be saved through the API, even though the propos
  const a=api({id:'manager',active:true,role:'manager'});a.command.preparation.choices={mousse:{date:'2026-11-03'}};
  const response=await a.route.POST(request(a.command));assert.equal(response.status,400);assert.equal(a.writes(),0);
  assert.match((await response.json()).message,/gebruiksdatum/);
+});
+
+test('a changed half-finished recipe is detected and rebuilt with stable task IDs and preserved scheduling',()=>{
+ const f=fixture(),original=rules.buildRecipePlan(f.state,f.recipes,f.command),root=original.tasks.find(t=>t.id==='order-1');
+ const caramel=original.tasks.find(t=>t.itemId==='recipe:caramel');
+ f.recipes.find(r=>r.id==='mousse').semiFinishedItems[0].quantity=3000;
+ const review=rules.recipePlanChanges(original,f.recipes,root);assert(review.changed);assert.equal(review.changes.find(c=>c.name==='Caramel').after,6);
+ const next=rules.refreshRecipePlan(original,f.recipes,root.id,rules.currentPlanCommand(original,root));
+ assert(workspace.validWorkspace(next,f.recipes));assert.equal(next.tasks.length,6);
+ const updated=next.tasks.find(t=>t.itemId==='recipe:caramel');assert.equal(updated.id,caramel.id);assert.equal(updated.date,caramel.date);assert.equal(updated.quantity,6);
+ assert.equal(original.tasks.find(t=>t.id===caramel.id).quantity,4);
+ assert.equal(rules.recipePlanChanges(next,f.recipes,next.tasks.find(t=>t.id===root.id)).changed,false);
+});
+test('replacing a semi-finished ingredient adds the new requirement and removes only unused unstarted preparation',()=>{
+ const f=fixture(),original=rules.buildRecipePlan(f.state,f.recipes,f.command),root=original.tasks.find(t=>t.id==='order-1'),oldIds=original.tasks.map(t=>t.id);
+ f.recipes[0].semiFinishedItems[1]={recipeId:'caramel',quantity:8450,unit:'gram'};
+ const review=rules.recipePlanChanges(original,f.recipes,root);assert(review.changes.some(c=>c.name==='Caramel-pecan' && c.after===undefined));
+ const next=rules.refreshRecipePlan(original,f.recipes,root.id,rules.currentPlanCommand(original,root));assert(workspace.validWorkspace(next,f.recipes));
+ assert(!next.tasks.some(t=>t.itemId==='recipe:pecan'));assert.equal(next.tasks.find(t=>t.itemId==='recipe:caramel').quantity,20.9);
+ assert(next.tasks.every(t=>oldIds.includes(t.id)));assert.equal(new Set(next.tasks.map(t=>t.id)).size,next.tasks.length);
+});
+test('saved exclusions and manual preparation dates survive recalculation, including a legacy plan without metadata',()=>{
+ const f=fixture();f.command.preparation.choices={mousse:{include:false},base:{date:'2026-10-29',departmentId:'brood'}};
+ const original=rules.buildRecipePlan(f.state,f.recipes,f.command),root=original.tasks.find(t=>t.id==='order-1');
+ assert.equal(rules.recipePlanChanges(original,f.recipes,root).changed,false);
+ f.recipes[0].semiFinishedItems[0].quantity=10000;
+ const next=rules.refreshRecipePlan(original,f.recipes,root.id,rules.currentPlanCommand(original,root));assert(!next.tasks.some(t=>t.itemId==='recipe:mousse'));
+ const base=next.tasks.find(t=>t.itemId==='recipe:base');assert.equal(base.quantity,20);assert.equal(base.date,'2026-10-29');assert.equal(base.departmentId,'brood');
+ const legacy=fixture(),old=rules.buildRecipePlan(legacy.state,legacy.recipes,legacy.command);old.tasks.forEach(t=>delete t.recipePlan);legacy.recipes[0].semiFinishedItems[0].quantity=11000;
+ const legacyRoot=old.tasks.find(t=>t.id==='order-1');assert(rules.recipePlanChanges(old,legacy.recipes,legacyRoot).changed);
+ assert(workspace.validWorkspace(rules.refreshRecipePlan(old,legacy.recipes,legacyRoot.id,rules.currentPlanCommand(old,legacyRoot)),legacy.recipes));
+});
+test('recalculation distinguishes a requested quantity from a requested number of base recipes',()=>{
+ for(const mode of ['quantity','batches']){
+  const f=fixture();f.command.amountMode=mode;f.command.amount=mode==='batches'?1:50;
+  const old=rules.buildRecipePlan(f.state,f.recipes,f.command),root=old.tasks.find(t=>t.id==='order-1');f.recipes[0].yield=60;
+  const next=rules.refreshRecipePlan(old,f.recipes,root.id,rules.currentPlanCommand(old,root));assert.equal(next.tasks.find(t=>t.id===root.id).quantity,mode==='batches'?60:50);
+  assert(workspace.validWorkspace(next,f.recipes));
+ }
+});
+test('started, completed, blocked and externally used preparation cannot be overwritten by a recipe refresh',()=>{
+ for(const status of ['active','done','blocked']){
+  const f=fixture(),old=rules.buildRecipePlan(f.state,f.recipes,f.command),root=old.tasks.find(t=>t.id==='order-1');old.tasks.find(t=>t.itemId==='recipe:caramel').status=status;
+  const before=JSON.stringify(old);assert.throws(()=>rules.refreshRecipePlan(old,f.recipes,root.id,rules.currentPlanCommand(old,root)),/al gestart/);assert.equal(JSON.stringify(old),before);
+ }
+ const f=fixture(),old=rules.buildRecipePlan(f.state,f.recipes,f.command),root=old.tasks.find(t=>t.id==='order-1'),caramel=old.tasks.find(t=>t.itemId==='recipe:caramel');
+ old.tasks.push({...root,id:'external',batchId:'external-batch',requires:[caramel.id]});assert.throws(()=>rules.refreshRecipePlan(old,f.recipes,root.id,rules.currentPlanCommand(old,root)),/andere productie/);
+});
+
+test('refreshing through the API uses canonical new recipe data and commits atomically with both revisions',async()=>{
+ const a=api({id:'manager',active:true,role:'manager'});a.state.tasks=rules.buildRecipePlan(a.state,a.recipes,a.command).tasks;
+ const root=a.state.tasks.find(t=>t.id==='order-1');a.source.recipes.find(r=>r.id==='mousse').semiFinishedItems[0].quantity=3000;
+ const refresh=()=>new Request('https://app.invalid/api/productie/plan',{method:'POST',body:JSON.stringify({replaceTaskId:root.id,command:rules.currentPlanCommand(a.state,root),revision:3,recipeRevision:7})});
+ const response=await a.route.POST(refresh());assert.equal(response.status,200);const result=await response.json();assert.equal(result.state.tasks.find(t=>t.itemId==='recipe:caramel').quantity,6);assert.equal(a.writes(),1);
+ const b=api({id:'manager',active:true,role:'manager'});b.state.tasks=rules.buildRecipePlan(b.state,b.recipes,b.command).tasks;b.state.tasks.find(t=>t.itemId==='recipe:caramel').status='active';
+ const blocked=await b.route.POST(new Request('https://app.invalid/api/productie/plan',{method:'POST',body:JSON.stringify({replaceTaskId:'order-1',command:rules.currentPlanCommand(b.state,b.state.tasks.find(t=>t.id==='order-1')),revision:3,recipeRevision:7})}));assert.equal(blocked.status,400);assert.equal(b.writes(),0);
+});
+test('newly introduced preparations use unique identities and stale recipe or planner revisions cannot refresh a plan',async()=>{
+ const f=fixture(),old=rules.buildRecipePlan(f.state,f.recipes,f.command),root=old.tasks.find(t=>t.id==='order-1');
+ f.recipes.push({...f.recipes[1],id:'new',name:'Nieuw halffabricaat',semiFinishedItems:[]});old.items.push({...old.items[1],id:'recipe:new',recipeId:'new',name:'Nieuw halffabricaat'});f.recipes[0].semiFinishedItems.push({recipeId:'new',quantity:1,unit:'kg'});
+ const next=rules.refreshRecipePlan(old,f.recipes,root.id,rules.currentPlanCommand(old,root));assert(workspace.validWorkspace(next,f.recipes));assert.equal(next.tasks.length,7);assert.equal(new Set(next.tasks.map(t=>t.id)).size,7);
+ for(const [revision,recipeRevision] of [[2,7],[3,6]]){const a=api({id:'manager',active:true,role:'manager'});a.state.tasks=rules.buildRecipePlan(a.state,a.recipes,a.command).tasks;const response=await a.route.POST(new Request('https://app.invalid/api/productie/plan',{method:'POST',body:JSON.stringify({replaceTaskId:'order-1',command:a.command,revision,recipeRevision})}));assert.equal(response.status,409);assert.equal(a.writes(),0);}
 });

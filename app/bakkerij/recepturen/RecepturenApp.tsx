@@ -97,19 +97,7 @@ import {
   syncRecipeProductionMetadata,
 } from "./utils";
 
-const beheerViewIds = [
-  "dashboard",
-  "voorpagina",
-  "recepten",
-  "halffabricaten",
-  "ingredienten",
-  "verpakkingen",
-  "import",
-  "factuurimport",
-  "marge",
-] as const;
-
-type TabId = (typeof beheerViewIds)[number];
+type TabId = "dashboard" | "voorpagina" | "recepten" | "halffabricaten" | "ingredienten" | "verpakkingen" | "import" | "factuurimport" | "marge";
 type MainTabId = "start" | "recepten" | "planning" | "beheer";
 type BeheerView = TabId | "menu";
 type RecepturenScope = "all" | "bakery" | "iceChocolate";
@@ -121,6 +109,7 @@ type RecepturenAppProps = {
   lockedTab?: MainTabId;
   hideTopNav?: boolean;
   initialBeheerView?: BeheerView;
+  initialOfferWeek?:string;
   showProductionLinks?: boolean;
   profile?: UserProfile | null;
 };
@@ -622,6 +611,7 @@ export default function RecepturenApp({
   lockedTab,
   hideTopNav = false,
   initialBeheerView = "menu",
+  initialOfferWeek,
   showProductionLinks = false,
   profile = null,
 }: Readonly<RecepturenAppProps> = {}) {
@@ -652,7 +642,7 @@ export default function RecepturenApp({
   >([]);
   const [bakeryHome, setBakeryHome] =
     useState<BakeryHomeData>(emptyBakeryHomeData);
-  const [selectedOfferWeek, setSelectedOfferWeek] = useState(weekStartForDate);
+  const [selectedOfferWeek, setSelectedOfferWeek] = useState(()=>initialOfferWeek || weekStartForDate());
   const [bakeryHomeStatus, setBakeryHomeStatus] = useState("");
   const [offerUploadStatus, setOfferUploadStatus] = useState("");
   const [syncStatus, setSyncStatus] = useState("Lokale receptuurdata geladen.");
@@ -2294,7 +2284,7 @@ export default function RecepturenApp({
           )}
 
           {mainTab === "planning" && (
-            <div className="h-full w-full overflow-y-auto px-2 py-2 sm:px-4 sm:py-3 lg:px-6">
+            <div className={embedded?"h-full w-full overflow-y-auto":"h-full w-full overflow-y-auto px-2 py-2 sm:px-4 sm:py-3 lg:px-6"}>
               <div className="w-full">
                 <RecepturenWorkMode
                   recipes={scopedRecipeItems}
@@ -2317,7 +2307,7 @@ export default function RecepturenApp({
           )}
 
           {mainTab === "beheer" && financialAccess && (
-            <div className="h-full w-full overflow-y-auto px-2 py-2 sm:px-4 sm:py-3 lg:px-6">
+            <div className={embedded?"h-full w-full overflow-y-auto":"h-full w-full overflow-y-auto px-2 py-2 sm:px-4 sm:py-3 lg:px-6"}>
               <div
                 className={
                   beheerView === "menu" ? "mx-auto w-full max-w-[72rem] py-1 sm:py-2" : "w-full"

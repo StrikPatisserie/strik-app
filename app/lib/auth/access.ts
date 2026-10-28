@@ -425,6 +425,7 @@ export function canAccessSinterklaasPath(
   if (!profile?.active) return false;
 
   if (hasFullAccess(profile)) return true;
+  if (pathname === "/sinterklaas/letters/productie" && (canAccessBakkerijPatisserie(profile) || canAccessBakkerijIjsChocolade(profile))) return true;
 
   if (isBakeryLogisticsAccount(profile)) {
     return isBakeryLogisticsSinterklaasPath(pathname);

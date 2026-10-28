@@ -1,11 +1,12 @@
 import type { RecepturenData } from "../bakkerij/recepturen/recepturenApi";
-import { type DepartmentId, type DemoRecipe, type ItemUnit, type PreviewState, type Task, DEPARTMENTS, addDays } from "./planning";
+import { type DepartmentId, type DemoRecipe, type ItemUnit, type PreviewState, type Task, DEPARTMENTS, addDays, validRecipePlan } from "./planning";
 
 export type IngredientView = { id: string; name: string; supplier: string; unit: string; linked: boolean; specification: string; allergens: string };
 export type LiveWorkspace = {
   state: PreviewState; revision: number; recipeRevision: number; updatedAt: string; today: string;
   recipes: DemoRecipe[]; ingredients: IngredientView[]; canManage: boolean;
   departments: DepartmentId[];
+  weeklyOffers?: { id:string; weekStart:string; weekEnd:string; label:string; imageUrl:string }[];
 };
 export function todayAmsterdam() { return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Amsterdam", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()); }
 export function itemUnit(value: string | undefined): ItemUnit {
@@ -90,6 +91,9 @@ export function validWorkspace(value: unknown, recipes: DemoRecipe[]): value is 
     }
     for (const t of state.tasks) {
       if (!t || !ids.has(t.itemId) || typeof t.id !== "string" || !t.id || tasks.has(t.id) || !Number.isFinite(t.quantity) || t.quantity <= 0 || t.quantity > 1000000 || !["planned","active","done","blocked"].includes(t.status) || !["manual","shop","order","routine"].includes(t.source) || !DEPARTMENTS.some(d => d.id === t.departmentId) || typeof t.operation !== "string" || !t.operation.trim() || typeof t.note !== "string" || t.note.length > 10000 || typeof t.batchId !== "string" || !t.batchId || typeof t.recordsOutput !== "boolean") return false;
+      if(t.recipePlan!==undefined && !validRecipePlan(t.recipePlan))return false;
+      if(t.weddingCode!==undefined && (typeof t.weddingCode!=="string" || !t.weddingCode || t.weddingCode.length>100))return false;
+      if(t.weddingDeliveryDate!==undefined)addDays(t.weddingDeliveryDate,0);
       addDays(t.date, 0); if (t.dueDate) { addDays(t.dueDate, 0); if (t.date > t.dueDate) return false; }
       if (t.minutes !== undefined && (!Number.isFinite(t.minutes) || t.minutes < 0 || t.minutes > 1440)) return false;
       if (t.requires!==undefined && (!Array.isArray(t.requires) || t.requires.length>250 || new Set(t.requires).size!==t.requires.length || t.requires.some(id=>typeof id!=="string" || !id || id===t.id))) return false;

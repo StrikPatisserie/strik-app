@@ -16,7 +16,7 @@ export async function GET() {
     const [recipes,planner]=await Promise.all([readDocument<RecepturenData>("recipes"),readDocument<PreviewState>("planner")]);
     if (!recipes || !planner) return Response.json({message:"De receptenoverdracht moet eerst worden afgerond.",setupRequired:true,canManage:hasFullAccess(profile)},{status:503,headers});
     const state=syncRecipeCatalog(planner.data,recipes.data);
-    return Response.json({state:visibleWorkspace(state),revision:planner.revision,recipeRevision:recipes.revision,updatedAt:planner.updated_at,today:todayAmsterdam(),recipes:recipeViews(recipes.data),ingredients:ingredientViews(recipes.data),canManage:hasFullAccess(profile),departments:allowed},{headers});
+    return Response.json({state:visibleWorkspace(state),revision:planner.revision,recipeRevision:recipes.revision,updatedAt:planner.updated_at,today:todayAmsterdam(),recipes:recipeViews(recipes.data),ingredients:ingredientViews(recipes.data),canManage:hasFullAccess(profile),departments:allowed,weeklyOffers:(recipes.data.bakeryHome?.offers || []).map(o=>({id:o.id,weekStart:o.weekStart,weekEnd:o.weekEnd,label:o.label,imageUrl:o.imageUrl}))},{headers});
   } catch (error) { return Response.json({message:error instanceof ProductionStoreError?error.message:"Strik Productie is tijdelijk niet bereikbaar."},{status:503,headers}); }
 }
 export async function PUT(request:Request) {
@@ -54,7 +54,7 @@ export async function PUT(request:Request) {
     for (const task of current.tasks) {
       const changed=next.tasks.find(t=>t.id===task.id);
       if (!changed) continue;
-      if (task.itemId!==changed.itemId || task.batchId!==changed.batchId || task.dependsOn!==changed.dependsOn || task.recordsOutput!==changed.recordsOutput || JSON.stringify(task.requires || [])!==JSON.stringify(changed.requires || []) || task.generatedFor!==changed.generatedFor) throw new ProductionStoreError("De identiteit, afhankelijkheden en voorraadregistratie van bestaande productiestappen blijven behouden.",400);
+      if (task.itemId!==changed.itemId || task.batchId!==changed.batchId || task.dependsOn!==changed.dependsOn || task.recordsOutput!==changed.recordsOutput || JSON.stringify(task.requires || [])!==JSON.stringify(changed.requires || []) || task.generatedFor!==changed.generatedFor || task.weddingCode!==changed.weddingCode || task.weddingDeliveryDate!==changed.weddingDeliveryDate || JSON.stringify(task.recipePlan)!==JSON.stringify(changed.recipePlan)) throw new ProductionStoreError("De identiteit, afhankelijkheden en voorraadregistratie van bestaande productiestappen blijven behouden.",400);
       if (task.status!==changed.status) {
         // Apply the same dependency/blocking checks for managers as employees.
         const { transitionTask }=await import("@/app/productie/planning");

@@ -5,6 +5,7 @@ export const DEPARTMENTS = [
   { id: "luxe", name: "Luxe gebak", short: "Luxe gebak", tone: "rose", board: "patisserie" },
   { id: "kapsel", name: "Kapseltaarten", short: "Kapseltaarten", tone: "honey", board: "patisserie" },
   { id: "slagroom", name: "Slagroomgebak", short: "Slagroomgebak", tone: "blue", board: "patisserie" },
+  { id: "bruidstaarten", name: "Bruidstaarten", short: "Bruidstaarten", tone: "rose", board: "patisserie" },
   { id: "bak", name: "Bakafdeling", short: "Bakafdeling", tone: "honey", board: "bak" },
   { id: "brood", name: "Brood", short: "Brood", tone: "sand", board: "bak" },
   { id: "ijs", name: "IJs", short: "IJs", tone: "blue", board: "ijs" },
@@ -29,6 +30,13 @@ export type Task = {
   note: string; source: "manual" | "shop" | "order" | "routine";
   dueDate?: string; dependsOn?: string; batchId: string; recordsOutput: boolean;
   requires?: string[]; generatedFor?: string;
+  recipePlan?: RecipePlanSettings;
+  weddingCode?: string; weddingDeliveryDate?: string;
+};
+export type PreparationChoice = { include?: boolean; date?: string; departmentId?: DepartmentId };
+export type RecipePlanSettings = {
+  amount: number; amountMode: "quantity" | "batches";
+  preparation?: { daysBefore: number; choices: Record<string, PreparationChoice> };
 };
 export type DemoRecipe = {
   id: string; name: string; yield: number; unit: ItemUnit;
@@ -203,4 +211,17 @@ export function completedOutput(items: Item[], tasks: Task[]): Map<string, numbe
     result.set(task.itemId, (result.get(task.itemId) || 0) + task.quantity);
   }
   return result;
+}
+
+export function validRecipePlan(value:RecipePlanSettings):boolean {
+  if(!value || !Number.isFinite(value.amount) || value.amount<=0 || value.amount>1000000 || !["quantity","batches"].includes(value.amountMode))return false;
+  const prep=value.preparation;if(!prep)return true;
+  if(!Number.isInteger(prep.daysBefore) || prep.daysBefore<0 || prep.daysBefore>30 || !prep.choices || typeof prep.choices!=="object" || Array.isArray(prep.choices) || Object.keys(prep.choices).length>250)return false;
+  return Object.values(prep.choices).every(c=>{if(!c || typeof c!=="object" || (c.include!==undefined && typeof c.include!=="boolean") || (c.departmentId!==undefined && !DEPARTMENTS.some(d=>d.id===c.departmentId)))return false;try{if(c.date)addDays(c.date,0);return true;}catch{return false;}});
+}
+
+export function matchesProductionSearch(query:string,values:(string|undefined)[]):boolean {
+  const normalize=(value:string)=>value.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("nl-NL");
+  const haystack=normalize(values.filter(Boolean).join(" "));
+  return normalize(query).trim().split(/\s+/).filter(Boolean).every(part=>haystack.includes(part));
 }

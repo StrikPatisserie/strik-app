@@ -30,7 +30,7 @@ function app(season) {
     if (cache[file]) return cache[file];
     const exports = cache[file] = {};
     const source = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
-    vm.runInNewContext(source + expose, { exports, console, window, Event, URL, crypto: require('node:crypto').webcrypto, require(name) {
+    vm.runInNewContext(source + expose, { exports, console, window, Event, URL, setInterval: () => 1, clearInterval: () => {}, crypto: require('node:crypto').webcrypto, require(name) {
       if (name === 'react') return hooks;
       if (name === 'react/jsx-runtime') return require(name);
       if (name === 'next/navigation') return { usePathname: () => season === 'sint' ? '/sinterklaas/b2b' : '/kerst/b2b', useRouter: () => ({ push: route => pushed.push(route) }) };
