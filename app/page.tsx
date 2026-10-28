@@ -29,8 +29,8 @@ const baseSections = [
   },
   {
     href: "/bakkerij/productie",
-    title: "Productie",
-    subtitle: "Open Strik Productie",
+    title: "STRAK gepland",
+    subtitle: "Productie, recepten en HACCP",
     icon: strikIcons.productie,
   },
   {

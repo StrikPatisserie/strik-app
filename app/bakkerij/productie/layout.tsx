@@ -6,7 +6,7 @@ import { hasFullAccess } from "@/app/lib/auth/access";
 import { ProductionSessionProvider } from "@/app/productie/ProductionSession";
 import { productionDepartments } from "@/app/productie/access";
 import "@/app/productie/production-surfaces.css";
-export const metadata: Metadata = { title: "Strik Productie", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "STRAK gepland", icons: { icon: "/strak-gepland/mark.svg", apple: "/strak-gepland/apple-touch-icon.png" }, robots: { index: false, follow: false } };
 export default async function ProductionLayout({children}:{children:ReactNode}) {
   const profile=await requireCurrentProfile();
   if(!productionDepartments(profile).length) notFound();

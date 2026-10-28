@@ -1,27 +1,27 @@
-/* Shared screen skin for every routed screen and nested editor in Productie.
+/* STRAK gepland: shared screen skin for every routed production screen and nested editor.
    Keep exports and the shop/management environment outside this scope. */
-[data-production-workspace] { --production-ink:#2b3e32; --production-muted:#758074; --production-green:#2c513e; --production-line:#dfe4da; --production-paper:#f7f7f2; font-family:Overpass,Arial,sans-serif; color:var(--production-ink); background:var(--production-paper); min-height:100dvh; }
+[data-production-workspace] { --production-ink:#1b3344; --production-muted:#63736c; --production-green:#1b3344; --production-line:#d3decf; --production-paper:#f4f6ef; --production-soft-green:#c3d3bb; --production-red:#d75a4c; --production-navy:#1b3344; font-family:Overpass,Arial,sans-serif; color:var(--production-ink); background:var(--production-paper); min-height:100dvh; }
 @media screen {
- [data-production-content] { font-family:Overpass,Arial,sans-serif; font-size:12px; line-height:1.4; color:var(--production-ink,#2b3e32); min-width:0; }
- [data-production-content] :is(h2,h3,h4) { font-family:inherit; color:var(--production-ink,#2b3e32) !important; letter-spacing:-.2px !important; line-height:1.3; }
+ [data-production-content] { font-family:Overpass,Arial,sans-serif; font-size:12px; line-height:1.4; color:var(--production-ink,#1b3344); min-width:0; }
+ [data-production-content] :is(h2,h3,h4) { font-family:inherit; color:var(--production-ink,#1b3344) !important; letter-spacing:-.2px !important; line-height:1.3; }
  [data-production-content] h2 { font-size:18px !important; } [data-production-content] :is(h3,h4) { font-size:13px !important; }
  [data-production-content] h2[class*="text-sm"] { font-size:13px !important; }
  [data-production-content] :is(section,article,fieldset,[class*="rounded-"]):not([data-preserve-shape]) { border-radius:6px !important; box-shadow:none !important; }
- [data-production-content] :is([class*="_card_"],[class*="_panel_"],[class*="_table_"],[class*="_filterPanel_"],[class*="_sharedPanel_"]) { border-radius:6px !important; box-shadow:none !important; border-color:#dfe4da; }
- [data-production-content] :is(section,article,fieldset,[data-production-card]) { border-color:var(--production-line,#dfe4da); }
+ [data-production-content] :is([class*="_card_"],[class*="_panel_"],[class*="_table_"],[class*="_filterPanel_"],[class*="_sharedPanel_"]) { border-radius:6px !important; box-shadow:none !important; border-color:#d3decf; }
+ [data-production-content] :is(section,article,fieldset,[data-production-card]) { border-color:var(--production-line,#d3decf); }
  [data-production-content] :is([data-production-card],[class*="sharedPanel"],[class*="panel_"]) { padding:12px !important; background:#fff; border-radius:6px !important; box-shadow:none !important; }
  [data-production-content] :is(button,summary) { font-family:inherit; font-size:12px !important; line-height:1.35; font-weight:600; border-radius:5px !important; min-height:32px; }
  [data-production-content] :is(input,select,textarea) { font-family:inherit; border-radius:5px !important; font-size:12px !important; font-weight:400 !important; line-height:1.4; min-height:34px; padding:6px 9px; }
  [data-production-content] :is(button,summary,input,select,textarea)[class]:not([data-preserve-shape]) { border-radius:5px !important; }
- [data-production-content] :is(input[type=checkbox],input[type=radio]) { width:18px; height:18px; min-height:18px; padding:0; accent-color:#2c513e; flex-shrink:0; }
- [data-production-content] :is(button,a)[class*="bg-[#c3d3bc]"], [data-production-content] button[class*="bg-[#f7df83]"], [data-production-content] button[class*="bg-[#d95749]"] { background:#2c513e !important; color:white !important; border-color:#2c513e !important; }
- [data-production-content] :is(button,a,label)[class*="bg-[#49342d]"], [data-production-content] :is(button,a,label)[class*="bg-[#1a1815]"], [data-production-content] label[class*="bg-[#c3d3bc]"] { background:#2c513e !important; color:white !important; border-color:#2c513e !important; }
- [data-production-content] button[class*="bg-[#fed500]"] { background:#e8efdf !important; color:#2c513e !important; border-color:#cbd8c3 !important; }
- [data-production-content] [class*="border-[#eadb8b]"] { border-color:#dfe4da; }
+ [data-production-content] :is(input[type=checkbox],input[type=radio]) { width:18px; height:18px; min-height:18px; padding:0; accent-color:#1b3344; flex-shrink:0; }
+ [data-production-content] :is(button,a)[class*="bg-[#c3d3bc]"], [data-production-content] button[class*="bg-[#f7df83]"], [data-production-content] button[class*="bg-[#d95749]"] { background:#1b3344 !important; color:white !important; border-color:#1b3344 !important; }
+ [data-production-content] :is(button,a,label)[class*="bg-[#49342d]"], [data-production-content] :is(button,a,label)[class*="bg-[#1a1815]"], [data-production-content] label[class*="bg-[#c3d3bc]"] { background:#1b3344 !important; color:white !important; border-color:#1b3344 !important; }
+ [data-production-content] button[class*="bg-[#fed500]"] { background:#e8efdf !important; color:#1b3344 !important; border-color:#cbd8c3 !important; }
+ [data-production-content] [class*="border-[#eadb8b]"] { border-color:#d3decf; }
  [data-production-content] .strik-page-title { font-family:Overpass,Arial,sans-serif !important; text-transform:none; font-size:18px !important; font-weight:700 !important; letter-spacing:-.2px !important; }
- [data-production-content] :is(section,article)[class*="bg-[#fffdf0]"], [data-production-content] section[class*="bg-[#fff8d8]"] { background:#f0f2e9 !important; border-color:#dfe4da !important; }
- [data-production-content] [class*="text-[#49342d]"], [data-production-content] [class*="text-[#2d2a26]"], [data-production-content] [class*="text-[#1a1815]"] { color:#2b3e32; }
- [data-production-content] [class*="text-[#8b8278]"], [data-production-content] [class*="text-[#a39c91]"] { color:#758074; }
+ [data-production-content] :is(section,article)[class*="bg-[#fffdf0]"], [data-production-content] section[class*="bg-[#fff8d8]"] { background:#e8efdf !important; border-color:#d3decf !important; }
+ [data-production-content] [class*="text-[#49342d]"], [data-production-content] [class*="text-[#2d2a26]"], [data-production-content] [class*="text-[#1a1815]"] { color:#1b3344; }
+ [data-production-content] [class*="text-[#8b8278]"], [data-production-content] [class*="text-[#a39c91]"] { color:#63736c; }
  [data-production-content] [class*="shadow"] { box-shadow:none !important; }
  [data-production-content] [class*="font-black"] { font-weight:600; }
  [data-production-content] [class*="text-base"], [data-production-content] [class*="text-sm"] { font-size:12px; }
@@ -31,16 +31,16 @@
  [data-production-content] [class*="gap-6"] { gap:12px; }
  [data-production-content] [class*="tracking-"] { letter-spacing:.04em; }
  [data-production-content] [class*="min-h-12"] { min-height:36px; } [data-production-content] [class*="min-h-11"] { min-height:34px; }
- [data-production-content] [class*="editor_"][class*="fixed"][class*="bg-[#c3d3bc]"] { background:#f7f7f2 !important; }
+ [data-production-content] [class*="editor_"][class*="fixed"][class*="bg-[#c3d3bc]"] { background:#f4f6ef !important; }
  [data-production-content] [class*="editor_"] > span[aria-hidden][class*="pointer-events-none"] { display:none; }
  [data-production-content] :is(table,[role=table]) { font-family:inherit; font-size:12px; }
  [data-production-content] table { border-collapse:collapse; }
- [data-production-content] th { background:#f0f2e9; color:#758074; font-size:10px; text-align:left; }
- [data-production-content] :is(th,td) { padding:7px 9px; border-color:#dfe4da; }
- [data-production-content] :is(input,select,textarea,button,a,summary):focus-visible { outline:2px solid #a0793d; outline-offset:2px; }
+ [data-production-content] th { background:#e8efdf; color:#63736c; font-size:10px; text-align:left; }
+ [data-production-content] :is(th,td) { padding:7px 9px; border-color:#d3decf; }
+ [data-production-content] :is(input,select,textarea,button,a,summary):focus-visible { outline:2px solid #1b3344; outline-offset:2px; }
  [data-production-content] [class*="fixed"][class*="inset-0"] { font-family:Overpass,Arial,sans-serif; }
  [data-production-content] [data-production-embedded] { padding:0; border:0; background:transparent; }
- [data-production-content] [data-production-kettle-step] { padding:8px 10px; border-color:#dfe4da; align-items:center; }
+ [data-production-content] [data-production-kettle-step] { padding:8px 10px; border-color:#d3decf; align-items:center; }
  [data-production-content] [data-production-kettle-step] > span { align-self:center; }
 }
 @media screen and (max-width:800px), screen and (pointer:coarse) {

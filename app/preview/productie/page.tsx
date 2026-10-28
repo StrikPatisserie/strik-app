@@ -4,8 +4,8 @@ import ProductionPreview from "./ProductionPreview";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
-  title: "Strik Productie · preview",
-  robots: { index: false, follow: false },
+  title: "STRAK gepland · preview",
+  icons: { icon: "/strak-gepland/mark.svg", apple: "/strak-gepland/apple-touch-icon.png" }, robots: { index: false, follow: false },
 };
 
 export default function ProductionPreviewPage() {

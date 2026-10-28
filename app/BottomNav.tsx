@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
-import { strikIcons } from "./StrikUI";
+import { ProductionAppIcon, strikIcons } from "./StrikUI";
 import {
   filterVisibleMainNavigationItems,
   type FeatureVisibilitySettings,
@@ -17,7 +17,7 @@ const items = [
   { href: "/winkel", label: "Winkel", icon: strikIcons.winkel },
   { href: "/ijs", label: "IJssalons", icon: strikIcons.ijs },
   { href: "/bakkerij/logistiek", label: "Logistiek", icon: strikIcons.logistiek },
-  { href: "/bakkerij/productie", label: "Productie", icon: strikIcons.productie },
+  { href: "/bakkerij/productie", label: "STRAK gepland", icon: strikIcons.productie },
   { href: "/management", label: "Management", icon: strikIcons.management },
   { href: "/vierdaagse", label: "Vierdaagse", icon: strikIcons.strikAgenda },
   { href: "/sinterklaas", label: "Sinterklaas", icon: strikIcons.sinterklaas },
@@ -132,12 +132,12 @@ export default function BottomNav({
               href={item.href}
               data-active={active ? "true" : undefined}
               className={`flex h-[4.25rem] min-w-[4.45rem] shrink-0 snap-start flex-col items-center justify-center gap-0.5 rounded-2xl px-1.5 py-1 text-center text-[0.6rem] font-bold transition ${
-                item.href === "/bakkerij/productie" ? "ml-2 !min-w-[6rem] border-l-4 border-white !bg-[#d75a48] !text-white" : active
+                item.href === "/bakkerij/productie" ? "ml-2 !min-w-[6rem] border-l-4 border-white !bg-[#e5eddf] !text-[#1b3344]" : active
                   ? "bg-[#ecf4ed] text-[#214456] shadow-sm"
                   : "text-[#6b645b] hover:bg-[#f6faf4] hover:text-[#4a6d5a]"
               }`}
             >
-              {item.href === "/bakkerij/productie" ? <img src="/icons_strik_productie-wit.svg" alt="" className="h-8 w-8 object-contain"/> : <img src={item.icon} alt="" className={`${item.href === "/" ? "h-9 w-9" : "h-5 w-5"} shrink-0 object-contain`} />}
+              {item.href === "/bakkerij/productie" ? <ProductionAppIcon className="h-9 w-9"/> : <img src={item.icon} alt="" className={`${item.href === "/" ? "h-9 w-9" : "h-5 w-5"} shrink-0 object-contain`} />}
               <span className="whitespace-nowrap leading-none">{item.label}</span>
             </Link>
           );

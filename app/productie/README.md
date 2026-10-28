@@ -1,4 +1,4 @@
-# Strik Productie
+# STRAK gepland
 
 Live werkversie, 28 oktober 2026. De omgeving staat op `/bakkerij/productie`, bereikbaar via Productie. De eenmalige overdracht wordt via het ingelogde management uitgevoerd. `/preview/productie` blijft uitsluitend in development beschikbaar met eigen fictieve gegevens.
 

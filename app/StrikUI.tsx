@@ -46,7 +46,11 @@ export const strikIcons = {
 };
 
 export function ProductionAppIcon({ className = "h-11 w-11" }: { className?: string }) {
-  return <span aria-hidden="true" className={`inline-flex shrink-0 items-center justify-center rounded-full bg-[#d75a48] ${className}`}><img src="/icons_strik_productie-wit.svg" alt="" className="h-4/5 w-4/5 object-contain" /></span>;
+  return <span aria-hidden="true" className={`inline-flex shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#c3d3bb] ${className}`}><img src="/strak-gepland/mark.svg" alt="" className="h-full w-full object-contain" /></span>;
+}
+
+export function ProductionWordmark({className}:{className?:string}) {
+  return <img src="/strak-gepland/wordmark.svg" alt="STRAK gepland" width={494} height={305} className={className}/>;
 }
 
 const toneClasses = {

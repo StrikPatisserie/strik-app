@@ -180,12 +180,12 @@ export default function WinkelSidebar({
           <div className="mt-auto w-full shrink-0 border-t border-[#b9c9b2]/70 pt-3">
             <Link
               href="/bakkerij/productie"
-              aria-label="Open Strik Productie"
+              aria-label="Open STRAK gepland · Productie"
               aria-current={inBakkerijArea ? "page" : undefined}
               className="group flex w-full flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-xs font-bold leading-4 text-[#344a39] transition hover:bg-white/45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#a63e31]"
             >
-              <ProductionAppIcon className="h-11 w-11 shadow-sm transition group-hover:bg-[#c74c3c]" />
-              <span>Productie</span>
+              <ProductionAppIcon className="h-11 w-11 shadow-sm ring-1 ring-[#1b3344]/10" />
+              <span className="text-[#1b3344]">STRAK<br/><span className="font-normal">gepland</span></span>
             </Link>
           </div>
         )}

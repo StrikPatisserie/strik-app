@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ProductionAppIcon } from "../StrikUI";
+import { ProductionWordmark } from "../StrikUI";
 import Icon, { type IconName } from "./ProductionIcon";
 import { PRODUCTION_HOME, type ProductionView } from "./navigation";
 import type { BoardId } from "./planning";
@@ -31,8 +31,8 @@ export default function ProductionNavigation({ active, canManage, canBakery = tr
 }) {
   return <aside className={s.sidebar}>
     <Link href="/" className={s.returnToTeam}><Icon name="back" size={17}/><span>Strik-app · hoofdmenu</span></Link>
-    <Link href={demo ? "/preview/productie" : PRODUCTION_HOME} className={s.brand} aria-label="Strik Productie"><ProductionAppIcon className="h-12 w-12" /><span>STRIK<strong>Productie</strong></span></Link>
-    <span className={s.sidebarCaption}>HET ATELIER</span>
+    <Link href={demo ? "/preview/productie" : PRODUCTION_HOME} className={s.brand} aria-label="STRAK gepland"><ProductionWordmark className={s.wordmark}/></Link>
+    <span className={s.sidebarCaption}>WERKPLEK</span>
     <nav aria-label="Productiemenu">{availableSections(canManage, demo, canBakery).map(section => {
       const content = <><Icon name={section.icon} /><span>{section.label}</span></>;
       return onNavigate && ["planning", "catalog", "recipes", "ingredients", "stock"].includes(section.id)
@@ -43,7 +43,7 @@ export default function ProductionNavigation({ active, canManage, canBakery = tr
       const content = <><span className={`${s.boardDot} ${s[`board_${board.id}`]}`} />{board.name}{active === "planning" && activeBoard === board.id && <Icon name="chevron" size={12} />}</>;
       return onBoard ? <button key={board.id} onClick={() => onBoard(board.id)} aria-current={active === "planning" && activeBoard === board.id ? "true" : undefined}>{content}</button> : <Link key={board.id} href={`${PRODUCTION_HOME}?board=${board.id}`}>{content}</Link>;
     })}</div>
-    <div className={s.sidebarBottom}>{onNavigate ? <button onClick={() => onNavigate("settings")} aria-current={active === "settings" ? "page" : undefined}><Icon name="settings" />Instellingen</button> : <Link href={`${PRODUCTION_HOME}?view=settings`}><Icon name="settings" />Instellingen</Link>}<span>Met aandacht gemaakt. Sinds 1937.</span></div>
+    <div className={s.sidebarBottom}>{onNavigate ? <button onClick={() => onNavigate("settings")} aria-current={active === "settings" ? "page" : undefined}><Icon name="settings" />Instellingen</button> : <Link href={`${PRODUCTION_HOME}?view=settings`}><Icon name="settings" />Instellingen</Link>}<span>STRAK gepland · voor Strik</span></div>
   </aside>;
 }
 

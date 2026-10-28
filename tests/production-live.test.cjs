@@ -130,7 +130,7 @@ test('production resource routes enforce management and HACCP department access 
 });
 
 test('production navigation separates operational recipes from management and keeps the return link visible',()=>{
- const jsx=require('react/jsx-runtime'),nav=load('app/productie/ProductionNavigation.tsx',{'react/jsx-runtime':jsx,'next/link':{default:'a'},'next/navigation':{},'../StrikUI':{ProductionAppIcon:'app-icon'},'./ProductionIcon':{default:'icon'},'./navigation':load('app/productie/navigation.ts',{'./planning':planning}),'../preview/productie/production.module.css':{default:{}}});
+ const jsx=require('react/jsx-runtime'),nav=load('app/productie/ProductionNavigation.tsx',{'react/jsx-runtime':jsx,'next/link':{default:'a'},'next/navigation':{},'../StrikUI':{ProductionWordmark:'wordmark'},'./ProductionIcon':{default:'icon'},'./navigation':load('app/productie/navigation.ts',{'./planning':planning}),'../preview/productie/production.module.css':{default:{}}});
  const nodes=tree=>!tree || typeof tree!=='object'?[]:Array.isArray(tree)?tree.flatMap(nodes):[tree,...nodes(tree.props?.children)];
  const text=tree=>typeof tree==='string'?tree:Array.isArray(tree)?tree.map(text).join(''):tree?.props?text(tree.props.children):'';
  for(const canManage of [false,true]){const tree=nav.default({active:'planning',canManage,canBakery:true,boards:[],demo:false});assert(text(tree).includes('Strik-app · hoofdmenu'));assert(text(tree).includes('Recepten'));assert.equal(text(tree).includes('Receptuurbeheer'),canManage);assert(!text(tree).includes('Producten & onderdelen'));assert(!text(tree).includes('Verpakkingen'));assert(nodes(tree).some(n=>n.props?.href==='/'));}
