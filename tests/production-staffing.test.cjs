@@ -39,6 +39,16 @@ test('unknown norms, incomplete APIs, work during leave, partial leave and overl
  assert.equal(staff.vacationWarnings(week,[...vacation(),...vacation().map(e=>({...e,id:`absence-${e.id}`,source:'absence'}))],{...settings,people:[{...person,weeklyHours:75}]},true).alerts.length,0);
  const overlapping=[...vacation(),{...vacation()[0],id:'overlap',start:'2026-11-09T07:00:00Z',end:'2026-11-09T15:00:00Z',minutes:480}];assert.equal(staff.vacationWarnings(week,overlapping,settings,true).alerts.length,0);
 });
+test('multi-day vacation periods appear on every day and their period total is counted once, without converting nights into leave hours',()=>{
+ const range=staff.normalizeRosterShifts([raw({StartDateTime:'2026-11-09T05:30:00+01:00',EndDateTime:'2026-11-13T14:00:00+01:00',ShiftHours:37.5})],department).entries;
+ assert.equal(range.length,5);assert(range.every(e=>e.minutes===null));assert.equal(staff.vacationWarnings(week,range,settings,true).alerts.length,1);
+ assert.equal(staff.vacationWarnings(week,range,{...settings,people:[{...person,weeklyHours:75}]},true).alerts.length,0);
+ const withoutHours=staff.normalizeRosterShifts([raw({StartDateTime:'2026-11-09T05:30:00+01:00',EndDateTime:'2026-11-13T14:00:00+01:00',ShiftHours:undefined})],department).entries;
+ assert.equal(staff.vacationWarnings(week,withoutHours,settings,true).alerts.length,0);
+ const fullDays=staff.normalizeRosterAbsences([{EmployeeId:employeeId,Name:'Voorbeeld Marit',AbsenceName:'Vakantie',Planned:[{DepartmentId:departmentId,StartDateTime:'2026-11-09T00:00:00+01:00',EndDateTime:'2026-11-14T00:00:00+01:00'}]}],department).entries;
+ assert.equal(fullDays.length,5);assert(fullDays.every(e=>e.period.fullDay));assert.equal(staff.vacationWarnings(week,fullDays,settings,true).alerts.length,1);
+ const duplicated=[...range,...range.map(e=>({...e,id:`report-${e.id}`,source:'absence'}))];assert.equal(staff.vacationWarnings(week,duplicated,{...settings,people:[{...person,weeklyHours:75}]},true).alerts.length,0);
+});
 test('roster settings are bounded and keyed by employee IDs instead of names',()=>{
  assert(planning.validStaffingSettings(settings));for(const value of [{...settings,people:[person,person]},{...settings,people:[{...person,employeeId:'Marit'}]},{...settings,people:[{...person,weekdays:[1,1]}]},{...settings,people:[{...person,weeklyHours:100}]},{...settings,departmentIds:['name']}])assert(!planning.validStaffingSettings(value));
 });

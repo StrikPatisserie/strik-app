@@ -2,7 +2,7 @@ import { addDays,mondayOf,type ProductionStaffingSettings } from "./planning";
 import { parseTime,localDate,formatTime } from "../management/urencontrole/reviewTime";
 
 export type RosterDepartment={id:string;name:string};
-export type RosterEntry={id:string;employeeId:string;name:string;departmentId:string;department:string;date:string;start:string|null;end:string|null;minutes:number|null;kind:"work"|"vacation"|"away"|"other";uncertain:boolean;source:"shift"|"absence"};
+export type RosterEntry={id:string;employeeId:string;name:string;departmentId:string;department:string;date:string;start:string|null;end:string|null;minutes:number|null;kind:"work"|"vacation"|"away"|"other";uncertain:boolean;source:"shift"|"absence";period?:{id:string;from:string;to:string;minutes:number|null;fullDay:boolean}};
 export type RosterCheck={departmentId?:string;source:"departments"|"planned"|"absences"|"data";available:boolean;message:string};
 export type VacationAlert={employeeId:string;name:string;from:string;to:string;tasks:string;hours:number};
 export type ProductionRoster={week:string;generatedAt:string;entries:RosterEntry[];departments:RosterDepartment[];availableDepartments:RosterDepartment[];settings:ProductionStaffingSettings;revision:number;checks:RosterCheck[];alerts:VacationAlert[];reviewNames:string[];coverageComplete:boolean};
@@ -34,12 +34,24 @@ function entry(row:Row,department:RosterDepartment,source:"shift"|"absence",id:s
  const gross=start.ms!==null && end.ms!==null?(end.ms-start.ms)/60000:null;
  const breakHours=typeof row.BreakCodeHours==="number" && row.BreakCodeHours>=0?row.BreakCodeHours:0;
  const minutes=hours!==null?hours*60:gross!==null && gross>0?Math.max(0,gross-breakHours*60):null;
- const multiDay=start.ms!==null && end.ms!==null && localDate(start.ms)!==localDate(end.ms-1);
- return {id,employeeId,name:text(row.EmployeeName)||text(row.Name)||"Naam ontbreekt",departmentId:actualDepartment,department:department.name,date,start:start.iso,end:end.iso,minutes:multiDay&&source==="absence"?null:minutes,kind:kind(activity,source==="absence"?false:row.IsProductive),uncertain:(source==="shift" && Number(row.PlanStatusCodeId)!==2) || Boolean(row.AbsencePercentage && Number(row.AbsencePercentage)<100) || Boolean(gross!==null && (gross<=0 || gross>1440 || (minutes!==null && minutes>gross+0.001))) || Boolean((start.issue && start.issue!=="missing") || (end.issue && end.issue!=="missing")),source};
+ const activityKind=kind(activity,source==="absence"?false:row.IsProductive),absence=activityKind==="vacation" || activityKind==="away";
+ return {id,employeeId,name:text(row.EmployeeName)||text(row.Name)||"Naam ontbreekt",departmentId:actualDepartment,department:department.name,date,start:start.iso,end:end.iso,minutes,kind:activityKind,uncertain:(source==="shift" && Number(row.PlanStatusCodeId)!==2) || Boolean(row.AbsencePercentage && Number(row.AbsencePercentage)<100) || Boolean(gross!==null && (gross<=0 || (!absence && gross>1440) || (minutes!==null && minutes>gross+0.001))) || Boolean((start.issue && start.issue!=="missing") || (end.issue && end.issue!=="missing")),source};
+}
+function expandAbsence(row:RosterEntry,suppliedHours:unknown):RosterEntry[]{
+ if(!["vacation","away"].includes(row.kind) || !row.start || !row.end)return[row];
+ const start=Date.parse(row.start),end=Date.parse(row.end),last=localDate(end-1);if(last<=row.date)return[row];
+ const period={id:`${row.employeeId}:${row.kind}:${row.start}:${row.end}`,from:row.date,to:last,minutes:typeof suppliedHours==="number" && Number.isFinite(suppliedHours) && suppliedHours>0?suppliedHours*60:null,fullDay:false},days:RosterEntry[]=[];
+ for(let date=row.date;date<=last && days.length<370;date=addDays(date,1)){
+  const from=parseTime(`${date}T00:00:00`).ms,to=parseTime(`${addDays(date,1)}T00:00:00`).ms;
+  days.push({...row,id:`${row.id}:${date}`,date,minutes:null,period:{...period,fullDay:from!==null && to!==null && start<=from && end>=to}});
+ }
+ // A period total is never copied onto every day. Very long/corrupt periods
+ // remain visible as uncertain and cannot generate a stock warning.
+ return days.map(d=>({...d,uncertain:d.uncertain || last>days[days.length-1].date}));
 }
 export function normalizeRosterShifts(value:unknown,department:RosterDepartment){
  const rows=rosterRows(value),entries:RosterEntry[]=[];let skipped=0;
- for(const row of rows){if(row.PlanStatusCodeId!==undefined && [3,4,5,6].includes(Number(row.PlanStatusCodeId)))continue;const id=text(row.ShiftId).toLowerCase();const found=id?entry(row,department,"shift",id):null;if(found)entries.push(found);else if(text(row.DepartmentId).toLowerCase()===department.id.toLowerCase() || !text(row.DepartmentId))skipped++;}
+ for(const row of rows){if(row.PlanStatusCodeId!==undefined && [3,4,5,6].includes(Number(row.PlanStatusCodeId)))continue;const id=text(row.ShiftId).toLowerCase();const found=id?entry(row,department,"shift",id):null;if(found)entries.push(...expandAbsence(found,row.ShiftHours));else if(text(row.DepartmentId).toLowerCase()===department.id.toLowerCase() || !text(row.DepartmentId))skipped++;}
  return {entries,skipped};
 }
 export function normalizeRosterAbsences(value:unknown,department:RosterDepartment){
@@ -53,13 +65,13 @@ export function normalizeRosterAbsences(value:unknown,department:RosterDepartmen
    if(!raw || typeof raw!=="object" || Array.isArray(raw)){skipped++;continue;}
    const row={...parent,...raw} as Row;if(row.Deleted===true || row.IsActual===true)continue;
    const id=`absence:${text(row.EmployeeId)}:${text(row.StartDateTime)}:${text(row.EndDateTime)}:${text(row.AbsenceTypeId)}:${index}`;
-   const found=entry(row,department,"absence",id);if(found)entries.push(found);else skipped++;
+   const found=entry(row,department,"absence",id);if(found)entries.push(...expandAbsence(found,row.ShiftHours));else skipped++;
   }
  }
  return {entries,skipped};
 }
 export function dedupeRoster(entries:RosterEntry[]){
- const byId=new Map<string,RosterEntry>();const fingerprint=(e:RosterEntry)=>JSON.stringify([e.employeeId,e.departmentId,e.date,e.start,e.end,e.minutes,e.kind]);
+ const byId=new Map<string,RosterEntry>();const fingerprint=(e:RosterEntry)=>JSON.stringify([e.employeeId,e.departmentId,e.date,e.start,e.end,e.minutes,e.kind,e.period]);
  for(const row of entries){const key=row.source==="shift"?row.id:`${row.employeeId}:${row.date}:${row.start}:${row.end}:${row.kind}:${row.minutes}`;const old=byId.get(key);byId.set(key,old?{...old,uncertain:old.uncertain||row.uncertain||fingerprint(old)!==fingerprint(row)}:row);}
  return [...byId.values()].sort((a,b)=>a.date.localeCompare(b.date)||(a.start||"").localeCompare(b.start||"")||a.name.localeCompare(b.name,"nl"));
 }
@@ -81,17 +93,31 @@ export function vacationWarnings(week:string,entries:RosterEntry[],settings:Prod
   const days=Array.from({length:14},(_,i)=>addDays(next,i)).filter(d=>person.weekdays.includes(new Date(`${d}T12:00:00Z`).getUTCDay()));
   for(let index=0;index<days.length && days[index]<=last;index++){
    const block=days.slice(index,index+person.weekdays.length);if(block.length<person.weekdays.length || block[block.length-1]>limit)continue;
-   let minutes=0,valid=true;
+   let minutes=0,valid=true,allFullDays=true;
+   const periodTotals:{shift:Map<string,number>;absence:Map<string,number>}={shift:new Map(),absence:new Map()};
+   let dailyMinutes=0;
    for(const day of block){
     const daily=own.filter(e=>e.date===day),leave=daily.filter(e=>e.kind==="vacation");
-    if(!leave.length || daily.some(e=>e.kind==="work" || e.uncertain) || leave.some(e=>e.minutes===null)){valid=false;break;}
+    if(!leave.length || daily.some(e=>e.kind==="work" || e.uncertain)){valid=false;break;}
+    allFullDays=allFullDays && leave.some(e=>e.period?.fullDay);
+    if(leave.some(e=>e.minutes===null && !e.period)){valid=false;break;}
+    for(const e of leave.filter(e=>e.period)){
+     const period=e.period!;
+     // Count a range's supplied total once and only when all its normal
+     // working days belong to this candidate workweek. Never prorate it.
+     const expected:string[]=[];let count=0;for(let date=period.from;date<=period.to && count<370;date=addDays(date,1),count++)if(person.weekdays.includes(new Date(`${date}T12:00:00Z`).getUTCDay()))expected.push(date);
+     if(period.minutes!==null && expected.every(d=>block.includes(d)))periodTotals[e.source].set(period.id,period.minutes);
+    }
     // The same absence can appear both as a planned shift and in the absence
     // report. Take the greater source total; never add these two sources.
-    const shiftMinutes=vacationSourceMinutes(leave.filter(e=>e.source==="shift")),absenceMinutes=vacationSourceMinutes(leave.filter(e=>e.source==="absence"));
+    if((["shift","absence"] as const).some(source=>vacationSourceMinutes(leave.filter(e=>e.source===source))===null)){valid=false;break;}
+    const shiftMinutes=vacationSourceMinutes(leave.filter(e=>e.source==="shift" && !e.period)),absenceMinutes=vacationSourceMinutes(leave.filter(e=>e.source==="absence" && !e.period));
     if(shiftMinutes===null || absenceMinutes===null){valid=false;break;}
-    minutes+=Math.max(shiftMinutes,absenceMinutes);
+    dailyMinutes+=Math.max(shiftMinutes,absenceMinutes);
    }
-   if(valid && minutes+0.001>=person.weeklyHours*60){alerts.push({employeeId:person.employeeId,name:person.name,from:block[0],to:block.at(-1)!,tasks:person.tasks,hours:minutes/60});break;}
+   const periodShift=[...periodTotals.shift.values()].reduce((a,b)=>a+b,0),periodAbsence=[...periodTotals.absence.values()].reduce((a,b)=>a+b,0);
+   minutes=Math.max(dailyMinutes,periodShift,periodAbsence);
+   if(valid && (allFullDays || minutes+0.001>=person.weeklyHours*60)){alerts.push({employeeId:person.employeeId,name:person.name,from:block[0],to:block.at(-1)!,tasks:person.tasks,hours:allFullDays?person.weeklyHours:minutes/60});break;}
   }
  }
  return {alerts,reviewNames};
