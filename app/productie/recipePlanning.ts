@@ -103,7 +103,7 @@ export function buildRecipePlan(state:PreviewState,recipes:DemoRecipe[],command:
     if(added.has(row.recipeId))return;
     for(const id of row.requires) {const dependency=included.find(r=>r.recipeId===id);if(dependency)addPreparation(dependency);}
     const task:Task={id:taskIds.get(row.recipeId)!,itemId:row.itemId,departmentId:row.departmentId,date:row.date,quantity:row.quantity,
-      operation:"Bereiden",status:"planned",note:`Meegepland voor ${rootItem.name} · ${proposal.quantity.toLocaleString("nl-NL")} ${rootItem.unit} op ${command.task.date}.`,
+      operation:"Bereiden",status:"planned",note:`Meegepland voor ${rootItem.name} · ${proposal.quantity.toLocaleString("nl-NL",{maximumFractionDigits:1})} ${rootItem.unit} op ${command.task.date}.`,
       source:command.task.source,batchId:`batch:${taskIds.get(row.recipeId)!}`,recordsOutput:true,generatedFor:command.task.id,
       requires:row.requires.map(id=>taskIds.get(id)!).filter(Boolean)};
     next=addTask(next,task);added.add(row.recipeId);
