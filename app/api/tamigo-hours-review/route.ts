@@ -17,8 +17,10 @@ export async function GET(request: Request) {
       return Response.json(await getTamigoHoursDayStatus(department, date), { headers });
     }
     const month = url.searchParams.get("month") || "";
+    const period = url.searchParams.get("period") || "calendar";
+    if (period !== "calendar" && period !== "payroll") return Response.json({ message: "Kies kalendermaand of loonperiode." }, { status: 400, headers });
     try { monthBounds(month); } catch { return Response.json({ message: "Kies een geldige maand." }, { status: 400, headers }); }
-    return Response.json(await getTamigoHoursReviewMonth(month), { headers });
+    return Response.json(await getTamigoHoursReviewMonth(month, period), { headers });
   } catch {
     return Response.json({ message: "De urencontrole kon niet geladen worden. Er zijn geen registraties gewijzigd." }, { status: 502, headers });
   }

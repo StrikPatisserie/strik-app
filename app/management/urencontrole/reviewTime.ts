@@ -81,3 +81,11 @@ export function monthBounds(month: string) {
   const year = +month.slice(0, 4), index = +month.slice(5) - 1;
   return { from: `${month}-01`, to: new Date(Date.UTC(year, index + 1, 1)).toISOString().slice(0, 10), fetchFrom: new Date(Date.UTC(year, index, 0)).toISOString().slice(0, 10), fetchTo: new Date(Date.UTC(year, index + 1, 2)).toISOString().slice(0, 10) };
 }
+export function reviewPeriodBounds(month: string, period: "calendar" | "payroll" = "calendar") {
+  const calendar = monthBounds(month);
+  if (period === "calendar") return calendar;
+  if (period !== "payroll") throw new Error("Kies kalendermaand of loonperiode.");
+  const year = +month.slice(0, 4), index = +month.slice(5) - 1;
+  const date = (monthIndex: number, day: number) => new Date(Date.UTC(year, monthIndex, day)).toISOString().slice(0, 10);
+  return { from: date(index - 1, 26), to: date(index, 26), fetchFrom: date(index - 1, 25), fetchTo: date(index, 27) };
+}

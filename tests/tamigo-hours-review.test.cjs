@@ -351,12 +351,12 @@ test('the review opens on work alerts only; other registrations remain available
  const before=JSON.stringify(rows);
  const selection=presentation.selectReviewRows(rows);
  assert.equal(presentation.DEFAULT_REVIEW_VIEW,'attention');
- assert.equal(selection.rows.length,6);
+ assert.equal(selection.rows.length,8);
  assert(selection.rows.every(row=>row.flags.length&&row.status!=='niet_werk'));
  const noFlags=presentation.selectReviewRows(rows,{view:'no_flags'});
  assert.equal(noFlags.rows.length,2);assert(noFlags.rows.every(row=>row.status==='geen_melding'));
- assert.equal(presentation.selectReviewRows(rows,{view:'all'}).rows.length,8);
- assert.equal(presentation.selectReviewRows(rows,{view:'all',showNonWork:true}).rows.length,9);
+ assert.equal(presentation.selectReviewRows(rows,{view:'all'}).rows.length,10);
+ assert.equal(presentation.selectReviewRows(rows,{view:'all',showNonWork:true}).rows.length,11);
  assert.equal(JSON.stringify(rows),before);
 });
 test('blocking missing data is placed before routine rounding, and every explanation is retained',()=>{
@@ -375,8 +375,79 @@ test('department, employee and alert filters combine using IDs and counts follow
  const rows=rules.buildHoursReview(demo.createHoursReviewDemo('2026-10'),types.DEFAULT_REVIEW_CONFIG);
  const other='22222222-2222-2222-2222-222222222222';
  const selection=presentation.selectReviewRows(rows,{department:other});
- assert.equal(selection.counts.all,1);assert.equal(selection.rows[0].actual.id,'a8');
+ assert.equal(selection.counts.all,2);assert(selection.rows.some(row=>row.actual.id==='a8'));
  assert.equal(presentation.selectReviewRows(rows,{employee:'demo-2',flagType:'pauze_uitzondering'}).rows[0].actual.id,'a2');
  assert.equal(presentation.selectReviewRows(rows,{department:other,employee:'demo-2'}).rows.length,0);
  assert.deepEqual(Array.from(presentation.selectReviewRows(rows,{flagType:'pauze_ontbreekt'}).rows,row=>row.actual.id),['a6','a1']);
+});
+
+test('missing actual hours show the unchanged planned service without inventing actual hours or a delta',()=>{
+ const p=shift('p-original','08:07','17:43',{BreakCodeHours:.5});
+ const before=JSON.stringify(p);const row=rules.buildHoursReview(dataset([p],[]))[0];
+ assert.deepEqual(times(row),['08:07','17:43']);assert.equal(row.proposal.breakMinutes,30);assert.equal(row.proposal.netMinutes,546);
+ assert.equal(row.proposal.basis,'planning');assert.equal(row.actual,null);assert.equal(row.originalNetMinutes,null);assert.equal(row.deltaMinutes,null);
+ assert.equal(flags(row,'uren_ontbreken').length,1);assert.equal(JSON.stringify(p),before);
+ const future=rules.buildHoursReview(dataset([p],[],{generatedAt:'2026-10-01T00:00:00Z'}))[0];
+ assert.equal(future.status,'nog_gepland');assert.equal(future.proposal.basis,'planning');
+ const unknownPause=rules.buildHoursReview(dataset([shift('p-unknown','08:00','17:00',{BreakCodeHours:null})],[]))[0];
+ assert.equal(unknownPause.proposal,null);
+});
+
+test('unassigned services have their own view and never inflate employee attention counts',()=>{
+ const known=shift('p-known');
+ const open=shift('p-open','08:00','16:00',{EmployeeId:'00000000-0000-0000-0000-000000000000',EmployeeName:null});
+ const unnamed=shift('p-unnamed','08:00','16:00',{EmployeeId:'employee-2',EmployeeName:'  '});
+ const rows=rules.buildHoursReview(dataset([known,open,unnamed],[]));
+ const normal=presentation.selectReviewRows(rows);
+ assert.equal(normal.rows.length,1);assert.equal(normal.counts.all,1);assert.equal(normal.counts.unassigned,2);
+ const separate=presentation.selectReviewRows(rows,{view:'unassigned'});
+ assert.equal(separate.rows.length,2);assert(separate.rows.every(row=>presentation.missingReviewEmployee(row.planned)));
+ assert.equal(presentation.selectReviewRows(rows,{view:'unassigned',employee:'employee-2'}).rows.length,1);
+});
+
+test('Wijchen and the Winkels parent are hidden from selections, other departments and source data stay intact',()=>{
+ const rows=rules.buildHoursReview(dataset([], [shift('a-wijchen','08:00','16:00',{DepartmentName:'Winkel - Wijchen'}),shift('a-parent','08:00','16:00',{EmployeeId:'employee-2',DepartmentName:'Winkels'}),shift('a-visible','08:00','16:00',{EmployeeId:'employee-3',DepartmentName:'Winkel - Daalseweg'})]));
+ const snapshot=JSON.stringify(rows);const selection=presentation.selectReviewRows(rows,{view:'all'});
+ assert.equal(selection.rows.length,1);assert.equal(selection.rows[0].actual.id,'a-visible');assert.equal(selection.counts.all,1);
+ assert.equal(presentation.visibleReviewDepartment(' Winkel – Wijchen '),false);assert.equal(presentation.visibleReviewDepartment('Strik Patisserie'),true);
+ assert.equal(JSON.stringify(rows),snapshot);
+});
+
+test('overlap names the other service, interval and duplicate possibility; touching services are not overlaps',()=>{
+ const a=shift('a-one','08:00','12:00');const b=shift('a-two','11:00','13:00',{DepartmentId:'department-b',DepartmentName:'Winkel B'});
+ const row=rules.buildHoursReview(dataset([], [a,b])).find(row=>row.actual.id==='a-one');
+ assert.equal(row.overlaps[0].shift.id,'a-two');assert.equal(row.overlaps[0].minutes,60);assert.equal(row.overlaps[0].duplicate,false);assert.match(flags(row,'overlap')[0].message,/1u 00 tegelijk/);assert.match(flags(row,'overlap')[0].message,/Winkel B/);assert.match(flags(row,'overlap')[0].message,/niet de planning/);
+ const duplicate=rules.buildHoursReview(dataset([], [a,shift('a-copy','08:00','12:00',{DepartmentId:'department-b'})]));
+ assert(duplicate.every(row=>flags(row,'overlap')[0].message.includes('mogelijk een dubbele registratie')));
+ const touching=rules.buildHoursReview(dataset([], [a,shift('a-next','12:00','16:00')]));
+ assert(touching.every(row=>!flags(row,'overlap').length));
+ const open=rules.buildHoursReview(dataset([], [shift('a-open-1','08:00','12:00',{EmployeeId:'00000000-0000-0000-0000-000000000000'}),shift('a-open-2','09:00','13:00',{EmployeeId:'00000000-0000-0000-0000-000000000000'})]));
+ assert(open.every(row=>!flags(row,'overlap').length));
+ const deduped=rules.buildHoursReview(dataset([], [a,{...a,sourceDepartments:['department-b']}]));
+ assert.equal(deduped.length,1);assert.equal(flags(deduped[0],'overlap').length,0);
+});
+
+test('payroll October covers September 26 through October 25 with one-day read margins',()=>{
+ const b=time.reviewPeriodBounds('2026-10','payroll');
+ assert.equal(b.from,'2026-09-26');assert.equal(b.to,'2026-10-26');assert.equal(b.fetchFrom,'2026-09-25');assert.equal(b.fetchTo,'2026-10-27');
+ const jan=time.reviewPeriodBounds('2026-01','payroll');assert.equal(jan.from,'2025-12-26');assert.equal(jan.to,'2026-01-26');
+ const march=time.reviewPeriodBounds('2028-03','payroll');assert.equal(march.from,'2028-02-26');assert.equal(march.to,'2028-03-26');
+ assert.equal(time.reviewPeriodBounds('2026-10','calendar').from,'2026-10-01');assert.equal(time.reviewPeriodBounds('2026-10','calendar').to,'2026-11-01');
+ assert.throws(()=>time.reviewPeriodBounds('2026-13','payroll'));assert.throws(()=>time.reviewPeriodBounds('2026-10','other'));
+ const make=(id,date)=>shift(id,`${date}T08:00:00+02:00`,`${date}T16:00:00+02:00`,{EmployeeId:id});
+ const data=dataset([], [make('a-before','2026-09-25'),make('a-first','2026-09-26'),make('a-last','2026-10-25'),make('a-after','2026-10-26')],{period:'payroll'});
+ assert.deepEqual(Array.from(rules.buildHoursReview(data),row=>row.actual.id),['a-first','a-last']);
+ assert.deepEqual(Array.from(rules.buildHoursReview({...data,period:'calendar'}),row=>row.actual.id),['a-last','a-after']);
+});
+
+test('server fetches the full payroll range instead of fetching only the selected calendar month',async()=>{
+ const {server,calls}=serverModule();const data=await server.getTamigoHoursReviewMonth('2026-10','payroll');
+ assert.equal(data.period,'payroll');const request=calls.find(call=>call.kind==='shifts');
+ assert.equal(request.from,'2026-09-25');assert.equal(request.to,'2026-10-27');
+});
+
+test('read API rejects unsupported period modes before calling Tamigo',async()=>{
+ const {route,calls}=apiRoute({active:true,role:'manager'});
+ const response=await route.GET(new Request('https://example.test/api/tamigo-hours-review?month=2026-10&period=other'));
+ assert.equal(response.status,400);assert.equal(calls.length,0);
 });

@@ -1,7 +1,7 @@
 import "server-only";
 import { fetchTamigoHoursReviewSource, getKnownTamigoHoursReviewDepartments, getTamigoStatusCode } from "../../tamigoApi";
 import { dedupeReviewShifts, isRecord, normalizeDayStatus, normalizeReviewShift, sourceRecords } from "./reviewSource";
-import { monthBounds } from "./reviewTime";
+import { reviewPeriodBounds } from "./reviewTime";
 import { REVIEW_VERSION, type DayStatus, type ReviewDataset, type SourceCheck } from "./reviewTypes";
 import { correctionRevision } from "./correctionRevision";
 import { dayAccessFailureMessage } from "./reviewAccess";
@@ -10,9 +10,9 @@ function errorCheck(key: string, label: string, error: unknown): SourceCheck {
   const status = getTamigoStatusCode(error);
   return { key, label, state: "unavailable", httpStatus: status, message: status === 401 ? "Tamigo heeft de aanvraag afgewezen (HTTP 401). Controleer de sessie en aanvraagparameters; de oorzaak is niet automatisch een ontbrekend recht." : status === 403 ? "Tamigo geeft geen toegang (HTTP 403). Controleer de bevoegdheden van deze applicatiekoppeling." : "Tamigo kon deze bron niet leveren. Probeer opnieuw; ontbrekende gegevens worden niet als nul behandeld." };
 }
-export async function getTamigoHoursReviewMonth(month: string): Promise<ReviewDataset> {
-  const bounds = monthBounds(month);
-  const data: ReviewDataset = { month, generatedAt: new Date().toISOString(), sourceVersion: REVIEW_VERSION, departments: [], planned: [], actual: [], coverage: { planned: [], actual: [] }, checks: [] };
+export async function getTamigoHoursReviewMonth(month: string, period: "calendar" | "payroll" = "calendar"): Promise<ReviewDataset> {
+  const bounds = reviewPeriodBounds(month, period);
+  const data: ReviewDataset = { month, period, generatedAt: new Date().toISOString(), sourceVersion: REVIEW_VERSION, departments: [], planned: [], actual: [], coverage: { planned: [], actual: [] }, checks: [] };
   const departments = new Map<string, { id: string; name: string }>();
   const metadata = await Promise.allSettled([true, false].map(includeParents => fetchTamigoHoursReviewSource({ kind: "departments", includeParents })));
   for (const [index, result] of metadata.entries()) {

@@ -1,5 +1,5 @@
 import { dedupeReviewShifts } from "./reviewSource";
-import { durationMinutes, formatMinutes, formatTime, monthBounds, roundQuarter } from "./reviewTime";
+import { durationMinutes, formatMinutes, formatStamp, formatTime, reviewPeriodBounds, roundQuarter } from "./reviewTime";
 import { DEFAULT_REVIEW_CONFIG, type ReviewConfig, type ReviewDataset, type ReviewFlag, type ReviewRow, type ReviewShift, type ReviewThresholds } from "./reviewTypes";
 
 export function effectiveRules(config: ReviewConfig, departmentId: string | null): ReviewThresholds {
@@ -67,6 +67,10 @@ function reviewOne(actual: ReviewShift | null, planned: ReviewShift | null, cand
   if (!actual) {
     if (planned?.kind !== "work") { flag("activiteit", `Geen gewerkte dienst: ${planned?.activity || "andere activiteit"}. Geen tijd- of pauzevoorstel.`); row.status = "niet_werk"; return row; }
     if (!validWork(planned)) { flag("planning_onduidelijk", "Planning is onvolledig, tegenstrijdig of een concept; niet als ontbrekende gewerkte uren beoordeeld."); return row; }
+    const plannedGross = durationMinutes(planned.start, planned.end)!;
+    if (planned.breakMinutes !== null && planned.breakMinutes >= 0 && planned.breakMinutes < plannedGross) {
+      row.proposal = { start: planned.start.iso!, end: planned.end.iso!, breakMinutes: planned.breakMinutes, netMinutes: plannedGross - planned.breakMinutes, basis: "planning", rules, reasons: ["De oorspronkelijke geplande dienst is ongewijzigd overgenomen: begin, einde en pauze. Dit is een voorstel bij ontbrekende werkelijke uren, geen bevestiging dat deze uren zijn gewerkt. Een ontbrekende dienst kan alleen in Tamigo worden toegevoegd."] };
+    }
     if (planned.end.ms !== null && planned.end.ms > Date.parse(data.generatedAt)) { row.status = "nog_gepland"; return row; }
     if (!planned.sourceDepartments.some(id => data.coverage.actual.includes(id))) flag("toegang", "Werkelijke diensten zijn voor deze afdeling niet volledig beschikbaar. Er kan niet worden vastgesteld of uren ontbreken.");
     else if (candidates.length) flag("planning_onduidelijk", "Meerdere mogelijke koppelingen. Geen dienst automatisch gekoppeld en geen ontbrekende uren vastgesteld.");
@@ -135,7 +139,7 @@ function reviewOne(actual: ReviewShift | null, planned: ReviewShift | null, cand
   return row;
 }
 export function buildHoursReview(data: ReviewDataset, config: ReviewConfig = DEFAULT_REVIEW_CONFIG): ReviewRow[] {
-  const { from, to } = monthBounds(data.month);
+  const { from, to } = reviewPeriodBounds(data.month, data.period);
   const planned = dedupeReviewShifts(data.planned), actual = dedupeReviewShifts(data.actual);
   const used = new Set<string>();
   const planningByEmployee = new Map<string, ReviewShift[]>();
@@ -155,14 +159,17 @@ export function buildHoursReview(data: ReviewDataset, config: ReviewConfig = DEF
   for (const p of planned) if (!used.has(p.id)) rows.push(reviewOne(null, p, actualByCandidate.get(p.id) || [], data, config));
   for (let first = 0; first < actual.length; first++) {
     const a = actual[first];
-    if (a.kind !== "work" || a.start.ms === null || a.end.ms === null || !a.employeeId) continue;
+    if (a.kind !== "work" || a.start.ms === null || a.end.ms === null || !a.employeeId || a.employeeId === "00000000-0000-0000-0000-000000000000") continue;
     for (let second = first + 1; second < actual.length; second++) {
       const b = actual[second];
       if (b.kind !== "work" || b.employeeId !== a.employeeId || b.start.ms === null || b.end.ms === null) continue;
       if (Math.max(a.start.ms, b.start.ms) < Math.min(a.end.ms, b.end.ms)) {
-        for (const id of [a.id, b.id]) {
-          const row = rows.find(item => item.actual?.id === id)!;
-          row.flags.push({ type: "overlap", message: "Deze registratie overlapt met een andere werkregistratie van dezelfde medewerker, ook over afdelingen of middernacht heen. Controleer beide diensten." });
+        const overlapStart = Math.max(a.start.ms, b.start.ms), overlapEnd = Math.min(a.end.ms, b.end.ms);
+        for (const [shift, other] of [[a, b], [b, a]]) {
+          const row = rows.find(item => item.actual?.id === shift.id)!;
+          const duplicate = a.start.ms === b.start.ms && a.end.ms === b.end.ms;
+          (row.overlaps ??= []).push({ shift: other, minutes: (overlapEnd - overlapStart) / 60000, duplicate });
+          row.flags.push({ type: "overlap", message: `${formatMinutes((overlapEnd - overlapStart) / 60000)} tegelijk geregistreerd (${formatStamp(new Date(overlapStart).toISOString())} – ${formatStamp(new Date(overlapEnd).toISOString())}). Andere dienst: ${other.departmentName}, ${formatStamp(other.start.iso)} – ${formatStamp(other.end.iso)}. ${duplicate ? "De tijden zijn exact gelijk; mogelijk een dubbele registratie." : "De werkelijke tijden van twee verschillende diensten kruisen elkaar."} Dit vergelijkt werkelijke registraties van dezelfde medewerker, niet de planning met de gewerkte dienst. Controleer beide diensten in Tamigo.` });
           row.status = "te_beoordelen";
         }
       }

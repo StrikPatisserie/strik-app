@@ -1,7 +1,15 @@
-import type { FlagType, ReviewRow } from "./reviewTypes";
+import type { FlagType, ReviewRow, ReviewShift } from "./reviewTypes";
 
-export type ReviewView = "attention" | "no_flags" | "all";
+export type ReviewView = "attention" | "no_flags" | "all" | "unassigned";
 export const DEFAULT_REVIEW_VIEW: ReviewView = "attention";
+
+export function visibleReviewDepartment(name: string) {
+  const normalized = name.trim().toLocaleLowerCase("nl").replace(/\s*[-–—]\s*/g, " - ").replace(/\s+/g, " ");
+  return !["winkel - wijchen", "winkel wijchen", "winkels"].includes(normalized);
+}
+export function missingReviewEmployee(shift: ReviewShift) {
+  return !shift.employeeId || shift.employeeId === "00000000-0000-0000-0000-000000000000" || !shift.employeeName.trim() || shift.employeeName === "Medewerkernaam niet beschikbaar";
+}
 
 // Incomplete/conflicting sources need a decision before routine time rounding.
 const PRIORITY: FlagType[] = [
@@ -18,13 +26,16 @@ export function selectReviewRows(rows: ReviewRow[], options: {
 } = {}) {
   const scoped = rows.filter(row => {
     const source = row.actual || row.planned!;
-    return (!options.department || source.departmentId === options.department)
+    return visibleReviewDepartment(source.departmentName)
+      && (!options.department || source.departmentId === options.department)
       && (!options.employee || source.employeeId === options.employee)
       && (options.showNonWork || row.status !== "niet_werk");
   });
-  const counts = { attention: scoped.filter(row => row.flags.length > 0).length, no_flags: scoped.filter(row => !row.flags.length).length, all: scoped.length };
+  const assigned = scoped.filter(row => !missingReviewEmployee(row.actual || row.planned!));
+  const unassigned = scoped.filter(row => missingReviewEmployee(row.actual || row.planned!));
+  const counts = { attention: assigned.filter(row => row.flags.length > 0).length, no_flags: assigned.filter(row => !row.flags.length).length, all: assigned.length, unassigned: unassigned.length };
   const view = options.view || DEFAULT_REVIEW_VIEW;
-  const selected = scoped.filter(row => (view === "all" || (view === "attention" ? row.flags.length > 0 : !row.flags.length))
+  const selected = (view === "unassigned" ? unassigned : assigned).filter(row => (view === "unassigned" || view === "all" || (view === "attention" ? row.flags.length > 0 : !row.flags.length))
     && (!options.flagType || row.flags.some(flag => flag.type === options.flagType)));
   const priority = (row: ReviewRow) => row.flags.length ? PRIORITY.indexOf(focusFlags(row)[0].type) : PRIORITY.length;
   selected.sort((a, b) => priority(a) - priority(b) || a.date.localeCompare(b.date) || a.id.localeCompare(b.id));

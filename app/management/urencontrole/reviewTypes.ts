@@ -55,7 +55,7 @@ export const FLAG_LABELS = {
 } as const;
 export type FlagType = keyof typeof FLAG_LABELS;
 export type ReviewFlag = { type: FlagType; message: string };
-export type ReviewProposal = { start: string; end: string; breakMinutes: number; netMinutes: number; reasons: string[]; rules: ReviewThresholds };
+export type ReviewProposal = { start: string; end: string; breakMinutes: number; netMinutes: number; reasons: string[]; rules: ReviewThresholds; basis?: "planning" };
 export type ReviewRow = {
   id: string;
   date: string;
@@ -68,6 +68,7 @@ export type ReviewRow = {
   proposal: ReviewProposal | null;
   deltaMinutes: number | null;
   status: "te_beoordelen" | "uitzondering" | "geen_melding" | "niet_werk" | "nog_gepland";
+  overlaps?: { shift: ReviewShift; minutes: number; duplicate: boolean }[];
 };
 export type SourceCheck = {
   key: string; label: string; state: "available" | "unavailable" | "partial" | "unknown";
@@ -75,6 +76,7 @@ export type SourceCheck = {
 };
 export type ReviewDataset = {
   month: string;
+  period?: "calendar" | "payroll";
   generatedAt: string;
   sourceVersion: string;
   departments: { id: string; name: string }[];

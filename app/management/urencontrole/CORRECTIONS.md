@@ -1,6 +1,41 @@
 # Tamigo-correcties
 
-De controlepagina en afgeschermde correctieflow zijn op 23 oktober 2026 gepubliceerd. Terugschrijven is niet geactiveerd en de productiemigratie voor correctiehistorie is nog niet uitgevoerd. De hieronder beschreven correctieflow is getest met fictieve diensten; er is nog geen echte wijziging in Tamigo beproefd. Nieuwe diensten, verlof, ziekte, salarisexports en het openen/sluiten van dagen vallen buiten deze functie.
+De controlepagina en afgeschermde correctieflow zijn op 23 oktober 2026 gepubliceerd. De productiemigratie voor correctiehistorie is op 28 oktober 2026 uitgevoerd en gecontroleerd. De eerste door Feline gekozen en bevestigde praktijkcorrectie is afgewezen met HTTP 401; de oorspronkelijke dienst is daarna ongewijzigd teruggelezen. Terugschrijven is daarom opnieuw uitgeschakeld. Nieuwe diensten, verlof, ziekte, salarisexports en het openen/sluiten van dagen vallen buiten deze functie.
+
+## Eerste praktijkproef: afgewezen op 28 oktober 2026
+
+- De beveiligde historie bevat één correctie met status `rejected`. De applicatie heeft na HTTP 401 de oorspronkelijke bronversie ongewijzigd teruggelezen. De correctie is niet opnieuw verzonden; tijdens de diagnose zijn geen PUT-, import- of andere dienstmutaties uitgevoerd.
+- De opgeslagen aanvraag bevat de negen verwachte veldnamen. IsAvailable en IsExchange zijn booleans, ShiftActivityId is null, Comment is een string, en beide tijdvelden voldoen aan de Microsoft Date-notatie met offset. Dienst-ID en bronversie stemmen overeen met het voorbereide record. Dit controleert de aanvraagvorm, niet de acceptatie door Tamigo; null versus een lege GUID is bijvoorbeeld nog niet door het endpoint bevestigd.
+- Een nieuwe `POST /v2/Login/Application` geeft HTTP 200. De oude `GET /Shifts/day/{date}/` geeft met dezelfde verse sessie HTTP 401, zowel met de tokenheader als met de gedocumenteerde securitytoken-queryparameter. Dit maakt een verlopen productiecache niet de enige verklaring. De v2-variant van deze oudere dagroute geeft eveneens HTTP 401; alleen een `/v2`-prefix toevoegen is dus geen bewezen oplossing.
+- `OPTIONS /Shifts/{niet-bestaand-id}/` en de v2-variant geven HTTP 405 met `Allow: PUT, POST, DELETE`. Dit bewijst alleen dat de server die methoden noemt; niet dat een applicatiesessie de PUT mag uitvoeren of dat een bepaalde body geldig is.
+- De actuele officiële **User Services**-PDF plaatst Update Shifts bij de gebruikersdiensten en schrijft voor die diensten een login met Tamigo-gebruiker voor. De **Application Services**-PDF onderscheidt applicatietoegang van gebruikerscontext. De gebruikte applicatiesessie is daarmee geen bewezen passende authenticatie voor deze PUT. Sommige leesroutes hebben expliciete applicatieondersteuning; dat geeft nog geen schrijfrecht. HTTP 401 alleen bewijst de precieze oorzaak niet.
+- De eerdere activering op basis van leescontroles, bronvelden en fictieve tests was te ruim: daarmee was het passende sessietype voor deze schrijfroute niet vastgesteld. Geen routevarianten op echte diensten proberen en geen gebruikerswachtwoord toevoegen zonder een afzonderlijk gekozen integratieaanpak.
+- `TAMIGO_HOURS_WRITE_ENABLED=0` is ingesteld voor productie. Uitrol `dpl_8BEAWNyncG8BujqRAtkNDMMw8qLz` gebruikt dezelfde commit, is READY en gekoppeld aan `app.strik-patisserie.nl`. Historie en alleen-lezen urencontrole blijven beschikbaar.
+
+### Aanvullende vraag aan Tamigo (niet verstuurd)
+
+> Onze eerste gecontroleerde correctie met `PUT /Shifts/{ShiftId}/` is met HTTP 401 afgewezen. Headers: Accept en Content-Type application/json, x-tamigo-token met een SessionToken uit een succesvolle `/v2/Login/Application`. De negen velden volgen jullie Update Shifts-voorbeeld; start/einde gebruiken Microsoft Date-notatie met Amsterdam-offset en ShiftActivityId is null bij een dienst zonder activiteit. Na de afwijzing is de bron ongewijzigd teruggelezen. Dezelfde applicatiekoppeling kan `/v2/Shifts/` en de v2-dagstatus wel lezen.
+>
+> In de actuele documentatie staat Update Shifts onder User Services, waarvoor een gebruikerslogin wordt beschreven. Ondersteunt deze PUT ook een applicatiesessie? Zo ja, welke exacte URL, claim/rechten, veldvereisten en notatie voor geen activiteit zijn nodig? Zo nee, welke applicatieroute werkt een bestaande werkelijke dienst op ShiftId bij zonder nieuwe dienst aan te maken, met behoud van alle overige velden? We willen geen persoonlijk gebruikerswachtwoord als integratieoplossing toevoegen.
+
+## Overzicht aangepast op 28 oktober 2026
+
+- Keuze tussen kalendermaand en loonperiode; standaard loonperiode. Loonperiode oktober loopt van 26 september t/m 25 oktober. De API haalt het volledige bereik op met een extra grensdag aan beide kanten; alleen diensten in de gekozen periode worden getoond. Januari en schrikkeljaren zijn afgedekt.
+- Winkel - Wijchen en de bovenliggende afdeling Winkels zijn verborgen uit rijen en afdelingskeuzes. Bronopvraging en overlapcontrole blijven alle afdelingen betrekken, zodat verbergen geen blinde vlek in controles veroorzaakt.
+- Rijen zonder medewerker of zonder beschikbare naam staan apart onder Zonder medewerker, met een rustige stijl en eigen telling. Een ontbrekende naam met een bestaand medewerker-ID wordt niet als bewezen oningevulde dienst aangeduid.
+- Bij ontbrekende werkelijke uren toont het voorstel de oorspronkelijke geldige planning, zonder afronding of gewijzigde pauze. Dit blijft herkenbaar als Volgens planning; er worden geen werkelijke uren of verschilbedragen verzonnen en de app maakt geen nieuwe dienst aan.
+- Elke overlapregel toont de andere afdeling, het andere tijdvak en de overlapduur, met Vergelijk dienst om beide oorspronkelijke registraties naast elkaar te bekijken. Gelijke tijden krijgen Mogelijk dubbel. De controle vergelijkt afzonderlijke werkelijke registraties op medewerker-ID, geen planning met werkelijkheid. Open diensten met de lege GUID worden niet met elkaar als één medewerker vergeleken.
+- Alle 114 gerichte tests, lint, TypeScript en productiebuild slagen. Een alleen-lezen loonperiodeproef slaagt; geen Tamigo-diensten gewijzigd. De lokale voorbeeldpagina rendert de loonperiodekeuze en de grenzen 26 september t/m 25 oktober. Interactieve browsercontrole was niet beschikbaar in deze sessie.
+
+## Inrichting correctiehistorie 28 oktober 2026
+
+- De Supabase-verbinding werkt met project `strik-team-app` (`ckzrajbflscdheaxhjbs`, ACTIVE_HEALTHY). Migratie `tamigo_hours_corrections` is succesvol toegepast vanuit het bestaande SQL-bestand.
+- Beide historietabellen hebben RLS. `anon` en `authenticated` hebben geen leesrechten en mogen de claimfunctie niet uitvoeren. De server heeft leesrechten en mag claims uitvoeren, maar kan geen historieregels verwijderen. De tabellen bevatten na inrichting nul correcties.
+- De 107 gerichte tests en de PGlite-proef voor onveranderlijke snapshots, claims, onzekere pogingen en toegangsrechten slagen. De database-advisor meldt voor deze tabellen alleen de verwachte informatieve melding over RLS zonder browserpolicies; geen waarschuwingen voor de correctiefuncties.
+- De Vercel-verbinding werkt met project `strik-app` (`prj_XbEpYcwDRqamChMDbAyCu99x9uS6`). Supabase-serverconfiguratie en de standaard Tamigo-configuratie zijn aanwezig in de omgevingsvariabelen. `TAMIGO_HOURS_WRITE_ENABLED=1` is uitsluitend voor productie ingesteld. Dezelfde geteste commit `19ef93c4575eeb737a3acfec7b94de0d2867728c` is opnieuw uitgerold als `dpl_CvmmEE9H7RH38DoWUqoL8c8nqg5P` (READY).
+- De officiële Shift Services-documentatie beschrijft `PUT /Shifts/{ShiftId}/`, alle negen door de adapter verzonden velden en de verplichting bestaande waarden mee te sturen. De actuele Swagger vermeldt geen PUT voor individuele diensten; die bevestigt de oudere route dus niet opnieuw. Een aanvullende mail is geen harde activeringsvoorwaarde meer, maar echte schrijfrechten en werkelijk veldbehoud zijn nog onbeproefd. Er is geen PUT verstuurd. De eerste echte proef mag uitsluitend een concrete, door Feline gekozen en bevestigde correctie betreffen.
+- De nieuwe alleen-lezen oktoberproef slaagt: 13 afdelingen, 436 unieke geplande en 452 unieke werkelijke diensten. Dagstatus is beschikbaar en de steekproefdag is open. Oorspronkelijke registraties zijn ongewijzigd; er zijn geen echte correcties aangemaakt of verzonden.
+- De aanvullende broncontrole (`--check-write-readiness`) heeft 452 unieke werkelijke diensten gecontroleerd: 359 voldoen aan de bronvoorwaarden voor terugschrijven, zonder ontbrekende IsAvailable/IsExchange/ShiftActivityId-velden of onbereikbare afdelingen. De resterende 93 blijven geblokkeerd; blokkaderedenen kunnen overlappen. Dit is geen bewijs van schrijfrechten of volledige correctiegereedheid: dagstatus, overlap, actuele bronversie, voorstel en opslag worden per gekozen correctie opnieuw gecontroleerd.
 
 ## API-onderzoek 28 oktober 2026
 
@@ -76,9 +111,11 @@ Met de standaardkoppeling waren 13 afdelingen (unie van beide lijsten), 435 unie
 
 ## Activering
 
-1. Voer `app/supabase/migrations/20261023170000_tamigo_hours_corrections.sql` uit in de bedoelde omgeving. De migratie is lokaal getest met een echte Postgres-engine (PGlite); niet op de productiedatabase toegepast.
-2. De versie-2-dagstatus is op 28 oktober alleen-lezen bevestigd en de leesadapter is daarop aangepast. Laat Tamigo nog het exacte schrijvend endpoint, de verplichte velden en het behoud van bestaande dienstgegevens bevestigen; schrijfrechten zijn niet met een echte wijziging getest.
-3. Pas na bevestigde toegang en een afgesproken gecontroleerde praktijkproef `TAMIGO_HOURS_WRITE_ENABLED=1` instellen. Deze variabele is nu niet aangezet. Een onbekende dagstatus blijft blokkeren, ook met de variabele aan.
+**Huidige blokkade na praktijkproef:** de productieschakelaar is teruggezet naar `0`. De hieronder beschreven eerdere activering is alleen historische context. Opnieuw activeren pas nadat het passende sessietype en de exacte schrijfroute zijn vastgesteld. Daarna opnieuw één concrete correctie door Feline laten kiezen en bevestigen; de afgewezen poging niet automatisch herhalen.
+
+1. **Uitgevoerd op 28 oktober 2026:** `app/supabase/migrations/20261023170000_tamigo_hours_corrections.sql` is toegepast op productieproject `strik-team-app`. RLS en ingetrokken browserrechten zijn op de productiedatabase gecontroleerd; de gedragsproef met fictieve gegevens slaagt in PGlite.
+2. De versie-2-dagstatus en de bronvoorwaarden zijn op 28 oktober alleen-lezen bevestigd. De officiële Shift Services-documentatie beschrijft de gebruikte PUT en de vereiste velden. Aanvullende bevestiging van Tamigo blijft nuttig, maar Feline heeft gevraagd de functie zonder nieuwe reactie werkend te maken. Schrijfrechten en veldbehoud worden pas bij de eerste gekozen echte correctie bewezen.
+3. `TAMIGO_HOURS_WRITE_ENABLED=1` is voor productie ingesteld; de bestaande geteste productieversie is opnieuw uitgerold en READY (`dpl_CvmmEE9H7RH38DoWUqoL8c8nqg5P`, circa 205 seconden buildtijd). Een onbekende dagstatus of onvolledige bron blijft blokkeren, ook met de variabele aan. Geen echte dienst wijzigen zonder een concrete keuze en bevestiging van Feline. Bij een onzekere uitkomst nooit automatisch herhalen. De productiepagina stuurt bezoekers zonder sessie naar de loginpagina (HTTP 307); de beheerflow is niet met een ingelogde browsersessie beproefd.
 
 De frontend kan een wijziging voorbereiden en de blokkades tonen zolang terugschrijven uitstaat. Er ontstaat pas een bevestigbaar correctierecord als bron, drempels, overlap, alle geraakte dagen en beveiligde opslag beschikbaar zijn. Het bevestigingsrecord is tien minuten geldig en gekoppeld aan de voorbereidend beheerder.
 
@@ -118,6 +155,16 @@ npm install --prefix /private/tmp/strik-tamigo-sqlcheck --no-package-lock --igno
 node scripts/check-tamigo-corrections-sql.cjs /private/tmp/strik-tamigo-sqlcheck
 ```
 
+Aanvullende alleen-lezen broncontrole met uitsluitend aantallen en blokkaderedenen als uitvoer:
+
+```sh
+node scripts/check-tamigo-hours.cjs --env-dir app --month 2026-10 --check-write-readiness
+```
+
+Deze controle retourneert een foutstatus bij onbereikbare afdelingen, geen werkelijke diensten of geen enkele ondersteunde bron. Hij claimt geen correctie en verstuurt nooit een PUT.
+
 Deze SQL-proef controleert migratie, onveranderlijke snapshots, idempotente claims, de blokkering van een onzekere poging, hercontrole, auditvermelding van de controleur en ingetrokken directe lees-/schrijf-/verwijderrechten. Hierbij worden ook ruime Supabase-defaultgrants gesimuleerd.
 
 Bronnen: [actuele Swagger](https://api.tamigo.com/api-docs/swagger.json), [Swagger-weergave](https://api.tamigo.com/api-docs/index.html?url=/api-docs/swagger.json), [actuele volledige Tamigo-documentatie met bijlagen](https://support.tamigo.no/support/solutions/articles/5000867116-api-dok-pr-01-04-2024-full-versjon), [diensten bijwerken](https://support.tamigo.no/support/solutions/articles/5000793326-shift-services-), [open/gesloten urenstaat](https://support.tamigo.no/support/solutions/articles/5000793327-actual-shift-services-).
+
+Controle na activering: Vercel bevestigt de productieschakelaar met waarde `1` en de productiealias op de READY-uitrol. Runtimefoutlogs konden niet worden ingezien: de connector geeft HTTP 403; er is geen lokale Vercel CLI beschikbaar. Dit is geen bevestiging van foutloze runtimewerking. Er is geen echte correctie verstuurd.

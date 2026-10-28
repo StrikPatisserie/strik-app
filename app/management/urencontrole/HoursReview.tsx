@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
 import { buildHoursReview, effectiveRules, validateConfig } from "./reviewRules";
-import { DEFAULT_REVIEW_VIEW, focusFlags, selectReviewRows, type ReviewView } from "./reviewPresentation";
+import { DEFAULT_REVIEW_VIEW, focusFlags, missingReviewEmployee, selectReviewRows, visibleReviewDepartment, type ReviewView } from "./reviewPresentation";
 import { reviewAccessSummary } from "./reviewAccess";
 import { createHoursReviewDemo } from "./demo";
 import CorrectionEditor from "./CorrectionEditor";
-import { formatMinutes, formatStamp, formatTime, localDate } from "./reviewTime";
+import { formatMinutes, formatStamp, formatTime, localDate, reviewPeriodBounds } from "./reviewTime";
 import { DEFAULT_REVIEW_CONFIG, FLAG_LABELS, TIME_ZONE, type DayStatus, type FlagType, type ReviewConfig, type ReviewDataset, type ReviewRow, type ReviewShift, type ReviewThresholds } from "./reviewTypes";
 import styles from "./hoursReview.module.css";
 
@@ -99,28 +99,50 @@ function SourceDetails({ row, demo }: { row: ReviewRow; demo: boolean }) {
     </div>
   </details>;
 }
-function ReviewCard({ row, demo, expanded, onToggle, config, reviewMonth, onChanged }: { row: ReviewRow; demo: boolean; expanded: boolean; onToggle: () => void; config: ReviewConfig; reviewMonth: string; onChanged: () => void }) {
+function OverlapComparison({ pair, onClose }: { pair: [ReviewShift, ReviewShift] | null; onClose: () => void }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => { if (pair && dialog.current && !dialog.current.open) dialog.current.showModal(); }, [pair]);
+  if (!pair) return null;
+  return <dialog ref={dialog} className={styles.correctionDialog} onClose={onClose} aria-labelledby="overlap-title">
+    <div className={styles.dialogHeading}><div><h2 id="overlap-title">Overlappende diensten vergelijken</h2><p>{pair[0].employeeName} · oorspronkelijke registraties</p></div><button type="button" aria-label="Vergelijking sluiten" onClick={() => dialog.current?.close()}>×</button></div>
+    <div className={styles.overlapComparison}>{pair.map((shift, index) => <section key={shift.id}>
+      <h3>{index ? "Andere dienst" : "Deze dienst"}</h3><strong>{shift.departmentName}</strong>
+      <p>{formatStamp(shift.start.iso)} – {formatStamp(shift.end.iso)}</p>
+      <p>{pauseText(shift.breakMinutes)} · {formatMinutes(shift.reportedNetMinutes)} netto uit Tamigo</p>
+      {shift.comments.filter(comment => comment?.trim()).map((comment, commentIndex) => <blockquote className={styles.originalComment} key={commentIndex}>{comment}</blockquote>)}
+      <p className={styles.muted}>Dienst-ID {shift.id}</p>
+    </section>)}</div>
+    <p className={styles.muted}>Twee afzonderlijke werkelijke registraties. Controleer in Tamigo of beide horen te bestaan; deze vergelijking wijzigt geen dienst.</p>
+  </dialog>;
+}
+function ReviewCard({ row, demo, expanded, onToggle, config, reviewMonth, onChanged, onCompare }: { row: ReviewRow; demo: boolean; expanded: boolean; onToggle: () => void; config: ReviewConfig; reviewMonth: string; onChanged: () => void; onCompare: (current: ReviewShift, other: ReviewShift) => void }) {
   const source = row.actual || row.planned!;
+  const unassigned = missingReviewEmployee(source);
+  const employeeLabel = unassigned ? (!source.employeeId || source.employeeId === "00000000-0000-0000-0000-000000000000" ? "Open dienst · niet ingevuld" : "Naam medewerker onbekend") : source.employeeName;
   const flags = focusFlags(row);
   const commentCount = row.actual?.comments.filter(comment => comment?.trim()).length || 0;
   const detailId = `review-detail-${row.id}`;
   const proposalTimes = row.proposal ? <strong title={`${formatStamp(row.proposal.start)} — ${formatStamp(row.proposal.end)}`}>{formatTime(row.proposal.start)} – {formatTime(row.proposal.end)}{localDate(Date.parse(row.proposal.start)) !== localDate(Date.parse(row.proposal.end)) ? " (+1 dag)" : ""}</strong> : <strong>Te beoordelen</strong>;
-  return <article className={`${styles.reviewRow} ${row.flags.length ? styles.hasFlags : ""}`} data-review-row={row.id}>
-    <button type="button" className={`${styles.rowSummary} ${styles.rowGrid}`} aria-expanded={expanded} aria-controls={detailId} aria-label={`${expanded ? "Sluit" : "Bekijk"} dienst ${source.employeeName}, ${row.date || "datum onbekend"}`} onClick={onToggle}>
-      <span className={styles.identity}><strong>{source.employeeName}</strong><span>{row.date ? new Intl.DateTimeFormat("nl-NL", { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" }).format(new Date(`${row.date}T12:00:00Z`)) : "Datum onbekend"} · {source.departmentName}</span></span>
+  return <article className={`${styles.reviewRow} ${unassigned ? styles.unassignedRow : row.flags.length ? styles.hasFlags : ""}`} data-review-row={row.id}>
+    <button type="button" className={`${styles.rowSummary} ${styles.rowGrid}`} aria-expanded={expanded} aria-controls={detailId} aria-label={`${expanded ? "Sluit" : "Bekijk"} dienst ${employeeLabel}, ${row.date || "datum onbekend"}`} onClick={onToggle}>
+      <span className={styles.identity}><strong>{employeeLabel}</strong><span>{row.date ? new Intl.DateTimeFormat("nl-NL", { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" }).format(new Date(`${row.date}T12:00:00Z`)) : "Datum onbekend"} · {source.departmentName}</span></span>
       <span className={`${styles.timeCell} ${styles.planSummary}`}><small className={styles.mobileLabel}>Gepland</small><SourceTimes shift={row.planned} /></span>
       <span className={styles.timeCell}><small className={styles.mobileLabel}>Geregistreerd</small>{row.actual ? <><strong title={`${formatStamp(row.actual.start.iso)} — ${formatStamp(row.actual.end.iso)}`}>{originalTime(row.actual.start)} – {originalTime(row.actual.end)}{row.actual.start.ms !== null && row.actual.end.ms !== null && localDate(row.actual.start.ms) !== localDate(row.actual.end.ms) ? " (+1 dag)" : ""}</strong><span>{formatMinutes(row.originalNetMinutes)} netto · {pauseText(row.actual.breakMinutes)}</span></> : <strong>Ontbreekt</strong>}</span>
-      <span className={`${styles.timeCell} ${styles.proposed}`}><small className={styles.mobileLabel}>Voorstel</small>{proposalTimes}{row.proposal ? <span>{formatMinutes(row.proposal.netMinutes)} netto · {pauseText(row.proposal.breakMinutes)}</span> : <span>Geen volledig voorstel</span>}</span>
+      <span className={`${styles.timeCell} ${styles.proposed}`}><small className={styles.mobileLabel}>Voorstel</small>{proposalTimes}{row.proposal ? <><span>{formatMinutes(row.proposal.netMinutes)} netto · {pauseText(row.proposal.breakMinutes)}</span>{row.proposal.basis === "planning" ? <span>Volgens planning</span> : null}</> : <span>Geen volledig voorstel</span>}</span>
       <span className={styles.difference}><small className={styles.mobileLabel}>Verschil</small><strong className={row.deltaMinutes ? styles.changed : ""}>{row.deltaMinutes === null ? "—" : formatMinutes(row.deltaMinutes, true)}</strong></span>
-      <span className={styles.focus}><strong>{flags[0] ? FLAG_LABELS[flags[0].type] : row.status === "nog_gepland" ? "Nog gepland" : row.status === "niet_werk" ? "Verlof / andere activiteit" : "Geen melding"}{flags.length > 1 ? <span className={styles.moreFlags}>+{flags.length - 1}</span> : null}</strong><span>{row.status === "uitzondering" ? "Verklaring aanwezig · beoordelen" : row.flags.length ? "Ter beoordeling" : "Niet beoordeeld"}{commentCount ? " · opmerking" : ""}</span></span>
+      <span className={styles.focus}><strong>{unassigned ? "Zonder medewerker" : flags[0] ? FLAG_LABELS[flags[0].type] : row.status === "nog_gepland" ? "Nog gepland" : row.status === "niet_werk" ? "Verlof / andere activiteit" : "Geen melding"}{!unassigned && flags.length > 1 ? <span className={styles.moreFlags}>+{flags.length - 1}</span> : null}</strong><span>{unassigned ? "Apart van de urencontrole" : flags[0]?.type === "overlap" ? "Open voor de andere dienst en overlappende tijden" : row.status === "uitzondering" ? "Verklaring aanwezig · beoordelen" : row.flags.length ? "Ter beoordeling" : "Niet beoordeeld"}{commentCount ? " · opmerking" : ""}</span></span>
       <span className={`${styles.chevron} ${expanded ? styles.chevronOpen : ""}`} aria-hidden="true">⌄</span>
     </button>
+    {row.actual && row.overlaps?.length ? <div className={styles.overlapLinks}>{row.overlaps.map(overlap => <div key={overlap.shift.id}>
+      <span><strong>{overlap.duplicate ? "Mogelijk dubbel" : "Tegelijk geregistreerd"}:</strong> {overlap.shift.departmentName} · {formatStamp(overlap.shift.start.iso)} – {formatStamp(overlap.shift.end.iso)} · {formatMinutes(overlap.minutes)} overlap</span>
+      <button type="button" onClick={() => onCompare(row.actual!, overlap.shift)} aria-label={`Vergelijk met dienst bij ${overlap.shift.departmentName} vanaf ${formatStamp(overlap.shift.start.iso)}`}>Vergelijk dienst</button>
+    </div>)}</div> : null}
     <div id={detailId} className={styles.rowDetail} hidden={!expanded}>
     <div className={styles.detailHeading}><strong>{STATUS_LABELS[row.status]}</strong><span>Oorspronkelijke registratie blijft behouden</span></div>
     <div className={styles.comparison}>
       <div className={styles.timeCell}><small>Gepland</small><SourceTimes shift={row.planned} />{row.planned ? <span>{row.planned.departmentName}</span> : null}</div>
       <div className={styles.timeCell}><small>Oorspronkelijk geregistreerd</small><SourceTimes shift={row.actual} /><b>Netto {formatMinutes(row.originalNetMinutes)}</b>{row.actual?.date && row.actual.date !== row.date ? <span>Startdatum {row.actual.date}</span> : null}</div>
-      <div className={`${styles.timeCell} ${styles.proposed}`}><small>Voorstel · beoordelen</small>{proposalTimes}{row.proposal ? <><span>{pauseText(row.proposal.breakMinutes)}</span><b>Netto {formatMinutes(row.proposal.netMinutes)} · verschil {formatMinutes(row.deltaMinutes, true)}</b></> : <span>Geen volledig voorstel</span>}</div>
+      <div className={`${styles.timeCell} ${styles.proposed}`}><small>{row.proposal?.basis === "planning" ? "Voorstel volgens oorspronkelijke planning" : "Voorstel · beoordelen"}</small>{proposalTimes}{row.proposal ? <><span>{pauseText(row.proposal.breakMinutes)}</span><b>Netto {formatMinutes(row.proposal.netMinutes)}{row.deltaMinutes === null ? "" : ` · verschil ${formatMinutes(row.deltaMinutes, true)}`}</b></> : <span>Geen volledig voorstel</span>}</div>
     </div>
     <CorrectionEditor row={row} config={config} reviewMonth={reviewMonth} demo={demo} onChanged={onChanged} />
     {row.actual?.comments.some(comment => comment?.trim()) ? <div className={styles.comments}>{row.actual.comments.map((comment, index) => comment?.trim() ? <blockquote key={index}><strong>Oorspronkelijke {index ? "extra opmerking" : "opmerking"}</strong>{comment}</blockquote> : null)}</div> : null}
@@ -136,6 +158,8 @@ export default function HoursReview({ demo = false }: { demo?: boolean }) {
   const [error, setError] = useState("");
   const [refresh, setRefresh] = useState(0);
   const [config, setConfig] = useState<ReviewConfig>(DEFAULT_REVIEW_CONFIG);
+  const [period, setPeriod] = useState<"calendar" | "payroll">("payroll");
+  const [comparison, setComparison] = useState<[ReviewShift, ReviewShift] | null>(null);
   const [department, setDepartment] = useState("");
   const [employee, setEmployee] = useState("");
   const [flagType, setFlagType] = useState("");
@@ -148,8 +172,8 @@ export default function HoursReview({ demo = false }: { demo?: boolean }) {
     async function load() {
       setLoading(true); setError(""); setDataset(null);
       try {
-        if (demo) { setDataset(createHoursReviewDemo(month)); return; }
-        const response = await fetch(`/api/tamigo-hours-review?month=${encodeURIComponent(month)}`, { cache: "no-store", signal: controller.signal });
+        if (demo) { setDataset({ ...createHoursReviewDemo(month), period }); return; }
+        const response = await fetch(`/api/tamigo-hours-review?month=${encodeURIComponent(month)}&period=${period}`, { cache: "no-store", signal: controller.signal });
         const data = await response.json();
         if (!response.ok || !Array.isArray(data.actual) || !Array.isArray(data.planned)) throw new Error(data.message || "Onbekend antwoord voor de urencontrole.");
         if (!controller.signal.aborted) setDataset(data);
@@ -158,19 +182,19 @@ export default function HoursReview({ demo = false }: { demo?: boolean }) {
     }
     if (/^\d{4}-\d{2}$/.test(month)) void load();
     return () => controller.abort();
-  }, [month, refresh, demo]);
-  const rows = useMemo(() => dataset ? buildHoursReview(dataset, config) : [], [dataset, config]);
+  }, [month, period, refresh, demo]);
+  const rows = useMemo(() => dataset ? buildHoursReview(dataset, config).filter(row => visibleReviewDepartment((row.actual || row.planned!).departmentName)) : [], [dataset, config]);
   const departments = useMemo(() => {
     const values = new Map((dataset?.departments || []).map(item => [item.id, item]));
     for (const row of rows) for (const shift of [row.actual, row.planned]) if (shift?.departmentId) values.set(shift.departmentId, { id: shift.departmentId, name: shift.departmentName });
-    return [...values.values()].sort((a, b) => a.name.localeCompare(b.name, "nl"));
+    return [...values.values()].filter(item => visibleReviewDepartment(item.name)).sort((a, b) => a.name.localeCompare(b.name, "nl"));
   }, [dataset, rows]);
   const employees = useMemo(() => {
     const people = new Map<string, string>();
     for (const row of rows) {
       const source = row.actual || row.planned!;
       if (department && source.departmentId !== department) continue;
-      if (source.employeeId) people.set(source.employeeId, source.employeeName);
+      if (source.employeeId && !missingReviewEmployee(source)) people.set(source.employeeId, source.employeeName);
     }
     return [...people.entries()].sort((a, b) => a[1].localeCompare(b[1], "nl"));
   }, [rows, department]);
@@ -178,17 +202,21 @@ export default function HoursReview({ demo = false }: { demo?: boolean }) {
   const pages = Math.max(1, Math.ceil(filtered.length / 25)), currentPage = Math.min(page, pages);
   const shown = filtered.slice((currentPage - 1) * 25, currentPage * 25);
   const { incompleteSources, dayBlocked, notice } = reviewAccessSummary(dataset?.checks || []);
+  const bounds = /^\d{4}-(0[1-9]|1[0-2])$/.test(month) && +month.slice(0, 4) >= 2000 && +month.slice(0, 4) <= 2100 ? reviewPeriodBounds(month, period) : null;
+  const formatDate = (date: string) => new Intl.DateTimeFormat("nl-NL", { timeZone: "UTC", day: "numeric", month: "long", year: "numeric" }).format(new Date(`${date}T12:00:00Z`));
   return <StrikShell extraWide backHref="/management"><div className={styles.root}>
     <StrikPageHeader title="Urencontrole" icon={strikIcons.managementSchedule} />
     {demo ? <p className={styles.demo}>Preview met fictieve diensten · geen Tamigo-verzoeken</p> : null}
     <section className={styles.panel}>
       <div className={styles.heading}><p><strong>Meldingen eerst.</strong> Open een dienst voor de details.</p><button type="button" disabled={loading} onClick={() => { setRefresh(refresh + 1); setExpandedId(null); }}>Vernieuwen</button></div>
       <div className={styles.filters}>
-        <label>Maand<input type="month" min="2000-01" max="2100-12" value={month} onChange={event => { setMonth(event.target.value); setPage(1); if (!event.target.value) setDataset(null); }} /></label>
+        <label>Periode<select value={period} onChange={event => { setPeriod(event.target.value as "calendar" | "payroll"); setPage(1); setExpandedId(null); }}><option value="payroll">Loonperiode · 26 t/m 25</option><option value="calendar">Kalendermaand</option></select></label>
+        <label>{period === "payroll" ? "Loonperiode" : "Maand"}<input type="month" min="2000-01" max="2100-12" value={month} onChange={event => { setMonth(event.target.value); setPage(1); setExpandedId(null); if (!event.target.value) setDataset(null); }} /></label>
         <label>Afdeling / winkel<select value={department} onChange={event => { setDepartment(event.target.value); setEmployee(""); setPage(1); }}><option value="">Alle afdelingen</option>{departments.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         <label>Medewerker<select value={employee} onChange={event => { setEmployee(event.target.value); setPage(1); }}><option value="">Alle medewerkers</option>{employees.map(([id, name]) => <option key={id} value={id}>{name} · {id.slice(-6)}</option>)}</select></label>
-        <label>Meldingstype<select value={flagType} onChange={event => { setFlagType(event.target.value); if (event.target.value) setView("attention"); setPage(1); setExpandedId(null); }}><option value="">Alle meldingen</option>{Object.entries(FLAG_LABELS).map(([id, label]) => <option key={id} value={id as FlagType}>{label}</option>)}</select></label>
+        <label>Meldingstype<select value={flagType} onChange={event => { setFlagType(event.target.value); if (event.target.value && view !== "unassigned") setView("attention"); setPage(1); setExpandedId(null); }}><option value="">Alle meldingen</option>{Object.entries(FLAG_LABELS).map(([id, label]) => <option key={id} value={id as FlagType}>{label}</option>)}</select></label>
       </div>
+      {bounds ? <p className={styles.periodRange}>{period === "payroll" ? "Loonperiode" : "Kalendermaand"} {new Intl.DateTimeFormat("nl-NL", { timeZone: "UTC", month: "long", year: "numeric" }).format(new Date(`${month}-01T12:00:00Z`))} · {formatDate(bounds.from)} t/m {formatDate(new Date(Date.parse(`${bounds.to}T12:00:00Z`) - 86400000).toISOString().slice(0, 10))}</p> : null}
       <div className={styles.tools}>
       <label className={styles.check}><input type="checkbox" checked={showNonWork} onChange={event => { setShowNonWork(event.target.checked); setPage(1); }} />Verlof / andere activiteiten ({rows.filter(row => row.status === "niet_werk").length})</label>
     <RulesEditor config={config} departments={departments} onChange={next => { setConfig(next); setPage(1); }} />
@@ -203,15 +231,17 @@ export default function HoursReview({ demo = false }: { demo?: boolean }) {
     {error ? <p role="alert" className={styles.error}>{error}</p> : null}
     {loading ? <p role="status" className={styles.panel}>Rooster en werkelijke registraties alleen-lezen ophalen…</p> : dataset ? <>
       <div className={styles.resultHeader}>
-        <div className={styles.views} role="group" aria-label="Diensten selecteren">{([["attention", "Te controleren"], ["no_flags", "Zonder melding"], ["all", "Alle"]] as const).map(([key, label]) => <button key={key} type="button" aria-pressed={view === key} onClick={() => { setView(key); setFlagType(""); setPage(1); setExpandedId(null); }}>{label}<b>{counts[key]}</b></button>)}</div>
+        <div className={styles.views} role="group" aria-label="Diensten selecteren">{([["attention", "Te controleren"], ["no_flags", "Zonder melding"], ["all", "Alle medewerkers"], ["unassigned", "Zonder medewerker"]] as const).map(([key, label]) => <button key={key} type="button" aria-pressed={view === key} onClick={() => { setView(key); setFlagType(""); setPage(1); setExpandedId(null); }}>{label}<b>{counts[key]}</b></button>)}</div>
         <span>Voorstellen · pas na controle en bevestiging opslaan</span>
       </div>
+      {view === "unassigned" ? <p className={styles.muted}>Diensten zonder medewerker of zonder beschikbare naam staan apart. Zonder medewerker-ID gaat het waarschijnlijk om een open dienst; een ontbrekende naam alleen bewijst dat niet.</p> : null}
       {shown.length ? <div className={styles.rows}>
         <div className={`${styles.listHeader} ${styles.rowGrid}`} aria-hidden="true"><span>Medewerker / dienst</span><span>Gepland</span><span>Geregistreerd</span><span>Voorstel</span><span>Verschil</span><span>Controlepunt</span><span /></div>
-        {shown.map(row => <ReviewCard key={`${dataset.generatedAt}:${row.id}`} row={row} demo={demo} expanded={expandedId === row.id} onToggle={() => setExpandedId(expandedId === row.id ? null : row.id)} config={config} reviewMonth={month} onChanged={() => { setExpandedId(null); setRefresh(value => value + 1); }} />)}
+        {shown.map(row => <ReviewCard key={`${dataset.generatedAt}:${row.id}`} row={row} demo={demo} expanded={expandedId === row.id} onToggle={() => setExpandedId(expandedId === row.id ? null : row.id)} config={config} reviewMonth={row.actual?.date.slice(0, 7) || month} onCompare={(current, other) => setComparison([current, other])} onChanged={() => { setExpandedId(null); setRefresh(value => value + 1); }} />)}
       </div> : <p className={styles.panel}>{incompleteSources.length ? "Geen passende registraties getoond. Er ontbreken brongegevens; dit betekent niet dat er geen diensten of afwijkingen zijn." : "Geen diensten voor deze selectie. Pas de filters aan."}</p>}
       <div className={styles.footer}><p className={styles.muted}>Geen melding is geen goedkeuring. Voorstellen vragen altijd beoordeling; een melding is geen bewijs van een fout.</p><span className={styles.muted}>{filtered.length} {filtered.length === 1 ? "dienst" : "diensten"}{flagType ? ` · ${FLAG_LABELS[flagType as FlagType]}` : ""} · belangrijkste controlepunten eerst</span></div>
       {pages > 1 ? <nav className={styles.pagination} aria-label="Pagina's van het urenoverzicht"><button type="button" disabled={currentPage <= 1} onClick={() => { setPage(currentPage - 1); setExpandedId(null); }}>Vorige</button><span>Pagina {currentPage} van {pages} · 25 diensten per pagina</span><button type="button" disabled={currentPage >= pages} onClick={() => { setPage(currentPage + 1); setExpandedId(null); }}>Volgende</button></nav> : null}
     </> : null}
+    <OverlapComparison pair={comparison} onClose={() => setComparison(null)} />
   </div></StrikShell>;
 }
