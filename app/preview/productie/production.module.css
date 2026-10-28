@@ -151,8 +151,8 @@
 .infoNote a { color:#2d513f; text-decoration:underline; text-underline-offset:3px; }
 .dialog { position:fixed; inset:0; margin:auto; width:min(620px,calc(100vw - 32px)); max-height:calc(100dvh - 40px); padding:0; border:1px solid #d7dfce; border-radius:12px; box-shadow:0 20px 100px #20352130; background:#fcfcf8; color:#2b3e32; font:13px/1.5 "Overpass",Arial,sans-serif; overflow-y:auto; overscroll-behavior:contain; }
 .dialog::backdrop { background:#223c2d50; backdrop-filter:blur(3px); }
-.dialogHeader { position:sticky; top:0; z-index:1; background:#fcfcf8; display:flex; justify-content:space-between; align-items:flex-start; gap:20px; padding:25px 26px 20px; border-bottom:1px solid #e1e6d9; }.dialogHeader h2 { font-size:22px; font-weight:700; line-height:1.2; margin-top:5px; letter-spacing:-.5px; }.dialogHeader p { color:#88957b; font-size:11px; margin-top:7px; }
-.dialogBody { padding:22px 26px; }.dialogBody > p { line-height:1.7; }.dialogBody > .field { margin-bottom:15px; }.dialogBody .infoNote { margin-bottom:0; }.dialogFooter { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:9px; padding:16px 26px; border-top:1px solid #e1e6d9; background:#f4f6ee; }
+.dialogHeader { position:sticky; top:0; z-index:3; background:#fcfcf8; display:flex; justify-content:space-between; align-items:flex-start; gap:20px; padding:25px 26px 20px; border-bottom:1px solid #e1e6d9; }.dialogHeader h2 { font-size:22px; font-weight:700; line-height:1.2; margin-top:5px; letter-spacing:-.5px; }.dialogHeader p { color:#88957b; font-size:11px; margin-top:7px; }
+.dialogBody { padding:22px 26px; }.dialogBody > p { line-height:1.7; }.dialogBody > .field { margin-bottom:15px; }.dialogBody .infoNote { margin-bottom:0; }.dialogFooter { position:sticky; bottom:0; z-index:2; display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:9px; padding:16px 26px; border-top:1px solid #e1e6d9; background:#f4f6ee; }
 .field { display:grid; gap:6px; font-size:11px; color:#607154; font-weight:600; }.field :is(input,select,textarea) { display:block; width:100%; font-size:12px; font-weight:400; min-height:42px; }.field textarea { resize:vertical; }.formGrid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:15px; }.fieldHint { font-size:10px; font-weight:400; color:#8e9982; margin:5px 0 15px !important; line-height:1.6; }.formError { margin-top:17px !important; padding:12px; background:#f8e9e2; border:1px solid #e2bfae; border-radius:5px; color:#a06142; font-size:12px; }
 .taskDetailSummary { display:flex; align-items:center; justify-content:space-between; gap:15px; }.taskDetailSummary small { display:block; color:#8c977f; font-size:10px; }.taskDetailSummary strong { font-size:18px; font-weight:700; }.statusPill { display:inline-flex; align-items:center; border:1px solid #d8e0ce; border-radius:5px; font-size:11px; padding:5px 9px; }
 .detailFacts { display:flex; gap:10px 20px; flex-wrap:wrap; font-size:11px; color:#8a977c; margin:16px 0; }.detailFacts > span { display:flex; align-items:center; gap:5px; }.detailNote { background:#f2efe6; padding:13px 15px; font-size:12px; border-left:2px solid #c8b182; border-radius:3px; margin:15px 0; }.issueBox { display:flex; gap:10px; align-items:center; padding:13px; background:#f9eee7; border:1px solid #ebd1bd; color:#a27550; border-radius:5px; font-size:11px; margin:15px 0; }.issueBox ul { padding:0; margin:0; list-style:none; }
@@ -206,6 +206,12 @@
 .preparationName strong,.preparationName small { display:block; }
 .preparationName small { color:#718069; font-size:10px; margin-top:4px; }
 .preparationExcluded { background:#f6f6ef; }
+.preparationInvalid { background:#fff3ee; }
+.preparationDate { min-width:0; }
+.preparationDate > small { display:block; color:#718069; font-size:10px; margin-top:5px; }
+.preparationInvalid .preparationDate > small { color:#9a4032; }
+.preparationDate input[aria-invalid=true] { border-color:#c85443; }
+.dateRepair { display:block; text-align:left; color:#9a4032; text-decoration:underline; text-underline-offset:3px; font-size:11px; min-height:32px; margin-top:3px; }
 .planWarning { background:#fff4d9; color:#805c2c; padding:10px 12px; border-radius:5px; font-size:11px; }
 .planDetails { margin:16px 0; }
 .planDetails > summary { cursor:pointer; font-size:11px; font-weight:600; color:#607154; padding:9px 0; }

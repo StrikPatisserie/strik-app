@@ -1,6 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
-function load(file,imports={}) {const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:name=>{if(!(name in imports))throw Error(`Unmocked ${name}`);return imports[name];},Request,Response,Date,Intl,JSON,Number,Set,Map});return exports;}
+function load(file,imports={}) {const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:name=>{if(!(name in imports))throw Error(`Unmocked ${name}`);return imports[name];},Request,Response,Date,Intl,JSON,Number,Set,Map,Error});return exports;}
 const planning=load('app/productie/planning.ts');
 const workspace=load('app/productie/workspaceData.ts',{'./planning':planning});
 const rules=load('app/productie/recipePlanning.ts',{'./planning':planning});
@@ -37,6 +37,32 @@ test('shared nested preparations are summed by recipe ID and placed before their
  const proposal=rules.preparationProposal(state,recipes,command);assert.equal(proposal.errors.length,0);
  const caramel=proposal.rows.filter(r=>r.recipeId==='caramel');assert.equal(caramel.length,1);assert.equal(caramel[0].quantity,6);assert.equal(caramel[0].date,'2026-10-28');
  const next=rules.buildRecipePlan(state,recipes,command);assert.equal(next.tasks.filter(t=>t.itemId==='recipe:caramel').length,1);assert(workspace.validWorkspace(next,recipes));
+});
+test('a late preparation stays visible with its original choice and can be repaired without losing the proposal',()=>{
+ const {state,recipes,command}=fixture();command.preparation.choices={mousse:{date:'2026-11-03',departmentId:'slagroom'}};
+ const proposal=rules.preparationProposal(state,recipes,command),mousse=proposal.rows.find(r=>r.recipeId==='mousse');
+ assert.match(proposal.errors[0],/Mousse.*ma 2 nov/);assert.equal(proposal.rows.length,5);
+ assert.equal(mousse.date,'2026-11-03');assert.equal(mousse.latestDate,'2026-11-02');assert.equal(mousse.departmentId,'slagroom');assert.equal(mousse.quantity,17.5);
+ assert.throws(()=>rules.buildRecipePlan(state,recipes,command),/gebruiksdatum/);assert.equal(state.tasks.length,0);
+ command.preparation.choices.mousse.date=mousse.latestDate;
+ const repaired=rules.preparationProposal(state,recipes,command);assert.equal(repaired.errors.length,0);assert.equal(repaired.rows.length,5);
+ assert.equal(rules.buildRecipePlan(state,recipes,command).tasks.length,6);
+});
+test('nested and shared preparations expose their earliest use and each invalid date can be corrected',()=>{
+ const {state,recipes,command}=fixture();recipes.find(r=>r.id==='foam').semiFinishedItems=[{recipeId:'caramel',quantity:1,unit:'kg'}];
+ command.preparation.choices={mousse:{date:'2026-10-29'},caramel:{date:'2026-10-30'}};
+ const proposal=rules.preparationProposal(state,recipes,command),caramel=proposal.rows.find(r=>r.recipeId==='caramel');
+ assert.equal(proposal.errors.length,1);assert.equal(proposal.rows.length,5);
+ assert.equal(caramel.latestDate,'2026-10-29');assert.equal(caramel.date,'2026-10-30');assert.equal(caramel.quantity,6);
+ command.preparation.choices.caramel.date=caramel.latestDate;
+ assert.equal(rules.preparationProposal(state,recipes,command).errors.length,0);
+ assert(workspace.validWorkspace(rules.buildRecipePlan(state,recipes,command),recipes));
+});
+test('a preparation explicitly marked already available is exempt from the date restriction and creates no task',()=>{
+ const {state,recipes,command}=fixture();command.preparation.choices={mousse:{include:false,date:'2026-11-03'}};
+ const proposal=rules.preparationProposal(state,recipes,command);assert.equal(proposal.errors.length,0);
+ assert.equal(proposal.rows.find(r=>r.recipeId==='mousse').included,false);
+ const next=rules.buildRecipePlan(state,recipes,command);assert(!next.tasks.some(t=>t.itemId==='recipe:mousse' || t.itemId==='recipe:caramel'));
 });
 test('missing yields, missing references, cycles, zero amounts and incompatible mass/volume units block the whole plan',()=>{
  for(const change of [
@@ -83,4 +109,9 @@ test('the guarded command endpoint recalculates from canonical recipes and commi
 test('stale recipe/planner revisions and a concurrent database conflict cannot leave a partial preparation plan',async()=>{
  for(const [revision,recipeRevision] of [[2,7],[3,6]]){const a=api({id:'manager',active:true,role:'manager'});assert.equal((await a.route.POST(request(a.command,revision,recipeRevision))).status,409);assert.equal(a.writes(),0);}
  const a=api({id:'manager',active:true,role:'manager'},{conflict:true});assert.equal((await a.route.POST(request(a.command))).status,409);assert.equal(a.writes(),0);
+});
+test('a late preparation cannot be saved through the API, even though the proposal remains editable',async()=>{
+ const a=api({id:'manager',active:true,role:'manager'});a.command.preparation.choices={mousse:{date:'2026-11-03'}};
+ const response=await a.route.POST(request(a.command));assert.equal(response.status,400);assert.equal(a.writes(),0);
+ assert.match((await response.json()).message,/gebruiksdatum/);
 });

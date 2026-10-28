@@ -1,4 +1,4 @@
-import { addDays, addTask, DEPARTMENTS, type DemoRecipe, type DepartmentId, type PreviewState, type Task } from "./planning";
+import { addDays, addTask, dateLabel, DEPARTMENTS, type DemoRecipe, type DepartmentId, type PreviewState, type Task } from "./planning";
 
 export type PreparationChoice = { include?: boolean; date?: string; departmentId?: DepartmentId };
 export type PlanCommand = {
@@ -8,7 +8,7 @@ export type PlanCommand = {
 };
 export type PreparationRow = {
   recipeId: string; itemId: string; name: string; quantity: number; unit: string;
-  recipeCount: number; date: string; departmentId: DepartmentId; departmentUnconfirmed: boolean;
+  recipeCount: number; date: string; latestDate: string; departmentId: DepartmentId; departmentUnconfirmed: boolean;
   included: boolean; requires: string[];
 };
 export type PreparationProposal = { quantity: number; recipeCount?: number; rows: PreparationRow[]; errors: string[] };
@@ -65,13 +65,13 @@ export function preparationProposal(state:PreviewState,recipes:DemoRecipe[],comm
         const needed=convert(line.quantity*amount/recipe.yield,line.unit,child.unit);
         if(!Number.isFinite(needed) || needed<=0 || needed>1000000)throw Error(`Ongeldige benodigde hoeveelheid bij ${child.name}.`);
         const plannedDate=choice.date || addDays(date,-daysBefore);addDays(plannedDate,0);
-        if(included && plannedDate>date)throw Error(`${child.name} moet op of vóór de gebruiksdatum ${date} worden ingepland.`);
         const departmentId=choice.departmentId || item.departmentId;
         if(!DEPARTMENTS.some(d=>d.id===departmentId))throw Error("Kies een geldige afdeling voor ieder halffabricaat.");
         let row=nodes.get(child.id);
-        if(!row) {row={recipeId:child.id,itemId:item.id,name:child.name,quantity:0,unit:item.unit,recipeCount:0,date:plannedDate,departmentId,departmentUnconfirmed:!!item.departmentUnconfirmed&&!choice.departmentId,included,requires:[]};nodes.set(child.id,row);}
+        if(!row) {row={recipeId:child.id,itemId:item.id,name:child.name,quantity:0,unit:item.unit,recipeCount:0,date:plannedDate,latestDate:date,departmentId,departmentUnconfirmed:!!item.departmentUnconfirmed&&!choice.departmentId,included,requires:[]};nodes.set(child.id,row);}
         row.quantity+=needed;row.recipeCount=child.yield>0?row.quantity/child.yield:0;
         if(plannedDate<row.date)row.date=plannedDate;
+        if(date<row.latestDate)row.latestDate=date;
         if(included) {
           if(consumer && !consumer.requires.includes(child.id))consumer.requires.push(child.id);
           expand(child,needed,plannedDate,[...path,child.id],row);
@@ -81,6 +81,11 @@ export function preparationProposal(state:PreviewState,recipes:DemoRecipe[],comm
     expand(root,result.quantity,command.task.date,[root.id]);
     result.rows=[...nodes.values()].map(row=>({...row,quantity:stableQuantity(row.quantity),recipeCount:stableQuantity(row.recipeCount)}));
     if(result.rows.some(row=>row.quantity>1000000))throw Error("De totale benodigde hoeveelheid is te groot.");
+    // Keep the complete proposal editable when a date is too late. Saving still
+    // rejects every error, including the earliest use of shared preparations.
+    for(const row of result.rows) {
+      if(row.included && row.date>row.latestDate)result.errors.push(`${row.name} moet op of vóór de gebruiksdatum ${dateLabel(row.latestDate,true)} worden ingepland. Pas de datum bij dit halffabricaat aan.`);
+    }
   } catch(error) { result.errors.push(error instanceof Error?error.message:"Het voorstel kon niet worden berekend."); }
   return result;
 }
