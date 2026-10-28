@@ -30,7 +30,14 @@ export async function getCurrentProfile() {
 
     // Server actions enforce the same seven-day MFA window as the proxy.
     if (profile && hasFullAccess(profile as UserProfile) && !hasRecentMfa(claimsData.claims)) return null;
-    return (profile as UserProfile | null) || null;
+    if (!profile) return null;
+    // Missing migration or storage outage hides the feature; it never grants it.
+    let personal_workspace=false;
+    if (hasFullAccess(profile as UserProfile)) {
+      const {data:owner,error:ownerError}=await supabase.from("personal_workspace_owners").select("enabled").eq("owner_id",profile.id).maybeSingle();
+      personal_workspace=!ownerError && owner?.enabled===true;
+    }
+    return {...profile,personal_workspace} as UserProfile;
   } catch {
     return null;
   }

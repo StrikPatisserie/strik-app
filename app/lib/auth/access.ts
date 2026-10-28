@@ -139,6 +139,10 @@ export function hasFullAccess(profile: UserProfile | null | undefined) {
   );
 }
 
+export function canAccessPersonalNotes(profile: UserProfile | null | undefined) {
+  return hasFullAccess(profile) && profile?.personal_workspace===true;
+}
+
 export function isWinkelIpadAccount(
   profile: UserProfile | null | undefined
 ) {
@@ -456,6 +460,7 @@ export function canAccessPath(
   pathname: string
 ) {
   if (!profile?.active) return false;
+  if (pathname==="/persoonlijk" || pathname.startsWith("/persoonlijk/")) return canAccessPersonalNotes(profile);
   if (pathname === "/") return true;
   if (pathname === "/profiel" || pathname.startsWith("/profiel/")) return true;
   if (isUniversalTeamPath(pathname)) return true;

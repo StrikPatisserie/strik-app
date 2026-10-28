@@ -17,6 +17,7 @@ const mainNavItems = [
   { href: "/bakkerij/logistiek", label: "Logistiek", icon: strikIcons.logistiek },
   { href: "/bakkerij/productie", label: "Productie", icon: strikIcons.productie },
   { href: "/management", label: "Management", icon: strikIcons.management },
+  { href: "/persoonlijk", label: "Mijn to-do’s", icon: strikIcons.personalTodo },
   { href: "/vierdaagse", label: "Vierdaagse", icon: strikIcons.strikAgenda },
   { href: "/sinterklaas", label: "Sinterklaas", icon: strikIcons.sinterklaas },
   { href: "/kerst", label: "Kerst", icon: strikIcons.kerst },

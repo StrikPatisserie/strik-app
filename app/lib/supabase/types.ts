@@ -28,6 +28,8 @@ export type UserProfile = {
   active: boolean;
   avatar_url: string | null;
   created_at: string;
+  // Computed from the private enrolment table, never an editable profile flag.
+  personal_workspace?: boolean;
 };
 
 export type AppSetting = {
@@ -84,6 +86,12 @@ export const PERMISSION_OPTIONS = [
 export type Database = {
   public: {
     Tables: {
+      personal_workspace_owners: {
+        Row: { owner_id:string; enabled:boolean; created_at:string };
+        Insert: { owner_id:string; enabled?:boolean; created_at?:string };
+        Update: { enabled?:boolean };
+        Relationships: [];
+      };
       profiles: {
         Row: UserProfile;
         Insert: {

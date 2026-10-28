@@ -4,6 +4,7 @@ import StrikBackButton from "./StrikBackButton";
 import { StrikPageHeading } from "./StrikPageTitle";
 
 export const strikIcons = {
+  personalTodo: "/icons_personal_todo.svg",
   agenda: "/icons_strik_agenda.svg",
   bakkerij: "/apps%20strik_Bakkerij.svg",
   productie: "/icons_strik_productie.svg",

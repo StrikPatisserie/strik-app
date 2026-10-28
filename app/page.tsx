@@ -9,6 +9,7 @@ import type { UserProfile } from "./lib/supabase/types";
 import WelcomeHighlights from "./WelcomeHighlights";
 
 const baseSections = [
+  { href:"/persoonlijk",title:"Mijn to-do’s",subtitle:"Jouw eigen notities en belangrijke gegevens",icon:strikIcons.personalTodo },
   {
     href: "/winkel",
     title: "Winkel",

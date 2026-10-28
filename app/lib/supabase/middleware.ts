@@ -54,6 +54,7 @@ function isPublicPath(pathname: string) {
   return (
     (process.env.NODE_ENV === "development" && pathname === "/preview/winkelpresentatie") ||
     (process.env.NODE_ENV === "development" && pathname === "/preview/productie") ||
+    (process.env.NODE_ENV === "development" && pathname === "/preview/persoonlijk") ||
     PUBLIC_PATHS.has(pathname) ||
     pathname.startsWith("/auth/callback/") ||
     pathname.startsWith("/fonts/") ||
@@ -162,6 +163,10 @@ export async function updateSession(request: NextRequest) {
     }
 
     const currentProfile = profile as UserProfile | null;
+    if (currentProfile && (pathname==="/persoonlijk" || pathname.startsWith("/persoonlijk/") || pathname==="/api/persoonlijk" || pathname.startsWith("/api/persoonlijk/"))) {
+      const {data:owner,error:ownerError}=await supabase.from("personal_workspace_owners").select("enabled").eq("owner_id",currentProfile.id).maybeSingle();
+      currentProfile.personal_workspace=!ownerError && owner?.enabled===true;
+    }
     const manager = hasFullAccess(currentProfile);
     if (manager && !hasRecentMfa(claims)) {
       if (isApi) return withSessionCookies(NextResponse.json({ message: "Bevestig je tweede verificatiestap.", code: "MFA_REQUIRED" }, { status: 403, headers: { "Cache-Control": "no-store" } }));
