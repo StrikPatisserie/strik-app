@@ -2186,6 +2186,25 @@ export function getKnownTamigoHoursReviewDepartments() {
   return [...SHOP_DEPARTMENTS, ICE_LOKET_DEPARTMENT].map(department => ({ id: department.departmentId, name: department.departmentName }));
 }
 
+/** Production roster: read-only projection, separate from payroll and corrections.
+ * Verified against the public Swagger, 28 October 2026. */
+export async function fetchTamigoProductionRosterSource(input:
+  | {kind:"departments"}
+  | {kind:"planned"|"absences";departmentId:string;from:string;to:string}
+):Promise<unknown>{
+  const path=input.kind==="departments"?"/v2/Departments/application/":input.kind==="planned"?"/v2/Shifts/":"/v2/Absences/AbsenceOverview/";
+  const params:Record<string,string>=input.kind==="departments"?{includeParents:"false"}:input.kind==="planned"?{departmentId:input.departmentId,from:input.from,to:input.to,shiftStatus:"planned"}:{departmentId:input.departmentId,startDate:input.from,endDate:input.to};
+  const scopes:TamigoAuthScope[]=process.env.TAMIGO_LOON_API_KEY?["default","labor"]:["default"];
+  for(const [index,scope] of scopes.entries()){
+    try{
+      const response=await fetch(createTamigoUrl(path,params),{method:"GET",headers:{Accept:"application/json","Content-Type":"application/json","x-tamigo-token":await getTamigoAccessToken(scope)},cache:"no-store",signal:AbortSignal.timeout(15000)});
+      if(!response.ok)throw new TamigoApiError("Tamigo-roosterbron niet beschikbaar.",response.status);
+      const data=parseJson(await response.text());if(data===null)throw new TamigoApiError("Tamigo gaf geen geldig roosterantwoord.");return data;
+    }catch(error){if(index<scopes.length-1 && (error instanceof TamigoConfigurationError || [401,403].includes(getTamigoStatusCode(error))))continue;throw error;}
+  }
+  throw new TamigoApiError("Tamigo-roosterbron niet beschikbaar.",403);
+}
+
 // Corrections have their own explicit gate; never call from the read-only adapter.
 export function tamigoHoursWritesEnabled() {
   return process.env.TAMIGO_HOURS_WRITE_ENABLED === "1";

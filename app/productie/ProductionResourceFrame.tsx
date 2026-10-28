@@ -12,6 +12,6 @@ export default function ProductionResourceFrame({ title, active, departments, ca
     <div className={s.previewBar}><span><i />Strik Productie</span></div>
     <header className={s.header}><div className={s.heading}><span className={s.eyebrow}>STRIK PRODUCTIE</span><h1>{title}</h1></div></header>
     <ProductionMobileNavigation active={active} canManage={canManage} canBakery={canBakery} />
-    <div className={s.resourceSurface}>{children}</div>
+    <div className={s.resourceSurface} data-production-content>{children}</div>
   </main></div>;
 }

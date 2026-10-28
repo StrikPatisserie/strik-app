@@ -8,6 +8,7 @@ export function Panel({
 }: Readonly<{ children: React.ReactNode; className?: string }>) {
   return (
     <section
+      data-production-card
       className={`${styles.sharedPanel} border border-[#e8e4de] bg-white ${className}`}
     >
       {children}

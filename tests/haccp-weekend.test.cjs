@@ -72,7 +72,7 @@ test('Sunday FIFO separates returns, the approved Saturday-vlaai exception, free
 
 const shared=load('app/winkel/schoonmaak-registratie/temperatureRegistrationShared.ts');
 const inventory=load('app/winkel/schoonmaak-registratie/deviceInventory.ts',{'./temperatureRegistrationShared':shared});
-const {normalize,isDefault}=load('app/winkel/schoonmaak-registratie/page.tsx',{'./temperatureRegistrationShared':shared},'exports.normalize=normalizeRegistrations; exports.isDefault=isDefaultTemperatureRow;');
+const {normalize,isDefault}=load('app/winkel/schoonmaak-registratie/TemperatureRegistration.tsx',{'./temperatureRegistrationShared':shared},'exports.normalize=normalizeRegistrations; exports.isDefault=isDefaultTemperatureRow;');
 test('new shop lists contain exactly the requested equipment and seasonal notes',()=>{
   const names={
     ziekerstraat:['Vriezer 1','Vriezer 2','Vriezer 3','Vriescel','Winkelvriezer','Gebakskoeling','Zelfbedienskoeling'],

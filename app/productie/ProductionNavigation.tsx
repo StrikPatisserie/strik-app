@@ -10,6 +10,7 @@ import s from "../preview/productie/production.module.css";
 
 const sections: { id: string; label: string; icon: IconName; href: string; manager?: boolean }[] = [
   { id: "planning", label: "Weekplanning", icon: "grid", href: PRODUCTION_HOME },
+  { id: "roster", label: "Personeelsrooster", icon: "users", href: `${PRODUCTION_HOME}/rooster` },
   { id: "recipes", label: "Recepten", icon: "book", href: `${PRODUCTION_HOME}?view=recipes` },
   { id: "ingredients", label: "Grondstoffen", icon: "leaf", href: `${PRODUCTION_HOME}?view=ingredients` },
   { id: "haccp", label: "HACCP & registraties", icon: "check", href: `${PRODUCTION_HOME}/haccp` },

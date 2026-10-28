@@ -16,10 +16,12 @@ const PROFILE_SELECT =
 export function useAllowedWinkelOptions<
   T extends TemperatureLocationOption,
 >(options: readonly T[]) {
+  const containsWinkelOptions = options.some((option) => WINKEL_STORE_IDS.includes(option.id as (typeof WINKEL_STORE_IDS)[number]));
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+    if (!containsWinkelOptions) return;
     let ignoreResult = false;
 
     async function loadProfile() {
@@ -49,17 +51,13 @@ export function useAllowedWinkelOptions<
     return () => {
       ignoreResult = true;
     };
-  }, []);
+  }, [containsWinkelOptions]);
 
   return useMemo(() => {
-    const containsWinkelOptions = options.some((option) =>
-      WINKEL_STORE_IDS.includes(option.id as (typeof WINKEL_STORE_IDS)[number])
-    );
-
     if (!containsWinkelOptions || !loaded || !profile || hasFullAccess(profile)) {
       return [...options];
     }
 
     return filterAllowedWinkelOptions(options, profile);
-  }, [loaded, options, profile]);
+  }, [loaded, options, profile, containsWinkelOptions]);
 }

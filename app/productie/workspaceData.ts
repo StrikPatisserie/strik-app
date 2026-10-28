@@ -1,5 +1,5 @@
 import type { RecepturenData } from "../bakkerij/recepturen/recepturenApi";
-import { type DepartmentId, type DemoRecipe, type ItemUnit, type PreviewState, type Task, DEPARTMENTS, addDays, validRecipePlan } from "./planning";
+import { type DepartmentId, type DemoRecipe, type ItemUnit, type PreviewState, type Task, DEPARTMENTS, addDays, validRecipePlan, validStaffingSettings } from "./planning";
 
 export type IngredientView = { id: string; name: string; supplier: string; unit: string; linked: boolean; specification: string; allergens: string };
 export type LiveWorkspace = {
@@ -82,6 +82,7 @@ export function validWorkspace(value: unknown, recipes: DemoRecipe[]): value is 
   if (!value || typeof value !== "object") return false;
   const state = value as PreviewState;
   if (state.version !== 1 || !Array.isArray(state.items) || !Array.isArray(state.tasks) || state.items.length > 15000 || state.tasks.length > 15000) return false;
+  if(state.staffing!==undefined && !validStaffingSettings(state.staffing))return false;
   const ids = new Set<string>(), tasks = new Map<string, Task>(), batches = new Set<string>();
   try {
     for (const i of state.items) {

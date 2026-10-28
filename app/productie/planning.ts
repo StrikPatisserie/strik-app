@@ -47,7 +47,24 @@ export type DemoRecipe = {
   semiFinishedItems?: { recipeId: string; quantity: number; unit: string }[];
 };
 export type RemovedTask = { task: Task; removedAt: string; removedBy: string };
-export type PreviewState = { version: 1; items: Item[]; tasks: Task[]; removedTasks?: RemovedTask[] };
+export type ProductionStaffingPerson = { employeeId:string; name:string; weekdays:number[]; weeklyHours:number|null; tasks:string };
+export type ProductionStaffingSettings = { departmentIds:string[]; people:ProductionStaffingPerson[] };
+export type PreviewState = { version: 1; items: Item[]; tasks: Task[]; removedTasks?: RemovedTask[]; staffing?:ProductionStaffingSettings };
+export function validStaffingSettings(value:unknown):value is ProductionStaffingSettings {
+  if(!value || typeof value!=="object" || Array.isArray(value))return false;
+  const s=value as ProductionStaffingSettings;
+  const guid=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+  if(!Array.isArray(s.departmentIds) || s.departmentIds.length>12 || s.departmentIds.some(id=>typeof id!=="string" || !guid.test(id)) || !Array.isArray(s.people) || s.people.length>200)return false;
+  if(new Set(s.departmentIds.map(id=>id.toLowerCase())).size!==s.departmentIds.length || new Set(s.people.map(p=>typeof p?.employeeId==="string"?p.employeeId.toLowerCase():undefined)).size!==s.people.length)return false;
+  return s.people.every(p=>{
+    if(!p || typeof p.employeeId!=="string" || !guid.test(p.employeeId) || typeof p.name!=="string" || !p.name.trim() || p.name.length>160 || typeof p.tasks!=="string" || p.tasks.length>5000)return false;
+    if(!Array.isArray(p.weekdays) || p.weekdays.length>7 || new Set(p.weekdays).size!==p.weekdays.length || p.weekdays.some(d=>!Number.isInteger(d)||d<0||d>6))return false;
+    return p.weeklyHours===null || (typeof p.weeklyHours==="number" && Number.isFinite(p.weeklyHours) && p.weeklyHours>0 && p.weeklyHours<=84);
+  });
+}
+export function normalizeStaffingSettings(value:ProductionStaffingSettings):ProductionStaffingSettings {
+  return {departmentIds:value.departmentIds.map(id=>id.toLowerCase()),people:value.people.map(p=>({employeeId:p.employeeId.toLowerCase(),name:p.name.trim(),weekdays:[...p.weekdays].sort((a,b)=>a-b),weeklyHours:p.weeklyHours,tasks:p.tasks.trim()}))};
+}
 
 export const STATUS_LABELS: Record<TaskStatus, string> = { planned: "Gepland", active: "Bezig", done: "Klaar", blocked: "Geblokkeerd" };
 export const SOURCE_LABELS: Record<Task["source"], string> = { manual: "Handmatig", shop: "Winkelbehoefte", order: "Bestelling", routine: "Vaste taak" };

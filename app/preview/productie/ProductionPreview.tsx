@@ -7,6 +7,7 @@ import dynamic from "next/dynamic";
 import WeddingWeekLane from "../../productie/WeddingWeekLane";
 import { scheduleWedding, type WeddingProductionOrder } from "../../productie/weddingPlanning";
 const OfferManager=dynamic(()=>import("../../bakkerij/recepturen/RecepturenApp"),{loading:()=> <p role="status">Aanbiedingbeheer laden…</p>});
+const ProductionStaffing=dynamic(()=>import("../../productie/ProductionStaffing"),{loading:()=> <p role="status">Personeelsrooster laden…</p>});
 import Icon, { type IconName } from "../../productie/ProductionIcon";
 import ProductionNavigation, { ProductionMobileNavigation } from "../../productie/ProductionNavigation";
 import { productionView, type ProductionView } from "../../productie/navigation";
@@ -39,7 +40,7 @@ function ModalFrame({ title, subtitle, children, onClose, wide }: { title: strin
   const { demo } = useContext(WorkspaceContext);
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => { ref.current?.showModal(); }, []);
-  return <dialog ref={ref} className={`${s.dialog} ${wide?s.dialogWide:""}`} onCancel={e => { e.preventDefault(); onClose(); }} onClick={e => { if (e.target === e.currentTarget) onClose(); }} aria-label={title}>
+  return <dialog ref={ref} data-production-content className={`${s.dialog} ${wide?s.dialogWide:""}`} onCancel={e => { e.preventDefault(); onClose(); }} onClick={e => { if (e.target === e.currentTarget) onClose(); }} aria-label={title}>
     <header className={s.dialogHeader}><div><span className={s.eyebrow}>Strik Productie{demo ? " · preview" : ""}</span><h2>{title}</h2>{subtitle && <p>{subtitle}</p>}</div><button type="button" className={s.iconButton} onClick={onClose} aria-label="Sluiten"><Icon name="close" /></button></header>
     {children}
   </dialog>;
@@ -55,7 +56,7 @@ function quantity(value: number) { return value.toLocaleString("nl-NL", { maximu
 function departmentName(id: DepartmentId) { return DEPARTMENTS.find(d => d.id === id)?.name || id; }
 function newId(prefix: string) { return `${prefix}-${crypto.randomUUID()}`; }
 
-export default function ProductionPreview({live,onRefresh,initialView="planning",initialBoard,initialDepartment}:{live?:LiveWorkspace;onRefresh?:()=>Promise<void>;initialView?:string;initialBoard?:BoardId;initialDepartment?:DepartmentId}) {
+export default function ProductionPreview({live,onRefresh,initialView="planning",initialBoard,initialDepartment,initialWeek}:{live?:LiveWorkspace;onRefresh?:()=>Promise<void>;initialView?:string;initialBoard?:BoardId;initialDepartment?:DepartmentId;initialWeek?:string}) {
   const demo = !live, canManage = !live || live.canManage;
   const today = live?.today || DEMO_TODAY;
   const recipeList = live?.recipes || demoRecipes;
@@ -68,7 +69,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
   const [hydrated, setHydrated] = useState(false);
   const [view, setView] = useState<View>(()=>productionView(initialView));
   const [board, setBoard] = useState<BoardId>(()=>initialBoard && (!live || departmentsFor(initialBoard).some(d=>live.departments.includes(d.id))) ? initialBoard : live && !live.departments.includes("dessert") ? "ijs" : "patisserie");
-  const [week, setWeek] = useState(()=>demo ? DEMO_WEEK : mondayOf(today));
+  const [week, setWeek] = useState(()=>initialWeek || (demo ? DEMO_WEEK : mondayOf(today)));
   const [department, setDepartment] = useState<DepartmentId | "all">(initialDepartment || "all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
@@ -224,7 +225,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
   return <WorkspaceContext.Provider value={{demo,recipes:recipeList,canManage,saving}}><div className={`${s.root} ${wall ? s.wall : ""} ${largeText ? s.largeText : ""}`} style={style} data-production-preview={demo || undefined} aria-busy={saving}>
     {!wall && <ProductionNavigation active={view} boards={availableBoards} canManage={canManage} canBakery={canBakery} demo={demo} activeBoard={board} onNavigate={navigate} onBoard={id=>{navigate("planning");chooseBoard(id);}} />}
 
-    <main className={s.main}>
+    <main className={s.main} data-production-content={view!=="planning"?"":undefined}>
       <div className={s.previewBar}><span><i />{demo ? "Preview · voorbeeldgegevens" : "Strik Productie · gedeelde werkversie"}</span><span>{demo ? (storageError ? "Bewaren niet mogelijk · wijzigingen vervallen bij herladen" : "Wijzigingen blijven alleen in deze browser") : saving ? "Bezig met opslaan…" : `Opgeslagen in Supabase · bijgewerkt ${syncedAt ? new Intl.DateTimeFormat("nl-NL",{timeZone:"Europe/Amsterdam",hour:"2-digit",minute:"2-digit"}).format(new Date(syncedAt)) : ""}`}</span>{demo ? <button onClick={() => setModal({ type: "reset" })}>Herstel voorbeeld</button> : <button disabled={saving} onClick={()=>void onRefresh?.()}>Verversen</button>}</div>
       <header className={s.header}><div className={s.heading}><span className={s.eyebrow}>STRIK PRODUCTIE{wall ? " · SCHERMMODUS" : ""}</span><h1>{NAV.find(n => n.id === view)?.label || "Instellingen"}</h1></div>
         <div className={s.headerActions}>{view === "planning" && <><button className={s.secondaryButton} aria-pressed={wall} onClick={() => setWall(!wall)}><Icon name="screen" />{wall ? "Sluit schermmodus" : "XL-scherm"}</button>{canManage && <button className={s.primaryButton} onClick={() => setModal({ type: "task", date: day, departmentId: visibleDepartments[0]?.id })}><Icon name="plus" />Taak toevoegen</button>}</>}{(view === "catalog" || view === "recipes") && canManage && <button className={s.primaryButton} onClick={() => setModal({ type: "item" })}><Icon name="plus" />Los onderdeel toevoegen</button>}</div>
@@ -233,6 +234,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
       <ProductionMobileNavigation active={view} canManage={canManage} canBakery={canBakery} demo={demo} onNavigate={navigate} />
 
       {view === "planning" ? <>
+        <ProductionStaffing week={week} canManage={canManage} demo={demo} onSettingsSaved={onRefresh}/>
         {canBakery && <section className={s.weekOffer} aria-label="Weekaanbieding"><button disabled={!offer?.imageUrl} onClick={()=>setModal({type:"offer"})}>{offer?.imageUrl && <img src={offer.imageUrl} alt="Weekaanbieding"/>}<span><strong>Weekaanbieding · week {weekNumber(week)}</strong><small>{offer?.label || (offer?.imageUrl?"Klik op de afbeelding om te vergroten":"Nog geen afbeelding voor deze week")}</small></span>{offer?.imageUrl && <span aria-hidden="true">↗</span>}</button>{canManage && <button className={s.secondaryButton} onClick={()=>setModal({type:"offer-manage"})}>Aanbieding beheren</button>}</section>}
         <section className={s.plannerToolbar} aria-label="Week en filters"><div className={s.weekPicker}><button aria-label="Vorige week" onClick={() => shiftWeek(-1)} className={s.previous}><Icon name="chevron" size={16} /></button><div><strong>Week {weekNumber(week)}</strong><span>{weekLabel(week)}</span></div><button aria-label="Volgende week" onClick={() => shiftWeek(1)}><Icon name="chevron" size={16} /></button><button className={s.thisWeek} onClick={() => { setWeek(demo ? DEMO_WEEK : mondayOf(today)); setDay(today); }}>{demo ? "Voorbeeldweek" : "Deze week"}</button></div>
           <div className={`${s.plannerFilters} ${showFilters ? s.filtersExpanded : ""}`}><label><span className={s.srOnly}>Planning</span><select value={board} onChange={e => chooseBoard(e.target.value as BoardId)}>{availableBoards.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label><button className={s.mobileFilterToggle} aria-label="Toon of verberg filters" aria-expanded={showFilters} onClick={() => setShowFilters(!showFilters)}><Icon name="settings" size={16} /></button><label className={s.extraFilter}><span className={s.srOnly}>Afdeling</span><select value={department} onChange={e => setDepartment(e.target.value as DepartmentId | "all")}><option value="all">Alle afdelingen</option>{boardDepartments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></label><label className={s.extraFilter}><span className={s.srOnly}>Taakstatus</span><select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="all">Alle taken</option><option value="open">Nog te doen</option><option value="active">Bezig</option><option value="attention">Aandacht nodig</option><option value="done">Afgerond</option></select></label>{wall && <button className={s.textSize} onClick={() => setLargeText(!largeText)} aria-pressed={largeText}>A<span>A</span> Tekstgrootte</button>}</div>

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { TemperatureRegistrationPage } from "@/app/winkel/schoonmaak-registratie/page";
+import { TemperatureRegistrationPage } from "@/app/winkel/schoonmaak-registratie/TemperatureRegistration";
 import { bakkerijTemperatureOptions, bakkerijTemperatureRows } from "@/app/winkel/schoonmaak-registratie/temperatureRegistrationShared";
 import GoodsRegistration from "@/app/bakkerij/schoonmaak/goederenregistratie/GoodsRegistration";
 import KettleRegistration from "@/app/bakkerij/ijs-chocolade/haccp/temperatuurregistratie/KettleRegistration";

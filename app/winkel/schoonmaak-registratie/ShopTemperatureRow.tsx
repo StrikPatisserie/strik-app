@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, type Ref } from "react";
+import { useId, type Ref,type ReactNode } from "react";
 import TemperatureValueInput from "./TemperatureValueInput";
 import {
   deviceTypeOptions,
@@ -16,7 +16,7 @@ import {
 
 type EditableField = "naam" | "handTemperatuur" | "deviceType" | "actionTaken" | "note";
 
-export default function ShopTemperatureRow({ item, isDefault, open, onToggleDetails, onChange, onToggleInactive, onRemove, rowRef }: {
+export default function ShopTemperatureRow({ item, isDefault, open, onToggleDetails, onChange, onToggleInactive, onRemove, rowRef,dragHandle,extraActions,onDefinitionBlur }: {
   item: TemperatureRegistration;
   isDefault: boolean;
   open: boolean;
@@ -25,6 +25,9 @@ export default function ShopTemperatureRow({ item, isDefault, open, onToggleDeta
   onToggleInactive: () => void;
   onRemove: () => void;
   rowRef: Ref<HTMLDivElement>;
+  dragHandle?:ReactNode;
+  extraActions?:ReactNode;
+  onDefinitionBlur?:()=>void;
 }) {
   const detailsId = useId();
   const deviceType = normalizeTemperatureDeviceType(item.deviceType, item.naam);
@@ -51,7 +54,7 @@ export default function ShopTemperatureRow({ item, isDefault, open, onToggleDeta
   return (
     <div ref={rowRef} data-temperature-row={item.id} className={`min-w-0 rounded-xl border border-[#e8e4de] border-l-4 bg-[#fffdfb] p-3 ${colors[status]} ${item.inactive ? "border-dashed" : ""}`}>
       <div className="grid grid-cols-[minmax(0,1fr)_2.75rem] items-center gap-x-3 gap-y-2 md:grid-cols-[minmax(0,1fr)_15rem_2.75rem]">
-        <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-2">{dragHandle}<div className="min-w-0 flex-1">
           <h3 className={`break-words text-sm font-black leading-snug ${item.inactive ? "text-[#6b645b]" : "text-[#1a1815]"}`}>{item.naam || "Nieuw meetpunt"}</h3>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
             <span className="text-[#6b645b]">{getDeviceTypeLabel(deviceType)}</span>
@@ -59,7 +62,7 @@ export default function ShopTemperatureRow({ item, isDefault, open, onToggleDeta
             {Number.isFinite(item.maxTemperature) ? <span className="font-bold text-[#a0382f]">max {formatTemperatureLimit(Number(item.maxTemperature))} °C</span> : null}
           </div>
           {item.department ? <p className="mt-1 text-xs leading-snug text-[#6b645b]">{item.department}</p> : null}
-        </div>
+        </div></div>
         <div className="col-span-2 row-start-2 min-w-0 md:col-span-1 md:col-start-2 md:row-start-1">
           <TemperatureValueInput label={`Handmeting ${item.naam || "nieuw meetpunt"}`} value={item.handTemperatuur} onChange={(value) => onChange("handTemperatuur", value)} disabled={Boolean(item.inactive)} />
         </div>
@@ -80,10 +83,10 @@ export default function ShopTemperatureRow({ item, isDefault, open, onToggleDeta
       {open ? (
         <div id={detailsId} className="mt-3 grid gap-3 border-t border-[#e8e4de] pt-3 sm:grid-cols-2">
           <label className="grid gap-1 text-xs font-bold text-[#6b645b]">Naam apparaat
-            <input data-device-name value={item.naam} onChange={(event) => onChange("naam", event.target.value)} disabled={Boolean(item.inactive)} placeholder="Bijvoorbeeld koeling" className={inputClass} />
+            <input data-device-name value={item.naam} onBlur={onDefinitionBlur} onChange={(event) => onChange("naam", event.target.value)} disabled={Boolean(item.inactive)} placeholder="Bijvoorbeeld koeling" className={inputClass} />
           </label>
           <label className="grid gap-1 text-xs font-bold text-[#6b645b]">Type
-            <select value={deviceType} onChange={(event) => onChange("deviceType", event.target.value as TemperatureDeviceType)} disabled={Boolean(item.inactive)} className={inputClass}>
+            <select value={deviceType} onBlur={onDefinitionBlur} onChange={(event) => onChange("deviceType", event.target.value as TemperatureDeviceType)} disabled={Boolean(item.inactive)} className={inputClass}>
               {deviceTypeOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
             </select>
           </label>
@@ -93,6 +96,7 @@ export default function ShopTemperatureRow({ item, isDefault, open, onToggleDeta
           <div className="flex flex-wrap gap-2 sm:col-span-2">
             {isDefault ? <button type="button" onClick={onToggleInactive} className="min-h-11 touch-manipulation rounded-lg border border-[#d8d0c7] bg-white px-3 text-sm font-bold text-[#8a6a3d]">{item.inactive ? "Weer aan" : "Tijdelijk uit"}</button>
               : <button type="button" onClick={onRemove} className="min-h-11 touch-manipulation rounded-lg border border-[#d8d0c7] bg-white px-3 text-sm font-bold text-[#c94f43]">Verwijder meetpunt</button>}
+            {extraActions}
           </div>
         </div>
       ) : null}

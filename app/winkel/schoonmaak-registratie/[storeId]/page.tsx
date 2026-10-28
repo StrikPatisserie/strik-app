@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { canAccessWinkelStore } from "../../../lib/auth/access";
 import { requireCurrentProfile } from "../../../lib/auth/session";
-import { TemperatureRegistrationPage } from "../page";
+import { TemperatureRegistrationPage } from "../TemperatureRegistration";
 import { isWinkelId, temperatureRowsByWinkel, winkelOptions } from "../temperatureRegistrationShared";
 
 export default async function WinkelTemperaturePage({

@@ -328,6 +328,7 @@ export default function IjsChocoladeTemperatuurregistratiePage({ embedded = fals
             {selectedEvaluations.map(({ evaluation, step, value }) => (
               <div
                 key={step.id}
+                data-production-kettle-step={embedded?"":undefined}
                 className="grid gap-3 rounded-2xl border border-[#eadb8b] bg-white p-3 md:grid-cols-[10rem_1fr_8rem_7rem]"
               >
                 <div>
@@ -339,7 +340,7 @@ export default function IjsChocoladeTemperatuurregistratiePage({ embedded = fals
                   </p>
                 </div>
                 <label className="grid gap-1 text-xs font-black uppercase tracking-[0.1em] text-[#594b10]/55 md:max-w-48">
-                  Temperatuur
+                  <span className={embedded?"sr-only":undefined}>Temperatuur</span>
                   <input
                     inputMode="decimal"
                     value={value}
@@ -349,7 +350,7 @@ export default function IjsChocoladeTemperatuurregistratiePage({ embedded = fals
                   />
                 </label>
                 <span className="self-end text-sm font-black text-[#2d2a26]/65">
-                  graden Celsius
+                  {embedded?"°C":"graden Celsius"}
                 </span>
                 <span
                     className={`self-end rounded-xl border px-3 py-3 text-center text-sm font-black ${statusClass(

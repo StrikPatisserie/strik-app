@@ -274,7 +274,7 @@ export function StrikShell({
   backHref?: string;
   embedded?: boolean;
 }>) {
-  if (embedded) return <section className="min-w-0 text-[#2b3e32]">{children}</section>;
+  if (embedded) return <section data-production-embedded className="min-w-0 text-[#2b3e32]">{children}</section>;
   return (
     <main
       data-app-background={tone}
