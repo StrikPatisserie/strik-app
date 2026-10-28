@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
-export type IconName = "users" | "gift" | "grid" | "book" | "box" | "leaf" | "stock" | "settings" | "arrow" | "plus" | "chevron" | "check" | "clock" | "screen" | "close" | "search" | "warning" | "link" | "back" | "move" | "play";
+export type IconName = "trash" | "users" | "gift" | "grid" | "book" | "box" | "leaf" | "stock" | "settings" | "arrow" | "plus" | "chevron" | "check" | "clock" | "screen" | "close" | "search" | "warning" | "link" | "back" | "move" | "play";
 
 export default function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, ReactNode> = {
+    trash: <><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></>,
     users: <><circle cx="9" cy="7" r="3"/><path d="M2 21v-3a7 7 0 0 1 14 0v3M17 4a3 3 0 0 1 0 6M18 14a5 5 0 0 1 4 5v2"/></>,
     gift: <><rect x="3" y="9" width="18" height="12" rx="1"/><path d="M2 5h20v4H2zM12 5v16"/><path d="M12 5C3 6 6-3 12 5Zm0 0c9 1 6-8 0 0Z"/></>,
     grid: <><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M3 10h18M9 10v11M15 10v11M8 2v4M16 2v4" /></>,

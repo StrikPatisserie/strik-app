@@ -182,9 +182,23 @@
   .weekSummary { padding:10px 0; }
 }
 
-.deleteTask { margin-top:24px; padding-top:18px; border-top:1px solid #e1e6d9; }
 .deleteButton { color:#9d3d36; border:1px solid #d8a69e; border-radius:6px; padding:10px 14px; min-height:44px; background:#fff7f4; font-weight:600; }
 .deleteButton:disabled { opacity:.5; cursor:not-allowed; }
+.taskIconButton { display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px; min-height:44px; padding:0; flex:0 0 44px; border:1px solid transparent; border-radius:5px; }
+.taskBackButton { background:#2c513e; color:#fff; }.taskBackButton:hover { background:#203e2e; }
+.taskDeleteButton { background:#d75a48; color:#fff; }.taskDeleteButton:hover { background:#bf4939; }.taskDeleteButton:disabled { opacity:.5; cursor:wait; }
+.taskDetailBody .recipeContent { margin:14px 0; padding-top:14px; }
+.taskDetailBody .ingredientAmounts > div { font-size:13px; padding:9px 12px; }
+.taskDetailBody .recipeContent ol { color:#3f4d3b; font-size:13px; line-height:1.6; margin:14px 0; }
+.taskDetailBody .statusActions { margin:14px 0 8px; padding-top:12px; }
+.taskDetailBody .moveDetails { margin-top:10px; padding-top:6px; }
+.taskDetailBody .stepsChain { margin:8px 0; }
+.removalPanel h3 { margin:0 0 14px; }.removalPanel h4 { margin:18px 0 8px; }
+.removalDependencies > p { font-size:12px; margin:0 0 6px; color:#8b493e; }
+.removalList { list-style:none; margin:0; padding:0; border-top:1px solid #dfe4da; }
+.removalList li { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:9px 0; border-bottom:1px solid #dfe4da; font-size:11px; }
+.removalList li > span:first-child { display:grid; gap:4px; }.removalList small { color:#758074; }.removalList li > span:last-child { white-space:nowrap; color:#758074; }
+.removalActions { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:8px; margin-top:18px; }
 .removedTaskList > div { display:flex; align-items:center; justify-content:space-between; gap:15px; padding:12px 0; border-top:1px solid #e1e6d9; }
 .removedTaskList span { display:grid; gap:5px; }
 .removedTaskList small { color:#607154; }

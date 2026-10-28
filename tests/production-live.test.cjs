@@ -50,6 +50,14 @@ test('started, completed and dependency-linked tasks cannot disappear from a bul
  const r=route(manager),state=r.store.planner.data;state.tasks.push({...state.tasks[0],id:'next',dependsOn:'task1',recordsOutput:false});
  assert.equal((await r.api.PUT(put({...state,tasks:state.tasks.filter(t=>t.id!=='task1')}))).status,400);assert.equal(r.counts().writes,0);
 });
+test('a complete planned production is removed atomically with every original retained, while shared work and stale revisions block the whole request',async()=>{
+ function group(){const r=route(manager),root=r.store.planner.data.tasks[0];root.requires=['prep'];r.store.planner.data.tasks.push({...root,id:'prep',batchId:'batch-prep',requires:[],generatedFor:root.id,date:'2026-10-27'},{...root,id:'finish',dependsOn:root.id,requires:[],recordsOutput:false});return r;}
+ const r=group(),current=structuredClone(r.store.planner.data),response=await r.api.PUT(put({...current,tasks:planning.removeRecipeProduction(current.tasks,'prep')}));assert.equal(response.status,200);const result=await response.json();assert.equal(result.state.tasks.length,0);assert.equal(result.state.removedTasks.length,3);assert.equal(r.counts().writes,1);
+ for(const original of current.tasks)assert.deepEqual(result.state.removedTasks.find(t=>t.task.id===original.id).task,original);
+ const shared=group(),root=shared.store.planner.data.tasks[0];shared.store.planner.data.tasks.push({...root,id:'external',batchId:'batch-external',requires:['prep']});
+ assert.equal((await shared.api.PUT(put({...shared.store.planner.data,tasks:shared.store.planner.data.tasks.filter(t=>t.id==='external')}))).status,400);assert.equal(shared.counts().writes,0);
+ const stale=group();assert.equal((await stale.api.PUT(put({...stale.store.planner.data,tasks:[]},1))).status,409);assert.equal(stale.counts().writes,0);
+});
 test('an existing recipe without known yield keeps unscaled quantities and unknown department/stock explicit',()=>{
  const data=fixture();delete data.recipes[0].standardBatchQuantity;const views=workspace.recipeViews(data);assert.equal(views[0].yield,0);assert.equal(views[0].ingredients[0].quantity,100);
  const state=workspace.seedWorkspace(data);assert(workspace.validWorkspace(state,views));assert.equal(state.items[0].stockKnown,false);

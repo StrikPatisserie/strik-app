@@ -95,6 +95,20 @@ test('removing an unstarted root also removes unused planned preparation but pre
  const remaining=planning.removePlannedTask(started,'order-1');assert.equal(remaining.length,1);assert.equal(remaining[0].id,caramel.id);
  assert.throws(()=>planning.removePlannedTask(next.tasks,caramel.id),/vervolgstap/);
 });
+test('whole production deletion follows explicit ownership and batches from a nested preparation or final follow-up, without touching another order of the same recipe',()=>{
+ const {state,recipes,command}=fixture(),first=rules.buildRecipePlan(state,recipes,command),second=rules.buildRecipePlan(first,recipes,{...command,task:{...command.task,id:'order-2',batchId:'batch-2'}});
+ const tasks=[...second.tasks,{...second.tasks.find(t=>t.id==='order-1'),id:'finish',dependsOn:'order-1',requires:[],recordsOutput:false}];
+ const nested=tasks.find(t=>t.generatedFor==='order-1' && t.itemId==='recipe:caramel');
+ for(const id of [nested.id,'finish','order-1']){const group=planning.recipeProductionTasks(tasks,id);assert.equal(group.length,7);const remaining=planning.removeRecipeProduction(tasks,id);assert.equal(remaining.length,6);assert(remaining.every(t=>t.id==='order-2'||t.generatedFor==='order-2'));}
+ assert.equal(tasks.length,13);assert.equal(state.tasks.length,0);assert.throws(()=>planning.removeRecipeProduction(tasks,'missing'),/niet gevonden/);
+});
+test('whole production deletion never removes actual work or preparations still needed by another production',()=>{
+ const {state,recipes,command}=fixture(),next=rules.buildRecipePlan(state,recipes,command),prep=next.tasks.find(t=>t.itemId==='recipe:caramel');
+ for(const status of ['active','done','blocked'])assert.throws(()=>planning.removeRecipeProduction(next.tasks.map(t=>t.id===prep.id?{...t,status}:t),'order-1'),/volledig geplande/);
+ const other={...next.tasks.find(t=>t.id==='order-1'),id:'other-order',batchId:'batch-other',requires:[prep.id]};
+ assert.equal(planning.recipeProductionTasks([...next.tasks,other],prep.id).length,6);
+ assert.throws(()=>planning.removeRecipeProduction([...next.tasks,other],prep.id),/andere productie/);
+});
 class StoreError extends Error{constructor(message,status=503){super(message);this.status=status;}}
 function api(profile,options={}){
  const f=fixture();const source={ingredients:[],recipes:f.recipes.map(r=>({id:r.id,name:r.name,type:r.type,standardBatchQuantity:r.yield,standardBatchUnit:r.unit==='stuks'?'stuk':r.unit,ingredients:[],semiFinishedItems:r.semiFinishedItems.map(l=>({semiFinishedRecipeId:l.recipeId,quantity:l.quantity,unit:l.unit})),allergens:[]}))};

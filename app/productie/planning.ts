@@ -175,6 +175,30 @@ export function removePlannedTask(tasks: Task[], id: string): Task[] {
   }
   return remaining;
 }
+/** An explicit production group, never inferred from recipe names or dates.
+ * Batch steps and automatically generated preparation belong together;
+ * a required preparation owned by another order does not. */
+export function recipeProductionTasks(tasks: Task[], id: string): Task[] {
+  const byId=new Map(tasks.map(t=>[t.id,t]));
+  if(!byId.has(id))throw Error("Taak niet gevonden.");
+  const batches=new Map<string,Task[]>(),children=new Map<string,Task[]>();
+  for(const task of tasks){batches.set(task.batchId,[...(batches.get(task.batchId)||[]),task]);if(task.generatedFor)children.set(task.generatedFor,[...(children.get(task.generatedFor)||[]),task]);}
+  const selected=new Set<string>(),seenBatches=new Set<string>(),queue=[id];
+  for(let index=0;index<queue.length;index++){
+    const task=byId.get(queue[index]);if(!task || selected.has(task.id))continue;
+    selected.add(task.id);
+    if(!seenBatches.has(task.batchId)){seenBatches.add(task.batchId);queue.push(...(batches.get(task.batchId)||[]).map(t=>t.id));}
+    if(task.generatedFor)queue.push(task.generatedFor);
+    queue.push(...(children.get(task.id)||[]).map(t=>t.id));
+  }
+  return tasks.filter(t=>selected.has(t.id));
+}
+export function removeRecipeProduction(tasks: Task[], id: string): Task[] {
+  const group=recipeProductionTasks(tasks,id),ids=new Set(group.map(t=>t.id));
+  if(group.some(t=>t.status!=="planned"))throw Error("Deze productie bevat gestarte, afgeronde of geblokkeerde taken. Alleen een volledig geplande productie kan in één keer worden verwijderd.");
+  if(tasks.some(t=>!ids.has(t.id) && requiredTaskIds(t).some(required=>ids.has(required))))throw Error("Een onderdeel is ook nodig voor een andere productie. Verwijder eerst die gekoppelde vervolgstap.");
+  return tasks.filter(t=>!ids.has(t.id));
+}
 export function addTask(state: PreviewState, task: Task): PreviewState {
   if (state.tasks.some(t => t.id === task.id)) throw Error("Deze taak bestaat al.");
   const item = state.items.find(i => i.id === task.itemId);
