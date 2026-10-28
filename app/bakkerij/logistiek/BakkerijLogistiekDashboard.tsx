@@ -6379,26 +6379,27 @@ function fixedShopStop(input: {
   };
 }
 
-function fixedShopIceStop(input: {
+function fixedShopIceStops(input: {
   receipts: ReceiptSummary[];
   shopKey: ShopKey;
   label: string;
-}): RouteStop {
+}): RouteStop[] {
   const shopMeta = shopRouteMeta[input.shopKey];
   const iceReceipts = input.receipts.filter(
     (receipt) =>
       isIceReceiptSummary(receipt) &&
       shopKeyForReceipt(receipt) === input.shopKey
   );
+  if (!iceReceipts.length) return [];
   const iceTubs = iceReceipts.reduce(
     (total, receipt) => total + iceTubCountForReceipt(receipt),
     0
   );
   const detail = iceTubs
     ? `${shopMeta.address} · ${iceTubs} ijs / ${Math.ceil(iceTubs / 3)} tempex`
-    : `${shopMeta.address} · vaste ijsstop`;
+    : `${shopMeta.address} · ijsbon aanwezig`;
 
-  return {
+  return [{
     id: `shop-${input.shopKey}-ice`,
     sourceId: `shop:${input.shopKey}:ice`,
     learningKey: `shop:${input.shopKey}:ice`,
@@ -6408,7 +6409,7 @@ function fixedShopIceStop(input: {
     label: input.label,
     detail,
     badges: ["winkel", "ijs", ...(iceTubs ? [`${iceTubs} ijs`] : [])],
-  };
+  }];
 }
 
 function lentEmballageStop(): RouteStop {
@@ -8379,7 +8380,7 @@ function buildWeekdayFixedRouteRounds(
       load: "shelf",
       label: "Winkel Heyendaalseweg houdbaar",
     }),
-    fixedShopIceStop({
+    ...fixedShopIceStops({
       receipts,
       shopKey: "heyendaalseweg",
       label: "IJs Heyendaal",
@@ -8390,7 +8391,7 @@ function buildWeekdayFixedRouteRounds(
       load: "shelf",
       label: "Winkel Daalseweg houdbaar",
     }),
-    fixedShopIceStop({
+    ...fixedShopIceStops({
       receipts,
       shopKey: "daalseweg",
       label: "IJs Daalseweg",
@@ -8406,7 +8407,7 @@ function buildWeekdayFixedRouteRounds(
       label: "Winkel Ziekerstraat vers",
     }),
     ...groupShopStops(receipts, ["lent"], []),
-    fixedShopIceStop({
+    ...fixedShopIceStops({
       receipts,
       shopKey: "lent",
       label: "Winkel Lent ijs",
@@ -8677,35 +8678,6 @@ function buildRouteRounds(
     );
   });
 
-  if (plan.iceTubs > 0 && iceReceipts.length === 0) {
-    const bus = chooseLightestBus(buses, "second");
-    rounds.push(
-      buildRouteRound({
-        id: `bus-${bus}-ice-check`,
-        title: "IJs check",
-        vehicle: `Bus ${bus}`,
-        departure: plan.isFuture ? "beslissen" : "na ronde 1",
-        tone: "border-[#efc7b8] bg-[#fff3ed]",
-        stops: [
-          {
-            id: "ijs-check",
-            sourceId: "check:ijs",
-            learningKey: "check:ijs",
-            learningLabel: "IJsbonnen controleren",
-            learningTarget: "ijsvolume zonder losse ijssalonbon",
-            learningKind: "check",
-            label: "IJsbonnen controleren",
-            detail: `${plan.iceTubs} bakken ijs · ${plan.tempexBoxes} zwarte tempexbakken`,
-            badges: ["ijs", `${plan.tempexBoxes} tempex`],
-          },
-        ],
-        reason:
-          "Er is ijsvolume herkend, maar geen losse ijssalonbon; controleer de bronbonnen.",
-        load: `${plan.iceTubs} ijsbakken per 3 in een zwarte tempexbak.`,
-        loadProfile,
-      })
-    );
-  }
 
   return rounds;
 }
@@ -8869,35 +8841,6 @@ function buildSaturdayRouteRounds(
     }
   });
 
-  if (plan.iceTubs > 0 && iceReceipts.length === 0) {
-    const bus = chooseLightestBus(buses, "second");
-    rounds.push(
-      buildRouteRound({
-        id: `bus-${bus}-3-ice-check-saturday`,
-        title: "Ronde 3 · IJs check",
-        vehicle: `Bus ${bus}`,
-        departure: plan.isFuture ? "na ronde 2" : "na ronde 2",
-        tone: "border-[#b8ddea] bg-[#eefaff]",
-        stops: [
-          {
-            id: "ijs-check",
-            sourceId: "check:ijs",
-            learningKey: "check:ijs",
-            learningLabel: "IJsbonnen controleren",
-            learningTarget: "ijsvolume zonder losse ijssalonbon",
-            learningKind: "check",
-            label: "IJsbonnen controleren",
-            detail: `${plan.iceTubs} bakken ijs · ${plan.tempexBoxes} zwarte tempexbakken`,
-            badges: ["ijs", `${plan.tempexBoxes} tempex`],
-          },
-        ],
-        reason:
-          "Er is ijsvolume herkend, maar geen losse ijssalonbon; controleer de bronbonnen.",
-        load: `${plan.iceTubs} ijsbakken per 3 in een zwarte tempexbak.`,
-        loadProfile,
-      })
-    );
-  }
 
   return rounds;
 }
@@ -10504,7 +10447,7 @@ export default function BakkerijLogistiekDashboard() {
       learningKind: "check",
       label: cleanLabel,
       detail: cleanDetail || "Handmatige stop",
-      badges: ["handmatig"],
+      badges: cleanLabel.startsWith("Brievenbuspakketje · ") ? ["handmatig", "acquisitie", "sinterklaasfolder"] : ["handmatig"],
     };
     const nextRoutes = currentRoutes.map((route) =>
       route.id === routeId
@@ -11852,6 +11795,7 @@ export default function BakkerijLogistiekDashboard() {
       <div className="mt-2">
         {activeTab === "routes" && (
           <RoutesPanel
+            acquisitionCampaign={showAcquisitionCampaign ? acquisitionCampaign : null}
             acquisitionMessage={acquisitionMessage}
             acquisitionSuggestions={acquisitionSuggestions}
             acquisitionUpdatingStopId={acquisitionUpdatingStopId}
@@ -12710,7 +12654,45 @@ function eventHasRouteDragState(
   return Array.from(event.dataTransfer.types).includes(routeDragMimeType);
 }
 
+function ManualPackageForm({ campaign, routes, busy, onAdd, onCustomAdd }: {
+  campaign?: AcquisitionCampaignSummary | null;
+  routes: RouteRound[];
+  busy: boolean;
+  onAdd: (suggestion: AcquisitionSuggestion) => Promise<void>;
+  onCustomAdd: (routeId: string, label: string, detail: string) => void;
+}) {
+  const [packageId, setPackageId] = useState("");
+  const [routeId, setRouteId] = useState("");
+  const [company, setCompany] = useState("");
+  const [address, setAddress] = useState("");
+  const used = new Set(routes.flatMap(route => route.stops.map(routeStopSourceKey)));
+  const delivered = new Set(campaign?.deliveries.map(delivery => delivery.stopId));
+  const remaining = campaign?.stops.filter(stop => !delivered.has(stop.id) && !used.has(`acquisition:${stop.id}`)) || [];
+  const selectedPackage = remaining.find(stop => stop.id === packageId);
+  const selectedRoute = routes.find(route => route.id === routeId);
+  const custom = packageId === "custom";
+  return <details className="border-t border-[#edc7a8] px-3 py-1">
+    <summary className="min-h-9 cursor-pointer content-center text-xs font-bold text-[#713519]">Zelf pakketje toevoegen</summary>
+    <form className="grid gap-2 py-2 sm:grid-cols-2 lg:grid-cols-3" onSubmit={event => {
+      event.preventDefault();
+      if (busy || !selectedRoute) return;
+      if (custom && company.trim() && address.trim()) {
+        onCustomAdd(selectedRoute.id, `Brievenbuspakketje · ${company.trim()}`, `SINTERKLAASFOLDER · ${address.trim()}`);
+        setCompany(""); setAddress("");
+      } else if (selectedPackage) {
+        void onAdd({ stop: selectedPackage, routeId: selectedRoute.id, routeTitle: selectedRoute.title, vehicle: selectedRoute.vehicle, afterStopId: selectedRoute.stops.at(-1)?.id || "", nearbyLabel: "Handmatig gekozen", exactMatch: false });
+      }
+    }}>
+      <label className="grid gap-1 text-xs font-semibold">Pakketje<select required value={custom ? "custom" : selectedPackage?.id || ""} onChange={event => setPackageId(event.target.value)} className="min-h-10 min-w-0 rounded-lg border border-[#edc7a8] bg-white px-2 text-xs"><option value="">Kies een pakketje</option>{remaining.map(stop => <option key={stop.id} value={stop.id}>{stop.company}</option>)}<option value="custom">Ander pakketje · zelf invullen</option></select></label>
+      <label className="grid gap-1 text-xs font-semibold">Ronde<select required value={selectedRoute?.id || ""} onChange={event => setRouteId(event.target.value)} className="min-h-10 min-w-0 rounded-lg border border-[#edc7a8] bg-white px-2 text-xs"><option value="">Kies een ronde</option>{routes.map(route => <option key={route.id} value={route.id}>{route.vehicle} · {route.title}</option>)}</select></label>
+      {custom ? <><label className="grid gap-1 text-xs font-semibold">Bedrijf / ontvanger<input required maxLength={150} value={company} onChange={event => setCompany(event.target.value)} className="min-h-10 min-w-0 rounded-lg border border-[#edc7a8] bg-white px-2 text-xs" /></label><label className="grid gap-1 text-xs font-semibold">Adres / t.a.v.<input required maxLength={300} value={address} onChange={event => setAddress(event.target.value)} className="min-h-10 min-w-0 rounded-lg border border-[#edc7a8] bg-white px-2 text-xs" /></label></> : null}
+      <button type="submit" disabled={busy || !selectedRoute || (!selectedPackage && !custom)} className="min-h-10 self-end rounded-lg bg-[#8c3f25] px-3 text-xs font-bold text-white disabled:opacity-45">{busy ? "Toevoegen…" : "+ Pakketje in route"}</button>
+    </form>
+  </details>;
+}
+
 function RoutesPanel({
+  acquisitionCampaign,
   acquisitionMessage,
   acquisitionSuggestions,
   acquisitionUpdatingStopId,
@@ -12733,6 +12715,7 @@ function RoutesPanel({
   routesEdited,
   selectedPlan,
 }: Readonly<{
+  acquisitionCampaign?: AcquisitionCampaignSummary | null;
   acquisitionMessage: string;
   acquisitionSuggestions: AcquisitionSuggestion[];
   acquisitionUpdatingStopId: string;
@@ -12910,45 +12893,27 @@ function RoutesPanel({
         )}
       </div>
 
-      {(acquisitionSuggestions.length > 0 || acquisitionMessage) && (
-        <section className="overflow-hidden rounded-2xl border-2 border-[#d46b3f] bg-[#fff7e9] shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2 bg-[#8c3f25] px-3 py-2 text-white">
-            <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#fff0d7] text-[#713519]">
-                <GiftIcon />
-              </span>
-              <div>
-                <p className="text-[0.6rem] font-black uppercase tracking-[0.14em] text-[#ffd9bc]">
-                  Extra stop · opvallend op de routeprint
-                </p>
-                <h3 className="text-sm font-black leading-tight">
-                  Brievenbuspakketjes langs de route van vandaag
-                </h3>
-              </div>
-            </div>
-            <span className="rounded-full bg-white/15 px-2 py-1 text-[0.62rem] font-black">
-              {acquisitionSuggestions.length} slimme suggestie
-              {acquisitionSuggestions.length === 1 ? "" : "s"}
-            </span>
+      {(acquisitionSuggestions.length > 0 || acquisitionMessage || routeRounds.length > 0) && (
+        <section className="overflow-hidden rounded-xl border border-[#edc7a8] bg-[#fffaf2]">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#edc7a8] px-3 py-2 text-[#713519]">
+            <h3 className="text-xs font-bold">Brievenbuspakketjes</h3>
+            <span className="text-[0.65rem] font-semibold">{acquisitionSuggestions.length} routesuggestie{acquisitionSuggestions.length === 1 ? "" : "s"}</span>
           </div>
           {acquisitionSuggestions.length > 0 && (
-            <div className="grid gap-2 p-2 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-1.5 p-2 sm:grid-cols-2 xl:grid-cols-3">
               {acquisitionSuggestions.map((suggestion) => (
                 <article
                   key={suggestion.stop.id}
-                  className="flex min-w-0 items-center gap-2 rounded-xl border border-[#edc7a8] bg-white p-2"
+                  className="flex min-w-0 items-center gap-2 rounded-lg border border-[#edc7a8] bg-white px-2 py-1.5"
                 >
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#fff0d7] text-[#8c3f25]">
-                    <GiftIcon />
-                  </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[0.76rem] font-black text-[#1a1815]">
+                    <p className="truncate text-[0.7rem] font-bold text-[#1a1815]">
                       {suggestion.stop.company}
                     </p>
                     <p className="truncate text-[0.64rem] font-semibold text-[#6b645b]">
                       {suggestion.stop.street} · {suggestion.stop.postalCode}
                     </p>
-                    <p className="mt-0.5 truncate text-[0.58rem] font-bold italic text-[#9a4f2e]">
+                    <p className="truncate text-[0.58rem] font-semibold text-[#9a4f2e]">
                       {suggestion.exactMatch ? "Langs" : "Vlak bij"} {suggestion.nearbyLabel} · {suggestion.routeTitle}
                     </p>
                   </div>
@@ -12956,7 +12921,7 @@ function RoutesPanel({
                     type="button"
                     disabled={Boolean(acquisitionUpdatingStopId)}
                     onClick={() => void onAcquisitionAdd(suggestion)}
-                    className="h-8 shrink-0 rounded-lg bg-[#ef6a37] px-2.5 text-[0.64rem] font-black text-white transition hover:bg-[#d95325] disabled:cursor-wait disabled:opacity-45"
+                    className="min-h-9 shrink-0 rounded-lg bg-[#ef6a37] px-2.5 text-[0.64rem] font-black text-white transition hover:bg-[#d95325] disabled:cursor-wait disabled:opacity-45"
                   >
                     {acquisitionUpdatingStopId === suggestion.stop.id
                       ? "Bezig..."
@@ -12966,6 +12931,7 @@ function RoutesPanel({
               ))}
             </div>
           )}
+          <ManualPackageForm key={selectedPlan.date} campaign={acquisitionCampaign} routes={routeRounds} busy={Boolean(acquisitionUpdatingStopId)} onAdd={onAcquisitionAdd} onCustomAdd={onRouteStopAdd} />
           {acquisitionMessage && (
             <p
               aria-live="polite"
@@ -13002,13 +12968,6 @@ function RoutesPanel({
         </span>
       </div>
 
-      <div className="flex items-center gap-1.5 rounded-lg border border-[#d6e5d8] bg-[#f6faf4] px-2.5 py-1.5 text-[0.62rem] font-semibold tracking-normal text-[#52654f]">
-        <ClockIcon />
-        <strong>Richttijden</strong>
-        <span>
-          iedere ronde start/eindigt Ambachtsweg 4 · 10 min laden tussen rondes · geen live verkeer
-        </span>
-      </div>
 
       {routePrintBlockedReason && (
         <p role="status" className="rounded-xl border border-[#ead7a6] bg-[#fff8e3] px-3 py-2 text-xs font-semibold text-[#7a5417]">

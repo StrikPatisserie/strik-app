@@ -11,7 +11,7 @@ function load(file, imports = {}, expose = '') {
   return exports;
 }
 const campaignModule = load('app/bakkerij/logistiek/sinterklaasAcquisitionCampaign.ts');
-const dashboard = load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx', {'./routePrintPagination':load('app/bakkerij/logistiek/routePrintPagination.ts')}, 'exports.suggest = buildAcquisitionSuggestions; exports.inPeriod = isAcquisitionCampaignDate; exports.print = createBusRoutePrintHtml;');
+const dashboard = load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx', {'./routePrintPagination':load('app/bakkerij/logistiek/routePrintPagination.ts')}, 'exports.suggest = buildAcquisitionSuggestions; exports.inPeriod = isAcquisitionCampaignDate; exports.print = createBusRoutePrintHtml; exports.iceStops = fixedShopIceStops; exports.reconcile = reconcileRouteDraftRounds;');
 const stop = (id, label, detail) => ({ id, sourceId: id, label, detail, badges: [] });
 const routes = [{ id: 'r1', vehicle: 'Bus A', title: 'Ronde 1', stops: [
   stop('west', 'Bedrijf', '6541 AA Nijmegen'),
@@ -102,4 +102,41 @@ test('package stops remain prominent and complete on the route print', () => {
     }],
   }] } });
   for (const value of ['BRIEVENBUSPAKKETJE', item.company, item.street, item.postalCode, 'HR / Personeelszaken']) assert(html.includes(value), value);
+});
+
+test('fixed shop ice stops require an actual matching ice receipt, not a fixed schedule or pastry receipt', () => {
+  const receipt = { id: 'ice-real', receiptNumber: '123', customer: 'Winkel Heyendaalseweg', address: 'Heyendaalseweg', deliveryAddress: '', pickupLocation: '', customerNote: '', internalNote: '', note: '', time: '', route: '', tags: [], lines: [{ quantity: '4', description: 'IJs 5L bak' }] };
+  const options = { shopKey: 'heyendaalseweg', label: 'IJs Heyendaal' };
+  assert.equal(dashboard.iceStops({ ...options, receipts: [] }).length, 0);
+  assert.equal(dashboard.iceStops({ ...options, receipts: [{ ...receipt, lines: [{ quantity: '4', description: 'Slagroomgebak' }] }] }).length, 0);
+  assert.equal(dashboard.iceStops({ ...options, receipts: [{ ...receipt, customer: 'Winkel Lent', address: 'Lent' }] }).length, 0);
+  const ice = dashboard.iceStops({ ...options, receipts: [receipt] });
+  assert.equal(ice.length, 1);assert.match(ice[0].detail, /4 ijs \/ 2 tempex/);assert.equal(ice[0].sourceId, 'shop:heyendaalseweg:ice');
+  assert.equal(dashboard.iceStops({ ...options, receipts: [{ ...receipt, tags: ['ijs'], customerNote: 'ijsbon aanwezig', lines: [] }] }).length, 1);
+});
+
+test('reconciling a saved tomorrow plan retains manual stops, ordering, exclusions and departure without changing the saved draft', () => {
+  const manual = { ...stop('manual:parcel', 'Brievenbuspakketje · Testbedrijf', 'Teststraat 1'), badges: ['handmatig','acquisitie'] };
+  const draft = { routes: [{ id: 'r1', vehicle: 'Bus A', title: 'Ronde 1', departure: 'vertrek 08:20', stops: [manual, routes[0].stops[0]] }], excludedSourceIds: ['shop:heyendaalseweg:ice'] };
+  const before=JSON.stringify(draft);
+  const result=dashboard.reconcile(draft,[{...draft.routes[0],stops:[routes[0].stops[0]]}],{pressure:'laag'});
+  assert.equal(result[0].stops[0].id,manual.id);assert.equal(result[0].departure,'vertrek 08:20');assert.equal(result[0].stops.length,2);assert.equal(JSON.stringify(draft),before);
+});
+
+test('manual package selection can place an unsuggested campaign package or a custom parcel in the chosen round', () => {
+  const campaign=campaignModule.emptySinterklaasAcquisitionCampaign();
+  const selected=campaign.stops[0];
+  function formFor(values, handlers) {
+    let index=0;
+    const { Form }=load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx', {
+      react: {useState: initial=>[values[index++] ?? initial,()=>{}]},
+      'react/jsx-runtime':require('react/jsx-runtime'),
+    }, 'exports.Form = ManualPackageForm;');
+    return Form({campaign,routes,busy:false,...handlers}).props.children[1];
+  }
+  let placement,custom;
+  formFor([selected.id,'r1','',''],{onAdd:value=>{placement=value;return Promise.resolve();},onCustomAdd(){}}).props.onSubmit({preventDefault(){}});
+  assert.equal(placement.stop.id,selected.id);assert.equal(placement.routeId,'r1');assert.equal(placement.afterStopId,'shop:lent');
+  formFor(['custom','r1',' Extra bedrijf ',' Adres 8 '],{onAdd(){},onCustomAdd:(...args)=>{custom=args;}}).props.onSubmit({preventDefault(){}});
+  assert.deepEqual(custom,['r1','Brievenbuspakketje · Extra bedrijf','SINTERKLAASFOLDER · Adres 8']);
 });
