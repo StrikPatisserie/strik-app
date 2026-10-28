@@ -261,8 +261,8 @@ export default function WelcomeHighlights() {
   }
 
   return (
-    <section className="relative z-20 mt-7 grid items-start gap-2.5 sm:grid-cols-2 lg:mt-4 lg:grid-cols-3">
-      <article className="flex flex-col self-start rounded-[1.25rem] border border-[#a27a8e]/30 bg-[#fffaf0]/85 p-4 text-[#49342d] shadow-sm backdrop-blur transition hover:bg-[#fffaf0]">
+    <section aria-label="Agenda, aanbieding en nieuws" className="relative z-20 mt-7 grid auto-rows-[22rem] items-stretch gap-2.5 sm:grid-cols-2 lg:mt-4 lg:grid-cols-3">
+      <article aria-label="Agenda" className="flex min-h-0 min-w-0 flex-col rounded-[1.25rem] border border-[#a27a8e]/30 bg-[#fffaf0]/85 p-4 text-[#49342d] shadow-sm backdrop-blur transition hover:bg-[#fffaf0]">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             <p className="text-[0.62rem] font-black uppercase tracking-[0.18em] text-[#a27a8e]">
@@ -310,7 +310,7 @@ export default function WelcomeHighlights() {
           </button>
         </div>
 
-        <div className="mt-3 max-h-[12rem] space-y-2 overflow-y-auto pr-0.5">
+        <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto pr-0.5">
           {visibleAgendaEvents.length ? (
             visibleAgendaEvents.map((event) => {
               const isHoliday = event.type === "holiday";
@@ -348,13 +348,13 @@ export default function WelcomeHighlights() {
         </div>
         <Link
           href="/strik-agenda"
-          className="mt-4 text-[0.64rem] font-black uppercase tracking-[0.14em] text-[#a27a8e] transition hover:text-[#49342d]"
+          className="mt-auto shrink-0 pt-4 text-[0.64rem] font-black uppercase tracking-[0.14em] text-[#a27a8e] transition hover:text-[#49342d]"
         >
           Bekijk hele agenda →
         </Link>
       </article>
 
-      <article className="flex min-h-[17rem] flex-col overflow-hidden rounded-[1.25rem] border border-[#fed500] bg-[#fed500] p-3 text-[#49342d] shadow-sm">
+      <article aria-label="Weekaanbieding" className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[1.25rem] border border-[#b9cbae] bg-[#dfe9d7] p-3 text-[#49342d] shadow-sm">
         <div className="flex items-center justify-between gap-2 px-1 pb-2.5">
           <button
             type="button"
@@ -365,10 +365,10 @@ export default function WelcomeHighlights() {
             ‹
           </button>
           <div className="min-w-0 text-center">
-            <p className="text-[0.58rem] font-black uppercase tracking-[0.16em] text-[#725b00]">
+            <p className="text-[0.58rem] font-semibold uppercase tracking-[0.13em] text-[#63765c]">
               Week {weekNumber(selectedWeek)}
             </p>
-            <p className="truncate text-[0.7rem] font-black">
+            <p className="truncate text-[0.65rem] font-medium text-[#65725e]">
               {formatWeekRange(selectedWeek)}
             </p>
           </div>
@@ -384,15 +384,15 @@ export default function WelcomeHighlights() {
 
         <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-[0.9rem] bg-transparent">
           {offer?.imageUrl ? (
-            <span className="block h-[17rem] max-h-full max-w-full overflow-hidden rounded-[0.7rem] shadow-md aspect-[210/297]">
+            <span className="block h-full max-h-full max-w-full overflow-hidden rounded-[0.7rem] shadow-sm aspect-[210/297]">
               <img
                 src={offer.imageUrl}
                 alt={offer.label || `Weekaanbieding week ${weekNumber(selectedWeek)}`}
-                className="h-full w-full object-cover"
+                className="h-full w-full object-contain"
               />
             </span>
           ) : (
-            <p className="rounded-xl bg-[#fffaf0]/75 px-4 py-6 text-center text-xs font-bold text-[#725b00]/70">
+            <p className="rounded-xl bg-white/60 px-4 py-6 text-center text-xs font-medium text-[#63765c]">
               {offerStatus || "Geen aanbieding in deze week"}
             </p>
           )}
@@ -401,7 +401,8 @@ export default function WelcomeHighlights() {
 
       <Link
         href="/nieuws"
-        className="group flex min-h-[17rem] flex-col overflow-hidden rounded-[1.25rem] border border-[#a27a8e]/25 bg-[#f3eadc] p-3 text-[#49342d] shadow-sm transition hover:-translate-y-0.5 sm:col-span-2 lg:col-span-1"
+        aria-label="Laatste nieuws"
+        className="group flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[1.25rem] border border-[#a27a8e]/25 bg-[#f3eadc] p-3 text-[#49342d] shadow-sm transition hover:shadow-md sm:col-span-2 lg:col-span-1"
       >
         <div className="h-36 shrink-0 overflow-hidden rounded-[0.9rem] bg-[#ece7df] sm:h-40">
           {news ? (

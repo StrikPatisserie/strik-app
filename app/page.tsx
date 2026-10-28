@@ -120,15 +120,15 @@ export default async function Home() {
   return (
     <main className="min-h-dvh overflow-hidden bg-[#c3d3bc] text-[#49342d]">
       <section className="relative flex min-h-dvh flex-col overflow-hidden bg-[#c3d3bc] p-5 sm:p-8 lg:p-8 xl:p-11">
-        <div className="pointer-events-none absolute -right-24 -top-28 h-80 w-80 rounded-full bg-[#fed500] sm:h-[28rem] sm:w-[28rem]" />
+        <div className="pointer-events-none absolute -right-24 -top-28 h-80 w-80 rounded-full bg-[#d9e4d3] sm:h-[28rem] sm:w-[28rem]" />
         <div className="pointer-events-none absolute -bottom-44 left-[7%] h-72 w-[80%] rotate-[-7deg] rounded-[50%] border-2 border-[#d75a48]/75 sm:-bottom-52 sm:h-96" />
         <div className="pointer-events-none absolute -bottom-36 left-[11%] h-64 w-[72%] rotate-[-4deg] rounded-[50%] border border-[#a27a8e]/65 sm:-bottom-44 sm:h-80" />
         <div className="pointer-events-none absolute right-[32%] top-[17%] hidden h-16 w-16 rotate-12 rounded-[1.4rem] bg-[#a27a8e] sm:block" />
 
         <div className="relative z-10 grid flex-1 items-center gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(13rem,.6fr)] lg:gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(16rem,.75fr)] xl:gap-12">
           <div className="min-w-0">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/55 bg-[#fffaf0]/55 px-3 py-1.5 text-[0.64rem] font-black uppercase tracking-[0.15em] text-[#49342d] backdrop-blur sm:text-xs">
-              <span className="h-2 w-2 rounded-full bg-[#d75a48]" />
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/40 bg-[#edf3e5]/70 px-3 py-1.5 text-[0.62rem] font-medium tracking-[0.03em] text-[#60705a] sm:text-[0.68rem]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#7e9670]" />
               {currentDate.label}
             </div>
 
@@ -147,27 +147,17 @@ export default async function Home() {
           </div>
 
           <div className="relative hidden justify-center lg:flex">
-            <div className="relative flex aspect-square w-full max-w-[14rem] rotate-3 flex-col items-center justify-center rounded-[2.5rem] bg-[#fed500] p-5 text-center shadow-[0_22px_55px_rgba(73,52,45,.2)] xl:max-w-[19rem] xl:rounded-[3.5rem] xl:p-7">
-              <span className="absolute -left-4 -top-4 flex h-14 w-14 -rotate-6 items-center justify-center rounded-[1.2rem] bg-[#d75a48] shadow-lg xl:-left-5 xl:-top-5 xl:h-16 xl:w-16 xl:rounded-[1.4rem]">
-                <span
-                  aria-hidden="true"
-                  className="block h-7 w-7 bg-white xl:h-8 xl:w-8"
-                  style={{
-                    WebkitMask: `url("${strikIcons.management}") center / contain no-repeat`,
-                    mask: `url("${strikIcons.management}") center / contain no-repeat`,
-                  }}
-                />
-              </span>
-              <span className="text-[0.68rem] font-black uppercase tracking-[0.24em] text-[#725b00]">
+            <div aria-label={currentDate.label} className="relative flex aspect-square w-full max-w-[10rem] flex-col items-center justify-center rounded-[1.75rem] border border-white/35 bg-[#dae5d2] p-4 text-center shadow-[0_8px_24px_rgba(73,52,45,.06)] xl:max-w-[12rem]">
+              <span className="text-[0.55rem] font-semibold uppercase tracking-[0.17em] text-[#6e7d63]">
                 Vandaag
               </span>
-              <span className="mt-1 text-[5.5rem] font-black leading-[0.82] tracking-[-0.09em] text-[#49342d] xl:text-[8rem]">
+              <span className="mt-2 text-[3.5rem] font-semibold leading-none tracking-[-0.055em] text-[#53644b] xl:text-[4.25rem]">
                 {currentDate.day}
               </span>
-              <span className="mt-2 text-base font-black uppercase tracking-[0.12em] text-[#49342d] xl:mt-3 xl:text-xl">
+              <span className="mt-1 text-[0.65rem] font-semibold uppercase tracking-[0.1em] text-[#64745b] xl:text-xs">
                 {currentDate.month}
               </span>
-              <span className="mt-3 rounded-full bg-[#fffaf0] px-4 py-1.5 text-[0.65rem] font-black uppercase tracking-[0.18em] text-[#d75a48] xl:mt-4 xl:px-5 xl:py-2 xl:text-xs">
+              <span className="mt-3 rounded-full bg-white/45 px-3 py-1 text-[0.55rem] font-medium tracking-[0.05em] text-[#64745b] xl:text-[0.6rem]">
                 {currentDate.weekday}
               </span>
             </div>
