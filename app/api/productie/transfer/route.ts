@@ -18,9 +18,9 @@ export async function GET() {
   if (!hasFullAccess(await getCurrentProfile())) return Response.json({message:"Alleen managers kunnen de overdracht controleren."},{status:403,headers});
   try {
     const active=await readDocument<RecepturenData>("recipes");
-    if (active) return Response.json({active:true,revision:active.revision,report:inspectRecipeTransfer(active.data)},{headers});
+    if (active) return Response.json({active:true,revision:active.revision,report:inspectRecipeTransfer(active.data,{preserveUnresolved:true})},{headers});
     const source=await wordpressTransfer("inspect"), data=fullData(source);
-    return Response.json({active:false,locked:source.locked,report:inspectRecipeTransfer(data),sourceHash:hash(source),bytes:Buffer.byteLength(JSON.stringify(source))},{headers});
+    return Response.json({active:false,locked:source.locked,report:inspectRecipeTransfer(data,{preserveUnresolved:true}),sourceHash:hash(source),bytes:Buffer.byteLength(JSON.stringify(source))},{headers});
   } catch(error) { return Response.json({message:error instanceof ProductionStoreError?error.message:"De overdracht kon niet worden gecontroleerd."},{status:503,headers}); }
 }
 export async function POST(request:Request) {
@@ -32,7 +32,7 @@ export async function POST(request:Request) {
   const lockId=randomUUID(); let locked=false, committed=false;
   try {
     const snapshot=await wordpressTransfer("lock",lockId); locked=true;
-    const data=fullData(snapshot), report=inspectRecipeTransfer(data);
+    const data=fullData(snapshot), report=inspectRecipeTransfer(data,{preserveUnresolved:true});
     if (!report.ready) { await wordpressTransfer("unlock",lockId); locked=false; return Response.json({message:"De bron bevat gegevens die eerst gecontroleerd moeten worden.",report},{status:422,headers}); }
     const copied=await copyWordPressImages(data), planner=seedWorkspace(copied.data);
     if (!validWorkspace(planner,recipeViews(copied.data))) throw new ProductionStoreError("De bestaande planning kan niet zonder fouten worden overgenomen.",422);

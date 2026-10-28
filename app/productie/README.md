@@ -1,35 +1,42 @@
-# Strik Productie — eerste preview
+# Strik Productie
 
-Status: ontwikkeling, 28 oktober 2026. Geen productie-uitrol of databasewijziging uitgevoerd.
+Live werkversie, 28 oktober 2026. De omgeving staat op `/bakkerij/productie`, bereikbaar via Productie. De eenmalige overdracht wordt via het ingelogde management uitgevoerd. `/preview/productie` blijft uitsluitend in development beschikbaar met eigen fictieve gegevens.
 
-## Wat deze versie doet
+## Gedeelde opslag en toegang
 
-`/preview/productie` is uitsluitend beschikbaar in development en gebruikt fictieve gegevens. De eigen omgeving vervangt daar de Team-appnavigatie. Via Productie is in development een previewknop beschikbaar. Geen bestaande productieroute wordt vervangen. Deze route bevat geen live receptuur- of managementdata en roept geen schrijf-API aan.
+Dezelfde Strik-login blijft gelden. Managers plannen en beheren onderdelen; bestaande productieaccounts wijzigen alleen taakstatussen binnen hun eigen afdelingen. Het operationele bord bevat geen factuur-, inkoop-, verkoopprijs- of margevelden. Het bestaande management blijft de financiële projectie van dezelfde receptenbron gebruiken.
 
-Het hoofdweekbord bevat Desserttaart & fruit, Luxe gebak, Kapseltaarten en Slagroomgebak. Bakafdeling, Brood, IJs en Chocolade hebben eigen weergaven. Kalenderdatums blijven dagen in Nederland, ook rond zomertijd. Op mobiel kiest de gebruiker een dag, met de afdelingen eronder. De XL-weergave is alleen-lezen en meldt dat er geen live verbinding is.
+Supabase bevat `production_documents` voor de canonieke receptuurcollectie en de planner, `production_document_versions` voor reconstructie van wijzigingen, `production_migration_backups` voor de oorspronkelijke WordPress-export en `production_media` voor onveranderlijke afbeeldingsbytes met SHA-256 als ID. RLS is ingeschakeld; anon en authenticated hebben geen directe tabel- of functierechten. Alleen de bewaakte serverroutes gebruiken service_role.
 
-Er zijn herbruikbare producten, onderdelen en werkzaamheden, met optionele receptkoppeling. Taken zijn te plannen, af te ronden en te verplaatsen via slepen of formulier. Een volgende productiestap verwijst naar de eerdere taak in dezelfde batch. Die kan niet starten vóór afronding van de voorganger. Eén batch mag hoogstens één stap hebben die voorraad oplevert. Voorraad is nadrukkelijk alleen een voorbeeld: startvoorraad plus output, zonder verkoop, verbruik of uitgifte. Voorbeeldrecepten zijn geen echte productie-instructies.
+Dit is een eerste opslagfase met JSONB-documenten: alle bestaande velden en tekst-ID's blijven behouden. Normaliseren naar afzonderlijke receptregels kan later vanuit deze canonieke bron; er is geen tweede beschrijfbare receptenverzameling. De eerste versie is een volledige snapshot, latere versies zijn veldpatches. Een checkboxwijziging kopieert daardoor niet telkens alle foto's en recepten naar de historie.
 
-Alle wijzigingen staan onder één eigen `localStorage`-sleutel. Ze blijven op deze browser; herstel vervangt alleen de voorbeeldgegevens. Er is nog geen realtime verbinding, gedeelde opslag, plannerautorisatie, capaciteitsplanning, werkelijke opbrengstregistratie of automatische productieprognose in dit nieuwe domein.
+Schrijven gebruikt een database-transactie met rijvergrendeling en verwachte revisie. Een verouderde tab krijgt 409 en overschrijft geen gedeelde gegevens. Originele WordPress-prijs-/factuurgegevens zijn alleen server-side beschikbaar. Oudere clients die geen revisie meesturen moeten verversen.
 
-## Gecontroleerde overdracht WordPress → Supabase
+## Overdracht WordPress → Supabase
 
-De gebruiker heeft de volledige receptuurverhuizing naar Supabase geautoriseerd, met eerst een preview. De bestaande live receptuur-API blijft daarom voorlopig op WordPress werken. Geen dubbele, gelijktijdig beschrijfbare receptuurbronnen introduceren.
+De aparte WordPress-snippet `strik-recepturen-supabase-transfer.php` staat naast de bestaande recepten-API en persoonlijke toegangsbeveiliging. De snippet vereist een bestaande manager met aal2. Hij maakt geen nieuwe credentials of toegangsrechten aan.
 
-1. Maak een afgeschermde volledige WordPress-export via de bestaande serverautorisatie en neem de bronrevisie en een SHA-256 op. Bewaar een herstelkopie buiten Git. Geen receptuur-, factuur- of prijsdata in logs of previewbundels.
-2. Gebruik `node scripts/check-production-recipe-migration.cjs /pad/naar/export.json` voor een **offline dry run**. Deze schrijft niets. Het rapport geeft alleen aantallen, bronhash en probleemcodes met collectie/index. `ready` betekent dat deze structurele controle slaagt, niet dat productie mag omschakelen.
-3. Controleer unieke bron-ID's per collectie, verwijzingen naar grondstoffen, verpakkingen en halffabricaten, vervangingen, kringverwijzingen en conceptregels met onbekende hoeveelheden. Houd bestaande IDs als tekst: geen UUID-conversie van legacy IDs en geen koppeling alleen op naam. Bewaar concepten en nulhoeveelheden met een waarschuwing; verzin geen ontbrekende receptinformatie.
-4. Voeg afzonderlijke Supabase-tabellen toe voor productiecatalogus, planning, batches, productiestappen, versies en mutatiehistorie. Plan tabellen voor gedeelde recepturen/grondstoffen/regels, met afzonderlijk afgeschermde financiële gegevens. Gebruik transacties en constraints voor referenties, éénmalige batchoutput en revisies. Serverautorisatie en RLS moeten beide worden getest. Rechtstreekse toegang is standaard geweigerd totdat de rollen zijn ingericht.
-5. `recipeTransferSnapshot` maakt alleen een verliesvrije kopie van de gecontroleerde export; ook onbekende toekomstige velden blijven behouden. Het is geen importadapter. De latere import moet alle bestaande gegevens meenemen: recepten, halffabricaten, grondstoffen, verpakkingen, prijs- en factuurhistorie, specificaties, SpecsPlaza-snapshots, productielogs/-verzoeken, losse planningstaken, allergenenlijsten, notities/aanbiedingen en bestelgeschiedenis.
-6. Foto's apart inventariseren. Inline beeldbytes behouden; WordPress-media downloaden, aantallen en checksums vergelijken, nieuwe verwijzingen testen. Een Supabase-databaseback-up is geen back-up van Storage-objecten. Maak daar een eigen herstelprocedure voor.
-7. Eerst importeren in afgeschermde stagingtabellen. Vergelijk aantallen, ID-sets, volledige genormaliseerde inhoud en beeldchecksums. Test oude receptuurweergaven, berekeningen, allergenen, financiële afscherming en terugzetten. Bij bronwijzigingen sinds export: afbreken en opnieuw vergelijken/importeren.
-8. Na beoordeling één omschakelmoment plannen met korte schrijfpauze op de oude bron. Laat oud en nieuw via één serveradapter dezelfde canonieke Supabase-gegevens lezen. Geen gelijktijdig schrijven naar WordPress én Supabase. Management blijft dezelfde gegevens gebruiken met eigen prijsrechten. Nieuwe productiewijzigingen na omschakeling moeten ook in het terugvalplan behouden blijven.
-9. Begin met één productieafdeling. Daarna bestellingen, winkelbehoefte, voorraad/verbruik en artikelverkoop aansluiten. Prognose en definitieve order zijn herkenbare verschillende bronnen; deduplicatie op bron-ID en bronregel, inclusief wijzigingen/annuleringen. Onbekende voorraad is onbekend, geen nul. Capaciteit pas tonen wanneer werktijdnormen en beschikbare uren zijn ingevoerd.
+1. `/api/productie/transfer` controleert eerst de volledige ongenormaliseerde bron en het aparte allergenenarchief, met uitsluitend aantallen en probleemcodes als antwoord.
+2. Bij overzetten vergrendelt WordPress zijn twee bron-options. Oude REST-schrijfverzoeken krijgen 423; ook oudere admin-acties mogen de options niet meer wijzigen.
+3. De volledige export, inclusief onbekende velden, originele IDs, recepten, halffabricaten, grondstoffen, verpakkingen, prijs-/factuurhistorie, productielogs/verzoeken, notities, aanbiedingen en allergenenlijsten blijft als herstelkopie bewaard. Het oorspronkelijk ingebedde allergenenarchief blijft daarnaast behouden als `wordpressEmbeddedAllergenLists`.
+4. Bestaande externe WordPress-foto's worden gekopieerd naar afgeschermde Supabase-afbeeldingsrecords, op inhoud gehasht en teruggelezen. Inline foto-data blijft in de receptuurdata staan. Afbeeldingsbytes vallen daardoor ook onder de databaseback-up. Er is geen afhankelijkheid van een openbare Storage-bucket.
+5. Na kopiëren wordt de vergrendelde WordPress-bron opnieuw vergeleken. Alleen bij gelijke inhoud importeert één transactie de volledige bronbackup, recepten en bestaande open planning. Een tweede import kan niets overschrijven.
+6. De opgeslagen receptuurdata wordt volledig teruggelezen en canoniek vergeleken. Daarna blijft de WordPress-bron definitief alleen-lezen als herstelkopie. Nieuwe app-reads en -writes gaan uitsluitend naar Supabase. Er wordt niets uit WordPress verwijderd.
+7. Bij een fout vóór de databasecommit wordt de bron ontgrendeld. Bij een fout na commit blijft hij gesloten, zodat geen twee beschrijfbare bronnen ontstaan. Bij een procesonderbreking met een achtergebleven schrijfslot moet beheer eerst vaststellen of `production_documents` gevuld is; nooit blind een bron heropenen.
 
-De huidige code heeft al recepten, halffabricaten, SpecsPlaza en eenvoudige productieplanning. Die functies zijn een herbruikbare basis. De huidige planning op verkoopgemiddelden bewijst geen complete artikelverkoopkoppeling. De live toegankelijkheid van de SpecsPlaza-productieomgeving en de kwaliteit van alle brongegevens zijn voor deze preview niet opnieuw getest.
+De eerste broncontrole vond 199 recepten, waarvan 108 halffabricaten, 359 grondstoffen en 3 facturen. Eén bronrecept heeft vijf verwijzingen naar ontbrekende grondstoffen. De gecontroleerde overdracht bewaart zulke bronverwijzingen letterlijk als aandachtspunt. Het bijbehorende recept blijft zichtbaar en is geblokkeerd voor productie totdat de koppelingen in het receptbeheer zijn hersteld. De gewone offline validator blijft streng; er worden geen grondstoffen of hoeveelheden verzonnen. Andere structurele fouten blijven de overdracht blokkeren.
 
-## Gerichte verificatie
+## Werking en grenzen
 
-`node --test tests/production-planning.test.cjs tests/production-recipe-migration.test.cjs`
+Het hoofdweekbord bevat Desserttaart & fruit, Luxe gebak, Kapseltaarten en Slagroomgebak. Bakafdeling, Brood, IJs en Chocolade hebben eigen weergaven. Op mobiel kies je een dag. De XL-weergave is alleen-lezen en ververst elke 15 seconden. Bij verbindingsverlies staat een waarschuwing boven de oude gegevens.
 
-Controleer daarnaast ESLint, TypeScript en Next-build; test op desktop, mobiel en groot scherm de toevoeg-, verplaats-, status- en receptkoppelflows. De ontwikkeluitzondering voor `/preview/productie` mag in productie nooit gelden; de pagina zelf geeft daar ook `notFound()`.
+Onderdelen kunnen zonder recept worden toegevoegd en later gekoppeld. Taken zijn te plannen, te verplaatsen en af te ronden. Vervolgstappen verwijzen naar een eerdere stap in dezelfde batch; één batch registreert hoogstens één output. Afdelingen die niet bekend zijn uit de bron krijgen 'Afdeling controleren'. Managers kunnen die indeling en opmerkingen aanpassen.
+
+De teller registreert productie, geen bewezen actuele voorraad. Onbekende voorraad blijft onbekend. Automatische verkoopprognoses, verbruik/uitgifte, werkelijke batchopbrengst, capaciteitsnormen en automatische orderimport zijn volgende bouwstappen. De eerdere receptuur- en managementschermen blijven beschikbaar en delen de nieuwe opslag.
+
+## Verificatie
+
+- `node --test tests/*.test.cjs scripts/specsplaza.test.cjs scripts/specsplaza-link.test.cjs`
+- ESLint, TypeScript en Next-productiebuild.
+- `app/supabase/tests/production_workspace_smoke.sql`: rollbacktest op lege opslag voor directe toegangsrechten, reconstructie van auditpatches en bescherming tegen een verouderde revisie. Op de echte database geslaagd vóór import.
+- Live controleren: broncontrole, overdracht, teruglezen, financiële afscherming, één taak bewaren en na herladen terugvinden, plus dezelfde planning op een tweede scherm.

@@ -21,6 +21,7 @@ export type Item = {
   unit: ItemUnit; recipeId?: string; articleNumber?: string;
   note: string; stock: number; minimumStock?: number;
   stockKnown?: boolean; departmentUnconfirmed?: boolean;
+  productionBlocked?: boolean;
 };
 export type Task = {
   id: string; itemId: string; departmentId: DepartmentId; date: string;
@@ -32,6 +33,7 @@ export type DemoRecipe = {
   id: string; name: string; yield: number; unit: ItemUnit;
   ingredients: { name: string; quantity: number; unit: string }[];
   steps: string[]; allergens: string[];
+  reviewRequired?: boolean;
 };
 export type PreviewState = { version: 1; items: Item[]; tasks: Task[] };
 
@@ -77,8 +79,9 @@ export function durationLabel(minutes: number) {
   return hours ? `${hours}u${remainder ? ` ${remainder}m` : ""}` : `${remainder}m`;
 }
 export function departmentsFor(board: BoardId) { return DEPARTMENTS.filter(d => d.board === board); }
-export function taskIssues(task: Task, tasks: Task[]): string[] {
+export function taskIssues(task: Task, tasks: Task[], items: Item[] = []): string[] {
   const issues: string[] = [];
+  if (items.find(i=>i.id===task.itemId)?.productionBlocked) issues.push("Het bronrecept heeft ontbrekende verwijzingen. Controleer dit recept eerst.");
   if (task.dependsOn) {
     const prior = tasks.find(t => t.id === task.dependsOn);
     if (!prior) issues.push("Voorgaande stap ontbreekt.");
@@ -91,13 +94,13 @@ export function taskIssues(task: Task, tasks: Task[]): string[] {
   if (task.status === "blocked") issues.push(task.note || "Deze taak is geblokkeerd; controleer de oorzaak.");
   return issues;
 }
-export function transitionTask(tasks: Task[], id: string, status: TaskStatus): Task[] {
+export function transitionTask(tasks: Task[], id: string, status: TaskStatus, items: Item[] = []): Task[] {
   if (!Object.hasOwn(STATUS_LABELS, status)) throw Error("Onbekende status.");
   const task = tasks.find(t => t.id === id);
   if (!task) throw Error("Taak niet gevonden.");
   if (task.status === "blocked" && (status === "active" || status === "done")) throw Error("Hef de blokkade eerst op door de taak weer op Gepland te zetten.");
   if (status === "done" || status === "active") {
-    const issues = taskIssues({ ...task, status }, tasks);
+    const issues = taskIssues({ ...task, status }, tasks,items);
     if (issues.length) throw Error(issues[0]);
   }
   if (task.status === "done" && status !== "done" && tasks.some(t => t.dependsOn === id && (t.status === "done" || t.status === "active"))) {
@@ -122,6 +125,7 @@ export function addTask(state: PreviewState, task: Task): PreviewState {
   if (state.tasks.some(t => t.id === task.id)) throw Error("Deze taak bestaat al.");
   const item = state.items.find(i => i.id === task.itemId);
   if (!item) throw Error("Kies een bestaand onderdeel.");
+  if (item.productionBlocked) throw Error("Dit bronrecept heeft ontbrekende grondstoffen of onderdelen. Controleer de koppelingen eerst.");
   calendarDate(task.date);
   if (task.dueDate) calendarDate(task.dueDate);
   if (!DEPARTMENTS.some(d => d.id === task.departmentId)) throw Error("Onbekende afdeling.");

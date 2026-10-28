@@ -23,6 +23,7 @@ export function recipeViews(data: RecepturenData): DemoRecipe[] {
     ],
     steps: [...(recipe.workInstructions || []), ...(recipe.preparationSteps || []), ...(recipe.finishingSteps || [])],
     allergens: recipe.allergens || [],
+    reviewRequired: (recipe.ingredients || []).some(line=>!data.ingredients.some(i=>i.id===line.ingredientId)) || (recipe.semiFinishedItems || []).some(line=>!data.recipes.some(r=>r.id===line.semiFinishedRecipeId)),
   }));
 }
 export function ingredientViews(data: RecepturenData): IngredientView[] {
@@ -34,6 +35,7 @@ export function ingredientViews(data: RecepturenData): IngredientView[] {
 }
 export function seedWorkspace(data: RecepturenData): PreviewState {
   const state: PreviewState = { version: 1, items: [], tasks: [] };
+  const views=recipeViews(data);
   for (const recipe of data.recipes) {
     const group = (recipe.productGroup || "").trim().toLocaleLowerCase("nl-NL");
     const departmentId: DepartmentId = group === "ijs" ? "ijs" : ["chocolade", "bonbons"].includes(group) ? "chocolade" : "dessert";
@@ -41,6 +43,7 @@ export function seedWorkspace(data: RecepturenData): PreviewState {
       kind: recipe.type === "semiFinished" ? "component" : "product", unit: itemUnit(recipe.standardBatchUnit),
       departmentId, departmentUnconfirmed: !["ijs", "chocolade", "bonbons"].includes(group),
       stock: 0, stockKnown: false, note: recipe.internalNotes || recipe.notes || "", articleNumber: recipe.strikArticleNumber,
+      productionBlocked: !!views.find(r=>r.id===recipe.id)?.reviewRequired,
     });
     for (const request of recipe.productionRequests || []) {
       if (request.status !== "open" || !Number.isFinite(request.quantity) || request.quantity <= 0) continue;
@@ -69,7 +72,7 @@ export function syncRecipeCatalog(state: PreviewState, data: RecepturenData): Pr
     if (!item.recipeId) return item;
     const recipe = recipes.find(r=>r.id===item.recipeId);
     if (!recipe || recipe.unit!==item.unit) return {...item,recipeId:undefined,note:`${item.note}\nReceptkoppeling opnieuw controleren: bronrecept of eenheid gewijzigd.`};
-    return {...item,name:recipe.name};
+    return {...item,name:recipe.name,productionBlocked:!!recipe.reviewRequired};
   });
   return {...state,items:[...items,...source.items.filter(i=>!known.has(i.id))]};
 }

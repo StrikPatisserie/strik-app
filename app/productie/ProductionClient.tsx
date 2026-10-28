@@ -20,7 +20,9 @@ export default function ProductionClient({canManage}:{canManage:boolean}) {
       setWorkspace(data);setError("");setSetup(false);
     } catch(e) {setError((e as Error).message);} finally {setLoading(false);}
   },[]);
-  useEffect(()=>{void load();const timer=setInterval(()=>{if(!document.hidden)void load();},15000);return()=>clearInterval(timer);},[load]);
+  const available=!!workspace;
+  useEffect(()=>{void load();},[load]);
+  useEffect(()=>{if(!available || busy)return;const timer=setInterval(()=>{if(!document.hidden)void load();},15000);return()=>clearInterval(timer);},[load,available,busy]);
   async function transfer(migrate=false) {
     setBusy(true);setError("");
     try {

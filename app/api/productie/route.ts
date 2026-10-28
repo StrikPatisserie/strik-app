@@ -33,17 +33,20 @@ export async function PUT(request:Request) {
     let next:PreviewState;
     try { next=hasFullAccess(profile)?incoming.state:mergeWorkspaceForEmployee(current,incoming.state,allowed); }
     catch(error) { throw new ProductionStoreError((error as Error).message,403); }
+    // Recipe review flags come from canonical source data, never the browser.
+    next=syncRecipeCatalog(next,recipes.data);
     // Original records and task identifiers stay available; deletion needs a
     // separate reviewed archive flow, so a stale/malicious bulk save cannot
     // silently remove production work or break a consumed dependency.
     if (current.items.some(i=>!next.items.some(n=>n.id===i.id)) || current.tasks.some(t=>!next.tasks.some(n=>n.id===t.id))) throw new ProductionStoreError("Bestaande onderdelen of taken kunnen niet via deze wijziging worden verwijderd.",400);
+    for(const task of next.tasks) if(!current.tasks.some(t=>t.id===task.id) && next.items.find(i=>i.id===task.itemId)?.productionBlocked) throw new ProductionStoreError("Het bronrecept heeft ontbrekende verwijzingen en moet eerst gecontroleerd worden.",400);
     for (const task of current.tasks) {
       const changed=next.tasks.find(t=>t.id===task.id)!;
       if (task.itemId!==changed.itemId || task.batchId!==changed.batchId || task.dependsOn!==changed.dependsOn || task.recordsOutput!==changed.recordsOutput) throw new ProductionStoreError("De identiteit en voorraadregistratie van bestaande productiestappen blijven behouden.",400);
       if (task.status!==changed.status) {
         // Apply the same dependency/blocking checks for managers as employees.
         const { transitionTask }=await import("@/app/productie/planning");
-        transitionTask(current.tasks,task.id,changed.status);
+        transitionTask(current.tasks,task.id,changed.status,current.items);
       }
     }
     const revision=await saveDocument("planner",planner.revision,next,profile.id,"Productieplanning bijgewerkt");

@@ -12,7 +12,7 @@ export type RecipeTransferReport = {
 function record(value: unknown): value is RecordValue { return !!value && typeof value === "object" && !Array.isArray(value); }
 function text(value: unknown): value is string { return typeof value === "string" && !!value.trim(); }
 
-export function inspectRecipeTransfer(source: unknown): RecipeTransferReport {
+export function inspectRecipeTransfer(source: unknown, options: { preserveUnresolved?: boolean } = {}): RecipeTransferReport {
   const result: RecipeTransferReport = {
     ready: false,
     counts: { recipes: 0, finalProducts: 0, semiFinished: 0, ingredients: 0, packaging: 0, manualTasks: 0, productionEntries: 0, specsPlazaLinks: 0, recipePhotos: 0, invoices: 0 },
@@ -59,7 +59,13 @@ export function inspectRecipeTransfer(source: unknown): RecipeTransferReport {
         continue;
       }
       for (const line of lines) {
-        if (!record(line) || !text(line[idField]) || !ids[target].has(String(line[idField]))) { result.errors.push({ code: "broken-reference", collection: "recipes", index, field }); continue; }
+        if (!record(line) || !text(line[idField]) || !ids[target].has(String(line[idField]))) {
+          // A legacy orphan is still original business data. A controlled live
+          // import may preserve it exactly, while its recipe is blocked for
+          // production. Default/offline validation remains strict.
+          (options.preserveUnresolved ? result.warnings : result.errors).push({ code: options.preserveUnresolved ? "unresolved-source-reference" : "broken-reference", collection:"recipes",index,field });
+          continue;
+        }
         if (target === "recipes" && recipeMap.get(line[idField])?.type !== "semiFinished") result.errors.push({ code: "reference-is-not-semi-finished", collection: "recipes", index, field });
         if (typeof line.quantity !== "number" || !Number.isFinite(line.quantity) || line.quantity < 0) result.errors.push({ code: "invalid-quantity", collection: "recipes", index, field });
         else if (line.quantity === 0) result.warnings.push({ code: "quantity-not-yet-filled", collection: "recipes", index, field });

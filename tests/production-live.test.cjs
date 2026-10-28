@@ -65,3 +65,10 @@ test('image downloads are private and unavailable to anonymous users',async()=>{
  let reads=0;const api=load('app/api/recepturen/media/[id]/route.ts',{'@/app/lib/auth/session':{getCurrentProfile:async()=>null},'@/app/productie/access':rights,'@/app/productie/media.server':{readProductionImage:async()=>{reads++;return null;}}});
  assert.equal((await api.GET(new Request('https://example.invalid'),{params:Promise.resolve({id:'a'.repeat(64)})})).status,403);assert.equal(reads,0);
 });
+test('a legacy recipe with a missing ingredient stays visible but cannot generate or finish production tasks',async()=>{
+ const r=route(manager);r.store.recipes.data.recipes[0].ingredients[0].ingredientId='missing';
+ const response=await r.api.GET(),data=await response.json();assert.equal(data.recipes[0].reviewRequired,true);assert.equal(data.state.items[0].productionBlocked,true);
+ const incoming=structuredClone(data.state);incoming.items[0].productionBlocked=false;incoming.tasks[0].status='done';
+ assert.equal((await r.api.PUT(put(incoming))).status,400);assert.equal(r.counts().writes,0);
+ assert.throws(()=>planning.addTask(data.state,{...data.state.tasks[0],id:'new',batchId:'new'}),/ontbrekende/);
+});

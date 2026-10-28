@@ -57,3 +57,10 @@ test('reports contain only counts and issue locations, never recipe names or fin
   const data = source(); const report = JSON.stringify(model.inspectRecipeTransfer(data));
   for (const sensitive of ['Testproduct', 'Testgrondstof', 'Testbodem', '123.45', '12.34', 'data:image', 'test-only']) assert(!report.includes(sensitive));
 });
+test('controlled transfer can preserve a legacy orphan verbatim, while ordinary validation stays strict',()=>{
+ const data=source();data.recipes[1].ingredients=[{ingredientId:'missing-source-id',quantity:12,unit:'gram'}];
+ assert.equal(model.inspectRecipeTransfer(data).ready,false);
+ const report=model.inspectRecipeTransfer(data,{preserveUnresolved:true});
+ assert.equal(report.ready,true);assert(report.warnings.some(w=>w.code==='unresolved-source-reference'));
+ assert.equal(data.recipes[1].ingredients[0].ingredientId,'missing-source-id');
+});

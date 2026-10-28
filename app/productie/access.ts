@@ -21,7 +21,7 @@ export function mergeWorkspaceForEmployee(current: PreviewState, incoming: Previ
     const original = visible.find(t => t.id === change.id);
     if (!original || JSON.stringify({ ...original, status: change.status }) !== JSON.stringify(change)) throw Error("Alleen de taakstatus van je eigen afdeling kan worden gewijzigd.");
     if (original.status !== change.status && !allowed.includes(original.departmentId)) throw Error("Je kunt alleen taken in je eigen afdeling wijzigen.");
-    if (original.status !== change.status) tasks = transitionTask(tasks, original.id, change.status);
+    if (original.status !== change.status) tasks = transitionTask(tasks, original.id, change.status,current.items);
   }
   return { ...current, tasks };
 }
