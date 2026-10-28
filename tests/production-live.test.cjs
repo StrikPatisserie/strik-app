@@ -85,3 +85,32 @@ test('a legacy recipe with a missing ingredient stays visible but cannot generat
  assert.equal((await r.api.PUT(put(incoming))).status,400);assert.equal(r.counts().writes,0);
  assert.throws(()=>planning.addTask(data.state,{...data.state.tasks[0],id:'new',batchId:'new'}),/ontbrekende/);
 });
+
+
+test('production resource routes enforce management and HACCP department access before rendering',async()=>{
+ const jsx=require('react/jsx-runtime');
+ const nav=load('app/productie/navigation.ts',{'./planning':planning});
+ const common={
+  'react/jsx-runtime':jsx,'next/link':{default:'a'},'next/navigation':{notFound:()=>{throw Error('not-found');}},
+  '@/app/lib/auth/access':access,'@/app/productie/access':rights,
+  '@/app/productie/ProductionResourceFrame':{default:'production-frame'},
+  '@/app/preview/productie/production.module.css':{default:{}},
+ };
+ const ice={...bakery,permissions:{'bakkerij.ijs_chocolade':true}};
+ for(const who of [manager,bakery,ice]){
+  const auth={'@/app/lib/auth/session':{requireCurrentProfile:async()=>who}};
+  const data=load('app/bakkerij/productie/beheer/[section]/page.tsx',{
+   ...common,...auth,'@/app/productie/navigation':nav,'@/app/bakkerij/recepturen/RecepturenApp':{default:'recipe-editor'},
+  });
+  const open=()=>data.default({params:Promise.resolve({section:'verpakkingen'})});
+  if(who===manager)assert.equal((await open()).props.canManage,true);
+  else await assert.rejects(open(),/not-found/);
+  const haccp=load('app/bakkerij/productie/haccp/[department]/layout.tsx',{...common,...auth});
+  const own=who===ice?'ijs':'bakkerij';
+  const page=await haccp.default({params:Promise.resolve({department:own}),children:'registration'});
+  assert.equal(page.props.active,'haccp');
+  assert.equal(page.props.children[1],'registration');
+  if(who!==manager)await assert.rejects(haccp.default({params:Promise.resolve({department:own==='ijs'?'bakkerij':'ijs'}),children:'registration'}),/not-found/);
+  await assert.rejects(haccp.default({params:Promise.resolve({department:'unknown'}),children:'registration'}),/not-found/);
+ }
+});

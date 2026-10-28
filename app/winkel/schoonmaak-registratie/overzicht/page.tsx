@@ -390,6 +390,7 @@ function buildRows(
 }
 
 type TemperatureRegistrationOverviewPageProps = {
+  embedded?: boolean;
   title?: string;
   kicker?: string;
   locationOptions?: readonly TemperatureLocationOption[];
@@ -401,6 +402,7 @@ type TemperatureRegistrationOverviewPageProps = {
 };
 
 export function TemperatureRegistrationOverviewPage({
+  embedded = false,
   title = "Temperatuurregistratie",
   kicker = "HACCP overzicht",
   locationOptions = winkelOptions,
@@ -751,15 +753,15 @@ export function TemperatureRegistrationOverviewPage({
   }
 
   return (
-    <StrikShell wide>
+    <StrikShell wide embedded={embedded}>
       <div className="space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <StrikPageHeader
+          {!embedded && <StrikPageHeader
             title={title}
             description={`${locationLabel} · ${periodLabel}`}
             kicker={kicker}
             icon={strikIcons.cleaning}
-          />
+          />}
           <Link
             href={registrationHref}
             className="min-h-12 touch-manipulation rounded-full bg-white px-4 py-2.5 text-sm font-black text-[#ef5737] shadow-sm ring-1 ring-[#e8e4de]"

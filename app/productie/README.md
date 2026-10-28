@@ -28,7 +28,7 @@ De eerste broncontrole vond 199 recepten, waarvan 108 halffabricaten, 359 gronds
 
 ## Werking en grenzen
 
-Het hoofdweekbord bevat Desserttaart & fruit, Luxe gebak, Kapseltaarten en Slagroomgebak. Bakafdeling, Brood, IJs en Chocolade hebben eigen weergaven. Op mobiel kies je een dag. De XL-weergave is alleen-lezen en ververst elke 15 seconden. Bij verbindingsverlies staat een waarschuwing boven de oude gegevens.
+Het hoofdweekbord bevat Desserttaart & fruit, Luxe gebak, Kapseltaarten en Slagroomgebak. Bakkant bevat Bakafdeling en Brood als twee subafdelingen op één bord. IJs en Chocolade hebben eigen weergaven. De bestaande afdelings-ID’s en taken blijven behouden. Op mobiel kies je een dag. De XL-weergave is alleen-lezen en ververst elke 15 seconden. Bij verbindingsverlies staat een waarschuwing boven de oude gegevens.
 
 Onderdelen kunnen zonder recept worden toegevoegd en later gekoppeld. Taken zijn te plannen, te verplaatsen en af te ronden. Vervolgstappen verwijzen naar een eerdere stap in dezelfde batch; één batch registreert hoogstens één output. Afdelingen die niet bekend zijn uit de bron krijgen 'Afdeling controleren'. Managers kunnen die indeling en opmerkingen aanpassen.
 
@@ -56,3 +56,11 @@ De teller registreert productie, geen bewezen actuele voorraad. Onbekende voorra
 - ESLint, TypeScript en Next-productiebuild.
 - `app/supabase/tests/production_workspace_smoke.sql`: rollbacktest op lege opslag voor directe toegangsrechten, reconstructie van auditpatches en bescherming tegen een verouderde revisie. Op de echte database geslaagd vóór import.
 - Live controleren: broncontrole, overdracht, teruglezen, financiële afscherming, één taak bewaren en na herladen terugvinden, plus dezelfde planning op een tweede scherm.
+
+## Eigen productieomgeving
+
+Productie opent direct `/bakkerij/productie`. De hoofdapp gebruikt een rood rondje (`#d75a48`) met witte koksmuts; binnen Productie staat uitsluitend het eigen menu met een teruglink naar de Team-app. De oude hubs en receptuur-/HACCP-routes verwijzen door. Logistiek, winkel-HACCP en IJssalons blijven zelfstandige onderdelen.
+
+Recepten, halffabricaten, grondstoffen/SpecsPlaza, verpakkingen en import zijn binnen Productie te beheren. Deze schermen gebruiken dezelfde Supabase-bron en dezelfde revisie- en rolcontrole als voorheen. De volledige beheerprojectie blijft uitsluitend voor managers; medewerkers behouden het operationele recepten- en grondstoffenoverzicht zonder prijzen of marges.
+
+HACCP wisselt tussen Bakkerij en IJs & chocolade, volgens de bestaande afdelingsbevoegdheden. Bakkerij heeft temperaturen inclusief week/maandoverzicht, goederenontvangst en allergenen; IJs & chocolade heeft kookketel-/afkoelregistraties. De bestaande registratiecomponenten zijn verplaatst en gebruiken ongewijzigde opslag-/locatie-ID’s en dezelfde API. Er is hierbij geen data-overdracht of verwijdering. Productie-HACCP blijft vooralsnog in de bestaande registratieopslag (WordPress); de receptuur- en plannerdata staan in Supabase. Een productieschoonmaakrooster was nog niet ingericht: de omgeving vermeldt dit expliciet en toont geen fictieve checklist.

@@ -28,9 +28,16 @@ test('calendar weeks survive Amsterdam clock changes and ISO year boundaries', (
   assert.equal(m.dateLabel('2026-10-28', true), 'wo 28 okt');
   assert.throws(() => m.addDays('2026-02-30', 1), /datum/);
 });
-test('four named departments share the main board while bakery, bread, ice and chocolate stay separate', () => {
+test('Bakkant combines baking and bread while patisserie, ice and chocolate keep their boards', () => {
   assert.deepEqual(Array.from(m.departmentsFor('patisserie'), d => d.id), ['dessert', 'luxe', 'kapsel', 'slagroom']);
-  for (const id of ['bak', 'brood', 'ijs', 'chocolade']) assert.equal(m.departmentsFor(id).length, 1);
+  assert.deepEqual(Array.from(m.departmentsFor('bak'), d => d.id), ['bak', 'brood']);
+  assert.equal(m.BOARDS.find(board => board.id === 'bak').name, 'Bakkant');
+  assert.equal(m.BOARDS.some(board => board.id === 'brood'), false);
+  for (const id of ['ijs', 'chocolade']) assert.equal(m.departmentsFor(id).length, 1);
+  assert(sample.initialPreviewState().tasks.some(task => task.departmentId === 'brood'));
+  const nav = load('app/productie/navigation.ts', {'./planning':m});
+  assert.equal(nav.productionBoard('brood'), 'bak');
+  assert.equal(nav.productionBoard('unknown'), undefined);
 });
 test('a standalone component needs no recipe and retains its ID and tasks when linked later', () => {
   let state = sample.initialPreviewState();

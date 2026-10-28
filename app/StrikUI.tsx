@@ -45,6 +45,10 @@ export const strikIcons = {
   winkel: "/APP_icons_strikk__winkel.svg",
 };
 
+export function ProductionAppIcon({ className = "h-11 w-11" }: { className?: string }) {
+  return <span aria-hidden="true" className={`inline-flex shrink-0 items-center justify-center rounded-full bg-[#d75a48] ${className}`}><img src="/icons_strik_productie-wit.svg" alt="" className="h-4/5 w-4/5 object-contain" /></span>;
+}
+
 const toneClasses = {
   primary: "bg-[#ecf4ed] border-[#d6e5d8]",
   secondary: "bg-[#fef9f3] border-[#f3d4a4]",
@@ -261,13 +265,16 @@ export function StrikShell({
   extraWide = false,
   tone = "mint",
   backHref,
+  embedded = false,
 }: Readonly<{
   children: React.ReactNode;
   wide?: boolean;
   extraWide?: boolean;
   tone?: "default" | "mint";
   backHref?: string;
+  embedded?: boolean;
 }>) {
+  if (embedded) return <section className="min-w-0 text-[#2b3e32]">{children}</section>;
   return (
     <main
       data-app-background={tone}

@@ -508,6 +508,7 @@ function payloadToFormState(
 }
 
 type TemperatureRegistrationPageProps = {
+  embedded?: boolean;
   title?: string;
   kicker?: string;
   locationOptions?: readonly TemperatureLocationOption[];
@@ -520,6 +521,7 @@ type TemperatureRegistrationPageProps = {
 };
 
 export function TemperatureRegistrationPage({
+  embedded = false,
   title = "Temperatuur registratie",
   kicker = "HACCP",
   locationOptions = winkelOptions,
@@ -1038,9 +1040,9 @@ export function TemperatureRegistrationPage({
   }, [datum, loadCleaningFallback, rowsByLocation, selectedWinkel.label, winkelId, inventory.ready, inventory.changes, manageDevices]);
 
   return (
-    <StrikShell wide>
+    <StrikShell wide embedded={embedded}>
       <div className="space-y-3">
-        <StrikPageHeader title={title} kicker={kicker} icon={strikIcons.cleaning} />
+        {!embedded && <StrikPageHeader title={title} kicker={kicker} icon={strikIcons.cleaning} />}
         {manageDevices && !inventory.ready && !inventory.error ? <p className="text-sm font-bold">Vaste apparatenlijst laden…</p> : null}
         {inventory.error ? <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">{inventory.error} Ververs de pagina om opnieuw te laden.</p> : null}
         {deviceDialogOpen ? <DeviceEditorDialog initialDevice={promotingDevice ? { name: promotingDevice.naam, type: normalizeTemperatureDeviceType(promotingDevice.deviceType, promotingDevice.naam) } : undefined} onClose={() => { setDeviceDialogOpen(false); setPromotingDevice(null); }} onSave={addDevice} /> : null}

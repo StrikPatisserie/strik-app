@@ -1,1 +1,5 @@
-export { default } from "../schoonmaak/page";
+import { redirect } from "next/navigation";
+
+export default function LegacyProductionPage() {
+  redirect("/bakkerij/productie/haccp/bakkerij");
+}

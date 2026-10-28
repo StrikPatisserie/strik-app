@@ -2,6 +2,9 @@
 
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
+import Icon, { type IconName } from "../../productie/ProductionIcon";
+import ProductionNavigation, { ProductionMobileNavigation } from "../../productie/ProductionNavigation";
+import { productionView, type ProductionView } from "../../productie/navigation";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import {
   addDays, addItem, BOARDS, completedOutput, dateLabel, DEPARTMENTS,
@@ -16,41 +19,15 @@ import { validWorkspace, type LiveWorkspace } from "../../productie/workspaceDat
 import { buildRecipePlan, preparationProposal, type PlanCommand, type PreparationChoice } from "../../productie/recipePlanning";
 const WorkspaceContext = createContext({ demo:true, recipes:demoRecipes, canManage:true, saving:false });
 
-type View = "planning" | "catalog" | "recipes" | "ingredients" | "stock" | "settings";
+type View = ProductionView;
 type Modal = { type: "task"; date?: string; departmentId?: DepartmentId; itemId?: string; priorId?: string } | { type: "item" } | { type: "detail"; id: string } | { type: "item-detail"; id: string } | { type: "attention" } | { type: "reset" } | null;
-type IconName = "grid" | "book" | "box" | "leaf" | "stock" | "settings" | "arrow" | "plus" | "chevron" | "check" | "clock" | "screen" | "close" | "search" | "warning" | "link" | "back" | "move" | "play";
 const NAV: { id: View; label: string; icon: IconName }[] = [
   { id: "planning", label: "Weekplanning", icon: "grid" },
   { id: "catalog", label: "Producten & onderdelen", icon: "box" },
   { id: "recipes", label: "Recepten", icon: "book" },
   { id: "ingredients", label: "Grondstoffen", icon: "leaf" },
-  { id: "stock", label: "Voorraad", icon: "stock" },
+  { id: "stock", label: "Productieregistraties", icon: "stock" },
 ];
-
-function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
-  const paths: Record<IconName, ReactNode> = {
-    grid: <><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M3 10h18M9 10v11M15 10v11M8 2v4M16 2v4" /></>,
-    book: <><path d="M12 5C9 3 5 3 2 4v16c3-1 7-1 10 1 3-2 7-2 10-1V4c-3-1-7-1-10 1Zm0 0v16" /></>,
-    box: <><path d="m12 3 9 5v9l-9 5-9-5V8l9-5ZM3 8l9 5 9-5M12 13v9M7.5 5.5l9 5" /></>,
-    leaf: <><path d="M20 3C5 1 1 9 7 16c7 6 15 2 13-13ZM4 21 16 8" /></>,
-    stock: <><path d="M3 3v18h18M7 17v-4h3v4M13 17V8h3v9M19 17V4h2v13" /></>,
-    settings: <><path d="M4 6h16M4 12h16M4 18h16" /><circle cx="9" cy="6" r="2" /><circle cx="16" cy="12" r="2" /><circle cx="8" cy="18" r="2" /></>,
-    arrow: <path d="M5 12h14m-6-6 6 6-6 6" />,
-    plus: <path d="M12 5v14M5 12h14" />,
-    chevron: <path d="m9 5 7 7-7 7" />,
-    check: <path d="m5 12 4 4L19 6" />,
-    clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
-    screen: <><rect x="2" y="3" width="20" height="14" rx="2" /><path d="M12 17v4M7 21h10" /></>,
-    close: <path d="m6 6 12 12M6 18 18 6" />,
-    search: <><circle cx="10" cy="10" r="6" /><path d="m15 15 6 6" /></>,
-    warning: <><path d="m12 3 10 18H2L12 3ZM12 9v5M12 17h.01" /></>,
-    link: <><path d="m10 13 4-4M8 16l-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0M16 8l1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0" transform="translate(0 1) scale(.9)" /></>,
-    back: <path d="M19 12H5m6-6-6 6 6 6" />,
-    move: <><path d="M12 2v20M2 12h20M8 6l4-4 4 4M8 18l4 4 4-4M6 8l-4 4 4 4M18 8l4 4-4 4" /></>,
-    play: <path d="m8 4 12 8-12 8V4Z" />,
-  };
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
-}
 
 function ModalFrame({ title, subtitle, children, onClose }: { title: string; subtitle?: string; children: ReactNode; onClose: () => void }) {
   const { demo } = useContext(WorkspaceContext);
@@ -66,7 +43,7 @@ function quantity(value: number) { return value.toLocaleString("nl-NL", { maximu
 function departmentName(id: DepartmentId) { return DEPARTMENTS.find(d => d.id === id)?.name || id; }
 function newId(prefix: string) { return `${prefix}-${crypto.randomUUID()}`; }
 
-export default function ProductionPreview({live,onRefresh}:{live?:LiveWorkspace;onRefresh?:()=>Promise<void>}) {
+export default function ProductionPreview({live,onRefresh,initialView="planning",initialBoard}:{live?:LiveWorkspace;onRefresh?:()=>Promise<void>;initialView?:string;initialBoard?:BoardId}) {
   const demo = !live, canManage = !live || live.canManage;
   const today = live?.today || DEMO_TODAY;
   const recipeList = live?.recipes || demoRecipes;
@@ -77,8 +54,8 @@ export default function ProductionPreview({live,onRefresh}:{live?:LiveWorkspace;
   const [saving,setSaving] = useState(false);
   const [syncedAt,setSyncedAt] = useState(live?.updatedAt || "");
   const [hydrated, setHydrated] = useState(false);
-  const [view, setView] = useState<View>("planning");
-  const [board, setBoard] = useState<BoardId>(()=>live && !live.departments.includes("dessert") ? "ijs" : "patisserie");
+  const [view, setView] = useState<View>(()=>productionView(initialView));
+  const [board, setBoard] = useState<BoardId>(()=>initialBoard && (!live || departmentsFor(initialBoard).some(d=>live.departments.includes(d.id))) ? initialBoard : live && !live.departments.includes("dessert") ? "ijs" : "patisserie");
   const [week, setWeek] = useState(()=>demo ? DEMO_WEEK : mondayOf(today));
   const [department, setDepartment] = useState<DepartmentId | "all">("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -194,6 +171,7 @@ export default function ProductionPreview({live,onRefresh}:{live?:LiveWorkspace;
       return error;
     }catch(error){return(error as Error).message;}
   }
+  const canBakery=!live || live.departments.some(department=>department!=="ijs" && department!=="chocolade");
   const availableBoards=BOARDS.filter(b=>!live || departmentsFor(b.id).some(d=>live.departments.includes(d.id)));
   const selectedTask=modal?.type==="detail" ? state.tasks.find(t=>t.id===modal.id) : undefined;
   const selectedTaskItem=selectedTask ? state.items.find(i=>i.id===selectedTask.itemId) : undefined;
@@ -221,13 +199,7 @@ export default function ProductionPreview({live,onRefresh}:{live?:LiveWorkspace;
   }
 
   return <WorkspaceContext.Provider value={{demo,recipes:recipeList,canManage,saving}}><div className={`${s.root} ${wall ? s.wall : ""} ${largeText ? s.largeText : ""}`} style={style} data-production-preview={demo || undefined} aria-busy={saving}>
-    {!wall && <aside className={s.sidebar}>
-      <Link href="/bakkerij" className={s.brand} aria-label="Terug naar Productie in de Team-app"><img src="/strik-logo.png" alt="Strik Patisserie" width="51" height="56" /><span>STRIK<strong>Productie</strong></span></Link>
-      <span className={s.sidebarCaption}>HET ATELIER</span>
-      <nav aria-label="Productiemenu">{NAV.map(n => <button key={n.id} onClick={() => navigate(n.id)} aria-current={view === n.id ? "page" : undefined}><Icon name={n.icon} /><span>{n.label}</span>{n.id === "planning" && <span className={s.navDot} />}</button>)}</nav>
-      <div className={s.sidebarBoards}><span className={s.sidebarCaption}>PLANNINGEN</span>{availableBoards.map(b => <button key={b.id} onClick={() => { navigate("planning"); chooseBoard(b.id); }} aria-current={view === "planning" && board === b.id ? "true" : undefined}><span className={`${s.boardDot} ${s[`board_${b.id}`]}`} />{b.name}{view === "planning" && board === b.id && <Icon name="chevron" size={12} />}</button>)}</div>
-      <div className={s.sidebarBottom}><button onClick={() => navigate("settings")} aria-current={view === "settings" ? "page" : undefined}><Icon name="settings" />Instellingen</button><Link href="/bakkerij"><Icon name="back" size={16} />Terug naar Team-app</Link><span>Met aandacht gemaakt. Sinds 1937.</span></div>
-    </aside>}
+    {!wall && <ProductionNavigation active={view} boards={availableBoards} canManage={canManage} canBakery={canBakery} demo={demo} activeBoard={board} onNavigate={navigate} onBoard={id=>{navigate("planning");chooseBoard(id);}} />}
 
     <main className={s.main}>
       <div className={s.previewBar}><span><i />{demo ? "Preview · voorbeeldgegevens" : "Strik Productie · gedeelde werkversie"}</span><span>{demo ? (storageError ? "Bewaren niet mogelijk · wijzigingen vervallen bij herladen" : "Wijzigingen blijven alleen in deze browser") : saving ? "Bezig met opslaan…" : `Opgeslagen in Supabase · bijgewerkt ${syncedAt ? new Intl.DateTimeFormat("nl-NL",{timeZone:"Europe/Amsterdam",hour:"2-digit",minute:"2-digit"}).format(new Date(syncedAt)) : ""}`}</span>{!wall && (demo ? <button onClick={() => setModal({ type: "reset" })}>Herstel voorbeeld</button> : <button disabled={saving} onClick={()=>void onRefresh?.()}>Verversen</button>)}</div>
@@ -235,7 +207,7 @@ export default function ProductionPreview({live,onRefresh}:{live?:LiveWorkspace;
         <div className={s.headerActions}>{view === "planning" && <><button className={s.secondaryButton} aria-pressed={wall} onClick={() => setWall(!wall)}><Icon name="screen" />{wall ? "Sluit schermmodus" : "XL-scherm"}</button>{!wall && canManage && <button className={s.primaryButton} onClick={() => setModal({ type: "task", date: day, departmentId: visibleDepartments[0]?.id })}><Icon name="plus" />Taak toevoegen</button>}</>}{view === "catalog" && canManage && <button className={s.primaryButton} onClick={() => setModal({ type: "item" })}><Icon name="plus" />Onderdeel toevoegen</button>}</div>
       </header>
 
-      <div className={s.mobileNav}><label><span className={s.srOnly}>Onderdeel van Productie</span><select value={view} onChange={e => navigate(e.target.value as View)}>{NAV.map(n => <option key={n.id} value={n.id}>{n.label}</option>)}<option value="settings">Instellingen</option></select></label><Link href="/bakkerij" aria-label="Terug naar Team-app"><Icon name="back" /></Link></div>
+      <ProductionMobileNavigation active={view} canManage={canManage} canBakery={canBakery} demo={demo} onNavigate={navigate} />
 
       {view === "planning" ? <>
         <section className={s.plannerToolbar} aria-label="Week en filters"><div className={s.weekPicker}><button aria-label="Vorige week" onClick={() => shiftWeek(-1)} className={s.previous}><Icon name="chevron" size={16} /></button><div><strong>Week {weekNumber(week)}</strong><span>{weekLabel(week)}</span></div><button aria-label="Volgende week" onClick={() => shiftWeek(1)}><Icon name="chevron" size={16} /></button><button className={s.thisWeek} onClick={() => { setWeek(demo ? DEMO_WEEK : mondayOf(today)); setDay(today); }}>{demo ? "Voorbeeldweek" : "Deze week"}</button></div>
@@ -264,20 +236,20 @@ export default function ProductionPreview({live,onRefresh}:{live?:LiveWorkspace;
         <div className={s.listToolbar}><Search value={query} onChange={setQuery} placeholder="Zoek op naam of artikelnummer…" /><select aria-label="Type onderdeel" value={kindFilter} onChange={e => setKindFilter(e.target.value)}><option value="all">Alle typen</option><option value="product">Eindproducten</option><option value="component">Halffabricaten</option><option value="activity">Werkzaamheden</option></select><DepartmentSelect value={department} onChange={setDepartment} /></div>
         <div className={s.catalogList}><div className={s.listHeader}><span>Eindproduct / halffabricaat</span><span>Afdeling</span><span>Recept</span><span /></div>{catalog.map(item => <div className={s.catalogRow} key={item.id}><button className={s.itemName} onClick={() => setModal({ type: "item-detail", id: item.id })}><span className={`${s.itemGlyph} ${s[`tone_${DEPARTMENTS.find(d => d.id === item.departmentId)!.tone}`]}`}><Icon name={item.kind === "activity" ? "clock" : item.kind === "component" ? "box" : "book"} /></span><span><strong>{item.name}</strong><small><span className={`${s.typeBadge} ${item.kind==="component"?s.halfBadge:s.finalBadge}`}>{KIND_LABELS[item.kind]}</span> · {item.unit}{item.productionBlocked && " · Recept controleren"}{item.articleNumber && ` · ${item.articleNumber}`}</small></span></button><span className={s.catalogDepartment}>{item.departmentUnconfirmed ? "Afdeling controleren" : departmentName(item.departmentId)}</span><span className={item.recipeId ? s.recipeLinked : s.recipeMissing}>{item.recipeId ? <><Icon name="link" size={13} />Gekoppeld</> : "Vrij in te plannen"}</span><button disabled={!canManage || saving || item.productionBlocked} className={s.planButton} onClick={() => setModal({ type: "task", itemId: item.id, departmentId: item.departmentId, date: day })}><Icon name="plus" size={14} />Inplannen</button></div>)}{catalog.length === 0 && <Empty title="Geen onderdelen gevonden" text="Pas de zoekopdracht of filters aan." />}</div>
       </> : view === "recipes" ? <>
-        <div className={s.sectionIntro}><p>Recepten en halffabricaten, samen met de onderdelen waarop ze worden gebruikt.</p><span>{recipeList.length} {demo ? "voorbeeldrecepten" : "recepten"}</span></div>
+        <div className={s.sectionIntro}><p>Recepten en halffabricaten, samen met de onderdelen waarop ze worden gebruikt.</p><span>{recipeList.length} {demo ? "voorbeeldrecepten" : "recepten"}</span>{!demo && canManage && <Link className={s.secondaryButton} href="/bakkerij/productie/beheer/recepten">Recepten beheren</Link>}</div>
         {demo && <div className={s.infoNote}><Icon name="book" /><p>Deze recepten zijn fictieve voorbeelden. Jullie bestaande WordPress-recepten worden pas na een gecontroleerde overdracht aangesloten.</p></div>}
         <div className={s.listToolbar}><Search value={query} onChange={setQuery} placeholder={demo ? "Zoek een voorbeeldrecept…" : "Zoek een recept…"} /><select aria-label="Type recept" value={kindFilter} onChange={e=>setKindFilter(e.target.value)}><option value="all">Alle recepten</option><option value="product">Eindproducten</option><option value="component">Halffabricaten</option></select></div>
         <div className={s.recipeGrid}>{recipeList.filter(r => r.name.toLocaleLowerCase("nl-NL").includes(query.toLocaleLowerCase("nl-NL")) && (kindFilter==="all" || (r.type==="semiFinished"?"component":"product")===kindFilter)).map(r => { const linked = state.items.filter(i => i.recipeId === r.id); return <article key={r.id} className={s.recipeCard}><div className={s.recipeCardIcon}><Icon name="book" size={23} /><span className={`${s.typeBadge} ${r.type==="semiFinished"?s.halfBadge:s.finalBadge}`}>{r.type==="semiFinished"?"HALFFABRICAAT":"EINDPRODUCT"}{demo?" · VOORBEELD":""}</span></div><h2>{r.name}</h2><p>{r.yield > 0 ? `Basisrecept voor ${quantity(r.yield)} ${r.unit}` : "Basisopbrengst nog invullen"}</p><div className={s.recipeMeta}><span>{r.ingredients.length} ingrediënten</span><span>{r.steps.length} stappen</span></div><footer>{linked.length ? <button onClick={() => setModal({ type: "item-detail", id: linked[0].id })}>Bekijk recept & onderdeel<Icon name="arrow" size={16} /></button> : <span>Koppelbaar via Producten & onderdelen</span>}</footer></article>; })}</div>
       </> : view === "ingredients" ? <>
         <div className={s.sectionIntro}><p>Gedeelde grondstoffen en leveranciersspecificaties voor alle afdelingen.</p><span>SpecsPlaza</span></div>
-        <div className={s.infoNote}><Icon name="link" /><p>{demo ? "Voorbeeld van de bestaande SpecsPlaza-koppeling." : "Specificaties worden gedeeld met het grondstoffenbeheer."} {canManage && <Link href="/bakkerij/management">Open grondstoffenbeheer</Link>}</p></div>
+        <div className={s.infoNote}><Icon name="link" /><p>{demo ? "Voorbeeld van de bestaande SpecsPlaza-koppeling." : "Specificaties worden gedeeld met het grondstoffenbeheer."} {canManage && <Link href="/bakkerij/productie/beheer/ingredienten">Open grondstoffenbeheer</Link>}</p></div>
         <div className={s.ingredientList}>{ingredientList.map(i => <article key={i.id}><div className={s.itemGlyph}><Icon name="leaf" /></div><div><h2>{i.name}</h2><p>{i.supplier} · {i.unit}</p></div><div className={s.ingredientSpec}><span className={i.linked ? s.recipeLinked : s.recipeMissing}>{i.linked && <Icon name="link" size={13} />}{i.specification}</span><small>{demo ? "Voorbeeld allergenen" : "Allergenen"}: {i.allergens}</small></div></article>)}</div>
       </> : view === "stock" ? <>
         <div className={s.sectionIntro}><p>{demo ? "Voorbeeldvoorraad plus afgeronde productie." : "Hier staan je productieregistraties. Een actuele voorraad is nog niet aangesloten."} Werkelijke voorraad vraagt ook registratie van verbruik en uitgifte.</p></div>
         <div className={s.listToolbar}><Search value={query} onChange={setQuery} placeholder="Zoek een product of onderdeel…" /><DepartmentSelect value={department} onChange={setDepartment} /></div>
         <div className={s.stockTable}><div className={s.stockHeader}><span>Product / onderdeel</span><span>Startvoorraad</span><span>Geproduceerd</span><span>{demo ? "Voorbeeldtotaal" : "Voorraad"}</span></div>{catalog.filter(i => i.kind !== "activity").map(i => <div className={s.stockRow} key={i.id}><button onClick={() => setModal({ type: "item-detail", id: i.id })}><strong>{i.name}</strong><small>{departmentName(i.departmentId)} · {i.unit}</small></button><span>{!demo && !i.stockKnown ? "Onbekend" : quantity(i.stock)}</span><span className={s.recipeLinked}>+{quantity(output.get(i.id) || 0)}</span><strong>{!demo && !i.stockKnown ? "Onbekend" : quantity(i.stock + (output.get(i.id) || 0))} <small>{i.unit}</small></strong></div>)}</div>
       </> : <>
-        <div className={s.settingsGrid}><section className={s.settingCard}><Icon name="screen" size={24} /><h2>Jouw weekbord</h2><p>Pas het bord aan voor de werkplek of het grote scherm.</p><label className={s.checkboxRow}><input type="checkbox" checked={weekend} onChange={e => setWeekend(e.target.checked)} /><span>Zondag ook tonen</span></label><label className={s.checkboxRow}><input type="checkbox" checked={largeText} onChange={e => setLargeText(e.target.checked)} /><span>Grotere tekst in het weekbord</span></label><button className={s.secondaryButton} onClick={() => { navigate("planning"); setWall(true); }}><Icon name="screen" />Open XL-schermstand</button></section><section className={s.settingCard}><Icon name="box" size={24} /><h2>{demo ? "Van preview naar productie" : "Werkversie in gebruik"}</h2><p>{demo ? "Deze versie gebruikt uitsluitend voorbeeldgegevens en bewaart je aanpassingen lokaal." : "Je planning en onderdelen worden gedeeld opgeslagen. Bestellingen, verbruik en verkoopprognoses worden in volgende stappen aangesloten."}</p><ol><li>Weekbord en werkwijze samen beoordelen.</li><li>Recepten, grondstoffen en koppelingen controleren en overzetten.</li><li>Met één afdeling testen en daarna uitbreiden.</li><li>Bestellingen, voorraad en verkoopgegevens aansluiten.</li></ol>{demo ? <button className={s.textLink} onClick={() => setModal({ type: "reset" })}>Voorbeeldgegevens herstellen</button> : canManage && <Link className={s.textLink} href="/bakkerij/management">Recepturen, prijzen & marges beheren</Link>}</section></div>
+        <div className={s.settingsGrid}><section className={s.settingCard}><Icon name="screen" size={24} /><h2>Jouw weekbord</h2><p>Pas het bord aan voor de werkplek of het grote scherm.</p><label className={s.checkboxRow}><input type="checkbox" checked={weekend} onChange={e => setWeekend(e.target.checked)} /><span>Zondag ook tonen</span></label><label className={s.checkboxRow}><input type="checkbox" checked={largeText} onChange={e => setLargeText(e.target.checked)} /><span>Grotere tekst in het weekbord</span></label><button className={s.secondaryButton} onClick={() => { navigate("planning"); setWall(true); }}><Icon name="screen" />Open XL-schermstand</button></section><section className={s.settingCard}><Icon name="box" size={24} /><h2>{demo ? "Van preview naar productie" : "Werkversie in gebruik"}</h2><p>{demo ? "Deze versie gebruikt uitsluitend voorbeeldgegevens en bewaart je aanpassingen lokaal." : "Je planning en onderdelen worden gedeeld opgeslagen. Bestellingen, verbruik en verkoopprognoses worden in volgende stappen aangesloten."}</p><ol><li>Weekbord en werkwijze samen beoordelen.</li><li>Recepten, grondstoffen en koppelingen controleren en overzetten.</li><li>Met één afdeling testen en daarna uitbreiden.</li><li>Bestellingen, voorraad en verkoopgegevens aansluiten.</li></ol>{demo ? <button className={s.textLink} onClick={() => setModal({ type: "reset" })}>Voorbeeldgegevens herstellen</button> : canManage && <Link className={s.textLink} href="/bakkerij/productie/beheer/recepten">Receptuurgegevens beheren</Link>}</section></div>
         {canManage && !!state.removedTasks?.length && <section className={s.settingCard}><h2>Verwijderde taken</h2><p>Geplande taken blijven herstelbaar. Recepten en onderdelen zijn behouden.</p><div className={s.removedTaskList}>{[...state.removedTasks].reverse().map(({task})=><div key={task.id}><span><strong>{state.items.find(i=>i.id===task.itemId)?.name}</strong><small>{dateLabel(task.date,true)} · {task.operation}</small></span><button disabled={saving} className={s.secondaryButton} onClick={()=>void restore(task.id)}>Herstellen</button></div>)}</div></section>}
       </>}
     </main>

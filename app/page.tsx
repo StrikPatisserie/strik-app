@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
-import { strikIcons } from "./StrikUI";
+import { ProductionAppIcon, strikIcons } from "./StrikUI";
 import { filterVisibleMainNavigationItems } from "./featureVisibility";
 import { getFeatureVisibilitySettings } from "./lib/appSettings";
 import { filterAllowedItems } from "./lib/auth/access";
@@ -28,9 +28,9 @@ const baseSections = [
     icon: strikIcons.logistiek,
   },
   {
-    href: "/bakkerij",
+    href: "/bakkerij/productie",
     title: "Productie",
-    subtitle: "Overzicht, bakkerij en data",
+    subtitle: "Open Strik Productie",
     icon: strikIcons.productie,
   },
   {
@@ -228,11 +228,7 @@ export default async function Home() {
                         : "bg-[#c3d3bc]"
                   }`}
                 >
-                  <img
-                    src={section.icon}
-                    alt=""
-                    className="h-6 w-6 object-contain"
-                  />
+                  {section.href === "/bakkerij/productie" ? <ProductionAppIcon /> : <img src={section.icon} alt="" className="h-6 w-6 object-contain" />}
                 </span>
                 <span
                   className={`min-w-0 truncate text-sm font-black sm:text-base ${

@@ -1,16 +1,5 @@
-import { StrikPageHeader, StrikShell, strikIcons } from "../../../StrikUI";
+import { redirect } from "next/navigation";
 
-export default function BakkerijSchoonmaakroosterPage() {
-  return (
-    <StrikShell>
-      <StrikPageHeader
-        title="Schoonmaakrooster"
-        kicker="Bakkerij HACCP"
-        icon={strikIcons.cleaning}
-      />
-      <section className="rounded-[0.95rem] border border-[#d6e5d8] bg-[#f6faf4] p-4 text-sm font-semibold text-[#30462f]/65 shadow-sm">
-        Inhoud volgt nog.
-      </section>
-    </StrikShell>
-  );
+export default function LegacyProductionPage() {
+  redirect("/bakkerij/productie/haccp/bakkerij");
 }

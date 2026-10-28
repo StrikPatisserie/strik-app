@@ -1,5 +1,5 @@
-import AllergenenClient from "./AllergenenClient";
+import { redirect } from "next/navigation";
 
-export default function AllergenenPage() {
-  return <AllergenenClient />;
+export default function LegacyProductionPage() {
+  redirect("/bakkerij/productie/haccp/bakkerij/allergenen");
 }

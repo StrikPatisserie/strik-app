@@ -1,20 +1,8 @@
-import { TemperatureRegistrationOverviewPage } from "../../../../winkel/schoonmaak-registratie/overzicht/page";
-import {
-  bakkerijTemperatureOptions,
-  bakkerijTemperatureRows,
-} from "../../../../winkel/schoonmaak-registratie/temperatureRegistrationShared";
+import { redirect } from "next/navigation";
 
-export default function BakkerijTemperatuurregistratieOverzichtPage() {
-  return (
-    <TemperatureRegistrationOverviewPage
-      title="Temperatuurregistratie"
-      kicker="Bakkerij HACCP week- en maandoverzicht"
-      locationOptions={bakkerijTemperatureOptions}
-      rowsByLocation={bakkerijTemperatureRows}
-      defaultLocationId="bakkerij"
-      registrationHref="/bakkerij/schoonmaak/temperatuurregistratie"
-      loadCleaningFallback={false}
-      allLocationsLabel="Alle bakkerijlocaties"
-    />
-  );
+export default async function LegacyProductionPage({searchParams}:{searchParams:Promise<{winkel?:string;locatie?:string}>}) {
+  const query=await searchParams;
+  const location=query.winkel || query.locatie;
+  const suffix=location?`?locatie=${encodeURIComponent(location)}`:"";
+  redirect(`/bakkerij/productie/haccp/bakkerij/temperaturen/overzicht${suffix}`);
 }

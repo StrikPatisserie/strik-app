@@ -210,3 +210,23 @@ test('production writes cannot overwrite prices, invoices, recipe definitions or
   incoming.recipes = [];
   assert.equal(recipes.mergeProductionUpdates(data, incoming).recipes.length, 1);
 });
+
+
+test('the production workspace keeps HACCP department access and management data separated', () => {
+  const bakery = {...profile('bakkerij'), permissions:{'bakkerij.patisserie':true}};
+  const ice = {...profile('bakkerij'), permissions:{'bakkerij.ijs_chocolade':true}};
+  for(const who of [bakery,ice]) {
+    assert.equal(access.canAccessPath(who,'/bakkerij/productie'),true);
+    assert.equal(access.canAccessPath(who,'/bakkerij/productie/haccp'),true);
+    assert.equal(access.canAccessPath(who,'/bakkerij/productie/beheer/recepten'),false);
+    assert.equal(access.canAccessPath(who,'/bakkerij/productie/beheer/verpakkingen'),false);
+  }
+  assert.equal(access.canAccessPath(bakery,'/bakkerij/productie/haccp/bakkerij/temperaturen/overzicht'),true);
+  assert.equal(access.canAccessPath(ice,'/bakkerij/productie/haccp/bakkerij/goederen'),false);
+  assert.equal(access.canAccessPath(bakery,'/bakkerij/productie/haccp/ijs/temperaturen'),false);
+  assert.equal(access.canAccessPath(ice,'/bakkerij/productie/haccp/ijs/temperaturen'),true);
+  assert.equal(access.canAccessPath(ice,'/bakkerij/productie/bruidstaarten'),false);
+  assert.equal(access.canAccessPath(profile('winkel'),'/bakkerij/productie/haccp'),false);
+  assert.equal(access.canAccessPath(profile('manager'),'/bakkerij/productie/beheer/recepten'),true);
+  assert.equal(access.canAccessPath({...profile('manager'),active:false},'/bakkerij/productie/haccp'),false);
+});

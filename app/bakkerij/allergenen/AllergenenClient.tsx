@@ -376,7 +376,7 @@ const emptyList = (): CustomerAllergenList => ({
   updatedAt: new Date().toISOString(),
 });
 
-export default function AllergenenClient() {
+export default function AllergenenClient({ embedded = false }: { embedded?: boolean }) {
   const [data, setData] = useState<RecepturenData | null>(null);
   const [draft, setDraft] = useState<CustomerAllergenList | null>(null);
   const [archiveOpen, setArchiveOpen] = useState(false);
@@ -495,9 +495,9 @@ export default function AllergenenClient() {
   }
 
   return (
-    <StrikShell>
+    <StrikShell embedded={embedded}>
       <div className="allergen-screen">
-        <StrikPageHeader title="Allergenen" icon={strikIcons.recepturen} />
+        {!embedded && <StrikPageHeader title="Allergenen" icon={strikIcons.recepturen} />}
 
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <button className="allergen-action" onClick={() => { setDraft(emptyList()); setArchiveOpen(false); }}>

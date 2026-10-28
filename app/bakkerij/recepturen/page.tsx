@@ -1,12 +1,5 @@
-import RecepturenApp from "./RecepturenApp";
+import { redirect } from "next/navigation";
 
-export default function RecepturenPage() {
-  return (
-    <RecepturenApp
-      scope="bakery"
-      initialTab="recepten"
-      lockedTab="recepten"
-      hideTopNav
-    />
-  );
+export default function LegacyProductionPage() {
+  redirect("/bakkerij/productie?view=recipes");
 }

@@ -1,12 +1,5 @@
-import RecepturenApp from "../../recepturen/RecepturenApp";
+import { redirect } from "next/navigation";
 
-export default function IjsChocoladeReceptenPage() {
-  return (
-    <RecepturenApp
-      scope="iceChocolate"
-      initialTab="recepten"
-      lockedTab="recepten"
-      hideTopNav
-    />
-  );
+export default function LegacyProductionPage() {
+  redirect("/bakkerij/productie?view=recipes&board=ijs");
 }

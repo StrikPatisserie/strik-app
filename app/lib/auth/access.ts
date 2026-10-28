@@ -492,7 +492,12 @@ export function canAccessPath(
   }
 
   if (isBakkerijPath(pathname)) {
-    if (pathname === "/bakkerij/productie") return canAccessBakkerijPatisserie(profile) || canAccessBakkerijIjsChocolade(profile);
+    if (pathname === "/bakkerij/productie" || pathname.startsWith("/bakkerij/productie/")) {
+      if (pathname.startsWith("/bakkerij/productie/beheer")) return false;
+      if (pathname.startsWith("/bakkerij/productie/haccp/bakkerij") || pathname.startsWith("/bakkerij/productie/bruidstaarten")) return canAccessBakkerijPatisserie(profile);
+      if (pathname.startsWith("/bakkerij/productie/haccp/ijs") || pathname.startsWith("/bakkerij/productie/bestellen")) return canAccessBakkerijIjsChocolade(profile);
+      return canAccessBakkerijPatisserie(profile) || canAccessBakkerijIjsChocolade(profile);
+    }
     if (isBakkerijDataPath(pathname)) {
       return false;
     }

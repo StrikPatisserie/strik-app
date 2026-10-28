@@ -115,6 +115,7 @@ type BeheerView = TabId | "menu";
 type RecepturenScope = "all" | "bakery" | "iceChocolate";
 
 type RecepturenAppProps = {
+  embedded?: boolean;
   scope?: RecepturenScope;
   initialTab?: MainTabId;
   lockedTab?: MainTabId;
@@ -615,6 +616,7 @@ function clampOfferWeekCount(value: number) {
 }
 
 export default function RecepturenApp({
+  embedded = false,
   scope = "all",
   initialTab,
   lockedTab,
@@ -2153,14 +2155,14 @@ export default function RecepturenApp({
     return (
       <section className={managementStyles.screen}>
         <div className={managementStyles.screenHeader}>
-          <button
+          {!embedded && <button
             type="button"
             onClick={() => setBeheerView("menu")}
             className={managementStyles.backButton}
           >
             <img src="/UI-apps_terug.svg" alt="" className="h-5 w-5" />
             Terug naar data
-          </button>
+          </button>}
           <ManagementSyncStatus status={syncStatus} isLoading={isLoadingData} />
         </div>
 
@@ -2255,8 +2257,8 @@ export default function RecepturenApp({
   }
 
   return (
-    <main className="h-[calc(100dvh-8.5rem)] overflow-hidden bg-[#c3d3bc] text-[#111111] md:h-screen md:h-[100dvh]">
-      <div className="flex h-[calc(100dvh-8.5rem)] min-w-0 flex-col overflow-hidden md:h-screen md:h-[100dvh]">
+    <main className={embedded ? "h-full min-h-0 overflow-hidden text-[#111111]" : "h-[calc(100dvh-8.5rem)] overflow-hidden bg-[#c3d3bc] text-[#111111] md:h-screen md:h-[100dvh]"}>
+      <div className={embedded ? "flex h-full min-w-0 flex-col overflow-hidden" : "flex h-[calc(100dvh-8.5rem)] min-w-0 flex-col overflow-hidden md:h-screen md:h-[100dvh]"}>
         {!hideTopNav && (
           <BakkerijTopNav active={mainTab} onSelect={openMainTab} canManage={financialAccess} />
         )}

@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { strikIcons } from "./StrikUI";
+import { ProductionAppIcon, strikIcons } from "./StrikUI";
 import {
   filterVisibleMainNavigationItems,
   type FeatureVisibilitySettings,
@@ -15,7 +15,7 @@ const mainNavItems = [
   { href: "/winkel", label: "Winkel", icon: strikIcons.winkel },
   { href: "/ijs", label: "IJssalons", icon: strikIcons.ijs },
   { href: "/bakkerij/logistiek", label: "Logistiek", icon: strikIcons.logistiek },
-  { href: "/bakkerij", label: "Productie", icon: strikIcons.productie },
+  { href: "/bakkerij/productie", label: "Productie", icon: strikIcons.productie },
   { href: "/management", label: "Management", icon: strikIcons.management },
   { href: "/vierdaagse", label: "Vierdaagse", icon: strikIcons.strikAgenda },
   { href: "/sinterklaas", label: "Sinterklaas", icon: strikIcons.sinterklaas },
@@ -26,7 +26,7 @@ function isActivePath(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
   if (href === "/winkel") return pathname === "/winkel";
   if (href === "/bakkerij/logistiek") return pathname === "/bakkerij/logistiek";
-  if (href === "/bakkerij") {
+  if (href === "/bakkerij/productie") {
     return (
       (pathname === "/bakkerij" || pathname.startsWith("/bakkerij/")) &&
       !isLogistiekWorkArea(pathname)
@@ -152,7 +152,7 @@ export default function WinkelSidebar({
           let active = isActivePath(pathname, item.href);
           if (item.href === "/winkel") active = inWinkelArea;
           if (item.href === "/ijs") active = inIjsArea;
-          if (item.href === "/bakkerij") active = inBakkerijArea;
+          if (item.href === "/bakkerij/productie") active = inBakkerijArea;
           if (item.href === "/bakkerij/logistiek") active = inLogistiekArea;
           if (item.href === "/management") active = inManagementArea;
           if (item.href === "/vierdaagse") active = inVierdaagseArea;
@@ -164,16 +164,14 @@ export default function WinkelSidebar({
               href={item.href}
               aria-label={item.label}
               className={`group relative flex h-14 w-14 items-center justify-center rounded-3xl transition ${
-                active
+                item.href === "/bakkerij/productie"
+                  ? "rounded-full bg-[#d75a48] shadow-sm ring-1 ring-[#d75a48]/30 hover:bg-[#c74c3c]"
+                  : active
                   ? "bg-white text-[#ef5737] shadow-sm ring-1 ring-white/80"
                   : "hover:bg-white/45"
               }`}
             >
-              <img
-                src={item.icon}
-                alt=""
-                className="h-9 w-9 object-contain"
-              />
+              {item.href === "/bakkerij/productie" ? <ProductionAppIcon className="h-14 w-14" /> : <img src={item.icon} alt="" className="h-9 w-9 object-contain" />}
               <span className="sr-only">{item.label}</span>
               <span className="pointer-events-none absolute left-[calc(100%+0.75rem)] top-1/2 z-[100] -translate-y-1/2 translate-x-1 whitespace-nowrap rounded-lg bg-[#183d29] px-3 py-2 text-xs font-black text-white opacity-0 shadow-lg transition group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100">
                 {item.label}

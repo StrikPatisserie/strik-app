@@ -6,7 +6,7 @@ export const DEPARTMENTS = [
   { id: "kapsel", name: "Kapseltaarten", short: "Kapseltaarten", tone: "honey", board: "patisserie" },
   { id: "slagroom", name: "Slagroomgebak", short: "Slagroomgebak", tone: "blue", board: "patisserie" },
   { id: "bak", name: "Bakafdeling", short: "Bakafdeling", tone: "honey", board: "bak" },
-  { id: "brood", name: "Broodafdeling", short: "Brood", tone: "sand", board: "brood" },
+  { id: "brood", name: "Brood", short: "Brood", tone: "sand", board: "bak" },
   { id: "ijs", name: "IJs", short: "IJs", tone: "blue", board: "ijs" },
   { id: "chocolade", name: "Chocolade", short: "Chocolade", tone: "rose", board: "chocolade" },
 ] as const;
@@ -45,8 +45,8 @@ export const STATUS_LABELS: Record<TaskStatus, string> = { planned: "Gepland", a
 export const SOURCE_LABELS: Record<Task["source"], string> = { manual: "Handmatig", shop: "Winkelbehoefte", order: "Bestelling", routine: "Vaste taak" };
 export const KIND_LABELS: Record<ItemKind, string> = { product: "Eindproduct", component: "Halffabricaat", activity: "Werkzaamheid" };
 export const BOARDS: { id: BoardId; name: string }[] = [
-  { id: "patisserie", name: "Patisserie" }, { id: "bak", name: "Bakafdeling" },
-  { id: "brood", name: "Brood" }, { id: "ijs", name: "IJs" }, { id: "chocolade", name: "Chocolade" },
+  { id: "patisserie", name: "Patisserie" }, { id: "bak", name: "Bakkant" },
+  { id: "ijs", name: "IJs" }, { id: "chocolade", name: "Chocolade" },
 ];
 
 function calendarDate(value: string) {

@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
-import { strikIcons } from "./StrikUI";
+import { ProductionAppIcon, strikIcons } from "./StrikUI";
 import {
   filterVisibleMainNavigationItems,
   type FeatureVisibilitySettings,
@@ -17,7 +17,7 @@ const items = [
   { href: "/winkel", label: "Winkel", icon: strikIcons.winkel },
   { href: "/ijs", label: "IJssalons", icon: strikIcons.ijs },
   { href: "/bakkerij/logistiek", label: "Logistiek", icon: strikIcons.logistiek },
-  { href: "/bakkerij", label: "Productie", icon: strikIcons.productie },
+  { href: "/bakkerij/productie", label: "Productie", icon: strikIcons.productie },
   { href: "/management", label: "Management", icon: strikIcons.management },
   { href: "/vierdaagse", label: "Vierdaagse", icon: strikIcons.strikAgenda },
   { href: "/sinterklaas", label: "Sinterklaas", icon: strikIcons.sinterklaas },
@@ -67,7 +67,7 @@ function isActivePath(pathname: string, href: string) {
   if (href === "/winkel") return isWinkelPath(pathname);
   if (href === "/ijs") return isIjsPath(pathname);
   if (href === "/bakkerij/logistiek") return isLogistiekPath(pathname);
-  if (href === "/bakkerij") {
+  if (href === "/bakkerij/productie") {
     return (
       (pathname === "/bakkerij" || pathname.startsWith("/bakkerij/")) &&
       !isLogistiekPath(pathname)
@@ -137,11 +137,7 @@ export default function BottomNav({
                   : "text-[#6b645b] hover:bg-[#f6faf4] hover:text-[#4a6d5a]"
               }`}
             >
-              <img
-                src={item.icon}
-                alt=""
-                className={`${item.href === "/" ? "h-9 w-9" : "h-5 w-5"} shrink-0 object-contain`}
-              />
+              {item.href === "/bakkerij/productie" ? <ProductionAppIcon className="h-8 w-8" /> : <img src={item.icon} alt="" className={`${item.href === "/" ? "h-9 w-9" : "h-5 w-5"} shrink-0 object-contain`} />}
               <span className="whitespace-nowrap leading-none">{item.label}</span>
             </Link>
           );
