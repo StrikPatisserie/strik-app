@@ -34,6 +34,20 @@ Onderdelen kunnen zonder recept worden toegevoegd en later gekoppeld. Taken zijn
 
 Managers kunnen geplande taken verwijderen via het taakvenster. Taken met een gekoppelde vervolgstap moeten van achter naar voren worden verwijderd; actieve, afgeronde en geblokkeerde taken kunnen niet rechtstreeks verdwijnen. De server bewaart het oorspronkelijke taakrecord met verwijdermoment en actor in `removedTasks`, naast de bestaande versiehistorie. Via Instellingen → Verwijderde taken kunnen managers ook na herladen de oorspronkelijke taak herstellen. Clients mogen herstelrecords niet wijzigen of wissen; bestaande revisiecontrole voorkomt verwijderen vanuit een verouderde planning. Onderdelen en recepten worden hierbij niet verwijderd.
 
+## Recepten en halffabricaten meeplannen
+
+Eindproducten en halffabricaten hebben afzonderlijke labels en filters in zowel de onderdelencatalogus als de receptenlijst. De plankeuze groepeert eindproducten, halffabricaten en werkzaamheden. Je kunt een uitvoerhoeveelheid invullen of een aantal basisrecepten kiezen; één basisrecept gebruikt uitsluitend de vastgelegde opbrengst, zonder een opbrengst te raden.
+
+`recipePlanning.ts` berekent optioneel de volledige gekoppelde keten. Elke benodigde hoeveelheid wordt geschaald naar de bronopbrengst; gram/kg en ml/liter worden expliciet omgerekend. Stuks/gewicht/volume worden nooit zonder aanvullende gegevens aan elkaar gelijkgesteld. Ontbrekende opbrengsten, niet-positieve hoeveelheden, kringverwijzingen en ontbrekende onderdelen blokkeren automatisch meeplannen. Handmatig plannen zonder recept blijft beschikbaar.
+
+De gebruiker zet 'Halffabricaten meeplannen' zelf aan. Standaard wordt ieder niveau één kalenderdag vóór zijn afnemer gepland; nul tot dertig dagen vooraf en afzonderlijke datums/afdelingen zijn instelbaar. Gedeelde halffabricaten worden per recept-ID samengenomen, op de vroegste benodigde datum. Uitvinken betekent dat de benodigde hoeveelheid al beschikbaar is; de eerste versie trekt geen voorraad af, rondt niet naar hele receptbatches af en berekent geen personeels- of machinecapaciteit.
+
+`POST /api/productie/plan` is uitsluitend voor managers en rekent opnieuw met de canonieke bron. De volledige opdracht wordt één keer opgeslagen. Migratie `20261028120000_production_recipe_planning.sql` voegt een private serverfunctie toe die de receptrevisie vergrendelt en tegelijk de plannerrevisie controleert. Een wijziging aan één van beide tijdens plannen veroorzaakt 409 zonder gedeeltelijke taken. De gebruikte receptrevisie staat in de wijzigingshistorie.
+
+Elke voorbereidingstaak heeft een eigen batch/outputregistratie. De afnemer wacht via `requires` op alle meegeplande halffabricaten, ook over afdelingen heen. Verplaatsen en heropenen behouden de volgorde; cycli worden ook server-side geweigerd. Verwijderen van een geplande hoofdtaak verwijdert ongebruikte, nog geplande voorbereiding mee. Gestarte/afgeronde of elders benodigde voorbereiding blijft behouden. Herstellen haalt de oorspronkelijke benodigde voorbereiding weer terug.
+
+Gerichte tests: `tests/production-recipe-planning.test.cjs`. De rollbackcontrole `app/supabase/tests/production_recipe_planning_smoke.sql` verifieert op de bestaande database de twee revisies en afgeschermde functie zonder live records of versies te wijzigen.
+
 De teller registreert productie, geen bewezen actuele voorraad. Onbekende voorraad blijft onbekend. Automatische verkoopprognoses, verbruik/uitgifte, werkelijke batchopbrengst, capaciteitsnormen en automatische orderimport zijn volgende bouwstappen. De eerdere receptuur- en managementschermen blijven beschikbaar en delen de nieuwe opslag.
 
 ## Verificatie

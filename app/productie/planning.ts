@@ -28,19 +28,22 @@ export type Task = {
   quantity: number; operation: string; status: TaskStatus; minutes?: number;
   note: string; source: "manual" | "shop" | "order" | "routine";
   dueDate?: string; dependsOn?: string; batchId: string; recordsOutput: boolean;
+  requires?: string[]; generatedFor?: string;
 };
 export type DemoRecipe = {
   id: string; name: string; yield: number; unit: ItemUnit;
   ingredients: { name: string; quantity: number; unit: string }[];
   steps: string[]; allergens: string[];
   reviewRequired?: boolean;
+  type?: "finalProduct" | "semiFinished";
+  semiFinishedItems?: { recipeId: string; quantity: number; unit: string }[];
 };
 export type RemovedTask = { task: Task; removedAt: string; removedBy: string };
 export type PreviewState = { version: 1; items: Item[]; tasks: Task[]; removedTasks?: RemovedTask[] };
 
 export const STATUS_LABELS: Record<TaskStatus, string> = { planned: "Gepland", active: "Bezig", done: "Klaar", blocked: "Geblokkeerd" };
 export const SOURCE_LABELS: Record<Task["source"], string> = { manual: "Handmatig", shop: "Winkelbehoefte", order: "Bestelling", routine: "Vaste taak" };
-export const KIND_LABELS: Record<ItemKind, string> = { product: "Product", component: "Onderdeel", activity: "Werkzaamheid" };
+export const KIND_LABELS: Record<ItemKind, string> = { product: "Eindproduct", component: "Halffabricaat", activity: "Werkzaamheid" };
 export const BOARDS: { id: BoardId; name: string }[] = [
   { id: "patisserie", name: "Patisserie" }, { id: "bak", name: "Bakafdeling" },
   { id: "brood", name: "Brood" }, { id: "ijs", name: "IJs" }, { id: "chocolade", name: "Chocolade" },
@@ -80,6 +83,7 @@ export function durationLabel(minutes: number) {
   return hours ? `${hours}u${remainder ? ` ${remainder}m` : ""}` : `${remainder}m`;
 }
 export function departmentsFor(board: BoardId) { return DEPARTMENTS.filter(d => d.board === board); }
+export function requiredTaskIds(task: Task): string[] { return [...new Set([...(task.dependsOn ? [task.dependsOn] : []), ...(task.requires || [])])]; }
 export function taskIssues(task: Task, tasks: Task[], items: Item[] = []): string[] {
   const issues: string[] = [];
   if (items.find(i=>i.id===task.itemId)?.productionBlocked) issues.push("Het bronrecept heeft ontbrekende verwijzingen. Controleer dit recept eerst.");
@@ -90,6 +94,13 @@ export function taskIssues(task: Task, tasks: Task[], items: Item[] = []): strin
       if (prior.date > task.date) issues.push("Voorgaande stap staat later ingepland.");
       if (prior.status !== "done") issues.push(`Wacht op ${prior.operation.toLocaleLowerCase("nl-NL")} (${dateLabel(prior.date)}).`);
     }
+  }
+  for (const id of task.requires || []) {
+    const prior=tasks.find(t=>t.id===id);
+    const name=items.find(i=>i.id===prior?.itemId)?.name || "halffabricaat";
+    if (!prior) issues.push("Benodigd halffabricaat ontbreekt in de planning.");
+    else if (prior.date>task.date) issues.push(`${name} staat later ingepland (${dateLabel(prior.date)}).`);
+    else if (prior.status!=="done") issues.push(`Wacht op ${name} (${dateLabel(prior.date)}).`);
   }
   if (task.dueDate && task.date > task.dueDate) issues.push("Gepland na de benodigde datum.");
   if (task.status === "blocked") issues.push(task.note || "Deze taak is geblokkeerd; controleer de oorzaak.");
@@ -104,7 +115,7 @@ export function transitionTask(tasks: Task[], id: string, status: TaskStatus, it
     const issues = taskIssues({ ...task, status }, tasks,items);
     if (issues.length) throw Error(issues[0]);
   }
-  if (task.status === "done" && status !== "done" && tasks.some(t => t.dependsOn === id && (t.status === "done" || t.status === "active"))) {
+  if (task.status === "done" && status !== "done" && tasks.some(t => requiredTaskIds(t).includes(id) && (t.status === "done" || t.status === "active"))) {
     throw Error("Een volgende stap is al gestart. Heropen die eerst.");
   }
   return tasks.map(t => t.id === id ? { ...t, status } : t);
@@ -116,8 +127,9 @@ export function moveTask(tasks: Task[], id: string, date: string, departmentId: 
   if (!task) throw Error("Taak niet gevonden.");
   if (task.status === "done") throw Error("Heropen de taak voordat je deze verplaatst.");
   const prior = tasks.find(t => t.id === task.dependsOn);
-  const next = tasks.filter(t => t.dependsOn === id);
+  const next = tasks.filter(t => requiredTaskIds(t).includes(id));
   if (prior && prior.date > date) throw Error("Plan deze stap op of na de voorgaande stap.");
+  if ((task.requires || []).some(id=>tasks.find(t=>t.id===id)!.date>date)) throw Error("Plan de taak op of na de benodigde halffabricaten.");
   if (next.some(t => t.date < date)) throw Error("Een volgende stap staat eerder. Verplaats die eerst.");
   if (task.dueDate && date > task.dueDate) throw Error("Deze datum ligt na de benodigde datum.");
   return tasks.map(t => t.id === id ? { ...t, date, departmentId } : t);
@@ -126,8 +138,17 @@ export function removePlannedTask(tasks: Task[], id: string): Task[] {
   const task = tasks.find(t => t.id === id);
   if (!task) throw Error("Taak niet gevonden.");
   if (task.status !== "planned") throw Error("Alleen geplande taken kunnen worden verwijderd.");
-  if (tasks.some(t => t.dependsOn === id)) throw Error("Er is een vervolgstap gekoppeld. Verwijder die eerst.");
-  return tasks.filter(t => t.id !== id);
+  if (tasks.some(t => requiredTaskIds(t).includes(id))) throw Error("Er is een vervolgstap gekoppeld. Verwijder die eerst.");
+  let remaining=tasks.filter(t => t.id !== id);
+  // Unstarted preparation created exclusively for this order can disappear
+  // with its parent. Actual work and preparation used elsewhere are retained.
+  let changed=true;
+  while(changed) {
+    const removable=remaining.filter(t=>t.generatedFor===id && t.status==="planned" && !remaining.some(n=>requiredTaskIds(n).includes(t.id)));
+    changed=removable.length>0;
+    remaining=remaining.filter(t=>!removable.some(r=>r.id===t.id));
+  }
+  return remaining;
 }
 export function addTask(state: PreviewState, task: Task): PreviewState {
   if (state.tasks.some(t => t.id === task.id)) throw Error("Deze taak bestaat al.");
@@ -147,6 +168,10 @@ export function addTask(state: PreviewState, task: Task): PreviewState {
   if (task.dependsOn) {
     const prior = state.tasks.find(t => t.id === task.dependsOn);
     if (!prior || prior.batchId !== task.batchId || prior.itemId !== task.itemId || prior.date > task.date) throw Error("Kies een eerdere stap van hetzelfde onderdeel en dezelfde batch.");
+  }
+  for(const id of task.requires || []) {
+    const prior=state.tasks.find(t=>t.id===id);
+    if(!prior || prior.id===task.id || prior.date>task.date) throw Error("Een benodigd halffabricaat ontbreekt of staat later ingepland.");
   }
   if (state.tasks.some(t => t.batchId === task.batchId && t.itemId !== task.itemId)) throw Error("Een batch hoort bij één onderdeel.");
   if (task.dueDate && task.date > task.dueDate) throw Error("De plandatum ligt na de benodigde datum.");

@@ -11,7 +11,8 @@ function load(file, imports = {}, extra = '', environment = 'development') {
 }
 const m = load('app/productie/planning.ts');
 const sample = load('app/preview/productie/sampleData.ts', { '../../productie/planning': m });
-const component = load('app/preview/productie/ProductionPreview.tsx', { 'react': require('react'), '../../productie/planning': m, './sampleData': sample }, '\nexports.validState=isPreviewState;');
+const workspace=load('app/productie/workspaceData.ts',{'./planning':m});
+const component = load('app/preview/productie/ProductionPreview.tsx', { 'react': require('react'), '../../productie/planning': m, './sampleData': sample, '../../productie/workspaceData':workspace }, '\nexports.validState=isPreviewState;');
 test('only planned leaf tasks can be removed without changing the original array or recipes',()=>{
  const state=sample.initialPreviewState(),leaf=state.tasks.find(t=>t.status==='planned'&&!state.tasks.some(n=>n.dependsOn===t.id));
  const next=m.removePlannedTask(state.tasks,leaf.id);assert.equal(next.length,state.tasks.length-1);assert(state.tasks.some(t=>t.id===leaf.id));

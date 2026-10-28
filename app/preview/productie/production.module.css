@@ -188,3 +188,36 @@
 .removedTaskList > div { display:flex; align-items:center; justify-content:space-between; gap:15px; padding:12px 0; border-top:1px solid #e1e6d9; }
 .removedTaskList span { display:grid; gap:5px; }
 .removedTaskList small { color:#607154; }
+
+.typeBadge { display:inline-flex; align-items:center; border-radius:4px; padding:3px 6px; font-size:9px; font-weight:700; letter-spacing:.02em; }
+.finalBadge { background:#e6eee0; color:#36583e; }
+.halfBadge { background:#f3e5cf; color:#865e2d; }
+.amountChoice { display:flex; align-items:end; gap:16px; margin-bottom:12px; }
+.amountChoice > label { flex:1; }
+.amountChoice > button { min-height:42px; }
+.calculatedAmount { padding:10px 12px; border-radius:5px; background:#edf1e6; color:#36583e; font-size:12px; margin:0 0 15px; }
+.preparationSection { margin:18px 0; padding:15px 0; border-top:1px solid #dfe6d4; border-bottom:1px solid #dfe6d4; }
+.preparationSection > .field { width:160px; margin:12px 0 8px; }
+.preparationList { display:grid; gap:0; }
+.preparationRow { display:grid; grid-template-columns:minmax(0,1fr) 122px 145px; gap:10px; align-items:start; padding:12px 0; border-top:1px solid #e1e6d9; }
+.preparationName { display:flex; align-items:start; gap:8px; min-width:0; font-size:11px; line-height:1.5; }
+.preparationName > input { width:19px; height:19px; flex-shrink:0; margin:1px 0 0; accent-color:#36583e; }
+.preparationName span { min-width:0; overflow-wrap:anywhere; }
+.preparationName strong,.preparationName small { display:block; }
+.preparationName small { color:#718069; font-size:10px; margin-top:4px; }
+.preparationExcluded { background:#f6f6ef; }
+.planWarning { background:#fff4d9; color:#805c2c; padding:10px 12px; border-radius:5px; font-size:11px; }
+.planDetails { margin:16px 0; }
+.planDetails > summary { cursor:pointer; font-size:11px; font-weight:600; color:#607154; padding:9px 0; }
+.planDetails .field { margin-bottom:12px; }
+@media(max-width:800px) {
+  .amountChoice { display:block; }.amountChoice > button { margin-top:4px; }
+  .preparationRow { grid-template-columns:1fr 1fr; gap:9px; }
+  .preparationName { grid-column:1 / -1; font-size:12px; }
+  .preparationName > input { width:24px; height:24px; }
+  .preparationName small { font-size:11px; }.preparationRow .field input { width:100%; min-width:0; }
+}
+
+.preparationLink { display:flex; width:100%; align-items:center; justify-content:space-between; gap:12px; padding:10px; text-align:left; border:1px solid #dfe6d4; border-radius:5px; margin:7px 0; background:#fff; font-size:11px; }
+.preparationLink span:first-child { display:grid; gap:4px; }
+.preparationLink small { color:#718069; font-size:10px; }

@@ -5,7 +5,7 @@ import { ProductionStoreError, readDocument, saveDocument } from "@/app/producti
 import { ingredientViews, recipeViews, syncRecipeCatalog, todayAmsterdam, validWorkspace } from "@/app/productie/workspaceData";
 import type { RecepturenData } from "@/app/bakkerij/recepturen/recepturenApi";
 import type { PreviewState } from "@/app/productie/planning";
-import { removePlannedTask } from "@/app/productie/planning";
+import { requiredTaskIds } from "@/app/productie/planning";
 export const dynamic="force-dynamic";
 const headers={"Cache-Control":"private, no-store"};
 
@@ -16,7 +16,7 @@ export async function GET() {
     const [recipes,planner]=await Promise.all([readDocument<RecepturenData>("recipes"),readDocument<PreviewState>("planner")]);
     if (!recipes || !planner) return Response.json({message:"De receptenoverdracht moet eerst worden afgerond.",setupRequired:true,canManage:hasFullAccess(profile)},{status:503,headers});
     const state=syncRecipeCatalog(planner.data,recipes.data);
-    return Response.json({state:visibleWorkspace(state),revision:planner.revision,updatedAt:planner.updated_at,today:todayAmsterdam(),recipes:recipeViews(recipes.data),ingredients:ingredientViews(recipes.data),canManage:hasFullAccess(profile),departments:allowed},{headers});
+    return Response.json({state:visibleWorkspace(state),revision:planner.revision,recipeRevision:recipes.revision,updatedAt:planner.updated_at,today:todayAmsterdam(),recipes:recipeViews(recipes.data),ingredients:ingredientViews(recipes.data),canManage:hasFullAccess(profile),departments:allowed},{headers});
   } catch (error) { return Response.json({message:error instanceof ProductionStoreError?error.message:"Strik Productie is tijdelijk niet bereikbaar."},{status:503,headers}); }
 }
 export async function PUT(request:Request) {
@@ -40,8 +40,10 @@ export async function PUT(request:Request) {
     // Deleting a planned task removes it from the board, not from the history.
     // The server owns the recovery records; clients cannot erase or rewrite them.
     const removed=current.tasks.filter(t=>!next.tasks.some(n=>n.id===t.id));
-    let remaining=current.tasks;
-    for (const task of [...removed].reverse()) remaining=removePlannedTask(remaining,task.id);
+    for (const task of removed) {
+      if(task.status!=="planned")throw new ProductionStoreError("Alleen geplande taken kunnen worden verwijderd.",400);
+      if(next.tasks.some(t=>requiredTaskIds(t).includes(task.id)))throw new ProductionStoreError("Verwijder eerst de gekoppelde vervolgstap.",400);
+    }
     const restored=next.tasks.filter(t=>!current.tasks.some(n=>n.id===t.id) && current.removedTasks?.some(r=>r.task.id===t.id));
     for (const task of restored) {
       const original=current.removedTasks!.find(r=>r.task.id===task.id)!.task;
@@ -52,7 +54,7 @@ export async function PUT(request:Request) {
     for (const task of current.tasks) {
       const changed=next.tasks.find(t=>t.id===task.id);
       if (!changed) continue;
-      if (task.itemId!==changed.itemId || task.batchId!==changed.batchId || task.dependsOn!==changed.dependsOn || task.recordsOutput!==changed.recordsOutput) throw new ProductionStoreError("De identiteit en voorraadregistratie van bestaande productiestappen blijven behouden.",400);
+      if (task.itemId!==changed.itemId || task.batchId!==changed.batchId || task.dependsOn!==changed.dependsOn || task.recordsOutput!==changed.recordsOutput || JSON.stringify(task.requires || [])!==JSON.stringify(changed.requires || []) || task.generatedFor!==changed.generatedFor) throw new ProductionStoreError("De identiteit, afhankelijkheden en voorraadregistratie van bestaande productiestappen blijven behouden.",400);
       if (task.status!==changed.status) {
         // Apply the same dependency/blocking checks for managers as employees.
         const { transitionTask }=await import("@/app/productie/planning");

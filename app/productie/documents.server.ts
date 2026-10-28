@@ -22,3 +22,8 @@ export async function importWordPressDocument(input: { data: unknown; planner: u
   const result = await db().rpc("production_import_wordpress", { p_data: input.data, p_planner: input.planner, p_snapshot: input.snapshot, p_hash: input.hash, p_report: input.report, p_actor: input.actor });
   if (result.error) throw new ProductionStoreError(result.error.code === "40001" ? "De recepten zijn al overgezet; de bestaande gegevens blijven behouden." : "De overdracht is niet opgeslagen. De bestaande gegevens blijven behouden.", result.error.code === "40001" ? 409 : 503);
 }
+export async function saveRecipePlanDocument(revision:number,recipeRevision:number,data:unknown,actor:string) {
+  const result=await db().rpc("production_save_recipe_plan",{p_revision:revision,p_recipe_revision:recipeRevision,p_data:data,p_actor:actor});
+  if(result.error)throw new ProductionStoreError(result.error.code==="40001"?"De planning of recepten zijn intussen gewijzigd. Ververs het voorstel; er is niets opgeslagen.":"De productieopdracht is niet opgeslagen.",result.error.code==="40001"?409:503);
+  return Number(result.data);
+}

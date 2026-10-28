@@ -3,7 +3,7 @@ import { type DepartmentId, type DemoRecipe, type ItemUnit, type PreviewState, t
 
 export type IngredientView = { id: string; name: string; supplier: string; unit: string; linked: boolean; specification: string; allergens: string };
 export type LiveWorkspace = {
-  state: PreviewState; revision: number; updatedAt: string; today: string;
+  state: PreviewState; revision: number; recipeRevision: number; updatedAt: string; today: string;
   recipes: DemoRecipe[]; ingredients: IngredientView[]; canManage: boolean;
   departments: DepartmentId[];
 };
@@ -14,8 +14,8 @@ export function itemUnit(value: string | undefined): ItemUnit {
 }
 export function recipeViews(data: RecepturenData): DemoRecipe[] {
   return data.recipes.map(recipe => ({
-    id: recipe.id, name: recipe.name,
-    yield: Number.isFinite(recipe.standardBatchQuantity) && (recipe.standardBatchQuantity || 0) > 0 ? recipe.standardBatchQuantity! : 0,
+    id: recipe.id, name: recipe.name, type: recipe.type,
+    yield: Number.isFinite(recipe.standardBatchQuantity) && (recipe.standardBatchQuantity || 0) > 0 && ["stuk","stuks","gram","kg","ml","liter","platen"].includes(recipe.standardBatchUnit || "") ? recipe.standardBatchQuantity! : 0,
     unit: itemUnit(recipe.standardBatchUnit),
     ingredients: [
       ...(recipe.ingredients || []).map(line => ({ name: data.ingredients.find(i => i.id === line.ingredientId)?.name || "Grondstofverwijzing controleren", quantity: line.quantity, unit: line.unit })),
@@ -23,6 +23,7 @@ export function recipeViews(data: RecepturenData): DemoRecipe[] {
     ],
     steps: [...(recipe.workInstructions || []), ...(recipe.preparationSteps || []), ...(recipe.finishingSteps || [])],
     allergens: recipe.allergens || [],
+    semiFinishedItems: (recipe.semiFinishedItems || []).map(line=>({recipeId:line.semiFinishedRecipeId,quantity:line.quantity,unit:line.unit})),
     reviewRequired: (recipe.ingredients || []).some(line=>!data.ingredients.some(i=>i.id===line.ingredientId)) || (recipe.semiFinishedItems || []).some(line=>!data.recipes.some(r=>r.id===line.semiFinishedRecipeId)),
   }));
 }
@@ -72,7 +73,7 @@ export function syncRecipeCatalog(state: PreviewState, data: RecepturenData): Pr
     if (!item.recipeId) return item;
     const recipe = recipes.find(r=>r.id===item.recipeId);
     if (!recipe || recipe.unit!==item.unit) return {...item,recipeId:undefined,note:`${item.note}\nReceptkoppeling opnieuw controleren: bronrecept of eenheid gewijzigd.`};
-    return {...item,name:recipe.name,productionBlocked:!!recipe.reviewRequired};
+    return {...item,name:recipe.name,kind:recipe.type==="semiFinished"?"component" as const:"product" as const,productionBlocked:!!recipe.reviewRequired};
   });
   return {...state,items:[...items,...source.items.filter(i=>!known.has(i.id))]};
 }
@@ -91,6 +92,8 @@ export function validWorkspace(value: unknown, recipes: DemoRecipe[]): value is 
       if (!t || !ids.has(t.itemId) || typeof t.id !== "string" || !t.id || tasks.has(t.id) || !Number.isFinite(t.quantity) || t.quantity <= 0 || t.quantity > 1000000 || !["planned","active","done","blocked"].includes(t.status) || !["manual","shop","order","routine"].includes(t.source) || !DEPARTMENTS.some(d => d.id === t.departmentId) || typeof t.operation !== "string" || !t.operation.trim() || typeof t.note !== "string" || t.note.length > 10000 || typeof t.batchId !== "string" || !t.batchId || typeof t.recordsOutput !== "boolean") return false;
       addDays(t.date, 0); if (t.dueDate) { addDays(t.dueDate, 0); if (t.date > t.dueDate) return false; }
       if (t.minutes !== undefined && (!Number.isFinite(t.minutes) || t.minutes < 0 || t.minutes > 1440)) return false;
+      if (t.requires!==undefined && (!Array.isArray(t.requires) || t.requires.length>250 || new Set(t.requires).size!==t.requires.length || t.requires.some(id=>typeof id!=="string" || !id || id===t.id))) return false;
+      if (t.generatedFor!==undefined && (typeof t.generatedFor!=="string" || !t.generatedFor || t.generatedFor.length>250)) return false;
       if (t.recordsOutput) { if (batches.has(t.batchId) || state.items.find(i => i.id === t.itemId)?.kind === "activity") return false; batches.add(t.batchId); }
       tasks.set(t.id, t);
     }
@@ -105,6 +108,18 @@ export function validWorkspace(value: unknown, recipes: DemoRecipe[]): value is 
         seen.add(prior.id); cursor = prior;
       }
     }
+    const visiting=new Set<string>(),visited=new Set<string>();
+    function visit(id:string,depth=0):boolean {
+      if(depth>250 || visiting.has(id)) return false;
+      if(visited.has(id)) return true;
+      const t=tasks.get(id);if(!t)return false;visiting.add(id);
+      for(const required of [...(t.dependsOn?[t.dependsOn]:[]),...(t.requires || [])]) {
+        const prior=tasks.get(required);
+        if(!prior || prior.date>t.date || (["done","active"].includes(t.status) && prior.status!=="done") || !visit(required,depth+1))return false;
+      }
+      visiting.delete(id);visited.add(id);return true;
+    }
+    for(const id of tasks.keys()) if(!visit(id))return false;
     return true;
   } catch { return false; }
 }
