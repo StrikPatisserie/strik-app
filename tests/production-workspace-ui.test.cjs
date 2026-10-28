@@ -24,6 +24,20 @@ function find(tree,predicate){const node=nodes(tree).find(predicate);assert(node
 function button(tree,label){return find(tree,n=>n.type==='button' && (text(n)===label || n.props['aria-label']===label));}
 function xl(h,props={}) {let tree=h.render(h.Component,props);button(tree,'XL-scherm').props.onClick();return h.render(h.Component,props);}
 
+test('the compact action bar keeps the selected offer beside XL controls and opens its full image',()=>{
+ const h=harness(),live={state:sample.initialPreviewState(),today:sample.DEMO_TODAY,recipes:sample.demoRecipes,ingredients:[],canManage:true,departments:['dessert'],revision:1,weeklyOffers:[{weekStart:sample.DEMO_WEEK,label:'Voorbeeldtaart',imageUrl:'/voorbeeldtaart.png'}]};
+ let tree=xl(h,{live});
+ const actions=find(tree,n=>n.type==='header' && n.props['aria-label']==='Planningacties');
+ const labels=nodes(actions).filter(n=>n.type==='button').map(n=>n.props['aria-label'] || text(n));
+ assert.deepEqual(labels,['Vergroot weekaanbieding · Voorbeeldtaart','Aanbieding beheren','Sluit schermmodus','Taak toevoegen']);
+ button(actions,'Vergroot weekaanbieding · Voorbeeldtaart').props.onClick();tree=h.render(h.Component,{live});
+ const dialog=find(tree,n=>typeof n.type==='function' && n.props.title===`Weekaanbieding · week ${planning.weekNumber(sample.DEMO_WEEK)}`);
+ assert.equal(find(dialog,n=>n.type==='img').props.src,'/voorbeeldtaart.png');dialog.props.onClose();
+ tree=h.render(h.Component,{live});button(tree,'Volgende week').props.onClick();tree=h.render(h.Component,{live});
+ assert(button(tree,'Geen weekaanbieding voor deze week').props.disabled);
+ assert(button(tree,'Aanbieding beheren'));assert(button(tree,'Sluit schermmodus'));assert(button(tree,'Taak toevoegen'));
+});
+
 test('XL keeps planning controls, drag/drop and task editing while hiding the navigation',async()=>{
  const h=harness();let tree=xl(h);
  assert(!nodes(tree).some(n=>n.type===h.navigation.default));

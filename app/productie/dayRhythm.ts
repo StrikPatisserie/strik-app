@@ -3,7 +3,6 @@ import { addDays, type BoardId, type ItemKind } from "./planning";
 const PATISSERIE_DAY = [
   { id: "start", start: "05:30", end: "08:00", label: "Dagstart", note: "Bestellingen van vandaag wegwerken" },
   { id: "break", start: "08:00", end: "08:30", label: "Pauze", note: "Een halfuur pauze" },
-  { id: "production", start: "08:30", end: "14:00", label: "Productie", note: "Productietaken van de dag" },
 ] as const;
 
 export function productionDayRhythm(board: BoardId, date: string) {

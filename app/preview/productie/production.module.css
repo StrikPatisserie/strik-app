@@ -285,13 +285,11 @@
 /* Fixed weekday rhythm and compact production bars. */
 .dayHeading.today { background:#f6dfc0; box-shadow:inset 0 3px #d75a4c; }
 .todayCell { background:#fff2de; }
-.dayRhythm { display:grid; gap:3px; margin-top:8px; }
-.dayRhythm > div { display:grid; grid-template-columns:auto 1fr; gap:1px 5px; border:1px solid #dbe1d4; padding:3px 4px; border-radius:2px; background:#f5f7f0; text-align:left; }
+.dayRhythm { display:grid; gap:2px; margin-top:4px; }
+.dayRhythm > div { display:flex; align-items:center; justify-content:space-between; gap:5px; border:1px solid #dbe1d4; padding:1px 4px; border-radius:2px; background:#f5f7f0; text-align:left; }
 .dayRhythm small { font-size:8px; color:#65725e; white-space:nowrap; }
 .dayRhythm b { font-size:8px; font-weight:700; }
-.dayRhythm em { grid-column:1/-1; font-size:7px; color:#76816e; font-style:normal; }
 .dayRhythm .rhythm_break { background:#f6efe3; border-color:#e8ddcc; }
-.dayRhythm .rhythm_production { background:#fff; }
 .mobileRhythm { display:none; }
 @media(min-width:801px) {
  .dayCell { min-height:86px; padding:6px 5px; gap:4px; }
@@ -304,17 +302,17 @@
  .wall .dayCell { min-height:100px; padding:6px; }
  .wall .taskCard { padding:6px 7px; min-height:42px; }
  .wall .taskOpen strong { font-size:12px; }.wall .taskOpen > span,.wall .taskOpen small { font-size:9px; }
- .wall .dayRhythm small,.wall .dayRhythm b { font-size:10px; }.wall .dayRhythm em { font-size:9px; }
+ .wall .dayRhythm small,.wall .dayRhythm b { font-size:10px; }
 }
 .wall .cellAdd { color:#74866a; border-color:#d8e1cf; min-height:24px; }
 .wall .cellAdd > span { opacity:1; }
 @media(max-width:800px) {
- .mobileRhythm { display:block; margin-bottom:10px; }.mobileRhythm .dayRhythm { grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; margin:0; }.mobileRhythm .dayRhythm > div { display:flex; flex-direction:column; padding:6px; }.mobileRhythm .dayRhythm b { font-size:10px; }.mobileRhythm .dayRhythm small { font-size:9px; }
+ .mobileRhythm { display:block; margin-bottom:10px; }.mobileRhythm .dayRhythm { grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px; margin:0; }.mobileRhythm .dayRhythm > div { padding:4px 6px; }.mobileRhythm .dayRhythm b { font-size:10px; }.mobileRhythm .dayRhythm small { font-size:9px; }
  .mobileDays button[data-today=true]:not([aria-pressed=true]) { background:#fff2de; border-color:#d75a4c; }
  .taskCard { padding:8px; border-radius:2px; border-color:#b9c6ad; border-left:3px solid var(--lane); gap:7px; }.taskOpen strong { font-size:12px; }.taskOpen > span { font-size:10px; }.taskOpen small { font-size:9px; margin-top:4px; }.taskCheck { width:25px; height:25px; }
 }
 
-@media(min-width:801px) and (max-width:1100px) { .dayRhythm > div { grid-template-columns:1fr; }.dayRhythm small { font-size:8px; } }
+@media(min-width:801px) and (max-width:1100px) { .dayRhythm > div { flex-wrap:wrap; gap:0 3px; }.dayRhythm small { font-size:8px; } }
 
 /* One compact visual language across the operational and management tools.
    Scoped to Productie so the shop forms keep their existing touch layout. */
@@ -352,10 +350,12 @@
 @media(max-width:800px) { .resourceCard { grid-template-columns:1fr auto; gap:5px 10px; }.resourceCard span { grid-row:2; grid-column:1 / -1; }.resourceCard small { grid-column:2; grid-row:1; }.planChanges > div { flex-wrap:wrap; }.resourceSurface :is(input,select,textarea) { font-size:16px; min-height:44px; }.resourceSurface :is(button,summary) { min-height:40px; }.resourceSurface :is(input[type=checkbox],input[type=radio]) { min-height:20px; }.resourceSurface section { padding:10px; } }
 @media(pointer:coarse) { .resourceSurface :is(button,summary,input,select) { min-height:44px; }.resourceSurface :is(input,select,textarea) { font-size:16px; }.resourceSurface :is(input[type=checkbox],input[type=radio]) { min-height:20px; } }
 .dialogWide { width:min(1080px,calc(100vw - 32px)); }
-.weekOffer { display:flex; align-items:center; gap:12px; padding:8px 12px; border:1px solid var(--line); border-radius:6px; background:#f0f2e9; margin-bottom:12px; }
-.weekOffer > button:first-child { display:flex; align-items:center; gap:12px; text-align:left; flex:1; min-width:0; }
-.weekOffer img { width:92px; height:56px; object-fit:contain; background:white; border:1px solid var(--line); border-radius:3px; }
-.weekOffer strong { display:block; font-size:12px; }.weekOffer small { display:block; color:var(--muted); font-size:11px; margin-top:3px; }.weekOffer .secondaryButton { min-height:32px; font-size:11px !important; padding:6px 10px; }
+.weekOffer { display:flex; align-items:center; gap:5px; flex:0 1 280px; min-width:150px; margin-left:auto; padding:3px 5px; border:1px solid var(--line); border-radius:5px; background:#e8efdf; }
+.weekOffer > button:first-child { display:flex; align-items:center; gap:8px; text-align:left; flex:1; min-width:0; min-height:36px; }
+.weekOffer img { flex-shrink:0; width:52px; height:36px; object-fit:contain; background:white; border:1px solid var(--line); border-radius:3px; }
+.weekOffer > button:first-child > span { min-width:0; flex:1; }
+.weekOffer strong { display:block; font-size:11px; }.weekOffer small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); font-size:10px; }
+.offerEdit { display:grid; place-items:center; flex:0 0 30px; width:30px; min-height:34px; border-left:1px solid var(--line); color:var(--brand-navy); }
 .offerFull { display:block; width:100%; max-height:72dvh; object-fit:contain; }
 .weddingActions { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
 .weddingDetail { display:grid; grid-template-columns:minmax(240px,.8fr) minmax(0,1.2fr); gap:20px; align-items:start; }
@@ -364,7 +364,7 @@
 .weddingFacts { font-size:12px; }.weddingFacts > div { display:grid; grid-template-columns:115px 1fr; gap:10px; border-bottom:1px solid #e3e7dd; padding:8px 0; }.weddingFacts dt { color:#63736c; }.weddingFacts dd { margin:0; white-space:pre-wrap; }
 .weddingSchedule { display:flex; align-items:end; flex-wrap:wrap; gap:10px; margin-top:16px; }.weddingSchedule small { width:100%; color:#63736c; font-size:11px; }
 .weddingLoadError { font-size:11px; color:#984839; margin-top:10px; overflow-wrap:anywhere; }.weddingLoadError button { display:block; text-decoration:underline; min-height:30px; }
-@media(max-width:800px) { .weddingDetail { grid-template-columns:1fr; gap:12px; }.weddingVisual svg { max-height:46dvh; }.weddingFacts > div { grid-template-columns:95px 1fr; }.weekOffer { flex-wrap:wrap; gap:8px; }.weekOffer img { width:65px; height:48px; }.weekOffer strong { font-size:11px; }.weekOffer small { font-size:10px; }.dialogWide { width:calc(100vw - 20px); } }
+@media(max-width:800px) { .weddingDetail { grid-template-columns:1fr; gap:12px; }.weddingVisual svg { max-height:46dvh; }.weddingFacts > div { grid-template-columns:95px 1fr; }.dialogWide { width:calc(100vw - 20px); } }
 .loadingInline { display:flex; align-items:center; justify-content:center; gap:10px; min-height:180px; color:var(--muted); font-size:12px; }
 .spinner { width:22px; height:22px; border:2px solid #dfe5d7; border-top-color:#1b3344; border-radius:50%; animation:productionSpin .8s linear infinite; }
 @keyframes productionSpin { to { transform:rotate(360deg); } }
@@ -429,7 +429,6 @@
 .tone_rose { --lane:#d75a4c; --lane-bg:#faf0eb; }.tone_blue { --lane:#55768d; --lane-bg:#edf3f6; }
 .dayHeading.today { background:#dce8d2; box-shadow:inset 0 3px var(--brand-red); }.todayCell { background:#eff5e8; }
 .dayRhythm > div { background:#f6f9f1; border-color:#d4dfcc; }.dayRhythm .rhythm_break { background:#edf2e7; border-color:#d4dfcc; }
-.dayRhythm .rhythm_production { background:#fff; }
 .task_active { background:#edf3f6; border-color:#b9cbd7; }.task_active .taskCheck { color:var(--brand-navy); border-color:#55768d; }
 .task_blocked { background:#fff0ec; border-color:#e2b6ad; }.blockedLegend { background:var(--brand-red); }.activeLegend { background:var(--brand-navy); }
 .staffAlert,.staffSourceWarning,.recipeUpdate { border-color:#d3decf; border-left-color:var(--brand-red); background:#f3f6ec; }
@@ -445,3 +444,51 @@
 .task_blocked .statusDot,.boardFooter .blockedLegend { background:var(--brand-red); }
 .attentionButton { color:#91483f; background:#faece7; }.taskWarning { color:#a14b3f; }.staffPeek > span { color:#91483f; }
 .holidayOverlay::backdrop { background:#1b334466; }
+
+
+/* Two compact planning bars keep the week board in view, including XL mode. */
+.planningActions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; min-height:60px; padding:8px 0; }
+.planningActions > :is(.primaryButton,.secondaryButton) { min-height:40px; padding:8px 11px; font-size:11px !important; }
+.planningActions > .screenButton { margin-left:auto; }.planningActions > .weekOffer + .screenButton { margin-left:0; }
+.staffingCompact { flex:0 1 auto; margin:0; }
+.staffingCompact .staffPeek { flex-wrap:nowrap; gap:12px; margin:0; }
+.staffingCompact .staffPeek > .secondaryButton { min-height:40px; }
+.staffingCompact .staffPeek > .textLink { white-space:nowrap; font-size:11px; }
+.staffAlertBadge { display:inline-flex; align-items:center; gap:4px; padding:2px 5px; border-radius:3px; background:#faece7; color:#91483f; font-size:9px; font-weight:600; white-space:nowrap; }
+.plannerToolbar,.wall .plannerToolbar { gap:8px 12px; flex-wrap:wrap; padding:7px 0; margin-bottom:7px; border-bottom:0; }
+.plannerToolbar > .plannerFilters { margin-left:auto; }
+.plannerMeta { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:10px; }
+.weekProgress { white-space:nowrap; font-variant-numeric:tabular-nums; }
+.plannerMeta > button { min-width:34px; justify-content:center; }
+.syncDetails { position:relative; }
+.syncDetails > summary { display:flex; align-items:center; gap:5px; min-height:32px; cursor:pointer; list-style:none; font-size:9px; white-space:nowrap; }
+.syncDetails > summary::-webkit-details-marker { display:none; }
+.syncDetails[open] > summary { color:var(--brand-navy); }
+.syncDetails > div { position:absolute; top:100%; right:0; z-index:5; width:230px; padding:12px; border:1px solid var(--line); border-radius:5px; box-shadow:0 5px 20px #1b334420; background:white; font-size:11px; }
+.syncDetails > div > button { min-height:36px; margin-top:5px; color:var(--brand-navy); text-decoration:underline; text-underline-offset:3px; }
+.plannerToolbar .textSize { gap:3px; min-width:34px; padding:5px; }
+.wall .dayHeading { padding-top:8px; padding-bottom:7px; }
+@media(min-width:801px) {
+ .plannerToolbar .weekPicker { gap:7px; }.plannerToolbar .weekPicker > div { min-width:130px; }
+ .plannerToolbar .plannerFilters select { max-width:155px; }
+}
+@media(max-width:1100px) and (min-width:801px) {
+ .planningActions { gap:7px; }.staffingCompact .staffPeek { gap:7px; }.staffingCompact .staffPeek > .textLink { font-size:10px; }
+ .weekOffer { flex-basis:220px; }.weekOffer img { width:42px; }.planningActions > :is(.primaryButton,.secondaryButton) { padding:8px; font-size:10px !important; }
+ .plannerToolbar > .plannerFilters { margin-left:0; }.plannerToolbar .plannerMeta { margin-left:auto; }
+}
+@media(max-width:800px) {
+ .planningActions { gap:7px; padding:6px 0; }.staffingCompact { flex-basis:100%; }.staffingCompact .staffPeek { justify-content:space-between; gap:7px; }
+ .planningActions :is(.primaryButton,.secondaryButton),.staffingCompact .staffPeek > .secondaryButton { min-height:44px; }
+ .staffingCompact .staffPeek > .textLink { display:flex; align-items:center; min-height:44px; font-size:10px; }
+ .weekOffer { flex:1 1 100%; margin:0; }.weekOffer > button:first-child { min-height:38px; }.offerEdit { min-height:38px; width:38px; flex-basis:38px; }
+ .planningActions > .screenButton { margin-left:0; }.planningActions > .primaryButton { margin-left:auto; }
+ .plannerToolbar,.wall .plannerToolbar { display:flex; gap:7px; padding:8px 0; }
+ .plannerToolbar > .weekPicker { flex:1 0 100%; }.plannerToolbar > .plannerFilters { flex:1; margin:0; min-width:0; }
+ .plannerToolbar .plannerMeta { gap:5px; }.weekProgress { display:none; }
+ .plannerToolbar .plannerFilters.filtersExpanded { flex-basis:100%; }.plannerToolbar .filtersExpanded + .plannerMeta { margin-left:auto; }
+ .syncDetails > summary { min-height:44px; }.plannerMeta > button { min-height:38px; }
+ .dayRhythm > div { justify-content:flex-start; gap:7px; }
+}
+
+@media(max-width:380px) { .staffingCompact .staffPeek { flex-wrap:wrap; } }
