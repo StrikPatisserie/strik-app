@@ -17,7 +17,7 @@ const items = [
   { href: "/winkel", label: "Winkel", icon: strikIcons.winkel },
   { href: "/ijs", label: "IJssalons", icon: strikIcons.ijs },
   { href: "/bakkerij/logistiek", label: "Logistiek", icon: strikIcons.logistiek },
-  { href: "/bakkerij", label: "Productie", icon: strikIcons.bakkerij },
+  { href: "/bakkerij", label: "Productie", icon: strikIcons.productie },
   { href: "/management", label: "Management", icon: strikIcons.management },
   { href: "/vierdaagse", label: "Vierdaagse", icon: strikIcons.strikAgenda },
   { href: "/sinterklaas", label: "Sinterklaas", icon: strikIcons.sinterklaas },

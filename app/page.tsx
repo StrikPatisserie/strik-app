@@ -31,7 +31,7 @@ const baseSections = [
     href: "/bakkerij",
     title: "Productie",
     subtitle: "Overzicht, bakkerij en data",
-    icon: strikIcons.bakkerij,
+    icon: strikIcons.productie,
   },
   {
     href: "/management",

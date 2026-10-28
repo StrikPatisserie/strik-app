@@ -6,6 +6,7 @@ import { StrikPageHeading } from "./StrikPageTitle";
 export const strikIcons = {
   agenda: "/icons_strik_agenda.svg",
   bakkerij: "/apps%20strik_Bakkerij.svg",
+  productie: "/icons_strik_productie.svg",
   data: "/APP_iconss__data.svg",
   gebak: "/icons_strik_winkel.svg",
   bruidstaart: "/icons_strik_bruidstaart.svg",
