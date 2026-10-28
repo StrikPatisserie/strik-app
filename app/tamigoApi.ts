@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { TeamAgendaEvent } from "./strik-agenda/teamAgendaApi";
+import { nextCalendarDate } from "./management/urencontrole/reviewTime";
 import {
   formatJubileeYears,
   isImportantJubileeYear,
@@ -2159,17 +2160,19 @@ export async function fetchTamigoHoursReviewSource(input:
   let path: string;
   let params: Record<string, string> | undefined;
   switch (input.kind) {
-    case "departments": path = "/departments/application/"; params = { includeParents: String(input.includeParents) }; break;
+    case "departments": path = "/v2/Departments/application/"; params = { includeParents: String(input.includeParents) }; break;
     case "shifts":
       // No status filter: documented PlanStatusCodeId 1/2 = planning, 3/5 = actual/closed.
       // Original (4) and attendance/clock entries (6) must not become duplicate worked shifts.
       path = "/v2/Shifts/"; params = { departmentId: input.departmentId, from: input.from, to: input.to }; break;
     case "breakcodes": path = "/Breakcodes/"; break;
-    case "day-status": path = `/actualshifts/status/day/${input.date}/`; params = { departmentId: input.departmentId }; break;
+    // The legacy User Services day route gives HTTP 401 with our application.
+    // V2 returns dated rows; the consumer must select the requested date explicitly.
+    case "day-status": path = `/v2/ActualShifts/status/period/${input.date}/${nextCalendarDate(input.date)}/`; params = { departmentId: input.departmentId }; break;
   }
   const response = await fetch(createTamigoUrl(path, params), {
     method: "GET",
-    headers: { Accept: "application/json", "x-tamigo-token": await getTamigoAccessToken() },
+    headers: { Accept: "application/json", "Content-Type": "application/json", "x-tamigo-token": await getTamigoAccessToken() },
     cache: "no-store",
     signal: AbortSignal.timeout(20000),
   });

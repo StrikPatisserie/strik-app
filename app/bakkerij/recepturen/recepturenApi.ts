@@ -14,6 +14,8 @@ import type { CustomerAllergenList } from "../allergenen/types";
 import { canonicalStrikArticleNumber } from "@/app/lib/strikArticles";
 
 export type RecepturenData = {
+  storageRevision?: number;
+  storageProvider?: string;
   financialAccess?: boolean;
   ingredients: Ingredient[];
   recipes: Recipe[];
@@ -75,6 +77,8 @@ function normalizeRecepturenData(data: unknown): RecepturenData | null {
       : emptyBakeryHomeData;
 
   return removeLegacyHalfFabricateIngredients({
+    storageRevision: Number.isSafeInteger(record.storageRevision) ? record.storageRevision : undefined,
+    storageProvider: typeof record.storageProvider === "string" ? record.storageProvider : undefined,
     financialAccess: record.financialAccess === true,
     ingredients: Array.isArray(record.ingredients) ? record.ingredients : [],
     recipes: normalizeStoredRecipes(record.recipes),

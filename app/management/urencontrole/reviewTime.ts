@@ -69,6 +69,13 @@ export function roundQuarter(ms: number, direction: "up" | "down") {
 export function durationMinutes(start: TimeValue, end: TimeValue) {
   return start.ms === null || end.ms === null ? null : (end.ms - start.ms) / 60000;
 }
+export function nextCalendarDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error("Ongeldige datum voor de dagstatus.");
+  const date = new Date(`${value}T12:00:00Z`);
+  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value) throw new Error("Ongeldige datum voor de dagstatus.");
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
+}
 export function monthBounds(month: string) {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || +month.slice(0, 4) < 2000 || +month.slice(0, 4) > 2100) throw new Error("Kies een geldige maand tussen 2000 en 2100.");
   const year = +month.slice(0, 4), index = +month.slice(5) - 1;

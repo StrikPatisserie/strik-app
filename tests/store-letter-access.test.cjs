@@ -20,6 +20,7 @@ function server(who, initial = [row('own', 'Heyendaal'), row('foreign', 'Lent'),
   const loaded = load('app/sinterklaas/sinterklaasServerApi.ts', {
     'server-only': {}, 'next/server': {NextResponse: {json: (data, init) => Response.json(data, init)}},
     '../lib/auth/access': access, '../lib/auth/session': {getCurrentProfile: async () => who}, './letterStoreAccess': stores,
+    './sinterklaasApi': load('app/sinterklaas/sinterklaasApi.ts', {'./b2bLetterLines':load('app/sinterklaas/b2bLetterLines.ts')}),
   }, {process: {env: {WORDPRESS_SINTERKLAAS_API_BASE: 'https://example.invalid/wp-json/strik/v1', WORDPRESS_SINTERKLAAS_API_KEY: 'test-only'}}, fetch: async (url, options = {}) => {
     const method = options.method || 'GET';
     calls.push({url: new URL(url), method, body: options.body});

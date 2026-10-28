@@ -53,6 +53,7 @@ const PUBLIC_API_PATHS = new Set([
 function isPublicPath(pathname: string) {
   return (
     (process.env.NODE_ENV === "development" && pathname === "/preview/winkelpresentatie") ||
+    (process.env.NODE_ENV === "development" && pathname === "/preview/productie") ||
     PUBLIC_PATHS.has(pathname) ||
     pathname.startsWith("/auth/callback/") ||
     pathname.startsWith("/fonts/") ||
@@ -169,6 +170,7 @@ export async function updateSession(request: NextRequest) {
       return withSessionCookies(NextResponse.redirect(mfaUrl));
     }
     const managementApi =
+      pathname === "/api/productie/transfer" ||
       pathname === "/api/management-dashboard" ||
       pathname === "/api/management-revenue" || pathname.startsWith("/api/management-revenue/") ||
       pathname === "/api/tamigo-labor-costs" || pathname === "/api/tamigo-week-schedule" || pathname === "/api/tamigo-hours-review" || pathname.startsWith("/api/tamigo-hours-review/") ||

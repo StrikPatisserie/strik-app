@@ -223,12 +223,17 @@ test('only internal readback skips the old revision; a browser cannot request th
  const f=contextReader();await assert.rejects(()=>f.read({...f.reference,revision:'a'.repeat(64)}),/gewijzigd/);
  assert.equal((await f.read({...f.reference,revision:'verify'})).before.id,shiftId);assert.throws(()=>rules.correctionReference({...f.reference,revision:'verify'}));
 });
-test('missing write permission is a rejection only after an unchanged source is independently confirmed',async()=>{
- const f=fixture();
- const factory=loader({'../../tamigoApi':{getTamigoStatusCode:()=>403}})(base+'correctionServer.ts').createCorrectionService;
- f.deps.write=async payload=>{f.attempts.push(payload);throw Error('Forbidden');};
- const service=factory(f.deps);await service.prepare(actor,f.reference,draft(),types.DEFAULT_REVIEW_CONFIG);
- const result=await service.commit(actor,intentId,true);assert.equal(result.state,'rejected');assert.match(result.message,/schrijfrechten/);assert.equal(f.attempts.length,1);
+test('401 request rejection and 403 missing permission are only released after unchanged independent readback',async()=>{
+ for(const status of [401,403]){
+  const f=fixture();
+  const factory=loader({'../../tamigoApi':{getTamigoStatusCode:()=>status}})(base+'correctionServer.ts').createCorrectionService;
+  f.deps.write=async payload=>{f.attempts.push(payload);throw Error('Private upstream reply');};
+  const service=factory(f.deps);await service.prepare(actor,f.reference,draft(),types.DEFAULT_REVIEW_CONFIG);
+  const result=await service.commit(actor,intentId,true);
+  assert.equal(result.state,'rejected');assert.match(result.message,new RegExp(`HTTP ${status}`));
+  assert.match(result.message,status===401?/aanvraaginhoud en veldformaten/:/schrijfrechten/);
+  assert(!result.message.includes('Private upstream'));assert.equal(f.attempts.length,1);
+ }
 });
 test('write timestamps include the Amsterdam offset for each side of a DST boundary',()=>{
  const raw=rawShift({StartDateTime:'2026-03-29T00:00:00+01:00',EndDateTime:'2026-03-29T08:00:00+02:00',ShiftHours:7});

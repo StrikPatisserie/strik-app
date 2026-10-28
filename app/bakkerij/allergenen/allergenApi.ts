@@ -1,14 +1,16 @@
 import type { CustomerAllergenList } from "./types";
 
 const API_URL = "/api/allergen-lists";
+let storageRevision:number|undefined;
 
 async function readResponse(response: Response) {
   const data = await response.json().catch(() => null) as
-    | { lists?: CustomerAllergenList[]; message?: string }
+    | { lists?: CustomerAllergenList[]; message?: string; storageRevision?:number }
     | null;
   if (!response.ok) {
     throw new Error(data?.message || "Allergenenarchief is niet beschikbaar.");
   }
+  storageRevision=data?.storageRevision;
   return Array.isArray(data?.lists) ? data.lists : [];
 }
 
@@ -20,6 +22,6 @@ export async function saveAllergenLists(lists: CustomerAllergenList[]) {
   return readResponse(await fetch(API_URL, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ lists }),
+    body: JSON.stringify({ lists, storageRevision }),
   }));
 }

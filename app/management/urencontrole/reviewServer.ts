@@ -1,6 +1,6 @@
 import "server-only";
 import { fetchTamigoHoursReviewSource, getKnownTamigoHoursReviewDepartments, getTamigoStatusCode } from "../../tamigoApi";
-import { dedupeReviewShifts, isRecord, normalizeReviewShift, sourceRecords } from "./reviewSource";
+import { dedupeReviewShifts, isRecord, normalizeDayStatus, normalizeReviewShift, sourceRecords } from "./reviewSource";
 import { monthBounds } from "./reviewTime";
 import { REVIEW_VERSION, type DayStatus, type ReviewDataset, type SourceCheck } from "./reviewTypes";
 import { correctionRevision } from "./correctionRevision";
@@ -8,7 +8,7 @@ import { dayAccessFailureMessage } from "./reviewAccess";
 
 function errorCheck(key: string, label: string, error: unknown): SourceCheck {
   const status = getTamigoStatusCode(error);
-  return { key, label, state: "unavailable", httpStatus: status, message: status === 401 || status === 403 ? `Geen API-toegang (HTTP ${status}). Controleer de bestaande Tamigo-applicatieconfiguratie en rechten.` : "Tamigo kon deze bron niet leveren. Probeer opnieuw; ontbrekende gegevens worden niet als nul behandeld." };
+  return { key, label, state: "unavailable", httpStatus: status, message: status === 401 ? "Tamigo heeft de aanvraag afgewezen (HTTP 401). Controleer de sessie en aanvraagparameters; de oorzaak is niet automatisch een ontbrekend recht." : status === 403 ? "Tamigo geeft geen toegang (HTTP 403). Controleer de bevoegdheden van deze applicatiekoppeling." : "Tamigo kon deze bron niet leveren. Probeer opnieuw; ontbrekende gegevens worden niet als nul behandeld." };
 }
 export async function getTamigoHoursReviewMonth(month: string): Promise<ReviewDataset> {
   const bounds = monthBounds(month);
@@ -74,8 +74,7 @@ export async function getTamigoHoursReviewMonth(month: string): Promise<ReviewDa
 export async function getTamigoHoursDayStatus(departmentId: string, date: string): Promise<DayStatus> {
   try {
     const raw = await fetchTamigoHoursReviewSource({ kind: "day-status", departmentId, date });
-    if (isRecord(raw) && raw.Success === true && [true, false, "true", "false"].includes(raw.Message as boolean | string)) return { state: raw.Message === true || raw.Message === "true" ? "closed" : "open", message: "Dagstatus rechtstreeks uit Tamigo. Dit is geen goedkeuring van een Strik-correctievoorstel.", employeeApprovalIsNotManagerApproval: true };
-    return { state: "unknown", message: "Onbekend API-antwoord voor de dagstatus; niet als open of goedgekeurd aangenomen.", employeeApprovalIsNotManagerApproval: true };
+    return normalizeDayStatus(raw, date);
   } catch (error) {
     const status = getTamigoStatusCode(error);
     return { state: "unknown", message: dayAccessFailureMessage(status), employeeApprovalIsNotManagerApproval: true, httpStatus: status };

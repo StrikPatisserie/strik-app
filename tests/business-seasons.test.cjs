@@ -17,6 +17,7 @@ const b2b = load('app/sinterklaas/b2b/SinterklaasB2BClient.tsx', {
   '../../sint-voor-bedrijven/sintProducts': sint,
   '../../kerst-voor-bedrijven/christmasProducts': catalog,
   '../../lib/business-folder-pricing': pricing,
+  '../../lib/businessDeliveryPricing': load('app/lib/businessDeliveryPricing.ts'),
 }, 'exports.formStateFromOrder = formStateFromOrder; exports.christmasCatalog = CHRISTMAS_CATALOG; exports.reprice = repriceProductLines; exports.serialize = serializeOrderText; exports.parse = parseOrderText;');
 const mailing = load('app/sinterklaas/mailing/SinterklaasMailingClient.tsx', { '../../lib/businessSeasons': seasons }, 'exports.defaultsFor = defaultsFor; exports.migrate = migrateCampaign; exports.preview = EmailPreview;');
 function collect(node, predicate) {

@@ -18,6 +18,8 @@ export default function AppChrome({
   profile: UserProfile | null;
 }>) {
   const pathname = usePathname();
+  const isProductionPreview = process.env.NODE_ENV === "development" && pathname === "/preview/productie";
+  const isProductionWorkspace = pathname === "/bakkerij/productie";
   const isAuthArea =
     pathname === "/login" ||
     pathname === "/reset-password" ||
@@ -40,7 +42,7 @@ export default function AppChrome({
     pathname === "/bruidstaarten/voorbeeld";
   const isWelcomeArea = pathname === "/";
 
-  if (isAuthArea || isPrintArea || isPublicCampaign) {
+  if (isAuthArea || isPrintArea || isPublicCampaign || isProductionPreview || isProductionWorkspace) {
     return <>{children}</>;
   }
 

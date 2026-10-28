@@ -342,6 +342,7 @@ function isBakkerijIjsChocoladePath(pathname: string) {
 
 function isBakkerijPatisseriePath(pathname: string) {
   return (
+    pathname === "/bakkerij/productie" ||
     pathname === "/bakkerij/bakkerij" ||
     pathname.startsWith("/bakkerij/bakkerij/") ||
     pathname === "/bakkerij/recepten" ||
@@ -491,6 +492,7 @@ export function canAccessPath(
   }
 
   if (isBakkerijPath(pathname)) {
+    if (pathname === "/bakkerij/productie") return canAccessBakkerijPatisserie(profile) || canAccessBakkerijIjsChocolade(profile);
     if (isBakkerijDataPath(pathname)) {
       return false;
     }

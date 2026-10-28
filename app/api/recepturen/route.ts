@@ -5,6 +5,8 @@ import { recipeDataForProduction, mergeProductionUpdates } from "@/app/bakkerij/
 import { NextResponse } from "next/server";
 import { removeLegacyHalfFabricateIngredients } from "../../bakkerij/recepturen/legacyHalfFabricates";
 import type { RecepturenData } from "../../bakkerij/recepturen/recepturenApi";
+import { ProductionStoreError, readDocument } from "@/app/productie/documents.server";
+import { sharedRecipes, saveSharedRecipes } from "@/app/productie/recipeStore.server";
 
 export const dynamic = "force-dynamic";
 
@@ -158,9 +160,11 @@ async function createShrinkProtectionResponse(incomingData: unknown) {
 
 export async function GET() {
   const profile = await getCurrentProfile();
-  if (!canAccessBakkerijPatisserie(profile) && !canAccessBakkerijIjsChocolade(profile)) return NextResponse.json({ message: "Geen toegang tot recepturen." }, { status: 403 });
+  if (!profile || (!canAccessBakkerijPatisserie(profile) && !canAccessBakkerijIjsChocolade(profile))) return NextResponse.json({ message: "Geen toegang tot recepturen." }, { status: 403 });
   const financialAccess = hasFullAccess(profile);
   try {
+    const shared = await sharedRecipes(profile);
+    if (shared) return NextResponse.json(shared, { headers:{"Cache-Control":"private, no-store"} });
     const response = await fetchWordPressRecepturen();
     const data = await readWordPressResponse(response);
 
@@ -179,7 +183,8 @@ export async function GET() {
 
     const clean = cleanRecepturenData(data) as RecepturenData;
     return NextResponse.json(financialAccess ? { ...clean, financialAccess: true } : recipeDataForProduction(clean), { headers: { "Cache-Control": "private, no-store" } });
-  } catch {
+  } catch (error) {
+    if (error instanceof ProductionStoreError) return NextResponse.json({message:error.message},{status:error.status});
     return NextResponse.json(
       {
         message: "Kan geen verbinding maken met WordPress recepturenopslag.",
@@ -191,7 +196,7 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   const profile = await getCurrentProfile();
-  if (!canAccessBakkerijPatisserie(profile) && !canAccessBakkerijIjsChocolade(profile)) return NextResponse.json({ message: "Geen toegang tot recepturen." }, { status: 403 });
+  if (!profile || (!canAccessBakkerijPatisserie(profile) && !canAccessBakkerijIjsChocolade(profile))) return NextResponse.json({ message: "Geen toegang tot recepturen." }, { status: 403 });
   const financialAccess = hasFullAccess(profile);
   let body = "";
   let incomingData: unknown = null;
@@ -208,6 +213,8 @@ export async function PUT(request: Request) {
 
   try {
     if (!isRecepturenData(incomingData)) return NextResponse.json({ message: "Ongeldige recepturendata." }, { status: 400 });
+    const shared = await readDocument<RecepturenData>("recipes");
+    if (shared) return NextResponse.json(await saveSharedRecipes(shared,incomingData as RecepturenData,profile), {headers:{"Cache-Control":"private, no-store"}});
     if (!financialAccess) {
       const currentResponse = await fetchWordPressRecepturen();
       const current = await readWordPressResponse(currentResponse);
@@ -241,7 +248,8 @@ export async function PUT(request: Request) {
     return NextResponse.json(financialAccess ? { ...stored, financialAccess: true } : recipeDataForProduction(stored), {
       status: response.status, headers: { "Cache-Control": "private, no-store" },
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof ProductionStoreError) return NextResponse.json({message:error.message},{status:error.status});
     return NextResponse.json(
       {
         message: "Kan geen verbinding maken met WordPress recepturenopslag.",

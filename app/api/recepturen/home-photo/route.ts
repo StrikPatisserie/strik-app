@@ -2,6 +2,8 @@ import { recipeStorageAuthHeaders } from "@/app/lib/recipeStorageAuth";
 import { getCurrentProfile } from "@/app/lib/auth/session";
 import { hasFullAccess } from "@/app/lib/auth/access";
 import { NextResponse } from "next/server";
+import { ProductionStoreError, readDocument } from "@/app/productie/documents.server";
+import { storeProductionImage } from "@/app/productie/media.server";
 
 export const dynamic = "force-dynamic";
 
@@ -85,6 +87,10 @@ export async function POST(request: Request) {
   if (typeof label === "string") formData.set("label", label);
 
   try {
+    if (await readDocument("recipes")) {
+      if (file.size > 3 * 1024 * 1024) return NextResponse.json({message:"Kies een foto van maximaal 3 MB."},{status:400});
+      return NextResponse.json(await storeProductionImage(Buffer.from(await file.arrayBuffer()),file.name));
+    }
     let response = await uploadToWordPress(
       formData,
       WORDPRESS_RECEPTUREN_HOME_PHOTO_URL
@@ -120,7 +126,8 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json(data || { ok: true });
-  } catch {
+  } catch (error) {
+    if (error instanceof ProductionStoreError) return NextResponse.json({message:error.message},{status:error.status});
     return NextResponse.json(
       { message: "Kan geen verbinding maken met WordPress media-opslag." },
       { status: 502 }

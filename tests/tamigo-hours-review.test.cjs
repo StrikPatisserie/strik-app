@@ -207,7 +207,7 @@ function serverModule(overrides={}){
    if(overrides.read)return overrides.read(input,raw);
    if(input.kind==='departments')return [{DepartmentId:department,Name:'Testwinkel'}];
    if(input.kind==='breakcodes')return [{Code:'P',Hours:.5}];
-   if(input.kind==='day-status')return {Success:true,Message:'false'};
+   if(input.kind==='day-status')return [{Date:`${input.date}T00:00:00`,Open:true,Status:1}];
    return [{...raw,ShiftId:'p1',PlanStatusCodeId:2},raw,{...raw,PlanStatusCodeId:5},{...raw,ShiftId:'original',PlanStatusCodeId:4},{...raw,ShiftId:'attendance',PlanStatusCodeId:6}];
   }
  };
@@ -236,20 +236,32 @@ test('unknown status codes and truncated replies are explicitly partial, never c
  const {server}=serverModule({read:(input,raw)=>input.kind==='departments'?[{DepartmentId:raw.DepartmentId,Name:'Testwinkel'}]:input.kind==='breakcodes'?[]:{Data:[{...raw,PlanStatusCodeId:999}],TotalCount:2}});
  const data=await server.getTamigoHoursReviewMonth('2026-10');assert.equal(data.coverage.actual.length,0);assert.equal(data.actual[0].kind,'unknown');assert(data.checks.some(check=>check.state==='partial'));
 });
-test('day status uses the explicit API boolean and never maps missing access to open',async()=>{
+test('v2 day status selects the requested Amsterdam day, never the first period row',async()=>{
  const fixture=serverModule();assert.equal((await fixture.server.getTamigoHoursDayStatus(fixture.department,'2026-10-05')).state,'open');
- for(const answer of [{Success:true,Message:'true'},{Success:false,Message:'true'},{Success:true,Message:'maybe'}]){
-  const {server,department}=serverModule({read:()=>answer});
-  const result=await server.getTamigoHoursDayStatus(department,'2026-10-05');assert.equal(result.state,answer.Success&&answer.Message==='true'?'closed':'unknown');
- }
- const {server,department}=serverModule({read:()=>{throw Object.assign(Error('Denied'),{status:401});}});assert.equal((await server.getTamigoHoursDayStatus(department,'2026-10-05')).state,'unknown');
+ const rows=[{Date:'2026-10-06T00:00:00',Open:true,Status:1},{Date:'2026-10-05T00:00:00',Open:false,Status:2}];
+ const {server,department}=serverModule({read:()=>rows});
+ assert.equal((await server.getTamigoHoursDayStatus(department,'2026-10-05')).state,'closed');
+ assert.equal((await server.getTamigoHoursDayStatus(department,'2026-10-07')).state,'unknown');
 });
-test('day access errors explain application access without exposing upstream replies',async()=>{
+test('closed, signed-off and validated days remain closed; contradictory or malformed statuses never open a day',()=>{
+ for(const status of [2,3,4])assert.equal(source.normalizeDayStatus([{Date:'2026-10-05T00:00:00',Open:false,Status:status}],'2026-10-05').state,'closed');
+ const valid={Date:'2026-10-05T00:00:00',Open:true,Status:1};
+ for(const rows of [[],null,{},[null],[{...valid,Open:'true'}],[{...valid,Status:'1'}],[{...valid,Status:2}],[{...valid,Open:false}],[{...valid,Status:99}],[{...valid,Date:null}],[valid,valid],[valid,{...valid,Open:false,Status:2}],{Success:true,Message:'false'}])assert.equal(source.normalizeDayStatus(rows,'2026-10-05').state,'unknown',JSON.stringify(rows));
+});
+test('day status handles explicit offsets and calendar dates around daylight-saving and month boundaries',()=>{
+ assert.equal(source.normalizeDayStatus([{Date:'2026-10-24T22:00:00Z',Open:true,Status:1}],'2026-10-25').state,'open');
+ assert.equal(source.normalizeDayStatus([{Date:'2026-10-25',Open:false,Status:2}],'2026-10-25').state,'closed');
+ assert.equal(source.normalizeDayStatus([{Date:'2026-02-30T00:00:00',Open:true,Status:1}],'2026-02-30').state,'unknown');
+ for(const [date,next]of [['2026-10-25','2026-10-26'],['2026-03-29','2026-03-30'],['2026-12-31','2027-01-01'],['2028-02-28','2028-02-29'],['2026-02-28','2026-03-01']])assert.equal(time.nextCalendarDate(date),next);
+ for(const date of ['2026-02-30','2026-13-01','invalid'])assert.throws(()=>time.nextCalendarDate(date),/datum/);
+});
+test('day access errors distinguish request rejection from missing permissions without exposing upstream replies',async()=>{
  for(const status of [401,403]){
   const {server,department}=serverModule({read:()=>{throw Object.assign(Error('private token and personnel reply'),{status});}});
   const result=await server.getTamigoHoursDayStatus(department,'2026-10-05');
   assert.equal(result.state,'unknown');assert.equal(result.httpStatus,status);
-  assert.match(result.message,/applicatiekoppeling/);assert.match(result.message,/User Services/);assert.match(result.message,/opslaan geblokkeerd/);
+  assert.match(result.message,/versie-2-dagstatus/);assert.match(result.message,/opslaan geblokkeerd/);
+  assert.match(result.message,status===401?/aanvraagparameters/:/rechten/);
   assert(!JSON.stringify(result).includes('private token'));
  }
 });
@@ -321,10 +333,15 @@ test('conflicting source versions are preserved for inspection',()=>{
 });
 test('the new Tamigo source adapter only uses GET and never calls a wage or mutation endpoint',async()=>{
  const calls=[];
- const api=loader({}, {process:{env:{TAMIGO_API_KEY:'test-token'}},fetch:async(url,options)=>{calls.push({url:String(url),method:options.method});return Response.json([]);}})('app/tamigoApi.ts');
+ const api=loader({}, {process:{env:{TAMIGO_API_KEY:'test-token'}},fetch:async(url,options)=>{calls.push({url:String(url),method:options.method,headers:options.headers,body:options.body});return Response.json([]);}})('app/tamigoApi.ts');
  for(const input of [{kind:'departments',includeParents:true},{kind:'breakcodes'},{kind:'shifts',departmentId:'d1',from:'2026-10-01',to:'2026-11-01'},{kind:'day-status',departmentId:'d1',date:'2026-10-05'}])await api.fetchTamigoHoursReviewSource(input);
  assert.equal(calls.length,4);assert(calls.every(call=>call.method==='GET'));assert(calls.every(call=>!/(?:close\/day|open\/day|employee|payroll|wage|export)/i.test(call.url)));
  assert(!calls.find(call=>call.url.includes('/v2/Shifts/')).url.includes('shiftStatus='));
+ const day=calls.find(call=>call.url.includes('/ActualShifts/'));
+ assert.equal(new URL(day.url).pathname,'/v2/ActualShifts/status/period/2026-10-05/2026-10-06/');
+ assert.equal(new URL(day.url).searchParams.get('departmentId'),'d1');
+ assert.equal(day.headers['Content-Type'],'application/json');assert.equal(day.body,undefined);
+ assert(calls.some(call=>call.url.includes('/v2/Departments/application/')));
 });
 
 const presentation=load(base+'reviewPresentation.ts');

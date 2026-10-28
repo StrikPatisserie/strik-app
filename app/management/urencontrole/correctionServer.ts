@@ -64,7 +64,7 @@ export function createCorrectionService(deps: Dependencies) {
       if (error instanceof CorrectionError) throw error;
       const status = getTamigoStatusCode(error);
       throw new CorrectionError(status === 401 || status === 403
-        ? `Tamigo geeft geen toegang tot de broncontrole (HTTP ${status}). Controleer de toegang van de koppeling. Er is geen correctie verstuurd; de uren zijn ongewijzigd.`
+        ? `Tamigo heeft de broncontrole afgewezen (HTTP ${status}). ${status === 401 ? "Controleer de sessie en aanvraagparameters." : "Controleer de bevoegdheden van de koppeling."} Er is geen correctie verstuurd; de uren zijn ongewijzigd.`
         : "De broncontrole kon niet worden voltooid. Probeer de leescontrole opnieuw. Er is geen correctie verstuurd; de uren zijn ongewijzigd.", 503);
     }
     const { context, after, blockers } = assessment;
@@ -103,11 +103,14 @@ export function createCorrectionService(deps: Dependencies) {
     let response: unknown;
     try { response = await deps.write(record.payload); }
     catch (error) {
-      if ([401, 403].includes(getTamigoStatusCode(error))) {
+      const status = getTamigoStatusCode(error);
+      if ([401, 403].includes(status)) {
         try {
           const current = await deps.read({ ...record.reference, revision: "verify" });
           if (current.before.sourceRevision === record.reference.revision) {
-            const message = "Tamigo geeft geen toestemming voor deze correctie. De bron is ongewijzigd teruggelezen. Controleer de schrijfrechten van de koppeling.";
+            const message = status === 401
+              ? "Tamigo heeft de correctie afgewezen (HTTP 401). De bron is ongewijzigd teruggelezen. Controleer de sessie, aanvraaginhoud en veldformaten; deze fout bewijst geen ontbrekende schrijfrechten."
+              : "Tamigo geeft geen toestemming voor deze correctie (HTTP 403). De bron is ongewijzigd teruggelezen. Controleer de schrijfrechten van de koppeling.";
             await deps.store.finish(id, "rejected", message, current.before);
             return { id, state: "rejected", message };
           }

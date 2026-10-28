@@ -49,3 +49,25 @@ test('the onboarding preview route is unavailable in production',()=>{
  vm.runInNewContext(code,{exports:page,process:{env:{NODE_ENV:'production'}},require:name=>name==='next/navigation'?{notFound:()=>{throw Error('not-found');}}:name==='react/jsx-runtime'?react:{default:()=>({})}});
  assert.throws(()=>page.default(),/not-found/);assert.equal(renderCount,0);assert.equal(page.metadata.robots.index,false);
 });
+test('payroll progress is separate from identity data and contract snapshots include no payroll identifiers',()=>{
+ const person=m.initialColleagues()[0];person.checked=true;
+ assert.deepEqual(Object.keys(person.profile).sort(),['address','city','email','firstName','lastName','phone','postalCode'].sort());
+ assert.deepEqual(Object.keys(person.payroll).sort(),['accountantConfirmed','identityChecked']);
+ const before=JSON.stringify(m.contractDraft(person));
+ person.payroll.identityChecked=true;person.payroll.accountantConfirmed=true;
+ // Even unexpected payroll fields in an incoming profile cannot leak into a contract snapshot.
+ person.profile.bsn='TEST-NOT-A-BSN';person.profile.passport='TEST-DOCUMENT';person.profile.iban='TEST-NOT-AN-IBAN';
+ assert.equal(JSON.stringify(m.contractDraft(person)),before);
+ assert(!before.includes('TEST-'));
+ assert.equal(m.initialColleagues()[1].payroll.identityChecked,false);
+});
+test('unconfirmed salary policy and draft FAQ answers stay hidden until explicitly released',()=>{
+ const items=m.initialFaq();
+ assert.equal(m.publishedAnswer(items.find(item=>item.id==='salaris')),'');
+ assert.equal(m.publishedAnswer(items.find(item=>item.id==='loonstrook')),'');
+ const draft={...items[0],answer:'  Fictieve betaaldag: de 25e  ',confirmed:false};
+ assert.equal(m.publishedAnswer(draft),'');
+ assert.equal(m.publishedAnswer({...draft,confirmed:true}),'Fictieve betaaldag: de 25e');
+ assert.equal(m.publishedAnswer({...draft,answer:'  ',confirmed:true}),'');
+ assert(items.filter(item=>m.publishedAnswer(item)).every(item=>item.confirmed));
+});

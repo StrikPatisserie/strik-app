@@ -3,7 +3,7 @@ export const PREVIEW_DATE = "2026-10-27";
 export type Track = "winkel" | "bakkerij";
 export type Profile = {
   firstName: string; lastName: string; email: string; phone: string;
-  address: string; postalCode: string; city: string; birthDate: string;
+  address: string; postalCode: string; city: string;
 };
 export type Wage = { id: string; effectiveFrom: string; amount: number; reason: string };
 export type Contract = {
@@ -13,32 +13,46 @@ export type Contract = {
 export type Evaluation = { date: string; time: string; employeeNote: string; report: string; shared: boolean; seen: boolean };
 export type Colleague = {
   id: string; profile: Profile; track: Track; location: string; startDate: string;
-  buddy: string; hours: number; endDate: string; submitted: boolean; checked: boolean;
+  hours: number; endDate: string; submitted: boolean; checked: boolean;
+  payroll: { identityChecked: boolean; accountantConfirmed: boolean };
   read: string[]; completed: string[]; onboardingDone: boolean;
   contract: Contract | null; contractState: "none" | "draft" | "sent" | "employee-signed" | "signed";
   wages: Wage[]; evaluation: Evaluation;
 };
 export type Policy = { welcome: boolean; contract: boolean; onboarding: boolean; evaluation: boolean; reviewMonths: number; ownerEmail: string };
 export const INITIAL_POLICY: Policy = { welcome: true, contract: true, onboarding: true, evaluation: true, reviewMonths: 3, ownerEmail: "personeelsbeheer@example.invalid" };
+export type FaqItem = { id: string; category: string; question: string; answer: string; confirmed: boolean };
+export function initialFaq(): FaqItem[] {
+  return [
+    { id: "salaris", category: "Salaris", question: "Wanneer wordt mijn salaris uitbetaald?", answer: "", confirmed: false },
+    { id: "loonstrook", category: "Salaris", question: "Waar vind ik mijn loonstrook?", answer: "", confirmed: false },
+    { id: "uren", category: "Uren & rooster", question: "Mijn gewerkte uren kloppen niet. Wat nu?", answer: "Bekijk je planning en geregistreerde uren in Tamigo. Ontbreekt er iets of kloppen de tijden niet? Geef de datum, tijden en een korte toelichting door aan Roos, zodat zij dit kan controleren.", confirmed: true },
+    { id: "rooster", category: "Uren & rooster", question: "Bij wie kan ik terecht met vragen over mijn rooster?", answer: "Bespreek vragen over je rooster, werkuren en afspraken met Roos. Zij is je aanspreekpunt bij Strik.", confirmed: true },
+    { id: "loonafspraak", category: "Salaris", question: "Waar staat mijn afgesproken uurloon?", answer: "Je persoonlijke loonafspraak staat in je contract. Heb je vragen over een afspraak of een wijziging? Bespreek die met Roos.", confirmed: true },
+    { id: "prive", category: "Gegevens", question: "Hoe lever ik mijn BSN en identiteitsbewijs aan?", answer: "Roos vertelt je via welk accountantportaal je de benodigde gegevens rechtstreeks kunt aanleveren. Upload ze niet in deze app en stuur ze niet per gewone mail. Neem vóór je eerste werkdag je originele geldige identiteitsbewijs mee voor de controle.", confirmed: true },
+  ];
+}
+// Unconfirmed company policy must never appear as an established employee answer.
+export function publishedAnswer(item: FaqItem) { return item.confirmed ? item.answer.trim() : ""; }
 export type Lesson = { id: string; title: string; minutes: number; description: string; steps: string[] };
 export const LESSONS: Record<Track, Lesson[]> = {
   winkel: [
-    { id: "w1", title: "Een goed begin achter de toonbank", minutes: 5, description: "Van de eerste begroeting tot een tevreden klant.", steps: ["Loop samen met je inwerkmaatje door de winkel. Waar vind je de producten, verpakkingen en actuele informatie?", "Begroet de klant en vraag voor welk moment het gebak is. Luister eerst, geef daarna gericht advies.", "Oefen het inpakken en afrekenen met je inwerkmaatje. Vraag hulp als je iets nog niet kent."] },
+    { id: "w1", title: "Een goed begin achter de toonbank", minutes: 5, description: "Van de eerste begroeting tot een tevreden klant.", steps: ["Laat je rondleiden door je collega’s. Waar vind je de producten, verpakkingen en actuele informatie?", "Begroet de klant en vraag voor welk moment het gebak is. Luister eerst, geef daarna gericht advies.", "Oefen het inpakken en afrekenen met je collega’s. Vraag hulp als je iets nog niet kent."] },
     { id: "w2", title: "Leer ons gebak kennen", minutes: 8, description: "Proeven, kijken en het verhaal van het product leren.", steps: ["Bekijk samen het assortiment. Welke producten komen vandaag vers uit de bakkerij?", "Bespreek de smaken, formaten en presentatie. Gebruik de actuele productinformatie voor je advies.", "Een vraag over allergenen of dieetwensen? Raadpleeg de actuele allergeneninformatie en vraag je collega; doe geen aannames."] },
-    { id: "w3", title: "Fris, verzorgd en klaar voor de dag", minutes: 6, description: "Samen openen, schoon werken en zorgvuldig afsluiten.", steps: ["Neem de opstartlijst van jouw winkel met je maatje door.", "Laat zien waar je de temperatuurregistratie en schoonmaaktaken in de app vindt.", "Oefen het controleren van datums en volg het actuele FIFO-plan van jouw winkel."] },
-    { id: "w4", title: "Bestellingen zonder verrassingen", minutes: 5, description: "Luisteren, controleren en goed overdragen.", steps: ["Herhaal met de klant wat besteld wordt, voor hoeveel personen en op welke datum en tijd.", "Leg bijzondere wensen vast op de juiste bestelregel. Controleer samen de gegevens.", "Vraag je maatje hoe je de bestelling overdraagt en waar je openstaande vragen noteert."] },
+    { id: "w3", title: "Fris, verzorgd en klaar voor de dag", minutes: 6, description: "Samen openen, schoon werken en zorgvuldig afsluiten.", steps: ["Neem de opstartlijst van jouw winkel door. Vraag Roos om uitleg als iets onduidelijk is.", "Laat zien waar je de temperatuurregistratie en schoonmaaktaken in de app vindt.", "Oefen het controleren van datums en volg het actuele FIFO-plan van jouw winkel."] },
+    { id: "w4", title: "Bestellingen zonder verrassingen", minutes: 5, description: "Luisteren, controleren en goed overdragen.", steps: ["Herhaal met de klant wat besteld wordt, voor hoeveel personen en op welke datum en tijd.", "Leg bijzondere wensen vast op de juiste bestelregel. Controleer samen de gegevens.", "Vraag Roos hoe je de bestelling overdraagt en waar je openstaande vragen noteert."] },
   ],
   bakkerij: [
-    { id: "b1", title: "Welkom op de werkvloer", minutes: 5, description: "Je werkplek, je collega’s en de dagstart.", steps: ["Maak kennis met je inwerkmaatje en de collega’s van jouw afdeling.", "Loop de werkplek langs: grondstoffen, gereedschap, opslag en de actuele productieplanning.", "Bespreek vóór je begint welke werkzaamheden je zelfstandig mag doen en waarvoor je begeleiding nodig hebt."] },
-    { id: "b2", title: "Van recept naar mooi gebak", minutes: 8, description: "Het ambacht leer je samen, stap voor stap.", steps: ["Zoek met je maatje een actueel recept op. Lees eerst hoeveelheden, werkwijze en aandachtspunten.", "Bekijk de gewenste afwerking en presentatie. Vraag om een voorbeeld voordat je begint.", "Werk een eerste product samen af. Bespreek wat goed gaat en wat je nog wilt oefenen."] },
-    { id: "b3", title: "Schoon en zorgvuldig werken", minutes: 6, description: "Vind de juiste werkinstructies voor jouw afdeling.", steps: ["Neem de actuele hygiëne- en schoonmaakinstructies door met je begeleider.", "Laat zien waar grondstof-, datum- en allergeneninformatie staat. Vraag hulp bij twijfel.", "Gebruik machines pas nadat je de bijbehorende instructie en begeleiding hebt gekregen."] },
-    { id: "b4", title: "Een goede overdracht", minutes: 4, description: "Productie, bijzonderheden en de volgende collega.", steps: ["Controleer hoeveelheden en bijzondere wensen aan de hand van de productieopdracht.", "Bespreek hoe je producten en kratten herkenbaar klaarzet voor logistiek.", "Geef openstaande vragen en afwijkingen door aan je begeleider voordat je afsluit."] },
+    { id: "b1", title: "Welkom op de werkvloer", minutes: 5, description: "Je werkplek, je collega’s en de dagstart.", steps: ["Maak kennis met Roos en de collega’s van jouw afdeling.", "Loop de werkplek langs: grondstoffen, gereedschap, opslag en de actuele productieplanning.", "Bespreek vóór je begint welke werkzaamheden je zelfstandig mag doen en waarvoor je begeleiding nodig hebt."] },
+    { id: "b2", title: "Van recept naar mooi gebak", minutes: 8, description: "Het ambacht leer je samen, stap voor stap.", steps: ["Vraag waar je de actuele recepten vindt. Lees eerst hoeveelheden, werkwijze en aandachtspunten.", "Bekijk de gewenste afwerking en presentatie. Vraag om een voorbeeld voordat je begint.", "Werk een eerste product samen af. Bespreek wat goed gaat en wat je nog wilt oefenen."] },
+    { id: "b3", title: "Schoon en zorgvuldig werken", minutes: 6, description: "Vind de juiste werkinstructies voor jouw afdeling.", steps: ["Neem de actuele hygiëne- en schoonmaakinstructies door. Stel je vragen aan Roos.", "Laat zien waar grondstof-, datum- en allergeneninformatie staat. Vraag hulp bij twijfel.", "Gebruik machines pas nadat je de bijbehorende instructie en begeleiding hebt gekregen."] },
+    { id: "b4", title: "Een goede overdracht", minutes: 4, description: "Productie, bijzonderheden en de volgende collega.", steps: ["Controleer hoeveelheden en bijzondere wensen aan de hand van de productieopdracht.", "Bespreek hoe je producten en kratten herkenbaar klaarzet voor logistiek.", "Geef openstaande vragen en afwijkingen door aan Roos voordat je afsluit."] },
   ],
 };
 export const DOCUMENTS = [
-  { id: "gids", title: "Je inwerkgids", subtitle: "Een wegwijzer voor je eerste weken", icon: "book" as const, sections: ["Je eerste dag: kennismaken, rondleiding en samen starten.", "Je inwerkmaatje: één aanspreekpunt voor je vragen.", "Leren op de werkvloer: meekijken, samen oefenen en zelfstandig proberen.", "Na het inwerken: samen terugkijken en de volgende leerdoelen kiezen."] },
-  { id: "regels", title: "Zo werken we samen", subtitle: "Onze algemene afspraken", icon: "heart" as const, sections: ["We helpen elkaar en spreken elkaar vriendelijk en duidelijk aan.", "Je rooster en werkafspraken bespreek je met je leidinggevende.", "Volg de actuele instructies voor kleding, hygiëne en veilig werken op jouw werkplek.", "Vragen, een foutje of iets onduidelijks? Bespreek het met je inwerkmaatje of leidinggevende."] },
-  { id: "formulier", title: "Indiensttreding", subtitle: "Je gegevens op één plek", icon: "file" as const, sections: ["Je vult je contact- en adresgegevens in bij Mijn gegevens.", "Personeelsbeheer controleert je gegevens voordat het contract wordt klaargezet.", "Benodigde gegevens voor de salarisadministratie worden in de definitieve versie via een afgeschermd formulier aangeleverd."] },
+  { id: "gids", title: "Je inwerkgids", subtitle: "Een wegwijzer voor je eerste weken", icon: "book" as const, sections: ["Je eerste dag: kennismaken, rondleiding en samen starten.", "Roos is je aanspreekpunt voor vragen over je werk en je start bij Strik.", "Leren op de werkvloer: meekijken, samen oefenen en zelfstandig proberen.", "Na het inwerken: samen terugkijken en de volgende leerdoelen kiezen."] },
+  { id: "regels", title: "Zo werken we samen", subtitle: "Onze algemene afspraken", icon: "heart" as const, sections: ["We helpen elkaar en spreken elkaar vriendelijk en duidelijk aan.", "Je rooster en werkafspraken bespreek je met Roos.", "Volg de actuele instructies voor kleding, hygiëne en veilig werken op jouw werkplek.", "Vragen, een foutje of iets onduidelijks? Bespreek het met Roos."] },
+  { id: "formulier", title: "Indiensttreding", subtitle: "Contactgegevens & je start", icon: "file" as const, sections: ["Je vult je contact- en adresgegevens in bij Mijn gegevens.", "Personeelsbeheer controleert je gegevens voordat het contract wordt klaargezet.", "BSN, identiteitskopie en loonheffingsgegevens lever je rechtstreeks aan bij het accountantportaal dat Roos bevestigt. Deze app bewaart alleen de voortgang, geen kopie van die gegevens."] },
 ];
 
 function parseDate(value: string) {
@@ -90,7 +104,7 @@ export function reminders(person: Colleague, policy: Policy) {
 }
 export function initialColleagues(): Colleague[] {
   const make = (id: string, firstName: string, lastName: string, track: Track, location: string, startDate: string, amount: number): Colleague => ({
-    id, profile: { firstName, lastName, email: `${firstName.toLowerCase()}@example.invalid`, phone: "", address: "Voorbeeldstraat 12", postalCode: "0000 AA", city: "Nijmegen", birthDate: "2000-05-12" }, track, location, startDate, buddy: track === "winkel" ? "Robin · je inwerkmaatje" : "Alex · je inwerkmaatje", hours: 24, endDate: addMonths(startDate, 6), submitted: false, checked: false, read: [], completed: [], onboardingDone: false, contract: null, contractState: "none", wages: [{ id: `${id}-loon-1`, effectiveFrom: startDate, amount, reason: "Afspraak bij indiensttreding · fictief" }], evaluation: { date: "", time: "10:00", employeeNote: "", report: "", shared: false, seen: false },
+    id, profile: { firstName, lastName, email: `${firstName.toLowerCase()}@example.invalid`, phone: "", address: "Voorbeeldstraat 12", postalCode: "0000 AA", city: "Nijmegen" }, track, location, startDate, hours: 24, endDate: addMonths(startDate, 6), submitted: false, checked: false, payroll: { identityChecked: false, accountantConfirmed: false }, read: [], completed: [], onboardingDone: false, contract: null, contractState: "none", wages: [{ id: `${id}-loon-1`, effectiveFrom: startDate, amount, reason: "Afspraak bij indiensttreding · fictief" }], evaluation: { date: "", time: "10:00", employeeNote: "", report: "", shared: false, seen: false },
   });
   const noor = make("demo-noor", "Noor", "Jansen", "winkel", "Lent", "2026-11-02", 16.80);
   const sam = make("demo-sam", "Sam", "de Vries", "bakkerij", "Bakkerij Malden", "2026-11-09", 17.60);

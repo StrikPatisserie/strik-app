@@ -1,5 +1,5 @@
 import { durationMinutes, localDate, parseTime } from "./reviewTime";
-import type { ReviewShift, ShiftKind } from "./reviewTypes";
+import type { DayStatus, ReviewShift, ShiftKind } from "./reviewTypes";
 
 type RecordValue = Record<string, unknown>;
 export const isRecord = (value: unknown): value is RecordValue => Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -11,6 +11,22 @@ export function sourceRecords(value: unknown): RecordValue[] | null {
     return rows.every(isRecord) ? rows : null;
   }
   return null;
+}
+export function normalizeDayStatus(value: unknown, date: string): DayStatus {
+  const unknown: DayStatus = { state: "unknown", message: "De versie-2-dagstatus bevat geen eenduidige, overeenkomende status voor deze datum. De dag wordt niet als open of goedgekeurd aangenomen.", employeeApprovalIsNotManagerApproval: true };
+  if (!Array.isArray(value) || !value.every(isRecord)) return unknown;
+  const matches = value.filter(row => {
+    const raw = typeof row.Date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(row.Date) ? `${row.Date}T00:00:00` : row.Date;
+    const parsed = parseTime(raw);
+    return parsed.ms !== null && localDate(parsed.ms) === date;
+  });
+  if (matches.length !== 1) return unknown;
+  const row = matches[0];
+  // Both fields must agree: 1 = open; 2/3/4 = closed/signed off/validated.
+  // A closed or approved timesheet must never become editable through a truthy value.
+  const state = row.Open === true && row.Status === 1 ? "open" : row.Open === false && [2, 3, 4].includes(row.Status as number) ? "closed" : null;
+  if (!state) return unknown;
+  return { state, message: "Dagstatus rechtstreeks uit Tamigo versie 2 voor deze datum. Dit is geen goedkeuring van een Strik-correctievoorstel.", employeeApprovalIsNotManagerApproval: true };
 }
 function text(value: unknown) { return typeof value === "string" ? value : null; }
 function number(value: unknown) {

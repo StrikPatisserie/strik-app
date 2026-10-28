@@ -11,7 +11,7 @@ function load(file, imports = {}, expose = '') {
   return exports;
 }
 const campaignModule = load('app/bakkerij/logistiek/sinterklaasAcquisitionCampaign.ts');
-const dashboard = load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx', {}, 'exports.suggest = buildAcquisitionSuggestions; exports.inPeriod = isAcquisitionCampaignDate; exports.print = createBusRoutePrintHtml;');
+const dashboard = load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx', {'./routePrintPagination':load('app/bakkerij/logistiek/routePrintPagination.ts')}, 'exports.suggest = buildAcquisitionSuggestions; exports.inPeriod = isAcquisitionCampaignDate; exports.print = createBusRoutePrintHtml;');
 const stop = (id, label, detail) => ({ id, sourceId: id, label, detail, badges: [] });
 const routes = [{ id: 'r1', vehicle: 'Bus A', title: 'Ronde 1', stops: [
   stop('west', 'Bedrijf', '6541 AA Nijmegen'),

@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { strikIcons } from "../../StrikUI";
@@ -59,7 +59,7 @@ import {
   emptyBakeryHomeData,
   fetchRecepturenData,
   pruneInvoiceImports,
-  saveRecepturenData,
+  saveRecepturenData as saveSharedRecepturenData,
   type RecepturenData,
 } from "./recepturenApi";
 import type {
@@ -661,9 +661,16 @@ export default function RecepturenApp({
     [recipeItems, scope]
   );
 
+  const storageRevisionRef = useRef<number | undefined>(undefined);
+  async function saveRecepturenData(data: RecepturenData) {
+    const result = await saveSharedRecepturenData({ ...data, storageRevision: storageRevisionRef.current });
+    if (result.ok) storageRevisionRef.current = result.data.storageRevision;
+    return result;
+  }
+
   function persistRecepturenData(
     nextData: RecepturenData,
-    successMessage = "Recepturen opgeslagen in WordPress."
+    successMessage = "Recepturen opgeslagen in de gedeelde opslag."
   ) {
     const completeData: RecepturenData = {
       ...nextData,
@@ -674,7 +681,7 @@ export default function RecepturenApp({
         nextData.manualProductionPlanningItems ?? manualPlanningItems,
     };
 
-    setSyncStatus("Opslaan naar WordPress...");
+    setSyncStatus("Opslaan naar de gedeelde opslag...");
 
     void saveRecepturenData(completeData).then((result) => {
       setSyncStatus(
@@ -690,7 +697,7 @@ export default function RecepturenApp({
     const normalizedHome = normalizeBakeryHomeData(nextHome);
 
     setBakeryHome(normalizedHome);
-    setBakeryHomeStatus("Opslaan naar WordPress...");
+    setBakeryHomeStatus("Opslaan naar de gedeelde opslag...");
 
     void saveRecepturenData({
       ingredients: ingredientItems,
@@ -714,7 +721,7 @@ export default function RecepturenApp({
     setBakeryHome((current) => {
       const normalizedHome = normalizeBakeryHomeData(update(current));
 
-      setBakeryHomeStatus("Opslaan naar WordPress...");
+      setBakeryHomeStatus("Opslaan naar de gedeelde opslag...");
       void saveRecepturenData({
         ingredients: ingredientItems,
         recipes: recipeItems,
@@ -783,6 +790,7 @@ export default function RecepturenApp({
 
       const result = await fetchRecepturenData();
       if (ignoreResult) return;
+      if (result.ok) storageRevisionRef.current = result.data.storageRevision;
       setFinancialAccess(result.ok && result.data.financialAccess === true);
 
       if (result.ok && hasStoredRecepturenData(result.data)) {
@@ -811,13 +819,13 @@ export default function RecepturenApp({
         setHefeOrderHistory(result.data.hefeOrderHistory || []);
         setBakeryHome(normalizeBakeryHomeData(result.data.bakeryHome));
         setManualPlanningItems(result.data.manualProductionPlanningItems || []);
-        setSyncStatus("Recepturen uit WordPress geladen.");
+        setSyncStatus("Recepturen uit de gedeelde opslag geladen.");
       } else if (result.ok) {
         setHefeOrderHistory(result.data.hefeOrderHistory || []);
         setBakeryHome(normalizeBakeryHomeData(result.data.bakeryHome));
         setManualPlanningItems(result.data.manualProductionPlanningItems || []);
         setSyncStatus(
-          "Lokale startdata geladen. Eerste wijziging wordt in WordPress opgeslagen."
+          "Lokale startdata geladen. Eerste wijziging wordt in de gedeelde opslag opgeslagen."
         );
       } else {
         setSyncStatus(`Lokale startdata geladen. ${result.message}`);
@@ -1843,7 +1851,7 @@ export default function RecepturenApp({
         recipes: recipeItems,
         invoiceImports: nextInvoices,
       },
-      "Factuur opgeslagen in WordPress; het bestand zelf is niet bewaard."
+      "Factuur opgeslagen in de gedeelde opslag; het bestand zelf is niet bewaard."
     );
   }
 
@@ -2058,7 +2066,7 @@ export default function RecepturenApp({
   ) {
     if (!file) return;
 
-    setOfferUploadStatus("Aanbieding uploaden naar WordPress...");
+    setOfferUploadStatus("Aanbieding uploaden naar de gedeelde opslag...");
 
     const targetWeekCount = clampOfferWeekCount(weekCount);
     const targetWeeks = Array.from({ length: targetWeekCount }, (_, index) =>
@@ -2767,7 +2775,7 @@ export function BakkerijWeddingCakeAgendaPanel({
             });
 
             if (!response.ok) {
-              throw new Error(`WordPress gaf status ${response.status}.`);
+              throw new Error(`de gedeelde opslag gaf status ${response.status}.`);
             }
 
             return normalizeDraftList(await response.json());
@@ -3208,9 +3216,9 @@ function ManagementSyncStatus({
 }: Readonly<{ status: string; isLoading: boolean }>) {
   const message = isLoading
     ? "Gegevens laden…"
-    : status === "Recepturen uit WordPress geladen." || status === "Lokale receptuurdata geladen."
+    : status === "Recepturen uit de gedeelde opslag geladen." || status === "Lokale receptuurdata geladen."
       ? ""
-      : status.replace("Opslaan naar WordPress...", "Opslaan…").replace("Recepturen opgeslagen in WordPress.", "Opgeslagen.");
+      : status.replace("Opslaan naar de gedeelde opslag...", "Opslaan…").replace("Recepturen opgeslagen in de gedeelde opslag.", "Opgeslagen.");
   const needsAttention = /niet opgeslagen|mislukt|kon niet|lokaal bijgewerkt|lokale startdata/i.test(message);
 
   return (

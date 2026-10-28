@@ -47,12 +47,74 @@
 .root progress::-webkit-progress-value { background:#668459; border-radius:10px; transition:width .25s ease; }
 .root progress::-moz-progress-bar { background:#668459; border-radius:10px; }
 .sidebarProgress p { color:#84907b; font-size:11px; margin-top:9px; }
-.buddy { display:flex; gap:10px; padding:18px 0; margin-top:24px; }
-.buddyIcon { color:#9b855e; padding-top:5px; }
-.buddy small { display:block; font-size:10px; color:var(--muted); }
-.buddy strong { display:block; font-size:11px; margin:5px 0; }
-.buddy button { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--green); min-height:35px; text-decoration:underline; text-underline-offset:3px; }
+.contactCard { display:flex; gap:10px; padding:18px 0; margin-top:24px; }
+.contactIcon { color:#9b855e; padding-top:5px; }
+.contactCard small { display:block; font-size:10px; color:var(--muted); }
+.contactCard strong { display:block; font-size:11px; margin:5px 0; }
+.contactCard button { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--green); min-height:35px; text-decoration:underline; text-underline-offset:3px; }
 .employeeContent { min-width:0; display:grid; align-content:start; gap:21px; padding-bottom:30px; }
+.faqSearch { display:grid; gap:7px; max-width:540px; }
+.faqList { border:1px solid var(--line); border-radius:12px; background:white; overflow:hidden; }
+.faqItem + .faqItem { border-top:1px solid var(--line); }
+.faqItem summary { display:flex; align-items:center; justify-content:space-between; gap:16px; min-height:76px; padding:17px 21px; cursor:pointer; font-weight:600; list-style:none; }
+.faqItem summary::-webkit-details-marker { display:none; }
+.faqItem summary small { display:block; font-size:10px; color:var(--muted); font-weight:400; margin-bottom:4px; }
+.faqItem[open] summary { color:var(--green); }
+.faqItem[open] summary > svg { transform:rotate(45deg); }
+.faqAnswer { padding:0 21px 19px; font-size:13px; max-width:780px; }
+.faqPending { color:#886a3e; }
+.faqContact { display:flex; align-items:center; gap:15px; padding:20px; background:#eaf0e4; border-radius:12px; }
+.faqContact h2 { font-size:17px; }
+.faqContact p { margin-top:3px; font-size:12px; color:#607354; }
+.faqManagement { display:grid; gap:23px; }
+.faqEditorGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.faqEditor { display:flex; flex-direction:column; gap:14px; padding:21px; border:1px solid var(--line); border-radius:12px; background:white; min-width:0; }
+.faqEditor .sectionHeading { margin:0; }
+.faqEditor .sectionHeading > span { max-width:none; }
+.faqEditor h2 { font-size:17px; }
+.faqEditor label { display:grid; gap:7px; flex:1; }
+.faqEditor textarea { font-size:13px; line-height:1.55; min-height:120px; resize:vertical; }
+.faqEditorActions { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.privacySummary { display:flex; align-items:flex-start; gap:17px; padding:22px; background:#eaf0e4; border:1px solid #d3ddc9; border-radius:12px; }
+.privacySummary > div { flex:1; }
+.privacySummary h2 { font-size:18px; }
+.privacySummary p { font-size:13px; margin-top:5px; }
+.privacyIntro { display:flex; align-items:flex-start; gap:13px; padding:17px; border-radius:10px; background:#eaf0e4; font-size:13px; }
+.maskedExample { display:flex; align-items:center; gap:18px; justify-content:space-between; padding:22px 0 10px; }
+.maskedExample small { font-size:11px; color:var(--muted); }
+.maskedExample h3 { display:flex; align-items:center; gap:20px; margin:10px 0 8px; }
+.maskedExample h3 span { font-size:25px; letter-spacing:2px; white-space:nowrap; }
+.maskedExample p { font-size:11px; color:var(--muted); max-width:350px; }
+.maskedExample button { max-width:230px; }
+.privacyFlow { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; margin:23px 0; }
+.privacyFlow section { padding-top:14px; border-top:2px solid #c5d3ba; min-width:0; }
+.privacyFlow section > span { display:block; font-size:10px; color:#927952; margin-bottom:8px; }
+.privacyFlow h3 { font-size:15px; }
+.privacyFlow p { font-size:12px; margin-top:7px; }
+.portalPending { display:flex; gap:20px; align-items:center; justify-content:space-between; background:#f1eee6; padding:18px; border-radius:10px; }
+.portalPending p { font-size:12px; margin-top:5px; }
+.portalPending button { flex-shrink:0; }
+.securityDetails { border-bottom:1px solid var(--line); padding:15px 0; }
+.securityDetails summary { font-weight:600; cursor:pointer; padding:10px 0; }
+.securityDetails ul { font-size:12px; line-height:1.65; padding-left:20px; margin:5px 0; }
+.securityDetails li + li { margin-top:9px; }
+.retentionNote { font-size:11px; color:#6f7869; margin-top:15px !important; }
+.retentionNote a { color:var(--green); text-decoration:underline; text-underline-offset:3px; }
+.payrollChecklist { padding:19px; margin-bottom:24px; border:1px solid var(--line); background:#f0f3eb; border-radius:10px; }
+.payrollChecklist .sectionHeading { margin-bottom:10px; }
+.payrollChecklist > p { font-size:12px; margin-bottom:10px; }
+.payrollChecklist .checkRow { margin:5px 0; }
+@media(max-width:750px) {
+ .faqEditorGrid,.privacyFlow { grid-template-columns:1fr; }
+ .privacySummary,.portalPending,.maskedExample { flex-wrap:wrap; }
+ .privacySummary > div { min-width:180px; }
+ .faqContact { align-items:flex-start; }
+ .faqItem summary { padding:16px; font-size:13px; }
+ .faqAnswer { padding:0 16px 17px; }
+ .faqEditor { padding:17px; }
+ .faqEditorActions .secondaryButton { flex:1; }
+ .portalPending button,.maskedExample button { width:100%; max-width:none; }
+}
 .eyebrow { display:block; font-size:10px; font-weight:700; letter-spacing:1.7px; line-height:1.6; text-transform:uppercase; color:#9a805a; }
 .welcomeHero { display:grid; grid-template-columns:1.12fr 1fr; min-height:304px; border-radius:15px; overflow:hidden; background:#efe8da; }
 .heroCopy { padding:32px 30px; align-content:center; }
@@ -317,7 +379,7 @@
  .personBlock { border:0; padding:0 0 13px; }
  .employeeSidebar nav { grid-column:1 / -1; display:flex; gap:8px; padding:3px 0 12px; overflow:auto; border-bottom:1px solid var(--line); }
  .employeeSidebar nav button { flex-shrink:0; padding:10px 12px; min-height:43px; font-size:12px; }
- .buddy { display:none; }
+ .contactCard { display:none; }
  .sidebarProgress { max-width:180px; min-width:130px; padding:0; margin:0 0 13px; border:0; }
  .sidebarProgress p { display:none; }
  .sidebarProgress { grid-column:2; grid-row:1; }
@@ -349,7 +411,7 @@
  .personBlock div > span { font-size:10px; }
  .sidebarProgress { min-width:95px; max-width:110px; }
  .sidebarProgress > div { font-size:9px; }
- .employeeSidebar nav { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:3px; overflow:visible; }
+ .employeeSidebar nav { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:3px; overflow:visible; }
  .employeeSidebar nav button { position:relative; flex-direction:column; gap:7px; padding:10px 3px; min-height:62px; font-size:9px; text-align:center; }
  .employeeSidebar nav button > span { flex:none; line-height:1.3; }
  .employeeSidebar nav button > svg:last-child:not(:first-child) { position:absolute; top:2px; right:1px; width:12px; height:12px; }

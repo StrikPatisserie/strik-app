@@ -8,6 +8,8 @@ function pick<T extends object>(value: T, keys: string[]): Record<string, unknow
 export function recipeDataForProduction(data: RecepturenData): RecepturenData {
   return {
     financialAccess: false,
+    storageRevision: data.storageRevision,
+    storageProvider: data.storageProvider,
     ingredients: data.ingredients.map(item => ({
       ...pick(item, ["id", "name", "supplier", "supplierArticleNumber", "packageSize", "recipeUnit", "allergens", "lastUpdated", "status", "aliases"]),
       specification: item.specification ? pick(item.specification, ["specsPlazaId", "specificationVersion", "ingredientsText", "allergensConfirmed", "nutritionPer100g", "densityGramsPerMl", "pieceWeightGrams", "source", "updatedAt"]) : undefined,

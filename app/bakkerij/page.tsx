@@ -5,6 +5,20 @@ import { getCurrentProfile } from "../lib/auth/session";
 
 const productieItems = [
   {
+    href: "/bakkerij/productie",
+    title: "Strik Productie",
+    description: "Weekplanning, recepten en onderdelen in de nieuwe productieomgeving.",
+    icon: strikIcons.bakkerij,
+    accent: "coral" as const,
+  },
+  ...(process.env.NODE_ENV === "development" ? [{
+    href: "/preview/productie",
+    title: "Strik Productie · preview",
+    description: "Probeer het nieuwe weekbord, onderdelen en de XL-schermstand.",
+    icon: strikIcons.bakkerij,
+    accent: "coral" as const,
+  }] : []),
+  {
     href: "/bakkerij/bakkerij",
     title: "Bakkerij",
     description: "Recepten, planning, HACCP en bruidstaartproductie.",
