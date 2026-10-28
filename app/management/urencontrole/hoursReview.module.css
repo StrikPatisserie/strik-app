@@ -36,6 +36,8 @@
 .sourceChecks small { display:block; overflow-wrap:anywhere; color:#657467; font-size:.68rem; margin-top:5px; }
 .resultHeader { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; margin-top:4px; }
 .resultHeader > span { color:#52634f; font-size:.72rem; }
+.sortControl { display:flex; align-items:center; flex-wrap:wrap; gap:8px; font-size:.72rem; color:#52634f; }
+.sortControl select { max-width:100%; font-size:.78rem; }
 .views { display:flex; gap:4px; flex-wrap:wrap; }
 .views button { display:flex; align-items:center; gap:8px; border-color:transparent; background:#f1f5ec; color:#4c6250; padding:8px 13px; }
 .views button b { font-size:.75rem; min-width:22px; border-radius:5px; padding:2px 5px; background:#e0e9d9; }

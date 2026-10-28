@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
 import { buildHoursReview, effectiveRules, validateConfig } from "./reviewRules";
-import { DEFAULT_REVIEW_VIEW, focusFlags, missingReviewEmployee, selectReviewRows, visibleReviewDepartment, type ReviewView } from "./reviewPresentation";
+import { DEFAULT_REVIEW_VIEW, focusFlags, missingReviewEmployee, selectReviewRows, visibleReviewDepartment, type ReviewSort, type ReviewView } from "./reviewPresentation";
 import { reviewAccessSummary } from "./reviewAccess";
 import { createHoursReviewDemo } from "./demo";
 import CorrectionEditor from "./CorrectionEditor";
@@ -164,6 +164,7 @@ export default function HoursReview({ demo = false }: { demo?: boolean }) {
   const [employee, setEmployee] = useState("");
   const [flagType, setFlagType] = useState("");
   const [view, setView] = useState<ReviewView>(DEFAULT_REVIEW_VIEW);
+  const [sort, setSort] = useState<ReviewSort>("priority");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showNonWork, setShowNonWork] = useState(false);
   const [page, setPage] = useState(1);
@@ -198,7 +199,7 @@ export default function HoursReview({ demo = false }: { demo?: boolean }) {
     }
     return [...people.entries()].sort((a, b) => a[1].localeCompare(b[1], "nl"));
   }, [rows, department]);
-  const { rows: filtered, counts } = selectReviewRows(rows, { department, employee, flagType, showNonWork, view });
+  const { rows: filtered, counts } = selectReviewRows(rows, { department, employee, flagType, showNonWork, view, sort });
   const pages = Math.max(1, Math.ceil(filtered.length / 25)), currentPage = Math.min(page, pages);
   const shown = filtered.slice((currentPage - 1) * 25, currentPage * 25);
   const { incompleteSources, dayBlocked, notice } = reviewAccessSummary(dataset?.checks || []);
@@ -208,7 +209,7 @@ export default function HoursReview({ demo = false }: { demo?: boolean }) {
     <StrikPageHeader title="Urencontrole" icon={strikIcons.managementSchedule} />
     {demo ? <p className={styles.demo}>Preview met fictieve diensten · geen Tamigo-verzoeken</p> : null}
     <section className={styles.panel}>
-      <div className={styles.heading}><p><strong>Meldingen eerst.</strong> Open een dienst voor de details.</p><button type="button" disabled={loading} onClick={() => { setRefresh(refresh + 1); setExpandedId(null); }}>Vernieuwen</button></div>
+      <div className={styles.heading}><p><strong>{sort === "employee" ? "Medewerkers op alfabet." : sort === "date" ? "Diensten op datum en begintijd." : "Meldingen eerst."}</strong> Open een dienst voor de details.</p><button type="button" disabled={loading} onClick={() => { setRefresh(refresh + 1); setExpandedId(null); }}>Vernieuwen</button></div>
       <div className={styles.filters}>
         <label>Periode<select value={period} onChange={event => { setPeriod(event.target.value as "calendar" | "payroll"); setPage(1); setExpandedId(null); }}><option value="payroll">Loonperiode · 26 t/m 25</option><option value="calendar">Kalendermaand</option></select></label>
         <label>{period === "payroll" ? "Loonperiode" : "Maand"}<input type="month" min="2000-01" max="2100-12" value={month} onChange={event => { setMonth(event.target.value); setPage(1); setExpandedId(null); if (!event.target.value) setDataset(null); }} /></label>
@@ -232,14 +233,14 @@ export default function HoursReview({ demo = false }: { demo?: boolean }) {
     {loading ? <p role="status" className={styles.panel}>Rooster en werkelijke registraties alleen-lezen ophalen…</p> : dataset ? <>
       <div className={styles.resultHeader}>
         <div className={styles.views} role="group" aria-label="Diensten selecteren">{([["attention", "Te controleren"], ["no_flags", "Zonder melding"], ["all", "Alle medewerkers"], ["unassigned", "Zonder medewerker"]] as const).map(([key, label]) => <button key={key} type="button" aria-pressed={view === key} onClick={() => { setView(key); setFlagType(""); setPage(1); setExpandedId(null); }}>{label}<b>{counts[key]}</b></button>)}</div>
-        <span>Voorstellen · pas na controle en bevestiging opslaan</span>
+        <label className={styles.sortControl}>Sorteren op<select value={sort} onChange={event => { setSort(event.target.value as ReviewSort); setPage(1); setExpandedId(null); }}><option value="priority">Controlepunten eerst</option><option value="employee">Medewerker · A–Z</option><option value="date">Datum · oud naar nieuw</option></select></label>
       </div>
       {view === "unassigned" ? <p className={styles.muted}>Diensten zonder medewerker of zonder beschikbare naam staan apart. Zonder medewerker-ID gaat het waarschijnlijk om een open dienst; een ontbrekende naam alleen bewijst dat niet.</p> : null}
       {shown.length ? <div className={styles.rows}>
         <div className={`${styles.listHeader} ${styles.rowGrid}`} aria-hidden="true"><span>Medewerker / dienst</span><span>Gepland</span><span>Geregistreerd</span><span>Voorstel</span><span>Verschil</span><span>Controlepunt</span><span /></div>
         {shown.map(row => <ReviewCard key={`${dataset.generatedAt}:${row.id}`} row={row} demo={demo} expanded={expandedId === row.id} onToggle={() => setExpandedId(expandedId === row.id ? null : row.id)} config={config} reviewMonth={row.actual?.date.slice(0, 7) || month} onCompare={(current, other) => setComparison([current, other])} onChanged={() => { setExpandedId(null); setRefresh(value => value + 1); }} />)}
       </div> : <p className={styles.panel}>{incompleteSources.length ? "Geen passende registraties getoond. Er ontbreken brongegevens; dit betekent niet dat er geen diensten of afwijkingen zijn." : "Geen diensten voor deze selectie. Pas de filters aan."}</p>}
-      <div className={styles.footer}><p className={styles.muted}>Geen melding is geen goedkeuring. Voorstellen vragen altijd beoordeling; een melding is geen bewijs van een fout.</p><span className={styles.muted}>{filtered.length} {filtered.length === 1 ? "dienst" : "diensten"}{flagType ? ` · ${FLAG_LABELS[flagType as FlagType]}` : ""} · belangrijkste controlepunten eerst</span></div>
+      <div className={styles.footer}><p className={styles.muted}>Geen melding is geen goedkeuring. Voorstellen vragen altijd beoordeling; een melding is geen bewijs van een fout.</p><span className={styles.muted}>{filtered.length} {filtered.length === 1 ? "dienst" : "diensten"}{flagType ? ` · ${FLAG_LABELS[flagType as FlagType]}` : ""} · {sort === "employee" ? "medewerker A–Z, daarna datum" : sort === "date" ? "datum en begintijd oplopend" : "belangrijkste controlepunten eerst"}</span></div>
       {pages > 1 ? <nav className={styles.pagination} aria-label="Pagina's van het urenoverzicht"><button type="button" disabled={currentPage <= 1} onClick={() => { setPage(currentPage - 1); setExpandedId(null); }}>Vorige</button><span>Pagina {currentPage} van {pages} · 25 diensten per pagina</span><button type="button" disabled={currentPage >= pages} onClick={() => { setPage(currentPage + 1); setExpandedId(null); }}>Volgende</button></nav> : null}
     </> : null}
     <OverlapComparison pair={comparison} onClose={() => setComparison(null)} />

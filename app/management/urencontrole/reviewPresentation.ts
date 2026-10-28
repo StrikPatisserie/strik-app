@@ -1,6 +1,7 @@
 import type { FlagType, ReviewRow, ReviewShift } from "./reviewTypes";
 
 export type ReviewView = "attention" | "no_flags" | "all" | "unassigned";
+export type ReviewSort = "priority" | "employee" | "date";
 export const DEFAULT_REVIEW_VIEW: ReviewView = "attention";
 
 export function visibleReviewDepartment(name: string) {
@@ -22,7 +23,7 @@ export function focusFlags(row: ReviewRow) {
   return [...row.flags].sort((a, b) => PRIORITY.indexOf(a.type) - PRIORITY.indexOf(b.type));
 }
 export function selectReviewRows(rows: ReviewRow[], options: {
-  department?: string; employee?: string; flagType?: string; showNonWork?: boolean; view?: ReviewView;
+  department?: string; employee?: string; flagType?: string; showNonWork?: boolean; view?: ReviewView; sort?: ReviewSort;
 } = {}) {
   const scoped = rows.filter(row => {
     const source = row.actual || row.planned!;
@@ -38,6 +39,13 @@ export function selectReviewRows(rows: ReviewRow[], options: {
   const selected = (view === "unassigned" ? unassigned : assigned).filter(row => (view === "unassigned" || view === "all" || (view === "attention" ? row.flags.length > 0 : !row.flags.length))
     && (!options.flagType || row.flags.some(flag => flag.type === options.flagType)));
   const priority = (row: ReviewRow) => row.flags.length ? PRIORITY.indexOf(focusFlags(row)[0].type) : PRIORITY.length;
-  selected.sort((a, b) => priority(a) - priority(b) || a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+  const source = (row: ReviewRow) => row.actual || row.planned!;
+  const employeeOrder = (a: ReviewRow, b: ReviewRow) => source(a).employeeName.localeCompare(source(b).employeeName, "nl", { sensitivity: "base", numeric: true }) || (source(a).employeeId || "").localeCompare(source(b).employeeId || "");
+  const chronological = (a: ReviewRow, b: ReviewRow) => (a.date || "9999-12-31").localeCompare(b.date || "9999-12-31") || (source(a).start.ms ?? Infinity) - (source(b).start.ms ?? Infinity);
+  selected.sort((a, b) => {
+    if (options.sort === "employee") return employeeOrder(a, b) || chronological(a, b) || a.id.localeCompare(b.id);
+    if (options.sort === "date") return chronological(a, b) || employeeOrder(a, b) || a.id.localeCompare(b.id);
+    return priority(a) - priority(b) || a.date.localeCompare(b.date) || a.id.localeCompare(b.id);
+  });
   return { rows: selected, counts };
 }

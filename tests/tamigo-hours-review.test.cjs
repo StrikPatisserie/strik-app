@@ -451,3 +451,16 @@ test('read API rejects unsupported period modes before calling Tamigo',async()=>
  const response=await route.GET(new Request('https://example.test/api/tamigo-hours-review?month=2026-10&period=other'));
  assert.equal(response.status,400);assert.equal(calls.length,0);
 });
+
+test('employee and date sorting order the entire filtered selection without changing source rows or counts',()=>{
+ const make=(id,name,date,start='08:00')=>shift(id,`${date}T${start}:00+02:00`,`${date}T17:00:00+02:00`,{EmployeeId:name,EmployeeName:name});
+ const rows=rules.buildHoursReview(dataset([], [make('a-zoe','Zoë','2026-09-27'),make('a-anna-late','Anna','2026-10-03'),make('a-anna-early','Anna','2026-09-26'),make('a-bram','Bram','2026-10-03','07:00')],{period:'payroll'}));
+ const before=JSON.stringify(rows);
+ const employees=presentation.selectReviewRows(rows,{view:'all',sort:'employee'});
+ assert.deepEqual(Array.from(employees.rows,row=>row.actual.id),['a-anna-early','a-anna-late','a-bram','a-zoe']);
+ const dates=presentation.selectReviewRows(rows,{view:'all',sort:'date'});
+ assert.deepEqual(Array.from(dates.rows,row=>row.actual.id),['a-anna-early','a-zoe','a-bram','a-anna-late']);
+ assert.equal(JSON.stringify(employees.counts),JSON.stringify(dates.counts));assert.equal(JSON.stringify(rows),before);
+ const anna=presentation.selectReviewRows(rows,{view:'all',sort:'date',employee:'Anna'});
+ assert.deepEqual(Array.from(anna.rows,row=>row.actual.id),['a-anna-early','a-anna-late']);
+});
