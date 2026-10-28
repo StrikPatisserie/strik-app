@@ -10,11 +10,11 @@ import s from "../preview/productie/production.module.css";
 
 const sections: { id: string; label: string; icon: IconName; href: string; manager?: boolean }[] = [
   { id: "planning", label: "Weekplanning", icon: "grid", href: PRODUCTION_HOME },
+  { id: "holidays", label: "Feestdagen", icon: "gift", href: `${PRODUCTION_HOME}/feestdagen/sint` },
   { id: "roster", label: "Personeelsrooster", icon: "users", href: `${PRODUCTION_HOME}/rooster` },
   { id: "recipes", label: "Recepten", icon: "book", href: `${PRODUCTION_HOME}?view=recipes` },
   { id: "ingredients", label: "Grondstoffen", icon: "leaf", href: `${PRODUCTION_HOME}?view=ingredients` },
   { id: "haccp", label: "HACCP & registraties", icon: "check", href: `${PRODUCTION_HOME}/haccp` },
-  { id: "holidays", label: "Feestdagen", icon: "gift", href: `${PRODUCTION_HOME}/feestdagen/sint` },
   { id: "stock", label: "Productieregistraties", icon: "stock", href: `${PRODUCTION_HOME}?view=stock` },
   { id: "data", label: "Receptuurbeheer", icon: "settings", href: `${PRODUCTION_HOME}/beheer/recepten`, manager: true },
   { id: "weddings", label: "Bruidstaartproductie", icon: "book", href: `${PRODUCTION_HOME}?board=patisserie&department=bruidstaarten` },

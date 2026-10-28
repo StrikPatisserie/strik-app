@@ -80,6 +80,30 @@
 .tone_rose { --lane:#b38b84; --lane-bg:#f6eeeb; }
 .tone_honey { --lane:#b49b67; --lane-bg:#f7f2e6; }
 .tone_blue { --lane:#83a4ac; --lane-bg:#edf3f4; }
+.cleaningLane { --lane:#5d96bb; --lane-bg:#e9f2fa; }
+.cleaningLane .departmentLabel { padding:12px 13px; background:#eaf2f9; }
+.cleaningLane .departmentLabel h2 { display:flex; align-items:center; gap:5px; color:#315f7c; }
+.cleaningLane .departmentLabel > .textLink { font-size:10px; margin-top:7px; color:#315f7c; }
+.cleaningLane .dayCell { min-height:80px; background:#f5f9fc; }
+.cleaningLane .todayCell { background:#e5f0f9; }
+.cleaningCard { display:flex; align-items:flex-start; gap:6px; padding:8px; border:1px solid #bed4e7; border-left:3px solid #5d96bb; border-radius:5px; background:#eaf3fb; color:#315f7c; min-width:0; }
+.cleaningCard[draggable=true] { cursor:grab; }
+.cleaningComplete { background:#eff4f8; border-color:#bfd0dd; }
+.cleaningMainCheck { display:grid; place-items:center; width:20px; height:20px; min-height:20px; border:0; flex-shrink:0; color:#315f7c; background:transparent; padding:0; }
+.cleaningCheckBox { display:grid; place-items:center; width:16px; height:16px; border:1px solid #88acc6; border-radius:3px; background:#fff; }
+.cleaningOpen { display:block; text-align:left; flex:1; min-width:0; color:inherit; }
+.cleaningOpen strong { display:block; font-size:11px; line-height:1.3; font-weight:700; overflow-wrap:anywhere; }
+.cleaningOpen small { display:block; margin-top:5px; font-size:9px; color:#62849c; }
+.cleaningComplete .cleaningOpen strong { text-decoration:line-through; }
+.cleaningListHeading { font-size:13px; font-weight:700; margin:4px 0 8px !important; color:#315f7c; }
+.cleaningCheckRow { display:flex; align-items:center; gap:12px; min-height:48px; padding:10px 12px; margin-bottom:8px; background:#edf5fc; border:1px solid #c5d8e8; border-radius:5px; cursor:pointer; }
+.dialog .cleaningCheckRow input,.dialog .cleaningRepeat input,.dialog .cleaningRepeatDays input { width:18px; height:18px; min-height:18px; padding:0; accent-color:#447da5; flex-shrink:0; }
+.cleaningCheckRow > span { display:grid; gap:4px; }.cleaningCheckRow strong { font-size:13px; font-weight:600; }.cleaningCheckRow small { font-size:10px; color:#62849c; }
+.cleaningChecked strong { text-decoration:line-through; color:#678297; }
+.cleaningRepeat { display:flex; align-items:center; gap:10px; min-height:44px; margin-top:12px; font-size:12px; }
+.cleaningRepeatDays { display:flex; flex-wrap:wrap; gap:6px 12px; margin:12px 0 0; padding:10px; border:1px solid #c5d8e8; border-radius:5px; }
+.cleaningRepeatDays legend { font-size:10px; color:#62849c; padding:0 5px; }.cleaningRepeatDays label { display:flex; align-items:center; gap:6px; min-height:36px; font-size:11px; }
+@media (max-width:800px), (pointer:coarse) { .cleaningMainCheck { width:44px; height:44px; min-height:44px; }.cleaningOpen { min-height:44px; }.cleaningOpen strong { font-size:13px; }.cleaningOpen small { font-size:10px; }.cleaningRepeatDays label { min-height:44px; } }
 .tone_sand { --lane:#a68b6c; --lane-bg:#f3eee7; }
 .departmentLabel { padding:16px 13px; position:relative; background:linear-gradient(130deg,var(--lane-bg),#fff); }
 .departmentMark { display:block; width:22px; height:3px; background:var(--lane); margin-bottom:10px; border-radius:2px; }
@@ -374,3 +398,6 @@
 .staffPersonSettings { border:1px solid var(--line,#dfe4da); border-radius:4px; padding:12px; margin-top:10px; }.staffPersonSettings > header { display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:10px; }.staffPersonForm { display:grid; grid-template-columns:minmax(0,1fr) 160px; gap:14px; margin-bottom:10px; }.staffPersonSettings textarea { min-height:65px; }.staffSaved { color:#2c513e; font-size:12px; }.staffSettings form > button { justify-self:start; }
 @media(max-width:1100px) { .staffWeek { grid-template-columns:repeat(7,minmax(145px,1fr)); overflow-x:auto; }.staffing { overflow:visible; }.staffWeek { display:flex; }.staffDay { flex:0 0 160px; }.staffDialog { width:calc(100vw - 24px); } }
 @media(max-width:800px) { .staffWeek { display:block; overflow:visible; }.staffDay { display:none; }.staffDay.staffSelectedDay { display:block; border:0; }.staffDay > div { min-height:100px; }.staffToolbar .weekPicker { width:100%; }.staffToolbar select { max-width:none; flex:1; }.staffPersonForm { grid-template-columns:1fr; gap:8px; }.staffPersonSettings { padding:10px; }.staffDialog .dialogBody { padding:10px; }.staffAddPerson select { max-width:none; width:100%; }.staffPeek { gap:7px; }.staffPeek .secondaryButton { min-height:44px; }.staffDay > header { padding:10px; }.staffChecks label { min-height:44px; } }
+
+.wall .cleaningLane .dayCell { min-height:80px; padding:6px; }
+.wall .cleaningOpen strong { font-size:13px; }

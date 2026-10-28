@@ -36,6 +36,11 @@ test('stale revisions, storage outages and duplicate output cannot overwrite the
  r=route(manager,{failRead:true});assert.equal((await r.api.GET()).status,503);
  r=route(manager);const state=structuredClone(r.store.planner.data);state.tasks.push({...state.tasks[0],id:'duplicate'});assert.equal((await r.api.PUT(put(state))).status,400);assert.equal(r.counts().writes,0);
 });
+test('an ordinary production save preserves cleaning and cannot forge or erase its completion history',async()=>{
+ const r=route(manager);r.store.planner.data.cleaning=[{id:'cleaning:2026-10-28',date:'2026-10-28',main:{id:'clean-check',label:'Reinigen',done:true,completedBy:'baker',completedAt:'2026-10-28T10:00:00.000Z'},daily:[]}];
+ for(const changed of [undefined,[],[{...r.store.planner.data.cleaning[0],main:{...r.store.planner.data.cleaning[0].main,done:false,completedBy:undefined,completedAt:undefined}}]]){const response=await r.api.PUT(put({...r.store.planner.data,cleaning:changed}));assert.equal(response.status,409);assert.equal(r.counts().writes,0);}
+ const response=await r.api.PUT(put(r.store.planner.data));assert.equal(response.status,200);assert.equal((await response.json()).state.cleaning[0].main.completedBy,'baker');
+});
 test('managers can remove planned tasks and restore originals while recovery records cannot be erased or rewritten',async()=>{
  const r=route(manager),original=structuredClone(r.store.planner.data.tasks[0]);
  let response=await r.api.PUT(put({...r.store.planner.data,tasks:[],removedTasks:[]}));
@@ -129,6 +134,7 @@ test('production navigation separates operational recipes from management and ke
  const nodes=tree=>!tree || typeof tree!=='object'?[]:Array.isArray(tree)?tree.flatMap(nodes):[tree,...nodes(tree.props?.children)];
  const text=tree=>typeof tree==='string'?tree:Array.isArray(tree)?tree.map(text).join(''):tree?.props?text(tree.props.children):'';
  for(const canManage of [false,true]){const tree=nav.default({active:'planning',canManage,canBakery:true,boards:[],demo:false});assert(text(tree).includes('Strik-app · hoofdmenu'));assert(text(tree).includes('Recepten'));assert.equal(text(tree).includes('Receptuurbeheer'),canManage);assert(!text(tree).includes('Producten & onderdelen'));assert(!text(tree).includes('Verpakkingen'));assert(nodes(tree).some(n=>n.props?.href==='/'));}
+ const menu=nodes(nav.default({active:'planning',canManage:true,boards:[]})).find(n=>n.type==='nav');assert.equal(text(menu.props.children[0]),'Weekplanning');assert.equal(text(menu.props.children[1]),'Feestdagen');
 });
 test('the loading screen retains the role-specific production frame and a local status indicator',()=>{
  const jsx=require('react/jsx-runtime');

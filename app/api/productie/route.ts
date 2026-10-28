@@ -32,6 +32,7 @@ export async function PUT(request:Request) {
     if (!validWorkspace(incoming.state,views)) throw new ProductionStoreError("De wijziging bevat een ongeldige taak, receptkoppeling of dubbele batchregistratie.",400);
     const current=syncRecipeCatalog(planner.data,recipes.data);
     if(JSON.stringify(incoming.state.staffing)!==JSON.stringify(current.staffing))throw new ProductionStoreError("Roosterinstellingen worden apart beheerd. Ververs de planning om met de actuele versie te werken.",409);
+    if(JSON.stringify(incoming.state.cleaning)!==JSON.stringify(current.cleaning))throw new ProductionStoreError("De schoonmaaklijst is intussen gewijzigd. Ververs de planning om met de actuele versie te werken.",409);
     let next:PreviewState;
     try { next=hasFullAccess(profile)?incoming.state:mergeWorkspaceForEmployee(current,incoming.state,allowed); }
     catch(error) { throw new ProductionStoreError((error as Error).message,403); }

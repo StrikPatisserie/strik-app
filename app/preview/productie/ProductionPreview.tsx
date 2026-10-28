@@ -5,6 +5,7 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import WeddingWeekLane from "../../productie/WeddingWeekLane";
+import CleaningWeekLane from "../../productie/CleaningWeekLane";
 import { scheduleWedding, type WeddingProductionOrder } from "../../productie/weddingPlanning";
 const OfferManager=dynamic(()=>import("../../bakkerij/recepturen/RecepturenApp"),{loading:()=> <p role="status">Aanbiedingbeheer laden…</p>});
 const ProductionStaffing=dynamic(()=>import("../../productie/ProductionStaffing"),{loading:()=> <p role="status">Personeelsrooster laden…</p>});
@@ -14,11 +15,11 @@ import { productionView, type ProductionView } from "../../productie/navigation"
 import { productionDayRhythm, plannedOperation } from "../../productie/dayRhythm";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import {
-  addDays, addItem, BOARDS, completedOutput, dateLabel, DEPARTMENTS,
+  addDays, addItem, applyCleaningCommand, BOARDS, completedOutput, dateLabel, DEPARTMENTS,
   departmentsFor, durationLabel, KIND_LABELS, linkRecipe, moveTask, removePlannedTask, recipeProductionTasks, removeRecipeProduction, SOURCE_LABELS,
   STATUS_LABELS, taskIssues, transitionTask, weekLabel, weekNumber, requiredTaskIds,
   mondayOf, matchesProductionSearch, type BoardId, type DepartmentId, type Item, type ItemKind, type ItemUnit,
-  type PreviewState, type Task, type TaskStatus,
+  type PreviewState, type Task, type TaskStatus, type CleaningCommand,
 } from "../../productie/planning";
 import { DEMO_TODAY, DEMO_WEEK, demoIngredients, demoRecipes, initialPreviewState, PREVIEW_STORAGE_KEY } from "./sampleData";
 import s from "./production.module.css";
@@ -27,7 +28,7 @@ import { buildRecipePlan, preparationProposal, currentPlanCommand, recipePlanCha
 const WorkspaceContext = createContext({ demo:true, recipes:demoRecipes, canManage:true, saving:false });
 
 type View = ProductionView;
-type Modal = { type: "task"; date?: string; departmentId?: DepartmentId; itemId?: string; priorId?: string; refreshId?: string } | { type: "item" } | { type: "detail"; id: string } | { type: "item-detail"; id: string } | { type: "attention" } | { type: "reset" } | {type:"offer"} | {type:"offer-manage"} | null;
+type Modal = { type: "task"; date?: string; departmentId?: DepartmentId; itemId?: string; priorId?: string; refreshId?: string } | { type: "item" } | { type: "detail"; id: string } | { type: "item-detail"; id: string } | { type: "attention" } | { type: "reset" } | {type:"offer"} | {type:"offer-manage"} | {type:"cleaning";date:string;edit?:boolean} | null;
 const NAV: { id: View; label: string; icon: IconName }[] = [
   { id: "planning", label: "Weekplanning", icon: "grid" },
   { id: "catalog", label: "Producten & onderdelen", icon: "box" },
@@ -164,6 +165,14 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
       return error;
     } catch(e) { return (e as Error).message; }
   }
+  async function clean(command:CleaningCommand):Promise<string|undefined> {
+    if(savingRef.current)return "Wacht tot de vorige wijziging is opgeslagen.";
+    const message=command.kind==="check"?(command.done?"Schoonmaaktaak afgevinkt.":"Schoonmaaktaak heropend."):"Schoonmaakplanning opgeslagen.";
+    if(demo){try{return await persist({...state,cleaning:applyCleaningCommand(state.cleaning || [],command,"preview",new Date().toISOString(),()=>newId("cleaning-check"))},message);}catch(e){return (e as Error).message;}}
+    savingRef.current=true;setSaving(true);
+    try{const response=await fetch("/api/productie/schoonmaak",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({revision:revisionRef.current,command})}),data=await response.json();if(!response.ok)throw Error(data.message || "De schoonmaakwijziging kon niet worden opgeslagen.");revisionRef.current=data.revision;setState(data.state);setSyncedAt(data.updatedAt);notify(message);}
+    catch(e){const message=(e as Error).message;notify(message,true);return message;}finally{savingRef.current=false;setSaving(false);}
+  }
   async function restore(id:string) {
     try {
       const tasks:Task[]=[],seen=new Set<string>();
@@ -244,6 +253,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
         <div className={s.mobileRhythm}><DayRhythm board={board} date={day}/></div>
         <section className={s.board} aria-label="Weekbord">
           <div className={s.boardHeader}><div className={s.departmentColumn}>Afdeling</div>{days.map(d => <div key={d} className={`${s.dayHeading} ${d === today ? s.today : ""}`}><strong>{dateLabel(d)}</strong><span>{d === today ? (demo ? "Voorbeeld: vandaag" : "Vandaag") : `${weekTasks.filter(t => t.date === d).length} taken`}</span><DayRhythm board={board} date={d}/></div>)}</div>
+          {board==="patisserie" && <CleaningWeekLane days={days} day={day} today={today} rows={state.cleaning || []} canManage={canManage} canCheck={!live || live.departments.some(id=>departmentsFor("patisserie").some(d=>d.id===id))} saving={saving} statusFilter={statusFilter} selected={modal?.type==="cleaning"?modal:null} Dialog={ModalFrame} onOpen={selection=>setModal(selection?{type:"cleaning",...selection}:null)} onCommand={clean}/>}
           {visibleDepartments.map(dep => {
             if(dep.id==="bruidstaarten")return <WeddingWeekLane key={dep.id} week={week} days={days} day={day} today={today} state={state} canManage={canManage} saving={saving} demo={demo} statusFilter={statusFilter} Dialog={ModalFrame} onUpdate={updateWedding}/>;
             const tasks = filtered.filter(t => t.departmentId === dep.id);
@@ -258,7 +268,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
             </div>;
           })}
         </section>
-        <footer className={s.boardFooter}><span><i />Gepland <i className={s.activeLegend} />Bezig <i className={s.doneLegend} />Klaar <i className={s.blockedLegend} />Geblokkeerd</span><span>{canManage ? "Sleep om te verplaatsen · open een taak om te wijzigen" : "Open een taak voor details en status"}</span>{!weekend && weekTasks.some(t => t.date === end) && <button onClick={() => setWeekend(true)}>Zondag heeft taken · toon zondag</button>}</footer>
+        <footer className={s.boardFooter}><span><i />Gepland <i className={s.activeLegend} />Bezig <i className={s.doneLegend} />Klaar <i className={s.blockedLegend} />Geblokkeerd</span><span>{canManage ? "Sleep om te verplaatsen · open een taak om te wijzigen" : "Open een taak voor details en status"}</span>{!weekend && (weekTasks.some(t => t.date === end) || (board==="patisserie" && state.cleaning?.some(d=>d.date===end))) && <button onClick={() => setWeekend(true)}>Zondag heeft taken · toon zondag</button>}</footer>
       </> : view === "catalog" ? <>
         <div className={s.sectionIntro}><p>Alles wat je maakt, ook zonder uitgewerkt recept.</p><span>{state.items.filter(i=>i.kind==="product").length} eindproducten · {state.items.filter(i=>i.kind==="component").length} halffabricaten</span></div>
         <div className={s.listToolbar}><Search value={query} onChange={setQuery} placeholder="Zoek op naam of artikelnummer…" /><select aria-label="Type onderdeel" value={kindFilter} onChange={e => setKindFilter(e.target.value)}><option value="all">Alle typen</option><option value="product">Eindproducten</option><option value="component">Halffabricaten</option><option value="activity">Werkzaamheden</option></select><DepartmentSelect value={department} onChange={setDepartment} /></div>

@@ -8,5 +8,5 @@ export default async function HaccpDepartmentPage({params}:{params:Promise<{depa
   {id:"allergenen",name:"Allergenen",text:"Opgeslagen allergenenlijsten bekijken en bijwerken."},
  ]:[{id:"temperaturen",name:"Kookketel & afkoeling",text:"Temperaturen tijdens het ijsbereidingsproces registreren en terugzoeken."}];
  return <><div className={s.resourceCards}>{items.map(item=><Link className={s.resourceCard} key={item.id} href={`/bakkerij/productie/haccp/${department}/${item.id}`}><strong>{item.name}</strong><span>{item.text}</span><small>Open registratie →</small></Link>)}</div>
- <section className={s.infoNote}><p><strong>Schoonmaakrooster</strong><br/>Voor deze productieafdeling is nog geen digitaal rooster ingericht. De bestaande winkellijsten staan bij Winkel.</p></section></>;
+ <section className={s.infoNote}><p><strong>Schoonmaakrooster</strong><br/>{department==="bakkerij"?<Link className={s.textLink} href="/bakkerij/productie?board=patisserie">Open de blauwe schoonmaaktaken in de weekplanning →</Link>:"Voor deze productieafdeling is nog geen digitaal rooster ingericht. De bestaande winkellijsten staan bij Winkel."}</p></section></>;
 }

@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
-export type IconName = "trash" | "users" | "gift" | "grid" | "book" | "box" | "leaf" | "stock" | "settings" | "arrow" | "plus" | "chevron" | "check" | "clock" | "screen" | "close" | "search" | "warning" | "link" | "back" | "move" | "play";
+export type IconName = "cleaning" | "trash" | "users" | "gift" | "grid" | "book" | "box" | "leaf" | "stock" | "settings" | "arrow" | "plus" | "chevron" | "check" | "clock" | "screen" | "close" | "search" | "warning" | "link" | "back" | "move" | "play";
 
 export default function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, ReactNode> = {
+    cleaning: <><path d="m14 3 7 7M17.5 6.5 10 14M5 12l7 7M3 21l2-9 7 7-9 2ZM7 16l-2 5M10 18l-1 3"/></>,
     trash: <><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></>,
     users: <><circle cx="9" cy="7" r="3"/><path d="M2 21v-3a7 7 0 0 1 14 0v3M17 4a3 3 0 0 1 0 6M18 14a5 5 0 0 1 4 5v2"/></>,
     gift: <><rect x="3" y="9" width="18" height="12" rx="1"/><path d="M2 5h20v4H2zM12 5v16"/><path d="M12 5C3 6 6-3 12 5Zm0 0c9 1 6-8 0 0Z"/></>,

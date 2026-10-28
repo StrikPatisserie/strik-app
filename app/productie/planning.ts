@@ -49,7 +49,72 @@ export type DemoRecipe = {
 export type RemovedTask = { task: Task; removedAt: string; removedBy: string };
 export type ProductionStaffingPerson = { employeeId:string; name:string; weekdays:number[]; weeklyHours:number|null; tasks:string };
 export type ProductionStaffingSettings = { departmentIds:string[]; people:ProductionStaffingPerson[] };
-export type PreviewState = { version: 1; items: Item[]; tasks: Task[]; removedTasks?: RemovedTask[]; staffing?:ProductionStaffingSettings };
+export type CleaningCheck = { id:string; label:string; done:boolean; completedAt?:string; completedBy?:string };
+export type CleaningDay = { id:string; date:string; main:CleaningCheck|null; daily:CleaningCheck[] };
+export type CleaningCommand = { kind:"plan"; date:string; main:string; daily:string[]; repeatDates:string[] } | {kind:"check";date:string;checkId:string;done:boolean} | {kind:"remove";date:string} | {kind:"move";date:string;to:string};
+export type PreviewState = { version: 1; items: Item[]; tasks: Task[]; removedTasks?: RemovedTask[]; staffing?:ProductionStaffingSettings; cleaning?:CleaningDay[] };
+export function cleaningProgress(day:CleaningDay) {
+  const checks=[...(day.main?[day.main]:[]),...day.daily],done=checks.filter(c=>c.done).length;
+  return {done,total:checks.length,complete:checks.length>0 && done===checks.length};
+}
+export function validCleaningDays(value:unknown):value is CleaningDay[] {
+  if(!Array.isArray(value) || value.length>10000)return false;
+  const dates=new Set<string>(),ids=new Set<string>();
+  try {for(const day of value as CleaningDay[]){
+    if(!day || typeof day.date!=="string" || day.id!==`cleaning:${day.date}` || dates.has(day.date) || !Array.isArray(day.daily) || day.daily.length>40 || (!day.main && !day.daily.length))return false;
+    addDays(day.date,0);dates.add(day.date);
+    if(day.main!==null && (typeof day.main!=="object" || Array.isArray(day.main)))return false;
+    for(const check of [...(day.main?[day.main]:[]),...day.daily]){
+      if(!check || typeof check.id!=="string" || !check.id || check.id.length>200 || ids.has(check.id) || typeof check.label!=="string" || !check.label.trim() || check.label.length>300 || typeof check.done!=="boolean")return false;
+      ids.add(check.id);
+      if(check.done){if(typeof check.completedBy!=="string" || !check.completedBy || check.completedBy.length>200 || typeof check.completedAt!=="string" || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(check.completedAt) || !Number.isFinite(Date.parse(check.completedAt)))return false;}
+      else if(check.completedAt!==undefined || check.completedBy!==undefined)return false;
+    }
+  }return true;}catch{return false;}
+}
+/** Cleaning is a separate checklist on the Patisserie board, without recipe,
+ * ingredient, batch or stock side effects. Completion identity is server-owned. */
+export function applyCleaningCommand(current:CleaningDay[],command:CleaningCommand,actor:string,now:string,createId:()=>string):CleaningDay[] {
+  if(!validCleaningDays(current))throw Error("De bestaande schoonmaaklijst moet eerst worden gecontroleerd.");
+  if(!command || typeof command.date!=="string")throw Error("Kies een geldige schoonmaakdatum.");
+  addDays(command.date,0);
+  const existing=current.find(d=>d.date===command.date);
+  const requireDay=()=>{if(!existing)throw Error("Deze schoonmaakdag bestaat niet meer. Ververs de planning.");return existing;};
+  let next:CleaningDay[];
+  if(command.kind==="check"){
+    const day=requireDay();if(typeof command.done!=="boolean" || ![...(day.main?[day.main]:[]),...day.daily].some(c=>c.id===command.checkId))throw Error("Kies een bestaande schoonmaaktaak.");
+    const update=(check:CleaningCheck):CleaningCheck=>check.id!==command.checkId || check.done===command.done?check:command.done?{id:check.id,label:check.label,done:true,completedBy:actor,completedAt:now}:{id:check.id,label:check.label,done:false};
+    next=current.map(d=>d.id===day.id?{...d,main:d.main?update(d.main):null,daily:d.daily.map(update)}:d);
+  }else if(command.kind==="remove" || command.kind==="move"){
+    const day=requireDay();if(cleaningProgress(day).done)throw Error("Deze dag bevat afgevinkte schoonmaaktaken. Heropen die eerst; uitgevoerde schoonmaak blijft bewaard.");
+    if(command.kind==="move"){
+      addDays(command.to,0);if(command.to!==day.date && current.some(d=>d.date===command.to))throw Error("Op die dag staat al een schoonmaaklijst. Pas de dag aan via de checklist.");
+      next=current.map(d=>d.id===day.id?{...d,id:`cleaning:${command.to}`,date:command.to}:d);
+    }else next=current.filter(d=>d.id!==day.id);
+  }else if(command.kind==="plan"){
+    const label=(value:unknown)=>{if(typeof value!=="string" || value.length>300)throw Error("Gebruik maximaal 300 tekens per schoonmaaktaak.");return value.trim();};
+    const main=label(command.main);
+    if(!Array.isArray(command.daily) || command.daily.length>40 || !Array.isArray(command.repeatDates) || command.repeatDates.length>6)throw Error("Gebruik maximaal 40 dagelijkse taken en zeven dagen per week.");
+    const daily=command.daily.map(label).filter(Boolean);
+    if(new Set(daily.map(s=>s.toLocaleLowerCase("nl-NL"))).size!==daily.length)throw Error("Een dagelijkse taak staat dubbel in de lijst.");
+    const dates=[command.date,...command.repeatDates];
+    if(new Set(dates).size!==dates.length || dates.some(d=>typeof d!=="string" || mondayOf(d)!==mondayOf(command.date)))throw Error("Kies unieke herhaaldagen binnen dezelfde week.");
+    if(command.repeatDates.length && !daily.length)throw Error("Vul eerst dagelijkse taken in om deze te herhalen.");
+    const updated=new Map<string,CleaningDay|null>();
+    for(const date of dates){
+      const old=current.find(d=>d.date===date),mainLabel=date===command.date?main:old?.main?.label || "";
+      const dayLabels=date===command.date?daily:[...(old?.daily.map(c=>c.label)||[]),...daily.filter(text=>!old?.daily.some(c=>c.label.toLocaleLowerCase("nl-NL")===text.toLocaleLowerCase("nl-NL")))];
+      if(dayLabels.length>40)throw Error("Er kunnen maximaal 40 dagelijkse taken op één dag staan.");
+      if(old?.main?.done && old.main.label!==mainLabel)throw Error("De hoofdtaak is al afgevinkt. Heropen deze eerst voordat je de tekst wijzigt of verwijdert.");
+      if(old?.daily.some(c=>c.done && !dayLabels.includes(c.label)))throw Error("Er zijn al dagelijkse taken afgevinkt. Behoud de tekst of heropen deze eerst.");
+      const make=(text:string,previous?:CleaningCheck):CleaningCheck=>previous?.label===text?previous:{id:createId(),label:text,done:false};
+      updated.set(date,mainLabel || dayLabels.length?{id:`cleaning:${date}`,date,main:mainLabel?make(mainLabel,old?.main || undefined):null,daily:dayLabels.map(text=>make(text,old?.daily.find(c=>c.label===text)))}:null);
+    }
+    next=[...current.filter(d=>!updated.has(d.date)),...[...updated.values()].filter((d):d is CleaningDay=>d!==null)];
+  }else throw Error("Onbekende schoonmaakactie.");
+  if(!validCleaningDays(next))throw Error("De schoonmaakwijziging bevat ongeldige gegevens.");
+  return [...next].sort((a,b)=>a.date.localeCompare(b.date));
+}
 export function validStaffingSettings(value:unknown):value is ProductionStaffingSettings {
   if(!value || typeof value!=="object" || Array.isArray(value))return false;
   const s=value as ProductionStaffingSettings;
