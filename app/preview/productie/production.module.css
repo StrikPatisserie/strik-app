@@ -239,3 +239,37 @@
 .sidebar nav :is(button,a) { min-height:37px; font-size:11px; }
 .sidebarBoards { margin-top:20px; }.sidebarBoards :is(button,a) { min-height:30px; padding-top:6px; padding-bottom:6px; }
 .sidebarBottom { padding-top:20px; }
+
+/* Fixed weekday rhythm and compact production bars. */
+.dayHeading.today { background:#f6dfc0; box-shadow:inset 0 3px #d75a48; }
+.todayCell { background:#fff2de; }
+.dayRhythm { display:grid; gap:3px; margin-top:8px; }
+.dayRhythm > div { display:grid; grid-template-columns:auto 1fr; gap:1px 5px; border:1px solid #dbe1d4; padding:3px 4px; border-radius:2px; background:#f5f7f0; text-align:left; }
+.dayRhythm small { font-size:8px; color:#65725e; white-space:nowrap; }
+.dayRhythm b { font-size:8px; font-weight:700; }
+.dayRhythm em { grid-column:1/-1; font-size:7px; color:#76816e; font-style:normal; }
+.dayRhythm .rhythm_break { background:#f6efe3; border-color:#e8ddcc; }
+.dayRhythm .rhythm_production { background:#fff; }
+.mobileRhythm { display:none; }
+@media(min-width:801px) {
+ .dayCell { min-height:86px; padding:6px 5px; gap:4px; }
+ .taskCard { border:1px solid #b9c6ad; border-left:3px solid var(--lane); border-radius:2px; padding:5px 6px; min-height:37px; box-shadow:none; gap:5px; }
+ .taskCard:hover { box-shadow:none; border-color:#8d9f7f; }
+ .taskOpen strong { font-size:10px; line-height:1.25; }
+ .taskOpen > span { display:inline; font-size:8px; margin-top:0; }
+ .taskOpen small { display:inline-flex; font-size:8px; margin-top:2px; margin-left:6px; }
+ .taskOpen .effort { margin-left:2px; }
+ .wall .dayCell { min-height:100px; padding:6px; }
+ .wall .taskCard { padding:6px 7px; min-height:42px; }
+ .wall .taskOpen strong { font-size:12px; }.wall .taskOpen > span,.wall .taskOpen small { font-size:9px; }
+ .wall .dayRhythm small,.wall .dayRhythm b { font-size:10px; }.wall .dayRhythm em { font-size:9px; }
+}
+.wall .cellAdd { color:#74866a; border-color:#d8e1cf; min-height:24px; }
+.wall .cellAdd > span { opacity:1; }
+@media(max-width:800px) {
+ .mobileRhythm { display:block; margin-bottom:10px; }.mobileRhythm .dayRhythm { grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; margin:0; }.mobileRhythm .dayRhythm > div { display:flex; flex-direction:column; padding:6px; }.mobileRhythm .dayRhythm b { font-size:10px; }.mobileRhythm .dayRhythm small { font-size:9px; }
+ .mobileDays button[data-today=true]:not([aria-pressed=true]) { background:#fff2de; border-color:#d75a48; }
+ .taskCard { padding:8px; border-radius:2px; border-color:#b9c6ad; border-left:3px solid var(--lane); gap:7px; }.taskOpen strong { font-size:12px; }.taskOpen > span { font-size:10px; }.taskOpen small { font-size:9px; margin-top:4px; }.taskCheck { width:25px; height:25px; }
+}
+
+@media(min-width:801px) and (max-width:1100px) { .dayRhythm > div { grid-template-columns:1fr; }.dayRhythm small { font-size:8px; } }

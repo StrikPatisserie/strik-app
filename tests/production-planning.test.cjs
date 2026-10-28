@@ -118,3 +118,19 @@ test('production preview is noindex and unavailable outside development at both 
     assert.equal(middleware.isPublicPath('/preview/productie/private'), false);
   }
 });
+
+
+test('the fixed day rhythm applies only to Patisserie Monday through Friday, including clock-change weeks',()=>{
+ const rhythm=load('app/productie/dayRhythm.ts',{'./planning':m});
+ for(const date of ['2026-10-26','2026-10-27','2026-10-28','2026-10-29','2026-10-30','2026-03-30']){
+  const blocks=rhythm.productionDayRhythm('patisserie',date);
+  assert.equal(JSON.stringify(blocks.map(b=>[b.start,b.end])),JSON.stringify([['05:30','08:00'],['08:00','08:30'],['08:30','14:00']]));
+ }
+ for(const date of ['2026-10-31','2026-11-01','2026-10-25'])assert.equal(rhythm.productionDayRhythm('patisserie',date).length,0);
+ for(const board of ['bak','ijs','chocolade'])assert.equal(rhythm.productionDayRhythm(board,'2026-10-28').length,0);
+ assert.throws(()=>rhythm.productionDayRhythm('patisserie','2026-02-30'),/datum/);
+ assert.equal(rhythm.plannedOperation('product',true,false),'Decoreren / afmaken');
+ assert.equal(rhythm.plannedOperation('component',false,false),'Bereiden');
+ assert.equal(rhythm.plannedOperation('product',false,false),'Maken');
+ assert.equal(rhythm.plannedOperation('product',true,true),'Afwerken');
+});
