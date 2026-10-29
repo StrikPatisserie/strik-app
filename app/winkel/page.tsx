@@ -1,3 +1,4 @@
+import Link from "next/link";
 import CompactStaffOverview from "../CompactStaffOverview";
 import DepartmentHub from "../DepartmentHub";
 import { strikIcons } from "../StrikUI";
@@ -5,8 +6,6 @@ import { canAccessStorePresentation, filterAllowedItems } from "../lib/auth/acce
 import { getCurrentProfile } from "../lib/auth/session";
 
 const winkelItems = [
-  { href: "/sint-voor-bedrijven", title: "Sinterklaasfolder", description: "Bekijk de zakelijke Sinterklaasfolder en bestel voor klanten.", icon: strikIcons.sinterklaas, accent: "coral" as const },
-  { href: "/kerst-voor-bedrijven", title: "Kerstfolder", description: "Bekijk de zakelijke kerstfolder en kerstgeschenken.", icon: strikIcons.kerst, accent: "green" as const },
   {
     href: "/winkel/presentatie",
     title: "Winkelpresentatie",
@@ -56,6 +55,14 @@ export default async function WinkelPage() {
       icon={strikIcons.winkel}
       items={visibleItems}
     >
+      <div className="mt-1 px-1">
+        <Link
+          href="/sint-voor-bedrijven"
+          className="inline-flex min-h-10 items-center gap-2 rounded-sm text-sm font-medium text-[#65594e] underline decoration-[#65594e]/35 underline-offset-4 transition hover:text-[#49342d] hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#49342d]"
+        >
+          Sinterklaas- &amp; kerstfolder <span aria-hidden="true">→</span>
+        </Link>
+      </div>
       <section>
         <CompactStaffOverview />
       </section>
