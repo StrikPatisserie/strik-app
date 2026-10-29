@@ -1,34 +1,50 @@
 "use client";
-import {useState} from "react";
-import {addTask,editTaskText,addTaskCategory,removeTaskCategory,taskCategories,moveTaskCategory,setTaskPriority,taskLines,toggleTask,type TaskPriority} from "./model";
+import {useEffect,useRef,useState,type FormEvent} from "react";
+import Icon from "../productie/ProductionIcon";
+import {addTask,editTaskText,resolveTask,addTaskCategory,removeTaskCategory,taskCategories,moveTaskCategory,setTaskPriority,taskLines,toggleTask,type TaskPriority} from "./model";
 import s from "./personal.module.css";
-type Filter="open"|"priority"|"later"|"done"|"all";
-const filters:{id:Filter;label:string}[]=[{id:"open",label:"Nu doen"},{id:"priority",label:"Prioriteit"},{id:"later",label:"Voor later"},{id:"done",label:"Afgerond"},{id:"all",label:"Alles"}];
+function Pencil(){return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14v6Z"/></svg>;}
 export default function TaskOrganizer({body,disabled,onChange}:{body:string;disabled:boolean;onChange:(body:string)=>Promise<boolean|undefined>}){
- const [filter,setFilter]=useState<Filter>("open"),[text,setText]=useState(""),[parent,setParent]=useState<number|undefined>(),[error,setError]=useState(""),[category,setCategory]=useState(""),[newCategory,setNewCategory]=useState(""),[editingTask,setEditingTask]=useState<number|undefined>();
- const tasks=taskLines(body),categories=["Algemeen",...taskCategories(body)],matches=(task:typeof tasks[number],view:Filter)=>view==="all"||view==="done"&&task.done||!task.done&&(view==="open"?task.priority!=="later":view==="priority"?task.priority==="priority":task.priority==="later");
- const visible=new Set<number>();
- for(let i=0;i<tasks.length;i++)if(matches(tasks[i],filter)&&(!category||tasks[i].category===category)){visible.add(tasks[i].index);let depth=tasks[i].depth;for(let j=i-1;j>=0&&depth>0;j--)if(tasks[j].depth<depth){visible.add(tasks[j].index);depth=tasks[j].depth;}}
- const parentTask=tasks.find(t=>t.index===parent);
- async function createCategory(event:React.FormEvent){event.preventDefault();setError("");try{const name=newCategory.trim();if(await onChange(addTaskCategory(body,name))){setCategory(name);setNewCategory("");}}catch(e){setError((e as Error).message);}}
- async function removeCategory(){
-  if(!category||category==='Algemeen'||disabled)return;setError("");
-  try{if(await onChange(removeTaskCategory(body,category))){setCategory('Algemeen');setParent(undefined);setEditingTask(undefined);setText('');setFilter('all');}}catch(e){setError((e as Error).message);}
- }
- async function submit(event:React.FormEvent){event.preventDefault();setError("");try{if(await onChange(editingTask===undefined?addTask(body,text,parent,category||"Algemeen"):editTaskText(body,editingTask,text))){setText("");setParent(undefined);setEditingTask(undefined);setFilter("all");}}catch(e){setError((e as Error).message);}}
+ const [text,setText]=useState(""),[parent,setParent]=useState<number>(),[editingTask,setEditingTask]=useState<number>(),[error,setError]=useState(""),[category,setCategory]=useState(""),[newCategory,setNewCategory]=useState(""),[addingCategory,setAddingCategory]=useState(false);
+ const input=useRef<HTMLInputElement>(null),categoryInput=useRef<HTMLInputElement>(null);
+ const tasks=taskLines(body),categories=["Algemeen",...taskCategories(body)],selected=categories.includes(category)?category:"";
+ useEffect(()=>{if(parent!==undefined||editingTask!==undefined)input.current?.focus();},[parent,editingTask]);
+ useEffect(()=>{if(addingCategory)categoryInput.current?.focus();},[addingCategory]);
+ function resetComposer(){setParent(undefined);setEditingTask(undefined);setText("");}
+ async function change(next:string){setError("");return onChange(next);}
+ async function createCategory(event:FormEvent){event.preventDefault();try{const name=newCategory.trim();if(await change(addTaskCategory(body,name))){setCategory(name);setNewCategory("");setAddingCategory(false);resetComposer();}}catch(e){setError((e as Error).message);}}
+ async function removeCategory(){if(!selected||selected==='Algemeen'||disabled)return;try{if(await change(removeTaskCategory(body,selected))){setCategory('Algemeen');resetComposer();}}catch(e){setError((e as Error).message);}}
+ async function resolve(index:number){if(disabled)return;try{if(await change(resolveTask(body,index)))resetComposer();}catch(e){setError((e as Error).message);}}
+ async function submit(event:FormEvent){event.preventDefault();try{if(await change(editingTask===undefined?addTask(body,text,parent,selected||"Algemeen"):editTaskText(body,editingTask,text)))resetComposer();}catch(e){setError((e as Error).message);}}
+ function composer(){const inline=editingTask!==undefined||parent!==undefined;return <form className={`${s.taskComposer} ${inline?s.inlineComposer:""}`} onSubmit={event=>void submit(event)}>
+  <Icon name={editingTask!==undefined?"check":"plus"} size={18}/><input ref={input} aria-label={editingTask!==undefined?"Taak wijzigen":parent!==undefined?"Nieuwe subtaak":"Nieuwe to-do"} value={text} maxLength={2000} disabled={disabled} onChange={event=>setText(event.target.value)} placeholder={parent!==undefined?"Nieuwe subtaak…":editingTask!==undefined?"Taak wijzigen…":"Nieuwe to-do…"}/>
+  <button className={s.iconButton} type="submit" disabled={disabled||!text.trim()} title={editingTask!==undefined?"Opslaan":"Toevoegen"} aria-label={editingTask!==undefined?"Opslaan":"Toevoegen"}><Icon name="arrow" size={17}/></button>{inline&&<button className={s.iconButton} type="button" disabled={disabled} onClick={resetComposer} title="Annuleren" aria-label="Annuleren"><Icon name="close" size={16}/></button>}
+ </form>;}
  return <section className={s.taskOrganizer} aria-label="Taken en subtaken">
-  <h3>To-do’s <small>{tasks.filter(t=>!t.done).length} open · {tasks.filter(t=>t.done).length} afgerond</small></h3>
-  <div className={s.categoryFilters} aria-label="Taakcategorieën"><button disabled={disabled} aria-pressed={!category} onClick={()=>{setCategory("");setParent(undefined);}}>Alle categorieën</button>{categories.map(name=><button key={name} disabled={disabled} aria-pressed={category===name} onClick={()=>{setCategory(name);setParent(undefined);}}>{name}</button>)}</div>
-  {category&&category!=="Algemeen"&&<div className={s.categoryRemoval}><span>Categorie verwijderen verplaatst alle taken en subtaken naar Algemeen.</span><button disabled={disabled} onClick={()=>void removeCategory()}>Categorie verwijderen</button></div>}
-  <form className={s.categoryForm} onSubmit={event=>void createCategory(event)}><input aria-label="Nieuwe subcategorie" placeholder="Eigen subcategorie…" maxLength={100} value={newCategory} disabled={disabled} onChange={e=>setNewCategory(e.target.value)}/><button type="submit" disabled={disabled||!newCategory.trim()}>+ Categorie</button></form>
-  <div className={s.taskFilters} aria-label="Taken filteren">{filters.map(item=><button key={item.id} disabled={disabled} aria-pressed={filter===item.id} onClick={()=>setFilter(item.id)}>{item.label} <span>{tasks.filter(t=>matches(t,item.id)&&(!category||t.category===category)).length}</span></button>)}</div>
-  <div className={s.taskRows}>{categories.filter(name=>tasks.some(t=>t.category===name&&visible.has(t.index))).map(name=><section key={name}><h4>{name}</h4>{tasks.filter(t=>t.category===name&&visible.has(t.index)).map(task=><div key={task.index} className={`${s.taskRow} ${task.done?s.completedTask:""}`} style={{marginInlineStart:`${Math.min(task.depth,8)*18}px`}} data-context={!matches(task,filter)||undefined}>
-   <label className={s.taskCheck}><input type="checkbox" checked={task.done} disabled={disabled} onChange={()=>void onChange(toggleTask(body,task.index))}/><span>{task.text}</span></label>
-   <div className={s.taskTools}>{task.depth===0&&<select aria-label={`Categorie van ${task.text}`} value={task.category} disabled={disabled} onChange={e=>{setParent(undefined);setEditingTask(undefined);setText("");void onChange(moveTaskCategory(body,task.index,e.target.value));}}>{categories.map(name=><option key={name} value={name}>{name}</option>)}</select>}<select aria-label={`Prioriteit van ${task.text}`} value={task.priority} disabled={disabled} onChange={e=>void onChange(setTaskPriority(body,task.index,e.target.value as TaskPriority))}><option value="normal">Normaal</option><option value="priority">★ Prioriteit</option><option value="later">Voor later</option></select><button disabled={disabled} onClick={()=>{setEditingTask(task.index);setParent(undefined);setText(task.text);document.getElementById("personal-new-task")?.focus();}}>Bewerken</button><button disabled={disabled||task.depth>=8} onClick={()=>{setEditingTask(undefined);setParent(task.index);setText("");document.getElementById("personal-new-task")?.focus();}}>+ Subtaak</button></div>
-  </div>)}</section>)}</div>
-  {!visible.size&&<p className={s.hint}>Geen taken in deze selectie.</p>}
-  <form className={s.taskForm} onSubmit={event=>void submit(event)}><label htmlFor="personal-new-task">{editingTask!==undefined?"Taak wijzigen":parentTask?`Subtaak onder: ${parentTask.text}`:`Nieuwe to-do · ${category||"Algemeen"}`}</label><div><input id="personal-new-task" value={text} disabled={disabled} maxLength={2000} onChange={e=>setText(e.target.value)} placeholder={parentTask?"Wat moet er voor deze taak gebeuren?":"Wat wil je doen?"}/><button className={s.primary} disabled={disabled||!text.trim()} type="submit">{editingTask!==undefined?"Opslaan":"Toevoegen"}</button>{(parent!==undefined||editingTask!==undefined)&&<button type="button" disabled={disabled} onClick={()=>{setParent(undefined);setEditingTask(undefined);setText("");}}>Annuleren</button>}</div></form>
-  {error&&<p role="alert" className={s.hint}>{error}</p>}
-  <p className={s.hint}>‘Nu doen’ toont open taken zonder ‘Voor later’. Subtaken vink je afzonderlijk af.</p>
+  <div className={s.taskToolbar}>
+   <select aria-label="Taakcategorie kiezen" value={selected} disabled={disabled} onChange={event=>{setCategory(event.target.value);resetComposer();}}><option value="">Alle categorieën</option>{categories.map(name=><option key={name} value={name}>{name}</option>)}</select>
+   <button className={s.iconButton} disabled={disabled} onClick={()=>setAddingCategory(value=>!value)} aria-expanded={addingCategory} aria-label="Categorie toevoegen" title="Categorie toevoegen"><Icon name="plus" size={17}/></button>
+   {selected&&selected!=="Algemeen"&&<button className={`${s.iconButton} ${s.resolveButton}`} disabled={disabled} onClick={()=>void removeCategory()} aria-label={`Categorie ${selected} verwijderen; taken naar Algemeen`} title="Categorie verwijderen · taken gaan naar Algemeen"><Icon name="trash" size={16}/></button>}
+   <small>{tasks.filter(task=>!selected||task.category===selected).length} taken</small>
+  </div>
+  {addingCategory&&<form className={s.compactCategoryForm} onSubmit={event=>void createCategory(event)}><input ref={categoryInput} aria-label="Naam nieuwe categorie" placeholder="Naam categorie…" value={newCategory} maxLength={100} disabled={disabled} onChange={event=>setNewCategory(event.target.value)}/><button className={s.iconButton} type="submit" disabled={disabled||!newCategory.trim()} aria-label="Categorie opslaan" title="Categorie opslaan"><Icon name="check" size={17}/></button><button className={s.iconButton} type="button" disabled={disabled} onClick={()=>setAddingCategory(false)} aria-label="Annuleren" title="Annuleren"><Icon name="close" size={16}/></button></form>}
+  {error&&<p role="alert" className={s.error}>{error}</p>}
+  {parent===undefined&&editingTask===undefined&&composer()}
+  <div className={s.taskRows}>{categories.filter(name=>(!selected||selected===name)&&tasks.some(task=>task.category===name)).map(name=><section key={name}>
+   {!selected&&<h4>{name}</h4>}
+   {tasks.filter(task=>task.category===name).map(task=><div key={task.index} className={s.taskItem} style={{marginInlineStart:`min(${Math.min(task.depth,8)*16}px, 18%)`}}>
+    <div className={`${s.taskRow} ${task.done?s.completedTask:""}`}>
+     <label className={s.taskCheck}><input type="checkbox" checked={task.done} disabled={disabled} onChange={()=>void change(toggleTask(body,task.index))}/><span>{task.text}{task.priority!=="normal"&&<small className={s.taskBadge}>{task.priority==="priority"?"★ Prioriteit":"Later"}</small>}</span></label>
+     <div className={s.taskTools}>
+      <details className={s.taskOptions}><summary aria-label={`Opties voor ${task.text}`} title="Categorie en prioriteit"><Icon name="settings" size={16}/></summary><div>{task.depth===0&&<label>Categorie<select aria-label={`Categorie van ${task.text}`} value={task.category} disabled={disabled} onChange={event=>{event.currentTarget.closest("details")?.removeAttribute("open");resetComposer();void change(moveTaskCategory(body,task.index,event.target.value));}}>{categories.map(value=><option key={value} value={value}>{value}</option>)}</select></label>}<label>Prioriteit<select aria-label={`Prioriteit van ${task.text}`} value={task.priority} disabled={disabled} onChange={event=>void change(setTaskPriority(body,task.index,event.target.value as TaskPriority))}><option value="normal">Normaal</option><option value="priority">Prioriteit</option><option value="later">Voor later</option></select></label><div className={s.mobileTaskActions}><button disabled={disabled} onClick={event=>{event.currentTarget.closest("details")?.removeAttribute("open");setParent(undefined);setEditingTask(task.index);setText(task.text);}}>Bewerken</button><button disabled={disabled||task.depth>=8} onClick={event=>{event.currentTarget.closest("details")?.removeAttribute("open");setEditingTask(undefined);setParent(task.index);setText("");}}>Subtaak toevoegen</button></div></div></details>
+      <button className={`${s.iconButton} ${s.taskEditAction}`} disabled={disabled} aria-label={`Bewerken: ${task.text}`} title="Bewerken" onClick={()=>{setParent(undefined);setEditingTask(task.index);setText(task.text);}}><Pencil/></button>
+      <button className={`${s.iconButton} ${s.taskChildAction}`} disabled={disabled||task.depth>=8} aria-label={`Subtaak toevoegen aan ${task.text}`} title="Subtaak toevoegen" onClick={()=>{setEditingTask(undefined);setParent(task.index);setText("");}}><Icon name="plus" size={17}/></button>
+      <button className={`${s.iconButton} ${s.resolveButton}`} disabled={disabled} aria-label={`Oplossen: ${task.text}, inclusief subtaken verwijderen`} title="Oplossen · taak en subtaken verwijderen" onClick={()=>void resolve(task.index)}><Icon name="trash" size={16}/></button>
+     </div>
+    </div>
+    {(editingTask===task.index||parent===task.index)&&composer()}
+   </div>)}
+  </section>)}</div>
+  {!tasks.some(task=>!selected||task.category===selected)&&<p className={s.empty}>Nog geen taken in deze categorie.</p>}
  </section>;
 }

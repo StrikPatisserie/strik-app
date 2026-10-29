@@ -33,15 +33,20 @@ Feline gebruikt vanaf nu uitsluitend de eigen notitie-app. De Evernote-importkno
 
 ## Taken indelen
 
-Alleen het notitieboek TO DO (ook geschreven als To do’s) heeft een takenpaneel met Nu doen (open, zonder later), Prioriteit, Voor later, Afgerond en Alles. Prioriteit kies je per taak. De knop Subtaak plaatst een nieuwe taak onder de gekozen hoofdtaak, na bestaande onderliggende taken. Maximaal acht niveaus; afvinken van een hoofdtaak verandert geen subtaken. Bij gefilterde subtaken blijven bovenliggende taken zichtbaar voor context. Nieuwe taken worden toegevoegd met een invoerveld; taaktekst bewerken kan afzonderlijk via Bewerken bij de betreffende taak.
+Alleen het notitieboek TO DO (ook geschreven als To do’s) heeft een takenpaneel. Een compacte categoriekeuze en pictogrammen voor toevoegen/verwijderen vervangen de brede beheerbalk. Er zijn geen statusfilters: ook doorgestreepte taken blijven zichtbaar totdat de gebruiker ze oplost. Prioriteit en Voor later blijven eigenschappen van een taak, via het instellingenmenu rechts; ze verbergen geen taken.
+
+De taaktekst staat centraal, met rustige categorie-kopjes en rechts compacte iconen voor instellingen, bewerken, subtaak en oplossen. Op mobiel staan bewerken en subtaak toevoegen in het instellingenmenu. Bewerken en nieuwe subtaken gebruiken een invoerveld direct bij de betreffende taak. Nieuwe hoofdtaken gebruiken één bescheiden invoerregel boven de lijst. Maximaal acht niveaus; afvinken van een hoofdtaak verandert geen subtaken.
+
+Oplossen verwijdert de gekozen taak met eventuele onderliggende subtaken uit de actuele notitietekst; het maakt geen archief- of soft-delete-record. Andere taken, categorieën en gewone notitietekst blijven intact. Oplossen van een subtaak bewaart de hoofdtaak en andere subtaken. De bestaande revisiecontrole voorkomt overschrijven van gelijktijdige wijzigingen.
+
 
 Taken blijven transparant in de bestaande notitietekst opgeslagen: `[ ] Taak`, `[ ] [prioriteit] Taak`, `[ ] [later] Taak`; twee spaties betekenen een niveau dieper. Er zijn geen aanvullende tabellen of permissies nodig. Een mislukte opslag houdt de wijziging als bewerkbaar concept zichtbaar. De importhash bevat ook zelfstandige taakgegevens zodat gewijzigde taken niet onzichtbaar dezelfde importidentiteit krijgen.
 
 ## Notitiepagina’s en categorieën
 
-Vergaderingen, Belangrijke gegevens en andere notitieboeken zijn gewone notitiepagina’s: geen taakpaneel, taakbediening of telling. Eventuele bestaande checklistregels worden als gewone opsomming leesbaar gehouden. Bij opslaan telt de API voor deze boeken nul open taken; het overzicht Open taken beperkt zich tot to-do-boeken. Bestaande inhoud en bronbijlagen worden niet verwijderd.
+Vergaderingen, Belangrijke gegevens en andere notitieboeken zijn gewone notitiepagina’s: geen taakpaneel, taakbediening of telling. Eventuele bestaande checklistregels worden als gewone opsomming leesbaar gehouden. Bij opslaan telt de API voor deze boeken nul open taken; de oudere API-selectie voor Open taken beperkt zich tot to-do-boeken, maar heeft geen knop meer in de interface. Bestaande inhoud en bronbijlagen worden niet verwijderd.
 
-TO DO heeft de standaardcategorieën Administratie to do’s, Winkel to do’s en Dagelijkse to do’s, plus Algemeen voor bestaande ongecategoriseerde taken. Zelf categorieën toevoegen kan met + Categorie. Per hoofdtaak is er een categoriekeuze; verplaatsen neemt alle subtaken, hun status en prioriteit mee. Subtaken horen bij de categorie van hun hoofdtaak. Categorieën worden als `## Naam` in de bestaande notitietekst bewaard, ook als ze nog leeg zijn; er is geen schemawijziging nodig. Categorieën filteren samen met Nu doen/Prioriteit/Voor later/Afgerond.
+TO DO heeft de standaardcategorieën Administratie to do’s, Winkel to do’s en Dagelijkse to do’s, plus Algemeen voor bestaande ongecategoriseerde taken. Zelf categorieën toevoegen kan met het plus-icoon naast de categoriekeuze. Per hoofdtaak is er een categoriekeuze; verplaatsen neemt alle subtaken, hun status en prioriteit mee. Subtaken horen bij de categorie van hun hoofdtaak. Categorieën worden als `## Naam` in de bestaande notitietekst bewaard, ook als ze nog leeg zijn; er is geen schemawijziging nodig. De categoriekeuze toont alle taken van die categorie, ongeacht afvinkstatus.
 
 Alle menutoepassingen gebruiken via `strikIcons.personalTodo` het bestaande Strik-notitie-icoon `/icons_strik.svg`, zodat schaal en tekenstijl bij de overige pictogrammen passen.
 
@@ -53,6 +58,6 @@ Op 29 oktober 2026 is op expliciet verzoek een leeg gemaakte TO DO-notitie recht
 
 ## Categorie verwijderen en bijlagen uit beeld
 
-Kies een categorie en klik Categorie verwijderen. Alle inhoud uit die categorie gaat naar Algemeen, inclusief afgeronde taken, prioriteiten en geneste subtaken. Ook lege en standaardcategorieën kunnen weg; Algemeen blijft de vaste opvangcategorie. Het verwijderen wordt samen met de verplaatsing als één revisiebeveiligde notitiewijziging opgeslagen. Een expliciete `## Algemeen`-sectie bewaart de gekozen categorieënset, zodat standaardcategorieën niet opnieuw verschijnen. Zelf opnieuw toevoegen blijft mogelijk.
+Kies een categorie en klik het prullenbak-icoon naast de categoriekeuze. Alle inhoud uit die categorie gaat naar Algemeen, inclusief afgeronde taken, prioriteiten en geneste subtaken. Ook lege en standaardcategorieën kunnen weg; Algemeen blijft de vaste opvangcategorie. Het verwijderen wordt samen met de verplaatsing als één revisiebeveiligde notitiewijziging opgeslagen. Een expliciete `## Algemeen`-sectie bewaart de gekozen categorieënset, zodat standaardcategorieën niet opnieuw verschijnen. Zelf opnieuw toevoegen blijft mogelijk.
 
 In TO DO zijn het bijlagenblok, de bijlagentelling op de notitiekaart en de oude Evernote-brondatum verborgen. De privébestanden en hun verwijzingen blijven bewaard. Gewone notitiepagina’s behouden hun bestaande bijlagenweergave.

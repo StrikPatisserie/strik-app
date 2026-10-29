@@ -51,6 +51,15 @@ export function editTaskText(body:string,index:number,text:string){
   const lines=body.split("\n"),prefix=/^[\t ]*(?:[-*]\s*)?\[[ xX]\]\s*(?:\[(?:prioriteit|later)\]\s*)?/.exec(lines[index])![0];
   lines[index]=prefix+clean;return lines.join("\n");
 }
+export function resolveTask(body:string,index:number){
+  const tasks=taskLines(body),task=tasks.find(t=>t.index===index);if(!task)throw Error("Deze taak bestaat niet meer.");
+  const lines=body.split("\n"),remove=new Set([index]),byIndex=new Map(tasks.map(t=>[t.index,t]));
+  for(let next=index+1;next<lines.length;next++){
+    if(/^## .+/.test(lines[next]))break;
+    const child=byIndex.get(next);if(!child)continue;if(child.depth<=task.depth)break;remove.add(next);
+  }
+  return lines.filter((_,line)=>!remove.has(line)).join("\n");
+}
 function appendTaskBlock(body:string,block:string[],category:string){
   if(category==="Algemeen"){
     const lines=body?body.split("\n"):[],general=lines.indexOf("## Algemeen");

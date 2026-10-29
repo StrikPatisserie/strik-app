@@ -100,3 +100,13 @@ test('Algemeen keeps an existing order when restored category tasks and new task
  const body='## Algemeen\n[ ] Bestaand\n## Winkel to do’s\n[ ] Verplaatsen\n  [ ] Subtaak';
  let next=model.removeTaskCategory(body,'Winkel to do’s');next=model.addTask(next,'Nieuw');const tasks=model.taskLines(next);assert.deepEqual(Array.from(tasks,t=>t.text),['Bestaand','Verplaatsen','Subtaak','Nieuw']);assert(tasks.every(t=>t.category==='Algemeen'));assert.equal(tasks[2].depth,1);
 });
+test('resolving a main task removes only its subtree, keeping other tasks, categories and note text',()=>{
+ const body='Intro\n## Werk\n[ ] Project\n  [x] Stap\n    [ ] Detail\nAantekening bewaren\n  [ ] Andere stap\n[ ] Ander project\n  [ ] Andere subtaak\n## Privé\n[ ] Laatste';
+ const result=model.resolveTask(body,2),tasks=model.taskLines(result);assert.deepEqual(Array.from(tasks,t=>t.text),['Ander project','Andere subtaak','Laatste']);assert(result.includes('Aantekening bewaren'));assert(result.includes('## Werk'));assert(result.includes('## Privé'));assert.throws(()=>model.resolveTask(body,0));
+});
+test('resolving a subtask preserves its parent and siblings and works for crossed-off tasks',()=>{
+ const body='## Algemeen\n[x] Hoofdtaak\n  [ ] Subtaak\n    [ ] Detail\n  [x] Andere stap\n## Leeg\n  [ ] Losse taak';
+ const result=model.resolveTask(body,2),tasks=model.taskLines(result);assert.deepEqual(Array.from(tasks,t=>t.text),['Hoofdtaak','Andere stap','Losse taak']);assert.equal(tasks[0].done,true);assert.equal(tasks[1].done,true);
+ const withoutParent=model.resolveTask(body,1);assert.deepEqual(Array.from(model.taskLines(withoutParent),t=>t.text),['Losse taak']);
+ assert.equal(model.resolveTask('[x] Klaar',0),'');assert.throws(()=>model.resolveTask(body,99));
+});
