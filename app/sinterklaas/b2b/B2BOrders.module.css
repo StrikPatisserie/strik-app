@@ -366,3 +366,6 @@
 .groupTableScroll th,.groupTableScroll td { padding:9px 10px; border-bottom:1px solid #e5dfd6; text-align:right; }
 .groupTableScroll th:first-child { text-align:left; }
 .groupTableScroll thead,.groupTableScroll tfoot { background:#edf2e9; font-weight:800; }
+
+.groupTableScroll input:not([type="checkbox"]) { width:75px; max-width:100%; border:1px solid #d7d0c6; padding:8px; border-radius:6px; background:white; }
+.groupTableScroll th input:not([type="checkbox"]) { width:210px; }

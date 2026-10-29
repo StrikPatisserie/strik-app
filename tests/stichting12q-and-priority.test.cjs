@@ -40,3 +40,27 @@ test('shop note priority survives the existing WordPress text-only persistence a
 test('both folders are accessible for all four shop profiles without access to internal B2B administration',()=>{
  const m=load('app/lib/auth/access.ts');for(const store of ['lent','heyendaal','daalseweg','ziekerstraat']){const profile={active:true,role:'winkel',store,permissions:{}};assert(m.canAccessPath(profile,'/sint-voor-bedrijven'));assert(m.canAccessPath(profile,'/kerst-voor-bedrijven'));assert.equal(m.canAccessPath(profile,'/sinterklaas/b2b'),false);}
 });
+test('changing Ponos or adding a subcompany regenerates totals, logos and purchase costs together',()=>{
+ const original=stichting12qImport();
+ const next=JSON.parse(JSON.stringify(stichting12qGroup));next.rows.find(row=>row.company==='Ponos').melk=20;
+ const fields=groups.letterGroupOrderFields(next,original),totals=groups.groupLetterTotals(next);
+ assert.equal(totals.quantity,590);assert.equal(totals.melk,310);assert.equal(totals.logos,258);
+ assert.match(fields.orderText,/590 grote/);assert.match(fields.importantNotes,/4\.620,40/);assert.match(fields.logo,/258 letters/);
+ assert.equal(groups.letterGroupMatchesOrder(next,fields),true);assert.equal(groups.validateLetterGroup(next),'');
+ next.rows.push({company:'Nieuw bedrijf',melk:1,wit:2,puur:3,withLogo:false});
+ const saved=groups.parseLetterGroup(groups.serializeLetterGroup(next));assert.equal(saved.rows.length,11);assert.equal(groups.groupLetterTotals(saved).quantity,596);
+});
+test('invalid company names, duplicate companies and invalid quantities cannot be saved',()=>{
+ for(const row of [{company:''},{company:'Ponos'},{company:'Test | extra'},{melk:-1},{wit:1.5},{puur:10001}]){
+  const next=JSON.parse(JSON.stringify(stichting12qGroup));next.rows[0]={...next.rows[0],...row};assert(groups.validateLetterGroup(next));
+ }
+});
+test('the editor changes a company quantity and adds or removes a row through its own controls',()=>{
+ const Editor=load('app/sinterklaas/b2b/GroupedLetterEditor.tsx').default;
+ let group=JSON.parse(JSON.stringify(stichting12qGroup));const render=()=>Editor({group,disabled:false,onChange:next=>{group=next;}});
+ const nodes=(node,predicate)=>Array.isArray(node)?node.flatMap(n=>nodes(n,predicate)):node&&typeof node==='object'?[...(predicate(node)?[node]:[]),...nodes(node.props?.children,predicate)]:[];
+ const field=nodes(render(),n=>n.props?.['aria-label']==='Ponos melk Q')[0];field.props.onChange({target:{value:'20'}});assert.equal(groups.groupLetterTotals(group).quantity,590);
+ nodes(render(),n=>n.type==='button'&&n.props.children==='+ Subbedrijf toevoegen')[0].props.onClick();assert.equal(group.rows.length,11);assert(groups.validateLetterGroup(group));
+ nodes(render(),n=>n.props?.['aria-label']==='Naam subbedrijf 11')[0].props.onChange({target:{value:'Nieuwe klant'}});assert.equal(groups.validateLetterGroup(group),'');
+ nodes(render(),n=>n.props?.['aria-label']==='Verwijder Nieuwe klant')[0].props.onClick();assert.equal(group.rows.length,10);
+});

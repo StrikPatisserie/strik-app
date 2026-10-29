@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import styles from "./B2BOrders.module.css";
+import GroupedLetterEditor from "./GroupedLetterEditor";
 import GroupedLetterBreakdown from "./GroupedLetterBreakdown";
-import { parseLetterGroup, letterGroupMatchesOrder } from "./groupedLetterOrders";
+import { parseLetterGroup, groupLetterTotals, letterGroupMatchesOrder, letterGroupOrderFields, validateLetterGroup, type LetterOrderGroup } from "./groupedLetterOrders";
 import B2BProductText from "./B2BProductText";
 import B2BConfirmationDialog, { canMailQuotation, customerConfirmationSent, customerQuotationSent, shouldOfferCustomerConfirmation } from "./B2BConfirmationDialog";
 import B2BApprovalDialog from "./B2BApprovalDialog";
@@ -80,6 +81,7 @@ function emptyProductDraft(): B2BProductLine {
 }
 
 type B2BFormState = {
+  letterGroup: LetterOrderGroup | null;
   customerName: string;
   contactName: string;
   customerEmail: string;
@@ -553,6 +555,7 @@ function createFormState(): B2BFormState {
     department: "chocolade",
     orderText: "",
     letterOrderText: "",
+    letterGroup: null,
     letterLines: [],
     logo: "",
     packaging: "",
@@ -591,6 +594,7 @@ function formStateFromOrder(order: SinterklaasB2BOrder | null | undefined, seaso
     department: order.department,
     orderText: parsedOrder.otherText,
     letterOrderText: order.letterOrderText,
+    letterGroup: parseLetterGroup(order.letterOrderText),
     letterLines,
     logo: order.logo,
     packaging: order.packaging,
@@ -969,8 +973,8 @@ function B2BOrderForm({
         setDraftNotice("De opgeslagen bestelling is opnieuw geladen, inclusief producten. Een ouder reserveconcept is niet overgenomen.");
       } else if (draft?.form && typeof draft.form.customerName === "string" && Array.isArray(draft.form.productLines) && Array.isArray(draft.form.letterLines)) {
         const letterLines = draft.form.letterLines.map((line: B2BLetterLine) => ({ ...line, withLogo: b2bLetterHasLogo(draft.form, line) }));
-        setForm({ ...formStateFromOrder(initialOrder, season), ...draft.form, letterLines,
-          productLines: letterLines.length ? syncLetterProductLines(draft.form.productLines, letterLines) : draft.form.productLines,
+        setForm({ ...formStateFromOrder(initialOrder, season), ...draft.form, letterLines, letterGroup: parseLetterGroup(draft.form.letterOrderText || ""),
+          productLines: letterLines.length && !parseLetterGroup(draft.form.letterOrderText || "") ? syncLetterProductLines(draft.form.productLines, letterLines) : draft.form.productLines,
         });
         setManualTotal(Boolean(draft.manualTotal));
         setManualLogoBaseline(typeof draft.manualLogoBaseline === "number" ? draft.manualLogoBaseline : logoTotal(draft.form.productLines));
@@ -986,7 +990,7 @@ function B2BOrderForm({
   }, [draftKey, initialOrder, season]);
 
   useEffect(() => {
-    if (!draftReady) return;
+    if (!draftReady || form.letterGroup && validateLetterGroup(form.letterGroup)) return;
     try {
       sessionStorage.setItem(draftKey, JSON.stringify({ form, manualTotal, manualLogoBaseline, manualDeliveryBaseline, productDraft, letterDraft, selectionVersion: 2, productFormatVersion: 1, orderRevision: initialOrder?.updatedAt || "" }));
     } catch {
@@ -1005,6 +1009,10 @@ function B2BOrderForm({
     setForm((current) => ({ ...current, [key]: value }));
   }
 
+  function updateLetterGroup(group: LetterOrderGroup) {
+    setForm(current => ({ ...current, letterGroup: group, ...letterGroupOrderFields(group, current) }));
+  }
+
   function updateLetterLine(id: string, patch: Partial<B2BLetterLine>) {
     setForm((current) => {
       const letterLines = current.letterLines.map((line) => {
@@ -1012,7 +1020,7 @@ function B2BOrderForm({
         const next = { ...line, ...patch };
         if (next.style === "vorm") {
           next.size = "groot";
-          next.letter = "S";
+          if (!B2B_VORM_LETTERS.includes(next.letter)) next.letter = "S";
         }
         return next;
       });
@@ -1190,6 +1198,7 @@ function B2BOrderForm({
     setBuilderOpen(false);
   }
 
+  const groupTotals = form.letterGroup ? groupLetterTotals(form.letterGroup) : null;
   const calculatedTotalEx = productLinesTotal(form.productLines);
   const calculatedTotalIncl = productLinesTotalIncl(form.productLines);
   const logosEx = logoTotal(form.productLines);
@@ -1233,7 +1242,10 @@ function B2BOrderForm({
       return;
     }
 
-    const group = parseLetterGroup(form.letterOrderText);
+    const group = form.letterGroup;
+    if (group && validateLetterGroup(group)) {
+      setStep(2); setMessage(validateLetterGroup(group)); return;
+    }
     if (group && !letterGroupMatchesOrder(group, { letterLines: form.letterLines, logo: form.logo })) {
       setMessage("De letterregels wijken af van de bedrijfsverdeling. Herstel de aantallen en logo’s voordat je opslaat.");
       return;
@@ -1248,7 +1260,8 @@ function B2BOrderForm({
       setMessage("Vul een geldige bezorgpostcode in of geef handmatig de bezorgkosten op (inclusief btw, ook € 0 is mogelijk).");
       return;
     }
-    const { productLines, deliveryPricing, ...storedForm } = form;
+    const { productLines, deliveryPricing, letterGroup: _letterGroup, ...storedForm } = form;
+    void _letterGroup;
     const productText = serializeOrderText(productLines, form.orderText);
     const orderText = serializeOrderText(productLines, form.orderText, businessDeliveryLine(deliveryPricing, form.deliveryMethod, form.deliveryAddress));
 
@@ -1346,6 +1359,7 @@ function B2BOrderForm({
   function goToStep(next: number) {
     if (saving) return;
     setMessage("");
+    if (next > 2 && form.letterGroup && validateLetterGroup(form.letterGroup)) { setStep(2); setMessage(validateLetterGroup(form.letterGroup)); return; }
     if (next > 1) {
       if (!form.customerName.trim()) { setStep(1); setMessage("Vul minimaal de klantnaam in."); return; }
       const invalid = formRef.current?.querySelector<HTMLInputElement>('[data-form-step="1"] input:invalid');
@@ -1483,10 +1497,10 @@ function B2BOrderForm({
         <section data-form-step="2" hidden={step !== 2} className={styles.formPanel}>
           <h2 tabIndex={-1}>De bestelling</h2>
           <p className={styles.panelIntro}>Pas aantallen aan en kies per regel of er een logo bij komt. De toeslag staat direct naast de keuze.</p>
-          {renderOrderItems(true)}
+          {form.letterGroup ? <GroupedLetterEditor group={form.letterGroup} disabled={saving} onChange={updateLetterGroup} /> : renderOrderItems(true)}
           {form.productLines.some(line => { const product = catalogProduct(line.productId); return product && productSupportsLogo(product, line.choice); }) && <div className={styles.cartBulk}><span>Logo’s in één keer instellen:</span><button type="button" onClick={() => applyLogoToAll(true)}>Logo bij alle geschikte artikelen</button><button type="button" onClick={() => applyLogoToAll(false)}>Alle logo’s uit</button></div>}
           {addFeedback && <p role="status" className={addFeedback.startsWith("Toegevoegd") || addFeedback.startsWith("Logo ") ? styles.notice : styles.error}>{addFeedback}</p>}
-          <div className={styles.productTabs}>
+          {!form.letterGroup && <><div className={styles.productTabs}>
             {form.department !== "bakkerij" && <button type="button" aria-expanded={builderOpen && productTab === "letters"} onClick={() => { setProductTab("letters"); setBuilderOpen(true); }}>Chocoladeletters toevoegen</button>}
             <button type="button" aria-expanded={builderOpen && (productTab === "products" || form.department === "bakkerij")} onClick={() => { setProductTab("products"); setBuilderOpen(true); }}>{season === "kerst" ? "Kerstproducten toevoegen" : "Overige producten toevoegen"}</button>
           </div>
@@ -1541,7 +1555,8 @@ function B2BOrderForm({
           </div>
           </div>
           {form.letterLines.length > 0 && <details className={styles.priceAgreements}><summary>Prijsafspraak voor chocoladeletters aanpassen</summary><p>Deze stukprijs geldt voor de letterregels met dezelfde soort, hetzelfde formaat en dezelfde logo-keuze. Logokosten komen daar apart bij.</p>{form.productLines.filter(line => ["chocoladeletter", "chocolade-vormletter"].includes(line.productId)).map(line => <label key={line.id} className={styles.priceAgreementField}><span>{lineDescription(line)} · {line.quantity} stuks<br/><small>Prijs per stuk excl. logo en btw</small></span><input aria-label={`Prijs ${lineDescription(line)}`} type="text" inputMode="decimal" value={basePriceInputs[line.id] ?? decimalInput(unitPriceWithoutLogo(line))} onChange={event => editBasePrice(line, event.target.value)} onBlur={() => finishBasePrice(line.id)}/><button type="button" className={styles.priceReset} onClick={() => updateProductLine(line.id, { manualPrice: false })}>Folderprijs</button></label>)}</details>}
-          {form.letterOrderText && <details className={styles.extra}><summary>Oude vrije letteromschrijving</summary><p className="whitespace-pre-wrap">{form.letterOrderText}</p></details>}
+          </>}
+          {form.letterOrderText && !form.letterGroup && <details className={styles.extra}><summary>Oude vrije letteromschrijving</summary><p className="whitespace-pre-wrap">{form.letterOrderText}</p></details>}
           <details className={styles.extra} open={Boolean(form.orderText.trim()) || undefined}>
             <summary>Aanvullende orderafspraken{form.orderText.trim() ? " · ingevuld" : ""}</summary>
             <div><label className={styles.field}>Afspraken bij deze bestelling<textarea rows={3} value={form.orderText} onChange={event => setField("orderText", event.target.value)} /></label></div>
@@ -1564,7 +1579,7 @@ function B2BOrderForm({
             ["Bezorgkosten", hasDelivery ? delivery.amountIncl === null ? "Nog niet ingesteld · controleer de bezorgafspraak" : `${money(deliveryIncl)} incl. btw (${money(deliveryEx)} excl. btw) · ${form.deliveryPricing.mode === "manual" ? "handmatig" : "postcodetarief"}${delivery.postcode ? ` · ${delivery.postcode}` : ""}` : ""],
             ["Fase", { aanvraag: "Aanvraag", offerte: "Offerte", akkoord: "Definitief · klant heeft akkoord gegeven", afgewezen: "Niet doorgegaan" }[form.status]],
           ].filter(([, value]) => value).map(([label, value]) => <div key={label} className={styles.reviewRow}><span>{label}</span><span>{value}</span></div>)}
-          {renderOrderItems(false)}
+          {form.letterGroup ? <GroupedLetterBreakdown group={form.letterGroup} matches={letterGroupMatchesOrder(form.letterGroup, form)} /> : renderOrderItems(false)}
           {[["Aanvullende afspraken", form.orderText], ["Logo", form.logo], ["Verpakking", form.packaging], ["Tekst", form.textInstructions], ["Prijsafspraak", form.priceAgreement], ["Interne opmerkingen", form.importantNotes], ["Factuurgegevens", form.invoiceInfo]].filter(([, value]) => value).map(([label, value]) => <div key={label} className={styles.reviewRow}><span>{label}</span><span>{value}</span></div>)}
           <p className={styles.reviewNote}>{form.status === "akkoord" ? "Na opslaan kun je de klant een definitieve bevestiging mailen. De interne back-up gaat automatisch naar info@strik-patisserie.nl." : "Deze bestelling is nog niet definitief. Je kunt de fase later aanpassen."}</p>
         </section>
@@ -1573,15 +1588,15 @@ function B2BOrderForm({
           <h2>Deze bestelling</h2>
           <div className={styles.summaryPair}><small>Klant</small><strong>{form.customerName || "Nog in te vullen"}</strong></div>
           <div className={styles.summaryPair}><small>Levering</small><strong>{form.deliveryMethod || "Nog af te spreken"}</strong><br />{deliveryWindowLabel(form)}</div>
-          <div className={styles.summaryPair}><small>Bestelregels</small>{form.productLines.length ? `${form.letterLines.length + form.productLines.filter(line => !["chocoladeletter", "chocolade-vormletter"].includes(line.productId) || !form.letterLines.length).length} regels · ${form.productLines.reduce((n, line) => n + line.quantity, 0)} artikelen` : "Nog geen producten"}</div>
+          <div className={styles.summaryPair}><small>Bestelregels</small>{groupTotals ? `${groupTotals.quantity} grote vormletters Q · ${groupTotals.logos} met logo` : form.productLines.length ? `${form.letterLines.length + form.productLines.filter(line => !["chocoladeletter", "chocolade-vormletter"].includes(line.productId) || !form.letterLines.length).length} regels · ${form.productLines.reduce((n, line) => n + line.quantity, 0)} artikelen` : "Nog geen producten"}</div>
           <label className={styles.field}>Fase<select value={form.status} onChange={event => setField("status", event.target.value as B2BFormState["status"])}>
             <option value="aanvraag">Aanvraag</option><option value="offerte">Offerte</option><option value="akkoord">Definitief · akkoord klant</option><option value="afgewezen">Niet doorgegaan</option>
           </select><small>Staat los van productie en invoer.</small></label>
           <div className={styles.total}>
-            <h3>Prijsopbouw <small>excl. btw</small></h3>
-            <dl className={styles.priceBreakdown}><div><dt>Producten</dt><dd>{money(productsEx)}</dd></div><div data-price-part="logos"><dt>Logo’s{logosCount > 0 && <small>{logosCount} × {money(productLogoPrice(false))}</small>}</dt><dd>{money(logosEx)}</dd></div>{hasDelivery && <div data-price-part="delivery"><dt>Bezorgkosten<small>{delivery.amountIncl === null ? "Nog niet ingesteld" : `${money(deliveryIncl)} incl. btw`}</small></dt><dd>{delivery.amountEx === null ? "—" : money(deliveryEx)}</dd></div>}{manualTotal && <div><dt>Prijsafspraak</dt><dd>{money(roundCents(total - calculatedTotalEx - deliveryEx))}</dd></div>}</dl>
-            <div className={styles.payableTotal}><span>Totaal excl. btw</span><strong>{money(total)}</strong></div>
-            <div className={styles.inclusiveTotal} data-price-part="inclusive-total"><span>Totaal incl. 9% btw</span><strong>{money(totalIncl)}</strong><small>{hasDelivery && delivery.amountIncl === null ? "Bezorgkosten nog niet afzonderlijk vastgelegd." : hasDelivery ? "Inclusief bezorgkosten en eventuele prijsafspraken." : manualTotal || form.productLines.some(line => line.manualPrice) ? "Inclusief eventuele prijsafspraken" : "Vergelijk met de folderprijs incl. btw."}</small></div>
+            <h3>{form.letterGroup ? "Verkoopprijs" : "Prijsopbouw"} <small>excl. btw</small></h3>
+            {!form.letterGroup && <dl className={styles.priceBreakdown}><div><dt>Producten</dt><dd>{money(productsEx)}</dd></div><div data-price-part="logos"><dt>Logo’s{logosCount > 0 && <small>{logosCount} × {money(productLogoPrice(false))}</small>}</dt><dd>{money(logosEx)}</dd></div>{hasDelivery && <div data-price-part="delivery"><dt>Bezorgkosten<small>{delivery.amountIncl === null ? "Nog niet ingesteld" : `${money(deliveryIncl)} incl. btw`}</small></dt><dd>{delivery.amountEx === null ? "—" : money(deliveryEx)}</dd></div>}{manualTotal && <div><dt>Prijsafspraak</dt><dd>{money(roundCents(total - calculatedTotalEx - deliveryEx))}</dd></div>}</dl>}
+            <div className={styles.payableTotal}><span>Totaal excl. btw</span><strong>{form.letterGroup && !manualTotal ? "Nog niet afgesproken" : money(total)}</strong></div>
+            {(!form.letterGroup || manualTotal) && <div className={styles.inclusiveTotal} data-price-part="inclusive-total"><span>Totaal incl. 9% btw</span><strong>{money(totalIncl)}</strong><small>{hasDelivery && delivery.amountIncl === null ? "Bezorgkosten nog niet afzonderlijk vastgelegd." : hasDelivery ? "Inclusief bezorgkosten en eventuele prijsafspraken." : manualTotal || form.productLines.some(line => line.manualPrice) ? "Inclusief eventuele prijsafspraken" : "Vergelijk met de folderprijs incl. btw."}</small></div>}
             <details className={styles.totalAgreement}><summary>Totaalafspraak aanpassen</summary><label className={styles.field}>Afgesproken totaal excl. btw<input aria-label="Afgesproken totaal excl. btw" value={displayedTotalEx} onChange={event => { setManualTotal(true); setManualLogoBaseline(logosEx); setManualDeliveryBaseline(deliveryEx); setField("totalExVat", event.target.value); }} placeholder="Automatisch" /></label><p>Dit totaal bevat de huidige logo’s en bezorgkosten. Latere wijzigingen daarin worden bij het totaal verrekend.</p>{manualTotal && <button type="button" onClick={() => setManualTotal(false)}>Gebruik berekend totaal</button>}</details>
           </div>
         </aside></div>

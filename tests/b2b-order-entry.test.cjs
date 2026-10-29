@@ -417,3 +417,15 @@ test('delivery-only inquiries retain their charge but cannot be finalized as a p
   const re=entry('sint',{...saved,id:'delivery-only',updatedAt:'now'});re.button('Verder naar producten →');re.button('Bestelling controleren →');await re.submit();assert.equal(re.calls[0].totalExVat,saved.totalExVat);assert.equal(re.calls[0].orderText,saved.orderText);
   re.field('Fase','akkoord');re.field('Vaste leverdatum','2026-11-30');await re.submit();assert.equal(re.calls.length,1);assert.match(label(re.render()),/Voeg gekozen producten eerst toe/);
 });
+test('editing the grouped 12Q order saves Ponos at 20 without S pricing and preserves all other companies',async()=>{
+ const groups=load('app/sinterklaas/b2b/groupedLetterOrders.ts');
+ const fixture=load('app/sinterklaas/b2b/stichting12q.ts',{'./groupedLetterOrders':groups}).stichting12qImport();
+ const ui=entry('sint',{...entry().blank(),...fixture});ui.button('Verder naar producten →');
+ const editor=nodes(ui.render(),n=>typeof n.props?.onChange==='function'&&n.props?.group?.rows)[0];assert(editor);
+ const group=JSON.parse(JSON.stringify(editor.props.group));group.rows.find(row=>row.company==='Ponos').melk=20;editor.props.onChange(group);
+ ui.button('Bestelling controleren →');await ui.submit();assert.equal(ui.calls.length,1);
+ const saved=ui.calls[0];assert.equal(saved.letterLines.reduce((sum,line)=>sum+line.quantity,0),590);assert(saved.letterLines.every(line=>line.letter==='Q'));assert.equal(saved.totalExVat,'');assert.equal('letterGroup' in saved,false);assert.match(saved.importantNotes,/4\.620,40/);
+ assert.equal(groups.parseLetterGroup(saved.letterOrderText).rows.find(row=>row.company==='Ponos').melk,20);
+ const reopened=entry('sint',{...fixture,...saved});reopened.button('Verder naar producten →');
+ const next=nodes(reopened.render(),n=>typeof n.props?.onChange==='function'&&n.props?.group?.rows)[0];assert.equal(next.props.group.rows.length,10);assert.equal(next.props.group.rows.find(row=>row.company==='Ponos').melk,20);
+});

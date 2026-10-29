@@ -40,3 +40,32 @@ export function letterGroupMatchesOrder(group: LetterOrderGroup, order: Pick<Sin
   return expected.every(target => order.letterLines.filter(line => line.chocolate === target.chocolate && (typeof line.withLogo === "boolean" ? line.withLogo : Boolean(order.logo)) === target.withLogo).reduce((sum, line) => sum + line.quantity, 0) === target.quantity)
     && order.letterLines.reduce((sum, line) => sum + line.quantity, 0) === groupLetterTotals(group).quantity;
 }
+
+export function validateLetterGroup(group: LetterOrderGroup): string {
+  if (!group.rows.length || group.rows.length > 40) return "Voeg 1 tot 40 subbedrijven toe.";
+  const names = new Set<string>();
+  for (const row of group.rows) {
+    const name = row.company.trim();
+    if (!name || name.length > 120 || /[|\r\n]/.test(name)) return "Vul voor elk subbedrijf een naam in, zonder verticale streep of nieuwe regel.";
+    const key = name.toLocaleLowerCase("nl-NL");
+    if (names.has(key)) return `Subbedrijf ${name} staat dubbel in de verdeling.`;
+    names.add(key);
+    if (![row.melk, row.wit, row.puur].every(value => Number.isSafeInteger(value) && value >= 0 && value <= 10000)) return `Vul bij ${name} hele aantallen van 0 tot 10.000 in.`;
+  }
+  if (groupLetterTotals(group).quantity < 1) return "De groepsbestelling moet minimaal één letter bevatten.";
+  if (groupLetterLines(group).some(line => line.quantity > 10000)) return "Maximaal 10.000 letters per chocolade-/logokeuze.";
+  if (serializeLetterGroup(group).length > 5000) return "De bedrijfsverdeling is te lang; gebruik kortere bedrijfsnamen.";
+  return "";
+}
+
+export function letterGroupOrderFields(group: LetterOrderGroup, current: Pick<SinterklaasB2BOrder, "orderText" | "importantNotes">) {
+  const total = groupLetterTotals(group);
+  const euro = (cents: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(cents / 100);
+  const cost = total.quantity * group.letterCostCents + total.logos * group.logoCostCents;
+  return {
+    letterOrderText: serializeLetterGroup(group), letterLines: groupLetterLines(group),
+    logo: `${total.logos} letters met bedrijfslogo; ${total.quantity - total.logos} zonder logo. Zie verdeling per bedrijf.`,
+    orderText: current.orderText.replace(/\b\d+ grote chocolade vormletters Q\./, `${total.quantity} grote chocolade vormletters Q.`),
+    importantNotes: current.importantNotes.replace(/Inkoop: [^\n]*?Totaal inkoop €\s*[\d.,]+ excl\. btw\./, `Inkoop: ${euro(group.letterCostCents)} per grote vormletter Q + ${euro(group.logoCostCents)} per logo, excl. btw. Totaal inkoop ${euro(cost)} excl. btw.`),
+  };
+}
