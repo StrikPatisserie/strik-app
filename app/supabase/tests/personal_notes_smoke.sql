@@ -21,8 +21,11 @@ do $$ begin
  if (select count(*) from storage.objects where bucket_id='personal-notes' and name=current_setting('strik.personal_owner')||'/smoke/'||current_setting('strik.personal_note'))<>1 then raise exception 'Owner cannot read own file'; end if;
  update storage.objects set metadata='{}'::jsonb where bucket_id='personal-notes' and name=current_setting('strik.personal_owner')||'/smoke/'||current_setting('strik.personal_note');
  if found then raise exception 'Immutable personal file could be overwritten'; end if;
- delete from storage.objects where bucket_id='personal-notes' and name=current_setting('strik.personal_owner')||'/smoke/'||current_setting('strik.personal_note');
- if found then raise exception 'Immutable personal file could be deleted'; end if;
+ begin
+  delete from storage.objects where bucket_id='personal-notes' and name=current_setting('strik.personal_owner')||'/smoke/'||current_setting('strik.personal_note');
+  if found then raise exception 'Immutable personal file could be deleted'; end if;
+ exception when insufficient_privilege then null;
+ end;
 end $$;
 reset role;
 select set_config('request.jwt.claims',jsonb_build_object('sub',current_setting('strik.personal_other'),'role','authenticated','aal','aal2','amr',jsonb_build_array(jsonb_build_object('method','totp','timestamp',floor(extract(epoch from now())))))::text,true);

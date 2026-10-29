@@ -10,6 +10,14 @@ const managementIconAppearance = {
 
 const managementItems = [
   {
+    href: "/management/betaalverzoeken",
+    label: "Mollie",
+    title: "Snel betaalverzoek",
+    description: "E-mailadres, bedrag en versturen. Houd betalingen en openstaande verzoeken bij.",
+    icon: strikIcons.managementCashCount,
+    ...managementIconAppearance,
+  },
+  {
     href: "/management/urencontrole",
     label: "Tamigo",
     title: "Urencontrole",

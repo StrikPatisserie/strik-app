@@ -48,6 +48,8 @@ const PUBLIC_API_PATHS = new Set([
   "/api/wedding-appointments/book",
   "/api/wedding-appointments/mail-retry",
   "/api/bruidstaart-payment-request/webhook",
+  "/api/management-payment-requests/webhook",
+  "/api/management-payment-requests/cron",
 ]);
 
 function isPublicPath(pathname: string) {
@@ -175,6 +177,7 @@ export async function updateSession(request: NextRequest) {
       return withSessionCookies(NextResponse.redirect(mfaUrl));
     }
     const managementApi =
+      pathname === "/api/management-payment-requests" ||
       pathname === "/api/productie/transfer" ||
       pathname === "/api/management-dashboard" ||
       pathname === "/api/management-revenue" || pathname.startsWith("/api/management-revenue/") ||
