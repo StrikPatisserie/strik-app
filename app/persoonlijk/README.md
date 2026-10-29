@@ -33,7 +33,7 @@ Feline gebruikt vanaf nu uitsluitend de eigen notitie-app. De Evernote-importkno
 
 ## Taken indelen
 
-Alleen het notitieboek TO DO (ook geschreven als To do’s) heeft een takenpaneel. Een compacte categoriekeuze en pictogrammen voor toevoegen/verwijderen vervangen de brede beheerbalk. Er zijn geen statusfilters: ook doorgestreepte taken blijven zichtbaar totdat de gebruiker ze oplost. Prioriteit en Voor later blijven eigenschappen van een taak, via het instellingenmenu rechts; ze verbergen geen taken.
+Alleen het notitieboek TO DO (ook geschreven als To do’s) heeft een takenpaneel. Een compacte categoriekeuze en pictogrammen voor toevoegen/verwijderen vervangen de brede beheerbalk. Er zijn geen statusfilters: ook doorgestreepte taken blijven zichtbaar totdat de gebruiker ze oplost. Prioriteit en Voor later kies je via het instellingenmenu rechts. Ze verdelen de lijst in drie verticale blokken: Prioriteit, To do’s en Voor later, met witruimte ertussen. Een hoofdtaak en haar subtaken blijven samen in het blok van de hoofdtaak.
 
 De taaktekst staat centraal, met rustige categorie-kopjes en rechts compacte iconen voor instellingen, bewerken, subtaak en oplossen. Op mobiel staan bewerken en subtaak toevoegen in het instellingenmenu. Bewerken en nieuwe subtaken gebruiken een invoerveld direct bij de betreffende taak. Nieuwe hoofdtaken gebruiken één bescheiden invoerregel boven de lijst. Maximaal acht niveaus; afvinken van een hoofdtaak verandert geen subtaken.
 
@@ -46,7 +46,7 @@ Taken blijven transparant in de bestaande notitietekst opgeslagen: `[ ] Taak`, `
 
 Vergaderingen, Belangrijke gegevens en andere notitieboeken zijn gewone notitiepagina’s: geen taakpaneel, taakbediening of telling. Eventuele bestaande checklistregels worden als gewone opsomming leesbaar gehouden. Bij opslaan telt de API voor deze boeken nul open taken; de oudere API-selectie voor Open taken beperkt zich tot to-do-boeken, maar heeft geen knop meer in de interface. Bestaande inhoud en bronbijlagen worden niet verwijderd.
 
-TO DO heeft de standaardcategorieën Administratie to do’s, Winkel to do’s en Dagelijkse to do’s, plus Algemeen voor bestaande ongecategoriseerde taken. Zelf categorieën toevoegen kan met het plus-icoon naast de categoriekeuze. Per hoofdtaak is er een categoriekeuze; verplaatsen neemt alle subtaken, hun status en prioriteit mee. Subtaken horen bij de categorie van hun hoofdtaak. Categorieën worden als `## Naam` in de bestaande notitietekst bewaard, ook als ze nog leeg zijn; er is geen schemawijziging nodig. De categoriekeuze toont alle taken van die categorie, ongeacht afvinkstatus.
+TO DO heeft de standaardcategorieën Administratie to do’s, Winkel to do’s en Dagelijkse to do’s, met Dagelijkse to do’s als vaste opvangcategorie. Zelf categorieën toevoegen kan met het plus-icoon naast de categoriekeuze. Per hoofdtaak is er een categoriekeuze; verplaatsen neemt alle subtaken, hun status en prioriteit mee. Subtaken horen bij de categorie van hun hoofdtaak. Categorieën worden als `## Naam` in de bestaande notitietekst bewaard, ook als ze nog leeg zijn; er is geen schemawijziging nodig. De categoriekeuze toont alle taken van die categorie, ongeacht afvinkstatus.
 
 Alle menutoepassingen gebruiken via `strikIcons.personalTodo` het bestaande Strik-notitie-icoon `/icons_strik.svg`, zodat schaal en tekenstijl bij de overige pictogrammen passen.
 
@@ -58,6 +58,20 @@ Op 29 oktober 2026 is op expliciet verzoek een leeg gemaakte TO DO-notitie recht
 
 ## Categorie verwijderen en bijlagen uit beeld
 
-Kies een categorie en klik het prullenbak-icoon naast de categoriekeuze. Alle inhoud uit die categorie gaat naar Algemeen, inclusief afgeronde taken, prioriteiten en geneste subtaken. Ook lege en standaardcategorieën kunnen weg; Algemeen blijft de vaste opvangcategorie. Het verwijderen wordt samen met de verplaatsing als één revisiebeveiligde notitiewijziging opgeslagen. Een expliciete `## Algemeen`-sectie bewaart de gekozen categorieënset, zodat standaardcategorieën niet opnieuw verschijnen. Zelf opnieuw toevoegen blijft mogelijk.
+Kies een categorie en klik het prullenbak-icoon naast de categoriekeuze. Alle inhoud uit die categorie gaat naar Dagelijkse to do’s, inclusief afgeronde taken, prioriteiten en geneste subtaken. Ook lege en standaardcategorieën kunnen weg; Dagelijkse to do’s blijft de vaste opvangcategorie. Het verwijderen wordt samen met de verplaatsing als één revisiebeveiligde notitiewijziging opgeslagen. Een expliciete `## Dagelijkse to do’s`-sectie bewaart de gekozen categorieënset, zodat standaardcategorieën niet opnieuw verschijnen. Zelf opnieuw toevoegen blijft mogelijk.
 
 In TO DO zijn het bijlagenblok, de bijlagentelling op de notitiekaart en de oude Evernote-brondatum verborgen. De privébestanden en hun verwijzingen blijven bewaard. Gewone notitiepagina’s behouden hun bestaande bijlagenweergave.
+
+## Ongedaan maken en opnieuw uitvoeren
+
+De notitiebalk heeft twee kleine pijlen voor Ongedaan maken en Opnieuw uitvoeren. Dit werkt voor tekst, titel, notitieboek, afvinken, oplossen, prioriteit en categorieën. In de teksteditor worden snelle typwijzigingen per veld samengevoegd tot bewerkstappen; eigen sneltoetsen in invoervelden blijven beschikbaar. Buiten invoervelden werken Cmd/Ctrl+Z en Cmd/Ctrl+Shift+Z op de notitiegeschiedenis.
+
+De historie is per notitie en blijft uitsluitend in het geheugen van de geopende app, maximaal dertig stappen per richting en vier miljoen tekens aan snapshots per richting. Geen localStorage, browserdatabase of extra serverarchief. Wisselen tussen notities behoudt de geschiedenis in deze sessie; verversen of sluiten wist die. Deze functie herstelt geen wijzigingen van vóór deze sessie.
+
+Ongedaan maken in de editor wijzigt het concept; Opslaan blijft nodig. Bij automatisch opgeslagen taakacties wordt het herstel direct als nieuwe revisie opgeslagen. Herstel gebruikt de huidige opgeslagen revisie, nooit de revisie uit de oude snapshot. Een mislukte opslag verbruikt de undo-stap niet. Een heropende notitie met een extern gewijzigde revisie krijgt een nieuwe, lege geschiedenis. Nieuwe bewerkingen na undo wissen de redo-tak.
+
+## Opvangcategorie en directe navigatie
+
+Algemeen is vervallen. Dagelijkse to do’s is niet verwijderbaar en vangt taken op wanneer een andere categorie wordt verwijderd. Oudere Algemeen-koppen worden bij het lezen als Dagelijkse to do’s geïnterpreteerd. Op verzoek zijn de huidige Algemeen-koppen ook rechtstreeks hernoemd, onder een rijvergrendeling en met controle dat alle taakregels identiek bleven.
+
+De desktopomgeving heeft twee kolommen: links navigatie/zoeken, rechts de inhoud. Een notitieboek met precies één actieve notitie opent rechtstreeks vanuit de linkernavigatie. Alle notities, zoeken en boeken met meerdere notities tonen het overzicht in het inhoudsvlak. Bij een geopende notitie is er geen extra notitielijstkolom. Op mobiel blijft de bestaande terugknop naar het overzicht beschikbaar.

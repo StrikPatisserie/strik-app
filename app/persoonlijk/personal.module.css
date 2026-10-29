@@ -23,3 +23,7 @@
 
 .mobileTaskActions { display:none; }
 @media(max-width:767px) { .taskTools .taskEditAction,.taskTools .taskChildAction { display:none; }.mobileTaskActions { display:grid; gap:5px; }.taskTools { opacity:1; }.taskOptions > div { right:-30px; } }
+.prioritySection + .prioritySection { margin-top:44px; padding-top:22px; border-top:1px solid #e4eadd; }.taskRows .priorityHeading { margin:18px 0 15px; font-size:19px; line-height:1.4; letter-spacing:-.3px; font-weight:750; color:var(--ink); }.prioritySection > section + section { margin-top:22px; }
+.workspace { grid-template-columns:168px minmax(0,1fr); }.workspace[data-note-open=true] .noteList { display:none; }.workspace[data-note-open=false] .editor { display:none; }.sidebarSearch { width:100%; min-height:35px; margin-bottom:13px; padding:8px; border:1px solid #cbd8c2; border-radius:5px; background:#f7faf4; font-size:12px !important; color:var(--ink); }.editorBar button:disabled { opacity:.3; }
+@media(min-width:768px) and (max-width:1150px) { .workspace { grid-template-columns:145px minmax(0,1fr); } }
+@media(min-width:768px) { .listTop > input { display:none; } }

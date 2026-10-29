@@ -9,36 +9,46 @@ export type PersonalNoteInput = Pick<PersonalNote,"id"|"title"|"notebook"|"body"
 export const PERSONAL_BUCKET="personal-notes";
 export const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export type TaskPriority="normal"|"priority"|"later";
+export const TASK_FALLBACK_CATEGORY="Dagelijkse to do’s";
 export const DEFAULT_TASK_CATEGORIES=["Administratie to do’s","Winkel to do’s","Dagelijkse to do’s"];
 export function isTodoNotebook(notebook:string){return /^to[\s-]*do(?:[’']?s)?$/i.test(notebook.trim());}
 export function taskCategories(body:string){
-  const names=body.split("\n").flatMap(line=>/^## (.+)$/.exec(line)?.[1]||[]);
-  return [...new Set([...(names.includes("Algemeen")?[]:DEFAULT_TASK_CATEGORIES),...names])].filter(name=>name!=="Algemeen");
+  const raw=body.split("\n").flatMap(line=>/^## (.+)$/.exec(line)?.[1]||[]),names=raw.map(name=>name==="Algemeen"?TASK_FALLBACK_CATEGORY:name);
+  return [...new Set([...(names.includes(TASK_FALLBACK_CATEGORY)?[]:DEFAULT_TASK_CATEGORIES),...names])].filter(name=>name!==TASK_FALLBACK_CATEGORY);
 }
 export function removeTaskCategory(body:string,name:string){
-  const categories=taskCategories(body);if(name==="Algemeen"||!categories.includes(name))throw Error("Deze categorie kan niet worden verwijderd.");
+  const categories=taskCategories(body);if(name===TASK_FALLBACK_CATEGORY||!categories.includes(name))throw Error("Deze categorie kan niet worden verwijderd.");
+  body=body.split("\n").map(line=>line==="## Algemeen"?`## ${TASK_FALLBACK_CATEGORY}`:line).join("\n");
   const kept:string[]=[],moved:string[]=[];let removing=false;
   for(const line of body.split("\n")){
     const heading=/^## (.+)$/.exec(line);
     if(heading){removing=heading[1]===name;if(!removing)kept.push(line);}
     else (removing?moved:kept).push(line);
   }
-  // An explicit Algemeen heading records the chosen category set, including
-  // an empty set, so removed default categories cannot silently reappear.
-  let next=kept.includes("## Algemeen")?kept.join("\n"):`## Algemeen\n${kept.join("\n")}`;
+  // An explicit fallback heading preserves the chosen category set.
+  let next=kept.includes(`## ${TASK_FALLBACK_CATEGORY}`)?kept.join("\n"):`## ${TASK_FALLBACK_CATEGORY}\n${kept.join("\n")}`;
   for(const remaining of categories.filter(category=>category!==name))next=addTaskCategory(next,remaining);
-  return moved.length?appendTaskBlock(next,moved,"Algemeen"):next;
+  return moved.length?appendTaskBlock(next,moved,TASK_FALLBACK_CATEGORY):next;
 }
 export function addTaskCategory(body:string,name:string){const clean=name.trim();if(!clean||clean.length>100||/[\r\n\0]/.test(clean)||clean==="Algemeen")throw Error("Kies een categorienaam van 1 tot 100 tekens.");return body.split("\n").includes(`## ${clean}`)?body:`${body}${body?"\n\n":""}## ${clean}`;}
 export function taskLines(body:string) {
-  let category="Algemeen";
+  let category=TASK_FALLBACK_CATEGORY;
   return body.split("\n").flatMap((line,index)=>{
-    const heading=/^## (.+)$/.exec(line);if(heading)category=heading[1];
+    const heading=/^## (.+)$/.exec(line);if(heading)category=heading[1]==="Algemeen"?TASK_FALLBACK_CATEGORY:heading[1];
     const match=/^([\t ]*)(?:[-*]\s*)?\[([ xX])\]\s*(.*)$/.exec(line);
     if(!match)return [];
     const marker=/^\[(prioriteit|later)\]\s*/.exec(match[3]);
     return [{index,category,done:match[2].toLowerCase()==="x",text:match[3].slice(marker?.[0].length||0),depth:Math.floor(match[1].replace(/\t/g,"  ").length/2),priority:(marker?.[1]==="prioriteit"?"priority":marker?"later":"normal") as TaskPriority}];
   });
+}
+export function taskPriorityGroups(body:string){
+ const groups:{priority:TaskPriority;label:string;tasks:ReturnType<typeof taskLines>}[]=[{priority:"priority",label:"Prioriteit",tasks:[]},{priority:"normal",label:"To do’s",tasks:[]},{priority:"later",label:"Voor later",tasks:[]}];
+ let root:TaskPriority="normal",category="";
+ for(const task of taskLines(body)){
+  if(task.depth===0||task.category!==category)root=task.priority;
+  category=task.category;groups.find(group=>group.priority===root)!.tasks.push(task);
+ }
+ return groups;
 }
 export function setTaskPriority(body:string,index:number,priority:TaskPriority) {
   if(!["normal","priority","later"].includes(priority))throw Error("Ongeldige prioriteit.");
@@ -61,8 +71,8 @@ export function resolveTask(body:string,index:number){
   return lines.filter((_,line)=>!remove.has(line)).join("\n");
 }
 function appendTaskBlock(body:string,block:string[],category:string){
-  if(category==="Algemeen"){
-    const lines=body?body.split("\n"):[],general=lines.indexOf("## Algemeen");
+  if(category===TASK_FALLBACK_CATEGORY){
+    const lines=body?body.split("\n"):[],general=lines.indexOf(`## ${TASK_FALLBACK_CATEGORY}`);
     const boundary=lines.findIndex((line,index)=>index>general&&/^## .+/.test(line));
     lines.splice(boundary<0?lines.length:boundary,0,...block);return lines.join("\n");
   }
@@ -74,7 +84,7 @@ export function moveTaskCategory(body:string,index:number,category:string){
   const lines=body.split("\n");let end=index+1;for(const child of tasks.filter(t=>t.index>index)){if(child.depth===0||child.category!==task.category)break;end=child.index+1;}
   const block=lines.splice(index,end-index);return appendTaskBlock(lines.join("\n"),block,category);
 }
-export function addTask(body:string,text:string,parentIndex?:number,category="Algemeen") {
+export function addTask(body:string,text:string,parentIndex?:number,category=TASK_FALLBACK_CATEGORY) {
   const clean=text.trim();if(!clean||clean.length>2000||/[\r\n\0]/.test(clean))throw Error("Vul één taak in van maximaal 2.000 tekens.");
   const lines=body?body.split("\n"):[],tasks=taskLines(body);
   if(parentIndex===undefined)return appendTaskBlock(body,[`[ ] ${clean}`],category);

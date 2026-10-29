@@ -73,7 +73,7 @@ test('only the to-do notebook has task controls; meeting and reference notes sta
 test('custom task categories persist without tasks and moving projects retains children, priority and completion',()=>{
  let body='Context\n[ ] Project\n\n  [x] Stap één\n  [ ] [prioriteit] Stap twee\n[ ] Andere taak';
  assert(model.taskCategories(body).includes('Administratie to do’s'));body=model.addTaskCategory(body,'Personeel');assert(model.taskCategories(body).includes('Personeel'));assert.equal(model.addTaskCategory(body,'Personeel'),body);
- body=model.moveTaskCategory(body,1,'Administratie to do’s');let tasks=model.taskLines(body);const moved=tasks.find(t=>t.text==='Project');assert.equal(moved.category,'Administratie to do’s');assert.equal(tasks.find(t=>t.text==='Stap één').done,true);assert.equal(tasks.find(t=>t.text==='Stap twee').priority,'priority');assert.equal(tasks.find(t=>t.text==='Stap twee').category,moved.category);assert.equal(tasks.find(t=>t.text==='Andere taak').category,'Algemeen');
+ body=model.moveTaskCategory(body,1,'Administratie to do’s');let tasks=model.taskLines(body);const moved=tasks.find(t=>t.text==='Project');assert.equal(moved.category,'Administratie to do’s');assert.equal(tasks.find(t=>t.text==='Stap één').done,true);assert.equal(tasks.find(t=>t.text==='Stap twee').priority,'priority');assert.equal(tasks.find(t=>t.text==='Stap twee').category,moved.category);assert.equal(tasks.find(t=>t.text==='Andere taak').category,model.TASK_FALLBACK_CATEGORY);
  body=model.addTask(body,'Belasting',undefined,'Administratie to do’s');body=model.addTask(body,'Rooster',undefined,'Personeel');tasks=model.taskLines(body);assert.equal(tasks.find(t=>t.text==='Belasting').category,'Administratie to do’s');assert.equal(tasks.find(t=>t.text==='Rooster').category,'Personeel');
  const parent=tasks.find(t=>t.text==='Project');body=model.addTask(body,'Nog een stap',parent.index);assert.equal(model.taskLines(body).find(t=>t.text==='Nog een stap').category,parent.category);
  assert.throws(()=>model.addTaskCategory(body,'Fout\n## injectie'));assert.throws(()=>model.moveTaskCategory(body,model.taskLines(body).find(t=>t.depth===1).index,'Personeel'));
@@ -85,20 +85,20 @@ test('editing one task preserves category, priority, completion, subtasks and ev
  assert.equal(model.taskLines(model.editTaskText(body,2,'Nieuwe stap'))[1].depth,1);
  for(const title of ['', 'één\ntwee','x'.repeat(2001)])assert.throws(()=>model.editTaskText(body,1,title));assert.throws(()=>model.editTaskText(body,0,'Titel'));
 });
-test('removing a category relocates every task and subtask to Algemeen without changing state or priority',()=>{
+test('removing a category relocates every task and subtask to Daily without changing state or priority',()=>{
  const body='[ ] Bestaand algemeen\n## Winkel to do’s\n[ ] [later] Project\n  [x] Klaar\n  [ ] [prioriteit] Stap\n## Personeel\n[ ] Collega\n## Winkel to do’s\n[ ] Tweede project';
  const before=model.taskLines(body),removed=model.removeTaskCategory(body,'Winkel to do’s'),after=model.taskLines(removed);assert.equal(after.length,before.length);assert(!model.taskCategories(removed).includes('Winkel to do’s'));
- for(const task of before){const restored=after.find(t=>t.text===task.text);assert(restored);assert.equal(restored.done,task.done);assert.equal(restored.priority,task.priority);assert.equal(restored.depth,task.depth);assert.equal(restored.category,task.category==='Winkel to do’s'?'Algemeen':task.category);}
- assert.equal(model.taskLines(model.addTask(removed,'Nieuwe taak')) .find(t=>t.text==='Nieuwe taak').category,'Algemeen');
+ for(const task of before){const restored=after.find(t=>t.text===task.text);assert(restored);assert.equal(restored.done,task.done);assert.equal(restored.priority,task.priority);assert.equal(restored.depth,task.depth);assert.equal(restored.category,task.category==='Winkel to do’s'?model.TASK_FALLBACK_CATEGORY:task.category);}
+ assert.equal(model.taskLines(model.addTask(removed,'Nieuwe taak')) .find(t=>t.text==='Nieuwe taak').category,model.TASK_FALLBACK_CATEGORY);
 });
-test('empty and default categories stay removed after every category is deleted; Algemeen remains',()=>{
- let body='[ ] Taak';for(const name of model.DEFAULT_TASK_CATEGORIES)body=model.removeTaskCategory(body,name);assert.equal(model.taskCategories(body).length,0);assert.equal(model.taskLines(body).length,1);assert.equal(model.taskLines(body)[0].category,'Algemeen');
+test('empty and default categories stay removed after optional categories are deleted; Daily remains',()=>{
+ let body='[ ] Taak';for(const name of model.DEFAULT_TASK_CATEGORIES.filter(name=>name!==model.TASK_FALLBACK_CATEGORY))body=model.removeTaskCategory(body,name);assert.equal(model.taskCategories(body).length,0);assert.equal(model.taskLines(body).length,1);assert.equal(model.taskLines(body)[0].category,model.TASK_FALLBACK_CATEGORY);
  body=model.addTaskCategory(body,'Eigen categorie');assert.equal(model.taskCategories(body).length,1);body=model.removeTaskCategory(body,'Eigen categorie');assert.equal(model.taskCategories(body).length,0);assert.throws(()=>model.removeTaskCategory(body,'Algemeen'));assert.throws(()=>model.removeTaskCategory(body,'Bestaat niet'));
  body=model.addTaskCategory(body,'Winkel to do’s');assert(model.taskCategories(body).includes('Winkel to do’s'));
 });
-test('Algemeen keeps an existing order when restored category tasks and new tasks are appended',()=>{
+test('Daily keeps an existing order when restored category tasks and new tasks are appended',()=>{
  const body='## Algemeen\n[ ] Bestaand\n## Winkel to do’s\n[ ] Verplaatsen\n  [ ] Subtaak';
- let next=model.removeTaskCategory(body,'Winkel to do’s');next=model.addTask(next,'Nieuw');const tasks=model.taskLines(next);assert.deepEqual(Array.from(tasks,t=>t.text),['Bestaand','Verplaatsen','Subtaak','Nieuw']);assert(tasks.every(t=>t.category==='Algemeen'));assert.equal(tasks[2].depth,1);
+ let next=model.removeTaskCategory(body,'Winkel to do’s');next=model.addTask(next,'Nieuw');const tasks=model.taskLines(next);assert.deepEqual(Array.from(tasks,t=>t.text),['Bestaand','Verplaatsen','Subtaak','Nieuw']);assert(tasks.every(t=>t.category===model.TASK_FALLBACK_CATEGORY));assert.equal(tasks[2].depth,1);
 });
 test('resolving a main task removes only its subtree, keeping other tasks, categories and note text',()=>{
  const body='Intro\n## Werk\n[ ] Project\n  [x] Stap\n    [ ] Detail\nAantekening bewaren\n  [ ] Andere stap\n[ ] Ander project\n  [ ] Andere subtaak\n## Privé\n[ ] Laatste';
@@ -109,4 +109,31 @@ test('resolving a subtask preserves its parent and siblings and works for crosse
  const result=model.resolveTask(body,2),tasks=model.taskLines(result);assert.deepEqual(Array.from(tasks,t=>t.text),['Hoofdtaak','Andere stap','Losse taak']);assert.equal(tasks[0].done,true);assert.equal(tasks[1].done,true);
  const withoutParent=model.resolveTask(body,1);assert.deepEqual(Array.from(model.taskLines(withoutParent),t=>t.text),['Losse taak']);
  assert.equal(model.resolveTask('[x] Klaar',0),'');assert.throws(()=>model.resolveTask(body,99));
+});
+test('Daily is the fixed fallback and legacy General headings map to Daily without losing tasks',()=>{
+ const body='[ ] Los\n## Algemeen\n[ ] Project\n  [x] Kind\n## Dagelijkse to do’s\n[ ] Dagelijks';
+ assert(!model.taskCategories(body).includes('Algemeen'));assert(model.taskLines(body).every(t=>t.category===model.TASK_FALLBACK_CATEGORY));assert.throws(()=>model.removeTaskCategory(body,model.TASK_FALLBACK_CATEGORY));assert.throws(()=>model.addTaskCategory(body,'Algemeen'));
+ const next=model.addTask(body,'Nieuw');assert.equal(model.taskLines(next).length,5);assert(model.taskLines(next).every(t=>t.category===model.TASK_FALLBACK_CATEGORY));
+});
+test('priority sections stay separate while each subtask follows its parent',()=>{
+ const body='## Werk\n[ ] [later] Later project\n  [ ] [prioriteit] Kind blijft bij project\n[ ] Gewoon\n[ ] [prioriteit] Belangrijk\n  [x] Stap\n## Ander\n[ ] Tweede gewoon';
+ const groups=model.taskPriorityGroups(body);assert.deepEqual(Array.from(groups,g=>g.priority),['priority','normal','later']);assert.deepEqual(Array.from(groups[0].tasks,t=>t.text),['Belangrijk','Stap']);assert.deepEqual(Array.from(groups[1].tasks,t=>t.text),['Gewoon','Tweede gewoon']);assert.deepEqual(Array.from(groups[2].tasks,t=>t.text),['Later project','Kind blijft bij project']);assert.equal(groups[0].tasks[1].done,true);
+});
+const undo=load('app/persoonlijk/undo.ts');
+const fullNote=(changes={})=>({...input(),revision:1,created_at:'2026-10-29T08:00:00Z',updated_at:'2026-10-29T08:00:00Z',...changes});
+test('undo restores resolved tasks and categories and redo reapplies them using the latest saved revision',()=>{
+ const original=fullNote({body:'## Winkel to do’s\n[ ] Project\n  [x] Stap'});let state=undo.startTimeline(original);
+ const removed=fullNote({body:model.resolveTask(original.body,1),revision:2});state=undo.acceptTimeline(state,removed);const target=undo.stepTimeline(state,'undo');assert.equal(target.present.body,original.body);assert.equal(target.revision,2);assert.equal(state.present.body,removed.body);
+ state=undo.acceptTimeline(target,fullNote({body:target.present.body,revision:3}));const redo=undo.stepTimeline(state,'redo');assert.equal(redo.present.body,removed.body);assert.equal(redo.revision,3);
+ state=undo.acceptTimeline(redo,fullNote({body:redo.present.body,revision:4}));assert.equal(state.revision,4);assert.equal(state.future.length,0);
+ const category=undo.acceptTimeline(undo.startTimeline(original),fullNote({body:model.removeTaskCategory(original.body,'Winkel to do’s'),revision:2}));assert.equal(undo.stepTimeline(category,'undo').present.body,original.body);
+});
+test('typing bursts make useful undo steps; new edits clear redo, and failed candidates do not consume history',()=>{
+ const original=fullNote({body:''});let state=undo.startTimeline(original);state=undo.recordTimeline(state,{...original,body:'H'},'body',1000);state=undo.recordTimeline(state,{...original,body:'Hallo'},'body',1200);assert.equal(state.past.length,1);state=undo.recordTimeline(state,{...original,body:'Hallo wereld'},'body',2200);assert.equal(state.past.length,2);
+ const candidate=undo.stepTimeline(state,'undo');assert.equal(candidate.present.body,'Hallo');assert.equal(state.present.body,'Hallo wereld');const branch=undo.recordTimeline(candidate,{...original,body:'Andere tekst'},'body',2300);assert.equal(branch.future.length,0);assert.equal(undo.stepTimeline(branch,'undo').present.body,'Hallo');assert.throws(()=>undo.recordTimeline(state,{...original,id:other}));
+});
+test('history stays per note and per session; an external revision invalidates stale undo targets',()=>{
+ const original=fullNote();let state=undo.acceptTimeline(undo.startTimeline(original),fullNote({title:'Nieuw',revision:2}));assert.equal(undo.reopenTimeline(state,fullNote({title:'Nieuw',revision:2})).past.length,1);assert.equal(undo.reopenTimeline(state,fullNote({title:'Op andere plek gewijzigd',revision:3})).past.length,0);
+ const fresh=undo.startTimeline(fullNote({id:other}));assert.equal(fresh.past.length,0);assert.equal(undo.stepTimeline(fresh,'undo'),null);
+ for(let i=0;i<40;i++)state=undo.recordTimeline(state,{...original,body:String(i)});assert(state.past.length<=30);
 });
