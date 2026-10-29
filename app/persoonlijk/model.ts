@@ -9,12 +9,18 @@ export type PersonalNoteInput = Pick<PersonalNote,"id"|"title"|"notebook"|"body"
 export const PERSONAL_BUCKET="personal-notes";
 export const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export type TaskPriority="normal"|"priority"|"later";
+export const DEFAULT_TASK_CATEGORIES=["Administratie to do’s","Winkel to do’s","Dagelijkse to do’s"];
+export function isTodoNotebook(notebook:string){return /^to[\s-]*do(?:[’']?s)?$/i.test(notebook.trim());}
+export function taskCategories(body:string){return [...new Set([...DEFAULT_TASK_CATEGORIES,...body.split("\n").flatMap(line=>/^## (.+)$/.exec(line)?.[1]||[])])];}
+export function addTaskCategory(body:string,name:string){const clean=name.trim();if(!clean||clean.length>100||/[\r\n\0]/.test(clean)||clean==="Algemeen")throw Error("Kies een categorienaam van 1 tot 100 tekens.");return body.split("\n").includes(`## ${clean}`)?body:`${body}${body?"\n\n":""}## ${clean}`;}
 export function taskLines(body:string) {
+  let category="Algemeen";
   return body.split("\n").flatMap((line,index)=>{
+    const heading=/^## (.+)$/.exec(line);if(heading)category=heading[1];
     const match=/^([\t ]*)(?:[-*]\s*)?\[([ xX])\]\s*(.*)$/.exec(line);
     if(!match)return [];
     const marker=/^\[(prioriteit|later)\]\s*/.exec(match[3]);
-    return [{index,done:match[2].toLowerCase()==="x",text:match[3].slice(marker?.[0].length||0),depth:Math.floor(match[1].replace(/\t/g,"  ").length/2),priority:(marker?.[1]==="prioriteit"?"priority":marker?"later":"normal") as TaskPriority}];
+    return [{index,category,done:match[2].toLowerCase()==="x",text:match[3].slice(marker?.[0].length||0),depth:Math.floor(match[1].replace(/\t/g,"  ").length/2),priority:(marker?.[1]==="prioriteit"?"priority":marker?"later":"normal") as TaskPriority}];
   });
 }
 export function setTaskPriority(body:string,index:number,priority:TaskPriority) {
@@ -22,12 +28,22 @@ export function setTaskPriority(body:string,index:number,priority:TaskPriority) 
   const task=taskLines(body).find(t=>t.index===index);if(!task)throw Error("Deze taak bestaat niet meer.");
   const lines=body.split("\n");lines[index]=lines[index].replace(/(\[[ xX]\]\s*)(?:\[(?:prioriteit|later)\]\s*)?/,`$1${priority==="normal"?"":priority==="priority"?"[prioriteit] ":"[later] "}`);return lines.join("\n");
 }
-export function addTask(body:string,text:string,parentIndex?:number) {
+function appendTaskBlock(body:string,block:string[],category:string){
+  if(category==="Algemeen"){const lines=body?body.split("\n"):[],first=lines.findIndex(line=>/^## .+/.test(line));lines.splice(first<0?lines.length:first,0,...block);return lines.join("\n");}
+  const lines=addTaskCategory(body,category).split("\n"),start=lines.indexOf(`## ${category}`),next=lines.findIndex((line,i)=>i>start&&/^## .+/.test(line));lines.splice(next<0?lines.length:next,0,...block);return lines.join("\n");
+}
+export function moveTaskCategory(body:string,index:number,category:string){
+  const tasks=taskLines(body),task=tasks.find(t=>t.index===index);if(!task||task.depth!==0)throw Error("Verplaats de hoofdtaak om ook de subtaken mee te nemen.");
+  if(task.category===category)return body;
+  const lines=body.split("\n");let end=index+1;for(const child of tasks.filter(t=>t.index>index)){if(child.depth===0||child.category!==task.category)break;end=child.index+1;}
+  const block=lines.splice(index,end-index);return appendTaskBlock(lines.join("\n"),block,category);
+}
+export function addTask(body:string,text:string,parentIndex?:number,category="Algemeen") {
   const clean=text.trim();if(!clean||clean.length>2000||/[\r\n\0]/.test(clean))throw Error("Vul één taak in van maximaal 2.000 tekens.");
   const lines=body?body.split("\n"):[],tasks=taskLines(body);
-  if(parentIndex===undefined)return [...lines,`[ ] ${clean}`].join("\n");
+  if(parentIndex===undefined)return appendTaskBlock(body,[`[ ] ${clean}`],category);
   const parent=tasks.find(t=>t.index===parentIndex);if(!parent||parent.depth>=8)throw Error("Deze taak kan geen extra subtaak krijgen.");
-  let at=parent.index+1;for(const next of tasks.filter(t=>t.index>parent.index)){if(next.depth<=parent.depth)break;at=next.index+1;}
+  let at=parent.index+1;for(const next of tasks.filter(t=>t.index>parent.index)){if(next.depth<=parent.depth||next.category!==parent.category)break;at=next.index+1;}
   lines.splice(at,0,`${"  ".repeat(parent.depth+1)}[ ] ${clean}`);return lines.join("\n");
 }
 export function toggleTask(body:string,index:number) {

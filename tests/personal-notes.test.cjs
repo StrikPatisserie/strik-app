@@ -2,7 +2,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 function load(file,imports={}){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:name=>{assert(name in imports,`Unexpected import: ${name}`);return imports[name];},Response,Request,URL,Date,Set,Map,crypto:require('node:crypto').webcrypto});return exports;}
 const model=load('app/persoonlijk/model.ts'),access=load('app/lib/auth/access.ts');
 const owner='00000000-0000-4000-8000-000000000001',noteId='00000000-0000-4000-8000-000000000002',other='00000000-0000-4000-8000-000000000003';
-function input(changes={}){return{id:noteId,title:'Mijn notitie',notebook:'Strik',body:'[ ] Controleren\n[x] Afgerond\nGewone tekst',tags:[],pinned:false,archived:false,attachments:[],source_hash:null,source_created_at:null,source_updated_at:null,...changes};}
+function input(changes={}){return{id:noteId,title:'Mijn notitie',notebook:'TO DO',body:'[ ] Controleren\n[x] Afgerond\nGewone tekst',tags:[],pinned:false,archived:false,attachments:[],source_hash:null,source_created_at:null,source_updated_at:null,...changes};}
 const profile={id:owner,role:'manager',active:true,permissions:{},personal_workspace:true};
 function context(data,error=null){const calls=[],query={};for(const method of ['select','eq','ilike','gt','order','range','insert','update'])query[method]=(...args)=>{calls.push([method,...args]);return query;};query.maybeSingle=query.single=async()=>({data,error});query.then=(resolve,reject)=>Promise.resolve({data,error,count:1}).then(resolve,reject);return{calls,value:{profile,db:{from:table=>{calls.push(['table',table]);return query;},rpc:async name=>({data:[{notebook:'Strik'}],error:null})}}};}
 function routes(ctx){return load('app/api/persoonlijk/route.ts',{'../../persoonlijk/access.server':{personalContext:async()=>ctx,personalHeaders:{'Cache-Control':'private, no-store'}},'../../persoonlijk/model':model});}
@@ -62,4 +62,19 @@ test('standalone Evernote tasks preserve completion, priority, order fields and 
  const warnings=new Set(),rows=evernoteTaskLines([task({title:'Belangrijk',taskStatus:'open',taskFlag:'true',sortWeight:'B',taskGroupNoteLevelID:'group'}),task({title:'Afgerond',taskStatus:'completed'}),task({title:'  ',taskStatus:'open',repeatAfterCompletion:'true'})],warnings);
  assert.equal(rows.length,3);assert.equal(rows[0].line,'[ ] [prioriteit] Belangrijk');assert.equal(rows[0].weight,'B');assert.equal(rows[0].group,'group');assert.equal(rows[1].line,'[x] Afgerond');assert.equal(rows[2].line,'[ ] Lege taak uit Evernote');assert.equal(warnings.size,2);
  assert.throws(()=>evernoteTaskLines([task({title:'Onbekend',taskStatus:'unexpected'})],new Set()));
+});
+test('only the to-do notebook has task controls; meeting and reference notes stay notes',async()=>{
+ for(const name of ['TO DO',"To do’s","To-do's",'to dos'])assert(model.isTodoNotebook(name));
+ for(const name of ['Vergaderingen','Belangrijke gegevens','Mijn notities']){
+  assert(!model.isTodoNotebook(name));const ctx=context(input({notebook:name}));await routes(ctx.value).POST(request('POST',input({notebook:name})));assert.equal(ctx.calls.find(c=>c[0]==='insert')[1].open_tasks,0);
+  const read=context([input({notebook:name})]),response=await routes(read.value).GET(new Request('https://app.example.invalid/api/persoonlijk'));assert.equal((await response.json()).notes[0].tasks.length,0);
+ }
+});
+test('custom task categories persist without tasks and moving projects retains children, priority and completion',()=>{
+ let body='Context\n[ ] Project\n\n  [x] Stap één\n  [ ] [prioriteit] Stap twee\n[ ] Andere taak';
+ assert(model.taskCategories(body).includes('Administratie to do’s'));body=model.addTaskCategory(body,'Personeel');assert(model.taskCategories(body).includes('Personeel'));assert.equal(model.addTaskCategory(body,'Personeel'),body);
+ body=model.moveTaskCategory(body,1,'Administratie to do’s');let tasks=model.taskLines(body);const moved=tasks.find(t=>t.text==='Project');assert.equal(moved.category,'Administratie to do’s');assert.equal(tasks.find(t=>t.text==='Stap één').done,true);assert.equal(tasks.find(t=>t.text==='Stap twee').priority,'priority');assert.equal(tasks.find(t=>t.text==='Stap twee').category,moved.category);assert.equal(tasks.find(t=>t.text==='Andere taak').category,'Algemeen');
+ body=model.addTask(body,'Belasting',undefined,'Administratie to do’s');body=model.addTask(body,'Rooster',undefined,'Personeel');tasks=model.taskLines(body);assert.equal(tasks.find(t=>t.text==='Belasting').category,'Administratie to do’s');assert.equal(tasks.find(t=>t.text==='Rooster').category,'Personeel');
+ const parent=tasks.find(t=>t.text==='Project');body=model.addTask(body,'Nog een stap',parent.index);assert.equal(model.taskLines(body).find(t=>t.text==='Nog een stap').category,parent.category);
+ assert.throws(()=>model.addTaskCategory(body,'Fout\n## injectie'));assert.throws(()=>model.moveTaskCategory(body,model.taskLines(body).find(t=>t.depth===1).index,'Personeel'));
 });

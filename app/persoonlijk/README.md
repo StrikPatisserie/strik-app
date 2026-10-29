@@ -13,7 +13,7 @@ Een managementrol of bewerkbare profielpermissie verleent nooit toegang. De serv
 
 Andere app-accounts hebben geen toegang. Dit is geen end-to-endversleutelde kluis: Supabase/projectbeheerders en infrastructuur met servicecredentials blijven technisch bij de opslag kunnen. Er gaat geen notitie-inhoud naar WordPress of AI-diensten. Responses zijn `private, no-store`; bijlagen worden na authenticatie gedownload als inert bestand, nooit als actieve HTML/SVG op de app-origin.
 
-## Evernote-overdracht
+## Historische Evernote-overdracht (importknop verwijderd)
 
 - Desktop-export per notitieboek als ENEX, alle eigenschappen ingeschakeld. Bestandsnaam bepaalt de notitieboeknaam; ENEX bevat geen betrouwbare volledige notitieboekstructuur. Meerdere ENEX-bestanden kunnen tegelijk worden gecontroleerd.
 - Parser draait lokaal in de browser. Voor de eerste upload worden alle omgezette notities gevalideerd. Tekst, aanwezige afvinkvakjes, labels, brondata en ingebedde bestanden worden overgenomen. Tabellen/opmaak worden vereenvoudigd tot leesbare tekst. HTML wordt nooit als HTML uitgevoerd. Versleutelde inhoud blijft versleuteld in de bronexport; zelfstandige Evernote-taken worden op volgorde als afvinkbare taken overgenomen, inclusief status en vlag voor prioriteit. Lege taken krijgen een herkenbare aanduiding; terugkerende taken krijgen een controlewaarschuwing en behouden hun herhaling in de bronexport.
@@ -29,10 +29,18 @@ Op 29 oktober 2026 is de bestaande migratie toegepast op Supabase-project `strik
 
 De persoonlijke omgeving is beschikbaar voor Feline via de bestaande startpagina en `/persoonlijk`. Op 29 oktober 2026 zijn de aangeleverde exports lokaal volledig gelezen en gecontroleerd: Vergaderingen bevat één notitie met tien taken (negen open, waaronder twee lege taken); TO DO bevat één notitie met 69 taken (57 open) en vijf bijlagen; Belangrijke gegevens bevat één notitie en drie bijlagen. In totaal drie notities, 79 taken waarvan 13 afgerond, acht bijlagen en drie originele bronexports.
 
-De daadwerkelijke upload naar het account is nog niet uitgevoerd. De aangemelde computerapp kon niet worden bediend; de Vercel CLI is niet aangemeld en er zijn geen productiegeheimen beschikbaar gemaakt. De drie originele ENEX-bestanden kunnen tegelijk gekozen worden via **Evernote importeren** in de persoonlijke omgeving. De importer bewaart eerst iedere ongewijzigde bronexport in de private bucket. Er is geen exportinhoud in Git, publieke bestanden of logbestanden opgenomen.
+Feline gebruikt vanaf nu uitsluitend de eigen notitie-app. De Evernote-importknop en de volledige importdialoog zijn daarom uit de interface verwijderd. De historische parser blijft beschikbaar voor de gerichte tests. Er is geen exportinhoud in Git, publieke bestanden of logbestanden opgenomen. De eerder door de agent gecontroleerde exports zijn niet door de agent naar het account geüpload; de gebruiker heeft inmiddels aangegeven de drie onderdelen in de app te gebruiken.
 
 ## Taken indelen
 
-Iedere notitie heeft een takenpaneel met Nu doen (open, zonder later), Prioriteit, Voor later, Afgerond en Alles. Prioriteit kies je per taak. De knop Subtaak plaatst een nieuwe taak onder de gekozen hoofdtaak, na bestaande onderliggende taken. Maximaal acht niveaus; afvinken van een hoofdtaak verandert geen subtaken. Bij gefilterde subtaken blijven bovenliggende taken zichtbaar voor context. Nieuwe taken worden toegevoegd met een invoerveld; tekst bewerken kan via Bewerken.
+Alleen het notitieboek TO DO (ook geschreven als To do’s) heeft een takenpaneel met Nu doen (open, zonder later), Prioriteit, Voor later, Afgerond en Alles. Prioriteit kies je per taak. De knop Subtaak plaatst een nieuwe taak onder de gekozen hoofdtaak, na bestaande onderliggende taken. Maximaal acht niveaus; afvinken van een hoofdtaak verandert geen subtaken. Bij gefilterde subtaken blijven bovenliggende taken zichtbaar voor context. Nieuwe taken worden toegevoegd met een invoerveld; tekst bewerken kan via Bewerken.
 
 Taken blijven transparant in de bestaande notitietekst opgeslagen: `[ ] Taak`, `[ ] [prioriteit] Taak`, `[ ] [later] Taak`; twee spaties betekenen een niveau dieper. Er zijn geen aanvullende tabellen of permissies nodig. Een mislukte opslag houdt de wijziging als bewerkbaar concept zichtbaar. De importhash bevat ook zelfstandige taakgegevens zodat gewijzigde taken niet onzichtbaar dezelfde importidentiteit krijgen.
+
+## Notitiepagina’s en categorieën
+
+Vergaderingen, Belangrijke gegevens en andere notitieboeken zijn gewone notitiepagina’s: geen taakpaneel, taakbediening of telling. Eventuele bestaande checklistregels worden als gewone opsomming leesbaar gehouden. Bij opslaan telt de API voor deze boeken nul open taken; het overzicht Open taken beperkt zich tot to-do-boeken. Bestaande inhoud en bronbijlagen worden niet verwijderd.
+
+TO DO heeft de standaardcategorieën Administratie to do’s, Winkel to do’s en Dagelijkse to do’s, plus Algemeen voor bestaande ongecategoriseerde taken. Zelf categorieën toevoegen kan met + Categorie. Per hoofdtaak is er een categoriekeuze; verplaatsen neemt alle subtaken, hun status en prioriteit mee. Subtaken horen bij de categorie van hun hoofdtaak. Categorieën worden als `## Naam` in de bestaande notitietekst bewaard, ook als ze nog leeg zijn; er is geen schemawijziging nodig. Categorieën filteren samen met Nu doen/Prioriteit/Voor later/Afgerond.
+
+Alle menutoepassingen gebruiken via `strikIcons.personalTodo` het bestaande Strik-notitie-icoon `/icons_strik.svg`, zodat schaal en tekenstijl bij de overige pictogrammen passen.
