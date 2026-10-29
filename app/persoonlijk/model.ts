@@ -28,6 +28,12 @@ export function setTaskPriority(body:string,index:number,priority:TaskPriority) 
   const task=taskLines(body).find(t=>t.index===index);if(!task)throw Error("Deze taak bestaat niet meer.");
   const lines=body.split("\n");lines[index]=lines[index].replace(/(\[[ xX]\]\s*)(?:\[(?:prioriteit|later)\]\s*)?/,`$1${priority==="normal"?"":priority==="priority"?"[prioriteit] ":"[later] "}`);return lines.join("\n");
 }
+export function editTaskText(body:string,index:number,text:string){
+  const clean=text.trim();if(!clean||clean.length>2000||/[\r\n\0]/.test(clean))throw Error("Vul één taak in van maximaal 2.000 tekens.");
+  if(!taskLines(body).some(task=>task.index===index))throw Error("Deze taak bestaat niet meer.");
+  const lines=body.split("\n"),prefix=/^[\t ]*(?:[-*]\s*)?\[[ xX]\]\s*(?:\[(?:prioriteit|later)\]\s*)?/.exec(lines[index])![0];
+  lines[index]=prefix+clean;return lines.join("\n");
+}
 function appendTaskBlock(body:string,block:string[],category:string){
   if(category==="Algemeen"){const lines=body?body.split("\n"):[],first=lines.findIndex(line=>/^## .+/.test(line));lines.splice(first<0?lines.length:first,0,...block);return lines.join("\n");}
   const lines=addTaskCategory(body,category).split("\n"),start=lines.indexOf(`## ${category}`),next=lines.findIndex((line,i)=>i>start&&/^## .+/.test(line));lines.splice(next<0?lines.length:next,0,...block);return lines.join("\n");

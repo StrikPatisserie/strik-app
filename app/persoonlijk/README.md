@@ -33,7 +33,7 @@ Feline gebruikt vanaf nu uitsluitend de eigen notitie-app. De Evernote-importkno
 
 ## Taken indelen
 
-Alleen het notitieboek TO DO (ook geschreven als To do’s) heeft een takenpaneel met Nu doen (open, zonder later), Prioriteit, Voor later, Afgerond en Alles. Prioriteit kies je per taak. De knop Subtaak plaatst een nieuwe taak onder de gekozen hoofdtaak, na bestaande onderliggende taken. Maximaal acht niveaus; afvinken van een hoofdtaak verandert geen subtaken. Bij gefilterde subtaken blijven bovenliggende taken zichtbaar voor context. Nieuwe taken worden toegevoegd met een invoerveld; tekst bewerken kan via Bewerken.
+Alleen het notitieboek TO DO (ook geschreven als To do’s) heeft een takenpaneel met Nu doen (open, zonder later), Prioriteit, Voor later, Afgerond en Alles. Prioriteit kies je per taak. De knop Subtaak plaatst een nieuwe taak onder de gekozen hoofdtaak, na bestaande onderliggende taken. Maximaal acht niveaus; afvinken van een hoofdtaak verandert geen subtaken. Bij gefilterde subtaken blijven bovenliggende taken zichtbaar voor context. Nieuwe taken worden toegevoegd met een invoerveld; taaktekst bewerken kan afzonderlijk via Bewerken bij de betreffende taak.
 
 Taken blijven transparant in de bestaande notitietekst opgeslagen: `[ ] Taak`, `[ ] [prioriteit] Taak`, `[ ] [later] Taak`; twee spaties betekenen een niveau dieper. Er zijn geen aanvullende tabellen of permissies nodig. Een mislukte opslag houdt de wijziging als bewerkbaar concept zichtbaar. De importhash bevat ook zelfstandige taakgegevens zodat gewijzigde taken niet onzichtbaar dezelfde importidentiteit krijgen.
 
@@ -44,3 +44,9 @@ Vergaderingen, Belangrijke gegevens en andere notitieboeken zijn gewone notitiep
 TO DO heeft de standaardcategorieën Administratie to do’s, Winkel to do’s en Dagelijkse to do’s, plus Algemeen voor bestaande ongecategoriseerde taken. Zelf categorieën toevoegen kan met + Categorie. Per hoofdtaak is er een categoriekeuze; verplaatsen neemt alle subtaken, hun status en prioriteit mee. Subtaken horen bij de categorie van hun hoofdtaak. Categorieën worden als `## Naam` in de bestaande notitietekst bewaard, ook als ze nog leeg zijn; er is geen schemawijziging nodig. Categorieën filteren samen met Nu doen/Prioriteit/Voor later/Afgerond.
 
 Alle menutoepassingen gebruiken via `strikIcons.personalTodo` het bestaande Strik-notitie-icoon `/icons_strik.svg`, zodat schaal en tekenstijl bij de overige pictogrammen passen.
+
+## Herstel en bescherming van de takenlijst
+
+Het gewone notitie-editorvenster biedt voor TO DO uitsluitend titel en notitieboek aan. De complete taakinhoud staat niet meer in één bewerkbaar tekstvak; taken worden afzonderlijk bewerkt in het taakpaneel. Gewone notitiepagina’s behouden hun teksteditor. Onder het taakpaneel wordt geen tweede weergave van de oude Evernote-tekst meer gerenderd.
+
+Op 29 oktober 2026 is op expliciet verzoek een leeg gemaakte TO DO-notitie rechtstreeks hersteld vanuit de aangeleverde ENEX-export, met controle van de bestaande revisie en lege inhoud. De 69 oorspronkelijke taken (waarvan 12 afgerond) zijn ingedeeld; de elf aanvullende actiepunten uit de notitietekst zijn onder twee hoofdtaken als subtaken opgenomen. Totaal: 82 taken, 70 open. De bestaande bijlagen en bronexport bleven behouden; de opgeslagen inhoud is met SHA-256 teruggecontroleerd. Ooit/Later-groepen zijn als Voor later behouden. Geen individuele taakteksten, herstel-SQL of exportbestanden zijn in Git opgenomen.

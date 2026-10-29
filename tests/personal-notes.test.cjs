@@ -78,3 +78,10 @@ test('custom task categories persist without tasks and moving projects retains c
  const parent=tasks.find(t=>t.text==='Project');body=model.addTask(body,'Nog een stap',parent.index);assert.equal(model.taskLines(body).find(t=>t.text==='Nog een stap').category,parent.category);
  assert.throws(()=>model.addTaskCategory(body,'Fout\n## injectie'));assert.throws(()=>model.moveTaskCategory(body,model.taskLines(body).find(t=>t.depth===1).index,'Personeel'));
 });
+test('editing one task preserves category, priority, completion, subtasks and every other line',()=>{
+ const body='## Administratie to do’s\n[x] [later] Project\n  [ ] [prioriteit] Subtaak\nNotitie\n[ ] Andere taak';
+ const edited=model.editTaskText(body,1,'Project hernoemd');assert.equal(edited,'## Administratie to do’s\n[x] [later] Project hernoemd\n  [ ] [prioriteit] Subtaak\nNotitie\n[ ] Andere taak');
+ const task=model.taskLines(edited)[0];assert.equal(task.done,true);assert.equal(task.priority,'later');assert.equal(task.category,'Administratie to do’s');
+ assert.equal(model.taskLines(model.editTaskText(body,2,'Nieuwe stap'))[1].depth,1);
+ for(const title of ['', 'één\ntwee','x'.repeat(2001)])assert.throws(()=>model.editTaskText(body,1,title));assert.throws(()=>model.editTaskText(body,0,'Titel'));
+});
