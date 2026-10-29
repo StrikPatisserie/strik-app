@@ -1,6 +1,6 @@
 "use client";
 import {useState} from "react";
-import {addTask,editTaskText,addTaskCategory,taskCategories,moveTaskCategory,setTaskPriority,taskLines,toggleTask,type TaskPriority} from "./model";
+import {addTask,editTaskText,addTaskCategory,removeTaskCategory,taskCategories,moveTaskCategory,setTaskPriority,taskLines,toggleTask,type TaskPriority} from "./model";
 import s from "./personal.module.css";
 type Filter="open"|"priority"|"later"|"done"|"all";
 const filters:{id:Filter;label:string}[]=[{id:"open",label:"Nu doen"},{id:"priority",label:"Prioriteit"},{id:"later",label:"Voor later"},{id:"done",label:"Afgerond"},{id:"all",label:"Alles"}];
@@ -11,10 +11,15 @@ export default function TaskOrganizer({body,disabled,onChange}:{body:string;disa
  for(let i=0;i<tasks.length;i++)if(matches(tasks[i],filter)&&(!category||tasks[i].category===category)){visible.add(tasks[i].index);let depth=tasks[i].depth;for(let j=i-1;j>=0&&depth>0;j--)if(tasks[j].depth<depth){visible.add(tasks[j].index);depth=tasks[j].depth;}}
  const parentTask=tasks.find(t=>t.index===parent);
  async function createCategory(event:React.FormEvent){event.preventDefault();setError("");try{const name=newCategory.trim();if(await onChange(addTaskCategory(body,name))){setCategory(name);setNewCategory("");}}catch(e){setError((e as Error).message);}}
+ async function removeCategory(){
+  if(!category||category==='Algemeen'||disabled)return;setError("");
+  try{if(await onChange(removeTaskCategory(body,category))){setCategory('Algemeen');setParent(undefined);setEditingTask(undefined);setText('');setFilter('all');}}catch(e){setError((e as Error).message);}
+ }
  async function submit(event:React.FormEvent){event.preventDefault();setError("");try{if(await onChange(editingTask===undefined?addTask(body,text,parent,category||"Algemeen"):editTaskText(body,editingTask,text))){setText("");setParent(undefined);setEditingTask(undefined);setFilter("all");}}catch(e){setError((e as Error).message);}}
  return <section className={s.taskOrganizer} aria-label="Taken en subtaken">
   <h3>To-do’s <small>{tasks.filter(t=>!t.done).length} open · {tasks.filter(t=>t.done).length} afgerond</small></h3>
   <div className={s.categoryFilters} aria-label="Taakcategorieën"><button disabled={disabled} aria-pressed={!category} onClick={()=>{setCategory("");setParent(undefined);}}>Alle categorieën</button>{categories.map(name=><button key={name} disabled={disabled} aria-pressed={category===name} onClick={()=>{setCategory(name);setParent(undefined);}}>{name}</button>)}</div>
+  {category&&category!=="Algemeen"&&<div className={s.categoryRemoval}><span>Categorie verwijderen verplaatst alle taken en subtaken naar Algemeen.</span><button disabled={disabled} onClick={()=>void removeCategory()}>Categorie verwijderen</button></div>}
   <form className={s.categoryForm} onSubmit={event=>void createCategory(event)}><input aria-label="Nieuwe subcategorie" placeholder="Eigen subcategorie…" maxLength={100} value={newCategory} disabled={disabled} onChange={e=>setNewCategory(e.target.value)}/><button type="submit" disabled={disabled||!newCategory.trim()}>+ Categorie</button></form>
   <div className={s.taskFilters} aria-label="Taken filteren">{filters.map(item=><button key={item.id} disabled={disabled} aria-pressed={filter===item.id} onClick={()=>setFilter(item.id)}>{item.label} <span>{tasks.filter(t=>matches(t,item.id)&&(!category||t.category===category)).length}</span></button>)}</div>
   <div className={s.taskRows}>{categories.filter(name=>tasks.some(t=>t.category===name&&visible.has(t.index))).map(name=><section key={name}><h4>{name}</h4>{tasks.filter(t=>t.category===name&&visible.has(t.index)).map(task=><div key={task.index} className={`${s.taskRow} ${task.done?s.completedTask:""}`} style={{marginInlineStart:`${Math.min(task.depth,8)*18}px`}} data-context={!matches(task,filter)||undefined}>

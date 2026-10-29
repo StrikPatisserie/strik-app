@@ -11,7 +11,24 @@ export const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[
 export type TaskPriority="normal"|"priority"|"later";
 export const DEFAULT_TASK_CATEGORIES=["Administratie to do’s","Winkel to do’s","Dagelijkse to do’s"];
 export function isTodoNotebook(notebook:string){return /^to[\s-]*do(?:[’']?s)?$/i.test(notebook.trim());}
-export function taskCategories(body:string){return [...new Set([...DEFAULT_TASK_CATEGORIES,...body.split("\n").flatMap(line=>/^## (.+)$/.exec(line)?.[1]||[])])];}
+export function taskCategories(body:string){
+  const names=body.split("\n").flatMap(line=>/^## (.+)$/.exec(line)?.[1]||[]);
+  return [...new Set([...(names.includes("Algemeen")?[]:DEFAULT_TASK_CATEGORIES),...names])].filter(name=>name!=="Algemeen");
+}
+export function removeTaskCategory(body:string,name:string){
+  const categories=taskCategories(body);if(name==="Algemeen"||!categories.includes(name))throw Error("Deze categorie kan niet worden verwijderd.");
+  const kept:string[]=[],moved:string[]=[];let removing=false;
+  for(const line of body.split("\n")){
+    const heading=/^## (.+)$/.exec(line);
+    if(heading){removing=heading[1]===name;if(!removing)kept.push(line);}
+    else (removing?moved:kept).push(line);
+  }
+  // An explicit Algemeen heading records the chosen category set, including
+  // an empty set, so removed default categories cannot silently reappear.
+  let next=kept.includes("## Algemeen")?kept.join("\n"):`## Algemeen\n${kept.join("\n")}`;
+  for(const remaining of categories.filter(category=>category!==name))next=addTaskCategory(next,remaining);
+  return moved.length?appendTaskBlock(next,moved,"Algemeen"):next;
+}
 export function addTaskCategory(body:string,name:string){const clean=name.trim();if(!clean||clean.length>100||/[\r\n\0]/.test(clean)||clean==="Algemeen")throw Error("Kies een categorienaam van 1 tot 100 tekens.");return body.split("\n").includes(`## ${clean}`)?body:`${body}${body?"\n\n":""}## ${clean}`;}
 export function taskLines(body:string) {
   let category="Algemeen";
@@ -35,7 +52,11 @@ export function editTaskText(body:string,index:number,text:string){
   lines[index]=prefix+clean;return lines.join("\n");
 }
 function appendTaskBlock(body:string,block:string[],category:string){
-  if(category==="Algemeen"){const lines=body?body.split("\n"):[],first=lines.findIndex(line=>/^## .+/.test(line));lines.splice(first<0?lines.length:first,0,...block);return lines.join("\n");}
+  if(category==="Algemeen"){
+    const lines=body?body.split("\n"):[],general=lines.indexOf("## Algemeen");
+    const boundary=lines.findIndex((line,index)=>index>general&&/^## .+/.test(line));
+    lines.splice(boundary<0?lines.length:boundary,0,...block);return lines.join("\n");
+  }
   const lines=addTaskCategory(body,category).split("\n"),start=lines.indexOf(`## ${category}`),next=lines.findIndex((line,i)=>i>start&&/^## .+/.test(line));lines.splice(next<0?lines.length:next,0,...block);return lines.join("\n");
 }
 export function moveTaskCategory(body:string,index:number,category:string){

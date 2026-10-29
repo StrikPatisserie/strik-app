@@ -50,3 +50,9 @@ Alle menutoepassingen gebruiken via `strikIcons.personalTodo` het bestaande Stri
 Het gewone notitie-editorvenster biedt voor TO DO uitsluitend titel en notitieboek aan. De complete taakinhoud staat niet meer in één bewerkbaar tekstvak; taken worden afzonderlijk bewerkt in het taakpaneel. Gewone notitiepagina’s behouden hun teksteditor. Onder het taakpaneel wordt geen tweede weergave van de oude Evernote-tekst meer gerenderd.
 
 Op 29 oktober 2026 is op expliciet verzoek een leeg gemaakte TO DO-notitie rechtstreeks hersteld vanuit de aangeleverde ENEX-export, met controle van de bestaande revisie en lege inhoud. De 69 oorspronkelijke taken (waarvan 12 afgerond) zijn ingedeeld; de elf aanvullende actiepunten uit de notitietekst zijn onder twee hoofdtaken als subtaken opgenomen. Totaal: 82 taken, 70 open. De bestaande bijlagen en bronexport bleven behouden; de opgeslagen inhoud is met SHA-256 teruggecontroleerd. Ooit/Later-groepen zijn als Voor later behouden. Geen individuele taakteksten, herstel-SQL of exportbestanden zijn in Git opgenomen.
+
+## Categorie verwijderen en bijlagen uit beeld
+
+Kies een categorie en klik Categorie verwijderen. Alle inhoud uit die categorie gaat naar Algemeen, inclusief afgeronde taken, prioriteiten en geneste subtaken. Ook lege en standaardcategorieën kunnen weg; Algemeen blijft de vaste opvangcategorie. Het verwijderen wordt samen met de verplaatsing als één revisiebeveiligde notitiewijziging opgeslagen. Een expliciete `## Algemeen`-sectie bewaart de gekozen categorieënset, zodat standaardcategorieën niet opnieuw verschijnen. Zelf opnieuw toevoegen blijft mogelijk.
+
+In TO DO zijn het bijlagenblok, de bijlagentelling op de notitiekaart en de oude Evernote-brondatum verborgen. De privébestanden en hun verwijzingen blijven bewaard. Gewone notitiepagina’s behouden hun bestaande bijlagenweergave.

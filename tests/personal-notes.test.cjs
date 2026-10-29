@@ -85,3 +85,18 @@ test('editing one task preserves category, priority, completion, subtasks and ev
  assert.equal(model.taskLines(model.editTaskText(body,2,'Nieuwe stap'))[1].depth,1);
  for(const title of ['', 'één\ntwee','x'.repeat(2001)])assert.throws(()=>model.editTaskText(body,1,title));assert.throws(()=>model.editTaskText(body,0,'Titel'));
 });
+test('removing a category relocates every task and subtask to Algemeen without changing state or priority',()=>{
+ const body='[ ] Bestaand algemeen\n## Winkel to do’s\n[ ] [later] Project\n  [x] Klaar\n  [ ] [prioriteit] Stap\n## Personeel\n[ ] Collega\n## Winkel to do’s\n[ ] Tweede project';
+ const before=model.taskLines(body),removed=model.removeTaskCategory(body,'Winkel to do’s'),after=model.taskLines(removed);assert.equal(after.length,before.length);assert(!model.taskCategories(removed).includes('Winkel to do’s'));
+ for(const task of before){const restored=after.find(t=>t.text===task.text);assert(restored);assert.equal(restored.done,task.done);assert.equal(restored.priority,task.priority);assert.equal(restored.depth,task.depth);assert.equal(restored.category,task.category==='Winkel to do’s'?'Algemeen':task.category);}
+ assert.equal(model.taskLines(model.addTask(removed,'Nieuwe taak')) .find(t=>t.text==='Nieuwe taak').category,'Algemeen');
+});
+test('empty and default categories stay removed after every category is deleted; Algemeen remains',()=>{
+ let body='[ ] Taak';for(const name of model.DEFAULT_TASK_CATEGORIES)body=model.removeTaskCategory(body,name);assert.equal(model.taskCategories(body).length,0);assert.equal(model.taskLines(body).length,1);assert.equal(model.taskLines(body)[0].category,'Algemeen');
+ body=model.addTaskCategory(body,'Eigen categorie');assert.equal(model.taskCategories(body).length,1);body=model.removeTaskCategory(body,'Eigen categorie');assert.equal(model.taskCategories(body).length,0);assert.throws(()=>model.removeTaskCategory(body,'Algemeen'));assert.throws(()=>model.removeTaskCategory(body,'Bestaat niet'));
+ body=model.addTaskCategory(body,'Winkel to do’s');assert(model.taskCategories(body).includes('Winkel to do’s'));
+});
+test('Algemeen keeps an existing order when restored category tasks and new tasks are appended',()=>{
+ const body='## Algemeen\n[ ] Bestaand\n## Winkel to do’s\n[ ] Verplaatsen\n  [ ] Subtaak';
+ let next=model.removeTaskCategory(body,'Winkel to do’s');next=model.addTask(next,'Nieuw');const tasks=model.taskLines(next);assert.deepEqual(Array.from(tasks,t=>t.text),['Bestaand','Verplaatsen','Subtaak','Nieuw']);assert(tasks.every(t=>t.category==='Algemeen'));assert.equal(tasks[2].depth,1);
+});
