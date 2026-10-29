@@ -20,6 +20,17 @@ do $$ begin
    values(current_setting('strik.payment_smoke')::uuid,current_setting('strik.payment_actor')::uuid,'smoke@example.invalid',2550,'Duplicate');
   raise exception 'Duplicate request ID accepted';
  exception when unique_violation then null; end;
+ if not exists(select 1 from public.management_payment_requests where id=current_setting('strik.payment_smoke')::uuid and mail_version=1 and customer_reminder_mail_state='pending' and followup_mail_state='pending' and customer_reminder_mail_id<>followup_mail_id and customer_reminder_mail_id<>customer_mail_id) then raise exception 'Reminder defaults or distinct receipts missing'; end if;
+ begin
+  update public.management_payment_requests set paid_at=now(),settlement_method='bank' where id=current_setting('strik.payment_smoke')::uuid;
+  raise exception 'Manual payment without actor accepted';
+ exception when check_violation then null; end;
+ update public.management_payment_requests set paid_at=now(),settlement_method='store',manual_paid_by=current_setting('strik.payment_actor')::uuid,manual_paid_note='Rollback-only audit check' where id=current_setting('strik.payment_smoke')::uuid;
+ begin
+  update public.management_payment_requests set customer_reminder_sent_at=now(),customer_reminder_due_at=now()+interval '6 days' where id=current_setting('strik.payment_smoke')::uuid;
+  raise exception 'Shortened reminder deadline accepted';
+ exception when check_violation then null; end;
+ update public.management_payment_requests set customer_reminder_sent_at=now(),customer_reminder_due_at=now()+interval '7 days' where id=current_setting('strik.payment_smoke')::uuid;
 end $$;
 reset role;
 select true as payment_smoke_passed;

@@ -1,7 +1,7 @@
 import { getCurrentProfile } from '@/app/lib/auth/session';
 import { hasFullAccess } from '@/app/lib/auth/access';
 import { paymentDb, paymentService, paymentSummary, paymentStore } from '@/app/management/betaalverzoeken/paymentServer';
-import { paymentInput, validRequestId, type PaymentRequest } from '@/app/management/betaalverzoeken/paymentRequests';
+import { paymentInput, paymentMail, validRequestId, type PaymentRequest } from '@/app/management/betaalverzoeken/paymentRequests';
 import { PaymentConflictError } from '@/app/management/betaalverzoeken/paymentService';
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
@@ -9,7 +9,13 @@ export const maxDuration=60;
 const json=(data:unknown,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'private, no-store'}});
 export async function GET(request:Request){
  if(!hasFullAccess(await getCurrentProfile()))return json({message:'Alleen bevoegde beheerders kunnen betaalverzoeken inzien.'},403);
- const offset=Number(new URL(request.url).searchParams.get('offset')||0);
+ const params=new URL(request.url).searchParams;
+ if(params.has('id')){
+  const id=params.get('id'),kind=params.get('mail')||'customer';
+  if(!validRequestId(id)||!['customer','customer_reminder'].includes(kind))return json({message:'Ongeldig mailvoorbeeld.'},400);
+  try{const row=await paymentStore.get(id);return json({...paymentMail(row,kind as 'customer'|'customer_reminder'),recipient:row.recipient_email,sent_at:kind==='customer'?row.sent_at:row.customer_reminder_sent_at,legacy:kind==='customer'&&row.mail_version===1});}catch{return json({message:'Het mailvoorbeeld kon niet worden geladen.'},503);}
+ }
+ const offset=Number(params.get('offset')||0);
  const view=new URL(request.url).searchParams.get('view')||'all';
  if(!['all','open','paid'].includes(view))return json({message:'Ongeldige statusselectie.'},400);
  if(!Number.isInteger(offset)||offset<0||offset>100000)return json({message:'Ongeldige pagina.'},400);
@@ -26,6 +32,11 @@ export async function POST(request:Request){
    return json({request:paymentSummary(await paymentService.create(profile!.id,input))});
   }
   if(!validRequestId(input.id))return json({message:'Ongeldig betaalverzoek.'},400);
+  if(input.action==='mark_paid'){
+   if(!['bank','store'].includes(String(input.method))||typeof (input.note??'')!=='string'||String(input.note??'').length>300||String(input.note??'').includes('\0'))return json({message:'Kies bank of winkel en maximaal 300 tekens toelichting.'},400);
+   return json({request:paymentSummary(await paymentService.markPaid(input.id,profile!.id,input.method as 'bank'|'store',String(input.note||'')))});
+  }
+  if(input.action==='remind_customer')return json({request:paymentSummary(await paymentService.remindCustomer(input.id,profile!.id))});
   if(input.action==='sync')return json({request:paymentSummary(await paymentService.sync(input.id))});
   if(input.action==='retry_mail'){
    const row=await paymentService.sync(input.id);
