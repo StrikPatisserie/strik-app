@@ -8,7 +8,7 @@ function xmlDocument(source:string,root:string) {
   // are rejected before parsing to prevent entity expansion or file lookups.
   if(/<!ENTITY|<!DOCTYPE[^>]*\[/i.test(source))throw Error("Dit exportbestand bevat niet-ondersteunde XML-entiteiten.");
   const safe=source.replace(/&(?!amp;|lt;|gt;|quot;|apos;|#\d+;|#x[\da-f]+;)([\w]+);/gi,(_,name:string)=>name==="nbsp"?"&#160;":`&amp;${name};`);
-  const doc=new DOMParser().parseFromString(safe,"application/xml");
+  const doc=new DOMParser().parseFromString(safe.trim(),"application/xml");
   if(doc.querySelector("parsererror")||doc.documentElement.localName!==root)throw Error(`Het ${root==="en-export"?"Evernote-exportbestand":"notitieformaat"} kon niet volledig worden gelezen. Er is niets geïmporteerd.`);
   return doc;
 }
@@ -39,6 +39,15 @@ function textContent(source:string,warnings:Set<string>) {
   }
   return walk(doc.documentElement).replace(/[\t ]+\n/g,"\n").replace(/\n{3,}/g,"\n\n").trim();
 }
+export function evernoteTaskLines(elements:Element[],warnings:Set<string>) {
+  return elements.map((task,order)=>{
+      const field=(name:string)=>Array.from(task.children).find(e=>e.localName===name)?.textContent||"";
+      const state=field("taskStatus");if(!["open","completed"].includes(state))throw Error("Deze export bevat een onbekende taakstatus. Er worden geen taken overgeslagen.");
+      const text=field("title").replace(/[\r\n]+/g," ").trim();if(!text)warnings.add("Lege Evernote-taken zijn herkenbaar bewaard als ‘Lege taak uit Evernote’. Je kunt ze zelf invullen.");
+      if(field("repeatAfterCompletion")==="true")warnings.add("Terugkerende taken zijn als eenmalige taak overgenomen. De oorspronkelijke herhaling blijft in de bronexport bewaard.");
+      return {group:field("taskGroupNoteLevelID"),weight:field("sortWeight"),order,line:`[${state==="completed"?"x":" "}] ${field("taskFlag")==="true"?"[prioriteit] ":""}${text||"Lege taak uit Evernote"}`};
+    });
+}
 export async function readEvernote(file:File,notebook=file.name.replace(/\.enex$/i,"")):Promise<EvernoteImport> {
   if(!/\.enex$/i.test(file.name))throw Error("Kies een Evernote-exportbestand (.enex).");
   if(file.size>LIMIT)throw Error("Deze export is groter dan 100 MB. Exporteer kleinere notitieboeken of deelbestanden; er wordt niets overgeslagen.");
@@ -49,7 +58,8 @@ export async function readEvernote(file:File,notebook=file.name.replace(/\.enex$
   const warnings=new Set<string>(),notes:EvernoteImport["notes"]=[],occurrences=new Map<string,number>();
   for(const element of elements){
     const get=(name:string)=>Array.from(element.children).find(e=>e.localName===name)?.textContent||"";
-    const title=get("title")||"Zonder titel",enml=get("content"),body=textContent(enml,warnings),resources:EvernoteResource[]=[];
+    const title=get("title")||"Zonder titel",enml=get("content"),resources:EvernoteResource[]=[];
+    let body=textContent(enml,warnings);
     const tags=Array.from(element.children).filter(e=>e.localName==="tag").map(e=>e.textContent||"").filter(Boolean);
     for(const resource of Array.from(element.children).filter(e=>e.localName==="resource")){
       const data=resource.querySelector("data"),encoded=data?.textContent?.replace(/\s/g,"")||"";
@@ -59,9 +69,11 @@ export async function readEvernote(file:File,notebook=file.name.replace(/\.enex$
       const name=resource.querySelector("resource-attributes > file-name")?.textContent||`Bijlage ${resources.length+1}`;
       resources.push({name,type:resource.querySelector("mime")?.textContent||"application/octet-stream",bytes:content,hash:await sha256(content)});
     }
-    if(element.querySelector("task,task-group"))warnings.add("Deze export bevat aanvullende Evernote-taakgegevens. Controleer de bronexport; alleen afvinkvakjes in de notitietekst worden als taken overgenomen.");
+    const tasks=evernoteTaskLines(Array.from(element.children).filter(e=>e.localName==="task"),warnings);
+    if(tasks.length){tasks.sort((a,b)=>a.group<b.group?-1:a.group>b.group?1:a.weight<b.weight?-1:a.weight>b.weight?1:a.order-b.order);body+=`\n\nTaken uit Evernote\n${tasks.map(t=>t.line).join("\n")}`;}
+    if(element.querySelector("task-group"))warnings.add("Aanvullende taakgroepen blijven in de oorspronkelijke bronexport bewaard.");
     const source_created_at=date(get("created")),source_updated_at=date(get("updated"));
-    const base=await sha256(new TextEncoder().encode(JSON.stringify({notebook,title,enml,tags,created:source_created_at,resources:resources.map(r=>r.hash)}))),occurrence=(occurrences.get(base)||0)+1;occurrences.set(base,occurrence);
+    const base=await sha256(new TextEncoder().encode(JSON.stringify({notebook,title,enml,tags,created:source_created_at,resources:resources.map(r=>r.hash),tasks:tasks.map(t=>({group:t.group,weight:t.weight,line:t.line}))}))),occurrence=(occurrences.get(base)||0)+1;occurrences.set(base,occurrence);
     const source_hash=await sha256(new TextEncoder().encode(`${base}:${occurrence}`)),id=`${source_hash.slice(0,8)}-${source_hash.slice(8,12)}-4${source_hash.slice(13,16)}-a${source_hash.slice(17,20)}-${source_hash.slice(20,32)}`;
     notes.push({note:{id,title,notebook,body,tags,pinned:false,archived:false,attachments:[],source_hash,source_created_at,source_updated_at},resources});
   }

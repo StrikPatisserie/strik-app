@@ -8,11 +8,27 @@ export type PersonalNote = {
 export type PersonalNoteInput = Pick<PersonalNote,"id"|"title"|"notebook"|"body"|"tags"|"pinned"|"archived"|"attachments"|"source_hash"|"source_created_at"|"source_updated_at">;
 export const PERSONAL_BUCKET="personal-notes";
 export const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export type TaskPriority="normal"|"priority"|"later";
 export function taskLines(body:string) {
   return body.split("\n").flatMap((line,index)=>{
-    const match=/^\s*(?:[-*]\s*)?\[([ xX])\]\s*(.*)$/.exec(line);
-    return match?[{index,done:match[1].toLowerCase()==="x",text:match[2]}]:[];
+    const match=/^([\t ]*)(?:[-*]\s*)?\[([ xX])\]\s*(.*)$/.exec(line);
+    if(!match)return [];
+    const marker=/^\[(prioriteit|later)\]\s*/.exec(match[3]);
+    return [{index,done:match[2].toLowerCase()==="x",text:match[3].slice(marker?.[0].length||0),depth:Math.floor(match[1].replace(/\t/g,"  ").length/2),priority:(marker?.[1]==="prioriteit"?"priority":marker?"later":"normal") as TaskPriority}];
   });
+}
+export function setTaskPriority(body:string,index:number,priority:TaskPriority) {
+  if(!["normal","priority","later"].includes(priority))throw Error("Ongeldige prioriteit.");
+  const task=taskLines(body).find(t=>t.index===index);if(!task)throw Error("Deze taak bestaat niet meer.");
+  const lines=body.split("\n");lines[index]=lines[index].replace(/(\[[ xX]\]\s*)(?:\[(?:prioriteit|later)\]\s*)?/,`$1${priority==="normal"?"":priority==="priority"?"[prioriteit] ":"[later] "}`);return lines.join("\n");
+}
+export function addTask(body:string,text:string,parentIndex?:number) {
+  const clean=text.trim();if(!clean||clean.length>2000||/[\r\n\0]/.test(clean))throw Error("Vul één taak in van maximaal 2.000 tekens.");
+  const lines=body?body.split("\n"):[],tasks=taskLines(body);
+  if(parentIndex===undefined)return [...lines,`[ ] ${clean}`].join("\n");
+  const parent=tasks.find(t=>t.index===parentIndex);if(!parent||parent.depth>=8)throw Error("Deze taak kan geen extra subtaak krijgen.");
+  let at=parent.index+1;for(const next of tasks.filter(t=>t.index>parent.index)){if(next.depth<=parent.depth)break;at=next.index+1;}
+  lines.splice(at,0,`${"  ".repeat(parent.depth+1)}[ ] ${clean}`);return lines.join("\n");
 }
 export function toggleTask(body:string,index:number) {
   const lines=body.split("\n");

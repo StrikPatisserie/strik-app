@@ -43,3 +43,23 @@ test('attachments reject another owner and always download with an inert content
  assert.equal((await route.GET(new Request(`https://app.example.invalid/api/persoonlijk/bijlage?path=${other}/test`))).status,404);assert.equal(downloads,0);
  const response=await route.GET(new Request(`https://app.example.invalid/api/persoonlijk/bijlage?path=${owner}/test&name=bron.html`));assert.equal(response.headers.get('Content-Type'),'application/octet-stream');assert(response.headers.get('Content-Disposition').startsWith('attachment;'));assert(response.headers.get('Content-Security-Policy').includes("default-src 'none'"));assert.equal(downloads,1);
 });
+test('priorities and later retain completion, task text, indentation and unrelated note content',()=>{
+ const body='Project\n[ ] Hoofdtaak\n  [ ] Subtaak\n  [x] Gedaan\n[ ] Andere taak';
+ const priority=model.setTaskPriority(body,2,'priority');assert.equal(model.taskLines(priority)[1].priority,'priority');assert.equal(model.taskLines(priority)[1].depth,1);assert.equal(model.taskLines(priority)[1].text,'Subtaak');
+ const later=model.setTaskPriority(priority,2,'later');assert.equal(model.taskLines(later)[1].priority,'later');assert.equal(model.setTaskPriority(later,2,'normal'),body);
+ assert.equal(model.taskLines(model.toggleTask(later,2))[1].done,true);assert.equal(model.taskLines(model.toggleTask(later,2))[1].priority,'later');assert.throws(()=>model.setTaskPriority(body,0,'priority'));assert.throws(()=>model.setTaskPriority(body,1,'unexpected'));
+});
+test('subtasks insert after descendants, preserve other projects and do not complete children implicitly',()=>{
+ const body='[ ] Project\n  [ ] Eerste stap\n    [x] Detail\n[ ] Volgend project';
+ assert.equal(model.addTask(body,'Tweede stap',0),'[ ] Project\n  [ ] Eerste stap\n    [x] Detail\n  [ ] Tweede stap\n[ ] Volgend project');
+ assert.equal(model.addTask(body,'Detail twee',1),'[ ] Project\n  [ ] Eerste stap\n    [x] Detail\n    [ ] Detail twee\n[ ] Volgend project');
+ assert.equal(model.taskLines(model.toggleTask(body,0))[1].done,false);assert.equal(model.addTask('','Nieuw'),'[ ] Nieuw');
+ for(const text of ['', 'one\ntwo','x'.repeat(2001)])assert.throws(()=>model.addTask(body,text));assert.throws(()=>model.addTask(body,'Taak',99));
+});
+test('standalone Evernote tasks preserve completion, priority, order fields and explicitly retain empty tasks',()=>{
+ const {evernoteTaskLines}=load('app/persoonlijk/evernote.ts');
+ const task=fields=>({children:Object.entries(fields).map(([localName,textContent])=>({localName,textContent}))});
+ const warnings=new Set(),rows=evernoteTaskLines([task({title:'Belangrijk',taskStatus:'open',taskFlag:'true',sortWeight:'B',taskGroupNoteLevelID:'group'}),task({title:'Afgerond',taskStatus:'completed'}),task({title:'  ',taskStatus:'open',repeatAfterCompletion:'true'})],warnings);
+ assert.equal(rows.length,3);assert.equal(rows[0].line,'[ ] [prioriteit] Belangrijk');assert.equal(rows[0].weight,'B');assert.equal(rows[0].group,'group');assert.equal(rows[1].line,'[x] Afgerond');assert.equal(rows[2].line,'[ ] Lege taak uit Evernote');assert.equal(warnings.size,2);
+ assert.throws(()=>evernoteTaskLines([task({title:'Onbekend',taskStatus:'unexpected'})],new Set()));
+});
