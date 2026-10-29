@@ -11,6 +11,7 @@ export type NoteItem = {
   id: string;
   text: string;
   createdAt: string;
+  priority?: boolean;
 };
 
 export type TodoItem = {
@@ -18,6 +19,7 @@ export type TodoItem = {
   text: string;
   done: boolean;
   createdAt: string;
+  priority?: boolean;
 };
 
 export type NotesBoardData = {
@@ -65,12 +67,15 @@ function textFrom(value: unknown) {
 function normalizeNoteItem(value: unknown): NoteItem | null {
   if (!isRecord(value)) return null;
 
-  const text = textFrom(value.text).trim();
+  const raw = textFrom(value.text).trim();
+  const priority = value.priority === true || raw.startsWith("[prioriteit] ");
+  const text = raw.replace(/^\[prioriteit\] /, "");
   if (!text) return null;
 
   return {
     id: textFrom(value.id) || createId("note"),
     text,
+    priority,
     createdAt: textFrom(value.createdAt) || new Date().toISOString(),
   };
 }
@@ -78,12 +83,15 @@ function normalizeNoteItem(value: unknown): NoteItem | null {
 function normalizeTodoItem(value: unknown): TodoItem | null {
   if (!isRecord(value)) return null;
 
-  const text = textFrom(value.text).trim();
+  const raw = textFrom(value.text).trim();
+  const priority = value.priority === true || raw.startsWith("[prioriteit] ");
+  const text = raw.replace(/^\[prioriteit\] /, "");
   if (!text) return null;
 
   return {
     id: textFrom(value.id) || createId("todo"),
     text,
+    priority,
     done: Boolean(value.done),
     createdAt: textFrom(value.createdAt) || new Date().toISOString(),
   };
@@ -119,4 +127,11 @@ export function normalizeNotesBoard(
 
 export function createId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+// Store priority in the existing text field as well, so the deployed WordPress
+// sanitizer preserves it without requiring a coordinated schema rollout.
+export function serializeNotesBoard(board: NotesBoardData) {
+  const encode = <T extends NoteItem>(item: T) => ({ ...item, text: `${item.priority ? "[prioriteit] " : ""}${item.text}` });
+  return { ...board, notes: board.notes.map(encode), todos: board.todos.map(encode) };
 }

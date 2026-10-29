@@ -27,3 +27,8 @@
 .workspace { grid-template-columns:168px minmax(0,1fr); }.workspace[data-note-open=true] .noteList { display:none; }.workspace[data-note-open=false] .editor { display:none; }.sidebarSearch { width:100%; min-height:35px; margin-bottom:13px; padding:8px; border:1px solid #cbd8c2; border-radius:5px; background:#f7faf4; font-size:12px !important; color:var(--ink); }.editorBar button:disabled { opacity:.3; }
 @media(min-width:768px) and (max-width:1150px) { .workspace { grid-template-columns:145px minmax(0,1fr); } }
 @media(min-width:768px) { .listTop > input { display:none; } }
+
+.composerPriority { max-width:115px; min-width:0; border:1px solid #dce6d6; border-radius:6px; background:white; color:var(--ink); padding:6px 3px; font-size:12px; }
+
+.notePriority { display:flex; gap:8px; align-items:center; margin:12px 0; font-size:14px; }
+.paper .notePriority input { width:18px; height:18px; padding:0; flex:none; }

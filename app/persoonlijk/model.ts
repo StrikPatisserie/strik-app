@@ -84,13 +84,15 @@ export function moveTaskCategory(body:string,index:number,category:string){
   const lines=body.split("\n");let end=index+1;for(const child of tasks.filter(t=>t.index>index)){if(child.depth===0||child.category!==task.category)break;end=child.index+1;}
   const block=lines.splice(index,end-index);return appendTaskBlock(lines.join("\n"),block,category);
 }
-export function addTask(body:string,text:string,parentIndex?:number,category=TASK_FALLBACK_CATEGORY) {
+export function addTask(body:string,text:string,parentIndex?:number,category=TASK_FALLBACK_CATEGORY,priority:TaskPriority="normal") {
   const clean=text.trim();if(!clean||clean.length>2000||/[\r\n\0]/.test(clean))throw Error("Vul één taak in van maximaal 2.000 tekens.");
   const lines=body?body.split("\n"):[],tasks=taskLines(body);
-  if(parentIndex===undefined)return appendTaskBlock(body,[`[ ] ${clean}`],category);
+  if(!["normal","priority","later"].includes(priority))throw Error("Ongeldige prioriteit.");
+  const marker=priority==="normal"?"":priority==="priority"?"[prioriteit] ":"[later] ";
+  if(parentIndex===undefined)return appendTaskBlock(body,[`[ ] ${marker}${clean}`],category);
   const parent=tasks.find(t=>t.index===parentIndex);if(!parent||parent.depth>=8)throw Error("Deze taak kan geen extra subtaak krijgen.");
   let at=parent.index+1;for(const next of tasks.filter(t=>t.index>parent.index)){if(next.depth<=parent.depth||next.category!==parent.category)break;at=next.index+1;}
-  lines.splice(at,0,`${"  ".repeat(parent.depth+1)}[ ] ${clean}`);return lines.join("\n");
+  lines.splice(at,0,`${"  ".repeat(parent.depth+1)}[ ] ${marker}${clean}`);return lines.join("\n");
 }
 export function toggleTask(body:string,index:number) {
   const lines=body.split("\n");

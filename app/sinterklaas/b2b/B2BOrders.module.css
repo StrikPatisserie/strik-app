@@ -359,3 +359,10 @@
 }
 
 @media (max-width: 1000px) { .formGrid { grid-template-columns: 1fr; } }
+
+.groupBreakdown { padding:16px 0; border-bottom:1px solid #e5dfd6; margin-bottom:16px; }
+.groupTableScroll { overflow-x:auto; margin:12px 0; }
+.groupTableScroll table { width:100%; min-width:490px; border-collapse:collapse; font-size:13px; }
+.groupTableScroll th,.groupTableScroll td { padding:9px 10px; border-bottom:1px solid #e5dfd6; text-align:right; }
+.groupTableScroll th:first-child { text-align:left; }
+.groupTableScroll thead,.groupTableScroll tfoot { background:#edf2e9; font-weight:800; }

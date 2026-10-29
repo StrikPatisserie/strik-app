@@ -5,6 +5,8 @@ import { canAccessStorePresentation, filterAllowedItems } from "../lib/auth/acce
 import { getCurrentProfile } from "../lib/auth/session";
 
 const winkelItems = [
+  { href: "/sint-voor-bedrijven", title: "Sinterklaasfolder", description: "Bekijk de zakelijke Sinterklaasfolder en bestel voor klanten.", icon: strikIcons.sinterklaas, accent: "coral" as const },
+  { href: "/kerst-voor-bedrijven", title: "Kerstfolder", description: "Bekijk de zakelijke kerstfolder en kerstgeschenken.", icon: strikIcons.kerst, accent: "green" as const },
   {
     href: "/winkel/presentatie",
     title: "Winkelpresentatie",

@@ -35,6 +35,7 @@ function entry(season = 'sint', initialOrder = null) {
   const state = [], refs = [], effects = [], calls = [], updated = [], storage = new Map();
   let cursor = 0, refCursor = 0;
   const loaded = load('app/sinterklaas/b2b/SinterklaasB2BClient.tsx', {
+    './groupedLetterOrders': load('app/sinterklaas/b2b/groupedLetterOrders.ts'),
     react: { ...React, useEffect(callback) { effects.push(callback); }, useMemo(callback) { return callback(); },
       useState(initial) { const i = cursor++; if (!(i in state)) state[i] = typeof initial === 'function' ? initial() : initial; return [state[i], next => { state[i] = typeof next === 'function' ? next(state[i]) : next; }]; },
       useRef(initial) { return refs[refCursor++] ||= { current: initial }; } },

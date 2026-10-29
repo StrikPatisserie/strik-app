@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import styles from "./B2BOrders.module.css";
+import GroupedLetterBreakdown from "./GroupedLetterBreakdown";
+import { parseLetterGroup, letterGroupMatchesOrder } from "./groupedLetterOrders";
 import B2BProductText from "./B2BProductText";
 import B2BConfirmationDialog, { canMailQuotation, customerConfirmationSent, customerQuotationSent, shouldOfferCustomerConfirmation } from "./B2BConfirmationDialog";
 import B2BApprovalDialog from "./B2BApprovalDialog";
@@ -572,9 +574,9 @@ function formStateFromOrder(order: SinterklaasB2BOrder | null | undefined, seaso
   const parsedOrder = parseOrderText(order.orderText);
   const letterLines = order.letterLines.map(line => ({
     ...line, withLogo: b2bLetterHasLogo(order, line),
-    ...(line.style === "vorm" ? { letter: "S", size: "groot" as const } : {}),
+    ...(line.style === "vorm" ? { size: "groot" as const } : {}),
   }));
-  const productLines = letterLines.length ? syncLetterProductLines(parsedOrder.productLines, letterLines) : parsedOrder.productLines;
+  const productLines = letterLines.length && !parseLetterGroup(order.letterOrderText) ? syncLetterProductLines(parsedOrder.productLines, letterLines) : parsedOrder.productLines;
 
   return {
     customerName: order.customerName,
@@ -1136,7 +1138,7 @@ function B2BOrderForm({
     setLetterDraft((current) => {
       const next = { ...current, ...patch };
       if (patch.style !== undefined && patch.style !== current.style) {
-        if (next.style === "vorm" && next.letter !== "S") next.letter = "";
+        if (next.style === "vorm" && !B2B_VORM_LETTERS.includes(next.letter)) next.letter = "";
         if (next.style === "vorm" && next.size !== "groot") next.size = "";
       }
       return next;
@@ -1160,7 +1162,7 @@ function B2BOrderForm({
       style,
       size,
       id: `b2b-letter-${crypto.randomUUID()}`,
-      letter: letterDraft.style === "vorm" ? "S" : letterDraft.letter,
+      letter: letterDraft.letter,
       quantity: letterDraft.quantity,
     };
     setForm((current) => {
@@ -1231,6 +1233,11 @@ function B2BOrderForm({
       return;
     }
 
+    const group = parseLetterGroup(form.letterOrderText);
+    if (group && !letterGroupMatchesOrder(group, { letterLines: form.letterLines, logo: form.logo })) {
+      setMessage("De letterregels wijken af van de bedrijfsverdeling. Herstel de aantallen en logo’s voordat je opslaat.");
+      return;
+    }
     if (hasInvalidBasePrice()) {
       setStep(2);
       setMessage("Vul een geldige stukprijs in.");
@@ -1501,7 +1508,7 @@ function B2BOrderForm({
                 <option value="" disabled>Kies smaak</option><option value="melk">Melk</option><option value="puur">Puur</option><option value="wit">Wit</option>
               </select></label>
               <label className={styles.field}>Soort<select aria-label="Soort" value={letterDraft.style} onChange={event => updateLetterDraft({ style: event.target.value as B2BLetterLine["style"] })}>
-                <option value="" disabled>Kies soort</option><option value="spuit">Spuit</option><option value="vorm">Vorm (S)</option>
+                <option value="" disabled>Kies soort</option><option value="spuit">Spuit</option><option value="vorm">Vorm (S of Q)</option>
               </select></label>
               <label className={styles.field}>Formaat<select aria-label="Formaat" value={letterDraft.size} onChange={event => updateLetterDraft({ size: event.target.value as B2BLetterLine["size"] })}>
                 <option value="" disabled>Kies formaat</option><option value="groot">Groot</option>{letterDraft.style !== "vorm" && <option value="klein">Klein</option>}
@@ -1625,6 +1632,8 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
   onApprove: (order: SinterklaasB2BOrder) => void;
 }>) {
   const [expanded, setExpanded] = useState(false);
+  const group = parseLetterGroup(order.letterOrderText);
+  const groupMatches = group ? letterGroupMatchesOrder(group, order) : false;
   const parsedOrder = parseOrderText(order.orderText);
   const priceBreakdowns = linePriceBreakdowns(parsedOrder.productLines);
   const orderTotal = effectiveOrderTotal(order);
@@ -1635,7 +1644,9 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
   const warnings = orderWarnings(order);
   const confirmationNeedsAttention = order.status === "akkoord" && (!order.confirmationEmailedAt || Boolean(order.confirmationEmailError)) && Boolean(order.deliveryDate) && order.deliveryDate >= todayIso() && !archived;
   const folderProductsText = order.orderText.match(/(?:GEKOZEN SINTERKLAASPRODUCTEN|LOSSE KERSTCADEAUS|KERSTPAKKET OP MAAT)\s+([\s\S]*?)(?:PRIJSINDICATIE|GEWENSTE LEVERING|WENSEN|$)/i)?.[1]?.trim();
-  const orderSummary = parsedOrder.productLines.length > 0
+  const orderSummary = group && groupMatches
+    ? (["wit", "puur", "melk"] as const).map(chocolate => `${order.letterLines.filter(line => line.chocolate === chocolate).reduce((sum, line) => sum + line.quantity, 0)} ${chocolate} Q`).join(" · ")
+    : parsedOrder.productLines.length > 0
     ? parsedOrder.productLines.map(line => `${line.quantity}× ${lineDescription(line)}`).join(" · ")
     : order.letterLines.length > 0 ? (["spuit", "vorm"] as const).flatMap(style => { const count = b2bLetterTotal(order.letterLines.filter(line => line.style === style)); return count ? [`${count}× ${style === "spuit" ? "Chocolade spuitletters" : "Chocolade vormletter S"}`] : []; }).join(" · ") : folderProductsText || compactOrderText(order.orderText);
   const statusLabel = order.cancelled ? "Geannuleerd" : { aanvraag: "Aanvraag", offerte: "Offerte", akkoord: "Definitief", afgewezen: "Niet doorgegaan" }[order.status];
@@ -1669,12 +1680,13 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
       </div>
     </div>
     {expanded && <div className={styles.detail}>
+      {group && <GroupedLetterBreakdown group={group} matches={groupMatches} />}
       <div className={styles.detailGrid}>
         <section>
           <h3>Bestelling</h3>
           {order.letterLines.length > 0 && <B2BLetterLineBadges lines={order.letterLines} />}
           <p style={{ marginTop: order.letterLines.length ? 12 : 0 }}><B2BProductText text={compactOrderText(order.orderText)} /></p>
-          {order.letterOrderText && <details><summary>Vrije letteromschrijving</summary><div><p>{order.letterOrderText}</p></div></details>}
+          {order.letterOrderText && !group && <details><summary>Vrije letteromschrijving</summary><div><p>{order.letterOrderText}</p></div></details>}
           {extraLines.length > 0 && <details><summary>Extra afspraken</summary><div><p>{extraLines.join("\n")}</p></div></details>}
           {priceBreakdowns.length > 0 && <details><summary>Prijsspecificatie · {money(orderTotal)} excl. btw</summary><div>
             {priceBreakdowns.map(price => <div key={price.line.id} className={styles.priceLine}>

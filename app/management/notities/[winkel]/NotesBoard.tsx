@@ -7,6 +7,7 @@ import {
   getEmptyNotesBoard,
   getNotesUrl,
   normalizeNotesBoard,
+  serializeNotesBoard,
 } from "../notesApi";
 
 type NotesBoardProps = {
@@ -33,6 +34,8 @@ export default function NotesBoard({ winkel, winkelLabel }: NotesBoardProps) {
     getEmptyNotesBoard(winkel)
   );
   const [newNote, setNewNote] = useState("");
+  const [notePriority, setNotePriority] = useState(false);
+  const [todoPriority, setTodoPriority] = useState(false);
   const [newTodo, setNewTodo] = useState("");
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
@@ -95,7 +98,7 @@ export default function NotesBoard({ winkel, winkelLabel }: NotesBoardProps) {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(boardToSave),
+        body: JSON.stringify(serializeNotesBoard(boardToSave)),
       });
 
       const data = (await res.json().catch(() => null)) as unknown;
@@ -145,6 +148,7 @@ export default function NotesBoard({ winkel, winkelLabel }: NotesBoardProps) {
       notes: [
         {
           id: createId("note"),
+          priority: notePriority,
           text,
           createdAt: new Date().toISOString(),
         },
@@ -152,6 +156,7 @@ export default function NotesBoard({ winkel, winkelLabel }: NotesBoardProps) {
       ],
     }));
     setNewNote("");
+    setNotePriority(false);
   }
 
   function addTodo() {
@@ -163,6 +168,7 @@ export default function NotesBoard({ winkel, winkelLabel }: NotesBoardProps) {
       todos: [
         {
           id: createId("todo"),
+          priority: todoPriority,
           text,
           done: false,
           createdAt: new Date().toISOString(),
@@ -171,6 +177,7 @@ export default function NotesBoard({ winkel, winkelLabel }: NotesBoardProps) {
       ],
     }));
     setNewTodo("");
+    setTodoPriority(false);
   }
 
   function updateNote(id: string, text: string) {
@@ -240,6 +247,7 @@ export default function NotesBoard({ winkel, winkelLabel }: NotesBoardProps) {
 
       <section className="rounded-[1.75rem] border border-[#e7e0d8] bg-white/85 p-5 shadow-sm">
         <h2 className="text-xl font-bold">Nieuwe to-do</h2>
+        <label className="mt-3 flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={todoPriority} onChange={e => setTodoPriority(e.target.checked)} />★ Prioriteit</label>
         <div className="mt-3 flex gap-2">
           <input
             value={newTodo}
@@ -271,7 +279,7 @@ export default function NotesBoard({ winkel, winkelLabel }: NotesBoardProps) {
             Nog geen to-do&apos;s voor {winkelLabel}.
           </div>
         ) : (
-          board.todos.map((todo) => (
+          [...board.todos].sort((a, b) => Number(Boolean(b.priority)) - Number(Boolean(a.priority))).map((todo) => (
             <article
               key={todo.id}
               className={`rounded-[1.5rem] border p-4 shadow-sm ${
@@ -280,6 +288,7 @@ export default function NotesBoard({ winkel, winkelLabel }: NotesBoardProps) {
                   : "border-[#e7e0d8] bg-white"
               }`}
             >
+              {todo.priority && <span className="text-xs font-bold">★ Prioriteit</span>}
               <div className="flex items-start gap-3">
                 <input
                   type="checkbox"
@@ -314,6 +323,7 @@ export default function NotesBoard({ winkel, winkelLabel }: NotesBoardProps) {
           placeholder={`Notitie voor ${winkelLabel}`}
           className="mt-3 min-h-28 w-full rounded-2xl border border-[#e7e0d8] bg-white p-4"
         />
+        <label className="mt-3 flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={notePriority} onChange={e => setNotePriority(e.target.checked)} />★ Prioriteit</label>
         <button
           onClick={addNote}
           disabled={!newNote.trim()}
@@ -331,11 +341,12 @@ export default function NotesBoard({ winkel, winkelLabel }: NotesBoardProps) {
             Nog geen notities voor {winkelLabel}.
           </div>
         ) : (
-          board.notes.map((note) => (
+          [...board.notes].sort((a, b) => Number(Boolean(b.priority)) - Number(Boolean(a.priority))).map((note) => (
             <article
               key={note.id}
               className="rounded-[1.5rem] border border-[#e7e0d8] bg-white p-4 shadow-sm"
             >
+              <label className="mb-2 flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={Boolean(note.priority)} onChange={e => mutateBoard(current => ({ ...current, notes: current.notes.map(item => item.id === note.id ? { ...item, priority: e.target.checked } : item) }))} />★ Prioriteit</label>
               <textarea
                 value={note.text}
                 onChange={(e) => updateNote(note.id, e.target.value)}

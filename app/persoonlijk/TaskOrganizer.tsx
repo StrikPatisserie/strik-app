@@ -6,18 +6,20 @@ import s from "./personal.module.css";
 function Pencil(){return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14v6Z"/></svg>;}
 export default function TaskOrganizer({body,disabled,onChange}:{body:string;disabled:boolean;onChange:(body:string)=>Promise<boolean|undefined>}){
  const [text,setText]=useState(""),[parent,setParent]=useState<number>(),[editingTask,setEditingTask]=useState<number>(),[error,setError]=useState(""),[category,setCategory]=useState(""),[newCategory,setNewCategory]=useState(""),[addingCategory,setAddingCategory]=useState(false);
+ const [newPriority,setNewPriority]=useState<TaskPriority>("normal");
  const input=useRef<HTMLInputElement>(null),categoryInput=useRef<HTMLInputElement>(null);
  const tasks=taskLines(body),categories=[TASK_FALLBACK_CATEGORY,...taskCategories(body)],selected=categories.includes(category)?category:"";
  useEffect(()=>{if(parent!==undefined||editingTask!==undefined)input.current?.focus();},[parent,editingTask]);
  useEffect(()=>{if(addingCategory)categoryInput.current?.focus();},[addingCategory]);
- function resetComposer(){setParent(undefined);setEditingTask(undefined);setText("");}
+ function resetComposer(){setParent(undefined);setEditingTask(undefined);setText("");setNewPriority("normal");}
  async function change(next:string){setError("");return onChange(next);}
  async function createCategory(event:FormEvent){event.preventDefault();try{const name=newCategory.trim();if(await change(addTaskCategory(body,name))){setCategory(name);setNewCategory("");setAddingCategory(false);resetComposer();}}catch(e){setError((e as Error).message);}}
  async function removeCategory(){if(!selected||selected===TASK_FALLBACK_CATEGORY||disabled)return;try{if(await change(removeTaskCategory(body,selected))){setCategory(TASK_FALLBACK_CATEGORY);resetComposer();}}catch(e){setError((e as Error).message);}}
  async function resolve(index:number){if(disabled)return;try{if(await change(resolveTask(body,index)))resetComposer();}catch(e){setError((e as Error).message);}}
- async function submit(event:FormEvent){event.preventDefault();try{if(await change(editingTask===undefined?addTask(body,text,parent,selected||TASK_FALLBACK_CATEGORY):editTaskText(body,editingTask,text)))resetComposer();}catch(e){setError((e as Error).message);}}
+ async function submit(event:FormEvent){event.preventDefault();try{if(await change(editingTask===undefined?addTask(body,text,parent,selected||TASK_FALLBACK_CATEGORY,newPriority):editTaskText(body,editingTask,text)))resetComposer();}catch(e){setError((e as Error).message);}}
  function composer(){const inline=editingTask!==undefined||parent!==undefined;return <form className={`${s.taskComposer} ${inline?s.inlineComposer:""}`} onSubmit={event=>void submit(event)}>
   <Icon name={editingTask!==undefined?"check":"plus"} size={18}/><input ref={input} aria-label={editingTask!==undefined?"Taak wijzigen":parent!==undefined?"Nieuwe subtaak":"Nieuwe to-do"} value={text} maxLength={2000} disabled={disabled} onChange={event=>setText(event.target.value)} placeholder={parent!==undefined?"Nieuwe subtaak…":editingTask!==undefined?"Taak wijzigen…":"Nieuwe to-do…"}/>
+  {editingTask===undefined&&<select className={s.composerPriority} aria-label="Prioriteit nieuwe taak" value={newPriority} disabled={disabled} onChange={event=>setNewPriority(event.target.value as TaskPriority)}><option value="normal">Normaal</option><option value="priority">★ Prioriteit</option><option value="later">Voor later</option></select>}
   <button className={s.iconButton} type="submit" disabled={disabled||!text.trim()} title={editingTask!==undefined?"Opslaan":"Toevoegen"} aria-label={editingTask!==undefined?"Opslaan":"Toevoegen"}><Icon name="arrow" size={17}/></button>{inline&&<button className={s.iconButton} type="button" disabled={disabled} onClick={resetComposer} title="Annuleren" aria-label="Annuleren"><Icon name="close" size={16}/></button>}
  </form>;}
  return <section className={s.taskOrganizer} aria-label="Taken en subtaken">

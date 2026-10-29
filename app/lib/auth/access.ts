@@ -461,7 +461,7 @@ export function canAccessPath(
 ) {
   if (!profile?.active) return false;
   if (pathname==="/persoonlijk" || pathname.startsWith("/persoonlijk/")) return canAccessPersonalNotes(profile);
-  if (pathname === "/") return true;
+  if (pathname === "/" || pathname === "/sint-voor-bedrijven" || pathname === "/kerst-voor-bedrijven") return true;
   if (pathname === "/profiel" || pathname.startsWith("/profiel/")) return true;
   if (isUniversalTeamPath(pathname)) return true;
 
