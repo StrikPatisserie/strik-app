@@ -200,7 +200,7 @@ export const products: Product[] = [
     name: "Staaf Stoomboot",
     eyebrow: "Nieuw",
     description: "Een gevulde speculaasstaaf en een gevulde amandelstaaf in een feestelijke stoombootverpakking.",
-    image: "/sinterklaas/staaf stoomboot2.png",
+    image: "/sinterklaas/2026 - SINT - strik stoomboot verticaal.png",
     shelfLifeInfo: [
       "Amandelstaaf · t.h.t. 7 dagen",
       "Gevulde speculaasstaaf · t.h.t. ca. 21 dagen",
