@@ -24,6 +24,11 @@ export function customerConfirmationSent(order: SinterklaasB2BOrder) {
   return Boolean(mail?.version && mail.customer?.version === mail.version && mail.customer.state === "sent" && mail.customer.sentAt);
 }
 
+export function customerConfirmationNeedsUpdate(order: SinterklaasB2BOrder) {
+  return order.status === "akkoord" && !order.cancelled && !order.id.startsWith("historie-") &&
+    Boolean(order.confirmationMail?.customer?.sentAt) && !customerConfirmationSent(order);
+}
+
 export function customerQuotationSent(order: SinterklaasB2BOrder) {
   const mail = order.quotationMail;
   return Boolean(mail?.version && mail.customer?.version === mail.version && mail.customer.state === "sent" && mail.customer.sentAt);
@@ -34,13 +39,14 @@ export function canMailQuotation(order: SinterklaasB2BOrder) {
 }
 
 export function shouldOfferCustomerConfirmation(order: SinterklaasB2BOrder, previous?: SinterklaasB2BOrder | null) {
-  return order.status === "akkoord" && !order.cancelled && (previous?.status !== "akkoord" ||
-    Boolean(previous.confirmationMail?.version && previous.confirmationMail.version !== order.confirmationMail?.version));
+  return order.status === "akkoord" && !order.cancelled && !order.id.startsWith("historie-") && !customerConfirmationSent(order) &&
+    (previous?.status !== "akkoord" || Boolean(order.confirmationMail?.version && previous.confirmationMail?.version !== order.confirmationMail.version) || customerConfirmationNeedsUpdate(order));
 }
 
-export default function B2BConfirmationDialog({ order, mode = "confirmation", onClose, onEdit, onUpdated }: Readonly<{
+export default function B2BConfirmationDialog({ order, mode = "confirmation", updatedOrder = false, onClose, onEdit, onUpdated }: Readonly<{
   order: SinterklaasB2BOrder;
   mode?: "confirmation" | "quotation";
+  updatedOrder?: boolean;
   onClose: () => void;
   onEdit: (order: SinterklaasB2BOrder) => void;
   onUpdated: (order: SinterklaasB2BOrder) => void;
@@ -51,12 +57,13 @@ export default function B2BConfirmationDialog({ order, mode = "confirmation", on
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [showPreview, setShowPreview] = useState(mode === "quotation");
+  const [showPreview, setShowPreview] = useState(mode === "quotation" || updatedOrder || customerConfirmationNeedsUpdate(order));
   const [reload, setReload] = useState(0);
   const title = useRef<HTMLHeadingElement>(null);
   const sending = useRef(false);
   const root = useRef<HTMLElement>(null);
   const quotation = mode === "quotation";
+  const updatedConfirmation = !quotation && (updatedOrder || customerConfirmationNeedsUpdate(current));
   const kind = current.status === "offerte" ? "Offerte" : "Aanvraag";
   const mail = quotation ? current.quotationMail : current.confirmationMail;
   const sent = quotation ? customerQuotationSent(current) : customerConfirmationSent(current);
@@ -117,9 +124,9 @@ export default function B2BConfirmationDialog({ order, mode = "confirmation", on
     <section ref={root} role="dialog" aria-modal="true" aria-labelledby="b2b-confirmation-title" aria-busy={busy || loading} className="flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-[1.75rem] bg-[#fffdf8] shadow-2xl">
       <header className="relative shrink-0 bg-[#244b37] px-6 pb-6 pt-6 text-white sm:px-8">
         <button type="button" aria-label="Bevestigingsvenster sluiten" disabled={busy} onClick={onClose} className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-xl disabled:opacity-40">×</button>
-        <span className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#e9cc89]/40 bg-white/10 px-3 py-1 text-xs font-bold text-[#e9cc89]">{quotation ? `${kind} · nog niet definitief` : "✓ Bestelling definitief"}</span>
-        <h2 ref={title} tabIndex={-1} id="b2b-confirmation-title" style={{ outline: "none" }} className="pr-5 text-2xl font-black leading-tight sm:text-3xl">{sent ? "De klant is op de hoogte" : quotation ? `${kind} mailen` : "Klant een bevestiging mailen?"}</h2>
-        <p className="mt-2 text-sm leading-relaxed text-[#e4ede4]">{quotation ? sent ? "Deze versie is verstuurd. De aanvraag of offerte blijft open." : "Controleer ontvanger en mail. De bestelling blijft open." : sent ? "Deze versie van de bestelling is verstuurd. De verzendstatus blijft bij de bestelling bewaard." : "Een feestelijke bevestiging met de definitieve bestelling, prijs en afspraken. Alles duidelijk op één plek."}</p>
+        <span className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#e9cc89]/40 bg-white/10 px-3 py-1 text-xs font-bold text-[#e9cc89]">{quotation ? `${kind} · nog niet definitief` : updatedConfirmation ? "✓ Definitieve bestelling gewijzigd" : "✓ Bestelling definitief"}</span>
+        <h2 ref={title} tabIndex={-1} id="b2b-confirmation-title" style={{ outline: "none" }} className="pr-5 text-2xl font-black leading-tight sm:text-3xl">{sent ? "De klant is op de hoogte" : quotation ? `${kind} mailen` : updatedConfirmation ? "Gewijzigde bevestiging mailen?" : "Klant een bevestiging mailen?"}</h2>
+        <p className="mt-2 text-sm leading-relaxed text-[#e4ede4]">{quotation ? sent ? "Deze versie is verstuurd. De aanvraag of offerte blijft open." : "Controleer ontvanger en mail. De bestelling blijft open." : sent ? "Deze versie van de bestelling is verstuurd. De verzendstatus blijft bij de bestelling bewaard." : updatedConfirmation ? "Stuur de klant de volledige, bijgewerkte bestelling met de actuele prijs en leverafspraken. Je kiest zelf of je deze mail verstuurt." : "Een feestelijke bevestiging met de definitieve bestelling, prijs en afspraken. Alles duidelijk op één plek."}</p>
       </header>
       <div className={quotation ? "min-h-0 space-y-3 overflow-auto p-4 sm:p-5" : "min-h-0 space-y-5 overflow-auto p-6 sm:p-8"}>
         <div className="flex items-start gap-4 rounded-2xl border border-[#dce7dc] bg-[#f1f6ef] p-4" style={quotation ? {padding:12} : undefined}>
@@ -139,7 +146,7 @@ export default function B2BConfirmationDialog({ order, mode = "confirmation", on
       </div>
         <footer className={quotation ? "flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-[#e2e8df] bg-[#fffdf8] px-4 py-3" : "flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-[#e2e8df] bg-[#fffdf8] px-6 py-4 sm:px-8"}>
           {(!quotation || sent) && <button type="button" disabled={busy} onClick={onClose} className="rounded-full px-4 py-3 text-sm font-bold text-[#647367] disabled:opacity-40">{sent ? "Sluiten" : "Nu niet"}</button>}
-          {!sent && <><button type="button" disabled={busy || loading} onClick={() => onEdit(current)} className="rounded-full border border-[#dce7dc] px-4 py-3 text-sm font-bold text-[#244b37] disabled:opacity-40">Gegevens wijzigen</button><button type="button" disabled={busy || loading || !html || !validEmail || Boolean(uncertain) || !allowed || Boolean(error)} onClick={() => void send()} className="rounded-full bg-[#244b37] px-5 py-3 text-sm font-black text-white shadow-sm disabled:opacity-40">{busy ? "Versturen…" : quotation ? `Mail ${kind.toLowerCase()} →` : "Ja, mail de klant →"}</button></>}
+          {!sent && <><button type="button" disabled={busy || loading} onClick={() => onEdit(current)} className="rounded-full border border-[#dce7dc] px-4 py-3 text-sm font-bold text-[#244b37] disabled:opacity-40">Gegevens wijzigen</button><button type="button" disabled={busy || loading || !html || !validEmail || Boolean(uncertain) || !allowed || Boolean(error)} onClick={() => void send()} className="rounded-full bg-[#244b37] px-5 py-3 text-sm font-black text-white shadow-sm disabled:opacity-40">{busy ? "Versturen…" : quotation ? `Mail ${kind.toLowerCase()} →` : updatedConfirmation ? "Ja, mail gewijzigde bevestiging →" : "Ja, mail de klant →"}</button></>}
         </footer>
     </section>
   </div>;

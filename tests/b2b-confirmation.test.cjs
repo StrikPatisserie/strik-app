@@ -18,7 +18,7 @@ function find(node, predicate) {
 function order(overrides = {}) {
   return { id: 'example', status: 'akkoord', season: 'kerst', customerName: 'Voorbeeld BV', customerEmail: 'sanne@example.invalid', orderText: '25 kerststollen', totalExVat: '347,50', deliveryDate: '2026-12-18', deliveryDateEnd: '', confirmationEmailedAt: '2026-10-21T10:00:00+02:00', confirmationEmailError: '', confirmationMail: { version: 'v1', backupVersion: 'b1' }, ...overrides };
 }
-function dialog(initial = order(), sendResponse, mode = 'confirmation') {
+function dialog(initial = order(), sendResponse, mode = 'confirmation', updatedOrder = false) {
   const states = [], refs = [], effects = [];
   let cursor = 0, refCursor = 0, effectCursor = 0, closed = 0;
   const pendingEffects = [], calls = [], updates = [];
@@ -39,7 +39,7 @@ function dialog(initial = order(), sendResponse, mode = 'confirmation') {
   }, { document: { activeElement: null }, HTMLElement: class {} });
   return {
     ...loaded, calls, updates,
-    render() { cursor = refCursor = effectCursor = 0; return loaded.default({ order: initial, mode, onClose() { closed++; }, onEdit() {}, onUpdated(next) { updates.push(next); } }); },
+    render() { cursor = refCursor = effectCursor = 0; return loaded.default({ order: initial, mode, updatedOrder, onClose() { closed++; }, onEdit() {}, onUpdated(next) { updates.push(next); } }); },
     async flush() { while (pendingEffects.length) pendingEffects.shift()(); await new Promise(setImmediate); },
     setLatest(next) { latest = next; }, get closed() { return closed; },
   };
@@ -179,4 +179,31 @@ test('declining approval, a missing delivery date and a failed refresh never app
     assert.ok(find(candidate.render(),n=>n.props?.role==='alert'));
     assert.equal(candidate.calls.filter(c=>c.kind==='approve').length,0);
   }
+});
+
+test('changed final orders offer a new confirmation for legacy metadata and previously skipped revisions', () => {
+  const changed = order({ confirmationMail: { version: 'v2', customer: { version: 'v1', state: 'sent', sentAt: '2026-10-20T10:00:00Z' } } });
+  assert.equal(pure.customerConfirmationNeedsUpdate(changed), true);
+  assert.equal(pure.shouldOfferCustomerConfirmation(changed, changed), true);
+  assert.equal(pure.shouldOfferCustomerConfirmation(order(), order({ confirmationMail: undefined })), true);
+  const sent = order({ confirmationMail: { version: 'v2', customer: { version: 'v2', state: 'sent', sentAt: '2026-10-29T10:00:00Z' } } });
+  assert.equal(pure.customerConfirmationNeedsUpdate(sent), false);
+  assert.equal(pure.shouldOfferCustomerConfirmation(sent, changed), false);
+});
+test('an updated final order opens the current preview and mails only after the explicit updated-confirmation choice', async () => {
+  const changed=order({confirmationMail:{version:'v2',customer:{version:'v1',state:'sent',sentAt:'2026-10-20T10:00:00Z'}}});
+  const ui=dialog(changed);ui.render();await ui.flush();
+  assert.equal(find(ui.render(),n=>n.type==='h2').props.children,'Gewijzigde bevestiging mailen?');
+  assert.ok(find(ui.render(),n=>n.type==='iframe'));
+  assert.equal(ui.calls.filter(call=>call.kind==='send').length,0);
+  find(ui.render(),n=>n.type==='button'&&n.props.children==='Ja, mail gewijzigde bevestiging →').props.onClick();await ui.flush();
+  assert.equal(ui.calls.filter(call=>call.kind==='send').length,1);assert.equal(ui.calls.find(call=>call.kind==='send').version,'v2');
+  assert.equal(pure.customerConfirmationSent(ui.updates[0]),true);
+});
+test('the save context labels a changed definitive order even if its first customer mail has not yet been sent', async () => {
+  const ui=dialog(order(),undefined,'confirmation',true);ui.render();await ui.flush();
+  assert.equal(find(ui.render(),n=>n.type==='h2').props.children,'Gewijzigde bevestiging mailen?');
+  assert.ok(find(ui.render(),n=>n.type==='iframe'));
+  find(ui.render(),n=>n.type==='button'&&n.props.children==='Nu niet').props.onClick();
+  assert.equal(ui.calls.filter(call=>call.kind==='send').length,0);
 });

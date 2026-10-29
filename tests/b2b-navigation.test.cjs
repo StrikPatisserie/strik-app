@@ -78,3 +78,16 @@ for (const season of ['sint', 'kerst']) test(`${season}: general back returns fr
   assert.deepEqual(ui.pushed, [season === 'sint' ? '/sinterklaas/bedrijven' : '/kerst'], 'from the overview the parent menu remains accessible');
   assert.equal(ui.writes.length, 0, 'back navigation never saves orders or sends mail');
 });
+
+test('saving a changed definitive folder order opens the explicit update-mail choice without sending mail', async () => {
+  const ui=app('sint');Object.assign(ui.fixture,{status:'akkoord',confirmationMail:{version:'v1',customer:{version:'v1',state:'sent',sentAt:'2026-10-20T10:00:00Z'}}});
+  await ui.ready();let tree=ui.render();
+  nodes(tree,n=>n.props?.order===ui.fixture&&n.props?.onToggle)[0].props.onEdit(ui.fixture);
+  tree=ui.render();const form=nodes(tree,n=>n.props?.order===ui.fixture&&n.props?.onSaved)[0];assert.ok(form);
+  const saved={...ui.fixture,orderText:'30 kerststollen',confirmationMail:{...ui.fixture.confirmationMail,version:'v2'}};
+  form.props.onSaved(saved);tree=ui.render();
+  const popup=nodes(tree,n=>n.props?.order===saved&&n.props?.onUpdated)[0];assert.ok(popup);assert.equal(popup.props.updatedOrder,true);assert.equal(ui.writes.length,0);
+  popup.props.onClose();tree=ui.render();assert.equal(nodes(tree,n=>n.props?.order===saved&&n.props?.onUpdated).length,0);
+  const row=nodes(tree,n=>n.props?.order===saved&&n.props?.onCustomerConfirmation)[0];assert.ok(row);row.props.onCustomerConfirmation(saved);
+  assert.ok(nodes(ui.render(),n=>n.props?.order===saved&&n.props?.onUpdated)[0]);assert.equal(ui.writes.length,0);
+});
