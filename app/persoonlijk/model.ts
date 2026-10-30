@@ -31,6 +31,11 @@ export function removeTaskCategory(body:string,name:string){
   return moved.length?appendTaskBlock(next,moved,TASK_FALLBACK_CATEGORY):next;
 }
 export function addTaskCategory(body:string,name:string){const clean=name.trim();if(!clean||clean.length>100||/[\r\n\0]/.test(clean)||clean==="Algemeen")throw Error("Kies een categorienaam van 1 tot 100 tekens.");return body.split("\n").includes(`## ${clean}`)?body:`${body}${body?"\n\n":""}## ${clean}`;}
+export const TASK_FILE_MARKER=/ \{bijlage:([-a-zA-Z0-9/_\.]+)\}/g;
+export function attachTaskFile(body:string,index:number,path:string){
+ if(!/^[-a-zA-Z0-9/_\.]+$/.test(path)||!taskLines(body).some(task=>task.index===index))throw Error("Deze taak of bijlage bestaat niet meer.");
+ const lines=body.split("\n");lines[index]+=` {bijlage:${path}}`;return lines.join("\n");
+}
 export function taskLines(body:string) {
   let category=TASK_FALLBACK_CATEGORY;
   return body.split("\n").flatMap((line,index)=>{
@@ -38,7 +43,7 @@ export function taskLines(body:string) {
     const match=/^([\t ]*)(?:[-*]\s*)?\[([ xX])\]\s*(.*)$/.exec(line);
     if(!match)return [];
     const marker=/^\[(prioriteit|later)\]\s*/.exec(match[3]);
-    return [{index,category,done:match[2].toLowerCase()==="x",text:match[3].slice(marker?.[0].length||0),depth:Math.floor(match[1].replace(/\t/g,"  ").length/2),priority:(marker?.[1]==="prioriteit"?"priority":marker?"later":"normal") as TaskPriority}];
+    return [{index,category,done:match[2].toLowerCase()==="x",text:match[3].slice(marker?.[0].length||0).replace(TASK_FILE_MARKER,""),files:[...match[3].matchAll(TASK_FILE_MARKER)].map(match=>match[1]),depth:Math.floor(match[1].replace(/\t/g,"  ").length/2),priority:(marker?.[1]==="prioriteit"?"priority":marker?"later":"normal") as TaskPriority}];
   });
 }
 export function taskPriorityGroups(body:string){
@@ -59,7 +64,7 @@ export function editTaskText(body:string,index:number,text:string){
   const clean=text.trim();if(!clean||clean.length>2000||/[\r\n\0]/.test(clean))throw Error("Vul één taak in van maximaal 2.000 tekens.");
   if(!taskLines(body).some(task=>task.index===index))throw Error("Deze taak bestaat niet meer.");
   const lines=body.split("\n"),prefix=/^[\t ]*(?:[-*]\s*)?\[[ xX]\]\s*(?:\[(?:prioriteit|later)\]\s*)?/.exec(lines[index])![0];
-  lines[index]=prefix+clean;return lines.join("\n");
+  lines[index]=prefix+clean+(lines[index].match(TASK_FILE_MARKER)||[]).join("");return lines.join("\n");
 }
 export function resolveTask(body:string,index:number){
   const tasks=taskLines(body),task=tasks.find(t=>t.index===index);if(!task)throw Error("Deze taak bestaat niet meer.");

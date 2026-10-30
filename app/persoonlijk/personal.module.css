@@ -32,3 +32,8 @@
 
 .notePriority { display:flex; gap:8px; align-items:center; margin:12px 0; font-size:14px; }
 .paper .notePriority input { width:18px; height:18px; padding:0; flex:none; }
+
+.fileUpload { position:relative; display:inline-flex; align-items:center; justify-content:center; min-width:36px; min-height:36px; cursor:pointer; border-radius:8px; }
+.fileUpload input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }
+.fileUpload:focus-within { outline:2px solid currentColor; outline-offset:2px; }
+.fileUpload:has(input:disabled) { opacity:.45; cursor:wait; }

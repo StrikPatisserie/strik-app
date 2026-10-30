@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
-function load(file,imports={}){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:name=>{assert(name in imports,`Unexpected import: ${name}`);return imports[name];},Response,Request,URL,Date,Set,Map,crypto:require('node:crypto').webcrypto});return exports;}
+function load(file,imports={}){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:name=>{assert(name in imports,`Unexpected import: ${name}`);return imports[name];},Response,Request,URL,Date,Set,Map,File,Uint8Array,crypto:require('node:crypto').webcrypto});return exports;}
 const model=load('app/persoonlijk/model.ts'),access=load('app/lib/auth/access.ts');
 const owner='00000000-0000-4000-8000-000000000001',noteId='00000000-0000-4000-8000-000000000002',other='00000000-0000-4000-8000-000000000003';
 function input(changes={}){return{id:noteId,title:'Mijn notitie',notebook:'TO DO',body:'[ ] Controleren\n[x] Afgerond\nGewone tekst',tags:[],pinned:false,archived:false,attachments:[],source_hash:null,source_created_at:null,source_updated_at:null,...changes};}
@@ -39,7 +39,7 @@ test('reimporting an existing Evernote note returns that note and never overwrit
  const response=await routes(ctx.value).POST(request('POST',input({source_hash:'a'.repeat(64)})));assert.equal(response.status,200);const data=await response.json();assert(data.duplicate);assert.equal(data.note.title,'Later handmatig gewijzigd');assert(!ctx.calls.some(c=>c[0]==='update'));
 });
 test('attachments reject another owner and always download with an inert content type',async()=>{
- let downloads=0;const route=load('app/api/persoonlijk/bijlage/route.ts',{'../../../persoonlijk/access.server':{personalContext:async()=>({profile,db:{storage:{from:()=>({download:async()=>{downloads++;return{data:new Blob(['<script>unsafe()</script>'])};}})}}}),personalHeaders:{'Cache-Control':'private, no-store'}},'../../../persoonlijk/model':model});
+ let downloads=0;const route=load('app/api/persoonlijk/bijlage/route.ts',{'../../../persoonlijk/access.server':{personalContext:async()=>({profile,db:{storage:{from:()=>({download:async()=>{downloads++;return{data:new Blob(['<script>unsafe()</script>'])};}})}}}),personalHeaders:{'Cache-Control':'private, no-store'}},'../../../persoonlijk/model':model,'../../../persoonlijk/fileTypes':load('app/persoonlijk/fileTypes.ts')});
  assert.equal((await route.GET(new Request(`https://app.example.invalid/api/persoonlijk/bijlage?path=${other}/test`))).status,404);assert.equal(downloads,0);
  const response=await route.GET(new Request(`https://app.example.invalid/api/persoonlijk/bijlage?path=${owner}/test&name=bron.html`));assert.equal(response.headers.get('Content-Type'),'application/octet-stream');assert(response.headers.get('Content-Disposition').startsWith('attachment;'));assert(response.headers.get('Content-Security-Policy').includes("default-src 'none'"));assert.equal(downloads,1);
 });
@@ -136,4 +136,39 @@ test('history stays per note and per session; an external revision invalidates s
  const original=fullNote();let state=undo.acceptTimeline(undo.startTimeline(original),fullNote({title:'Nieuw',revision:2}));assert.equal(undo.reopenTimeline(state,fullNote({title:'Nieuw',revision:2})).past.length,1);assert.equal(undo.reopenTimeline(state,fullNote({title:'Op andere plek gewijzigd',revision:3})).past.length,0);
  const fresh=undo.startTimeline(fullNote({id:other}));assert.equal(fresh.past.length,0);assert.equal(undo.stepTimeline(fresh,'undo'),null);
  for(let i=0;i<40;i++)state=undo.recordTimeline(state,{...original,body:String(i)});assert(state.past.length<=30);
+});
+
+test('task files stay linked through edits, completion and category moves',()=>{
+ const path=`${owner}/tasks/test.pdf`,body=model.attachTaskFile('[ ] Lezen\n[ ] Andere taak',0,path);
+ assert.equal(model.taskLines(body)[0].text,'Lezen');assert.equal(model.taskLines(body)[0].files[0],path);
+ const edited=model.editTaskText(body,0,'Nieuwe naam');assert.equal(model.taskLines(edited)[0].files[0],path);
+ const moved=model.moveTaskCategory(model.toggleTask(edited,0),0,'Administratie to do’s');
+ assert.equal(model.taskLines(moved).find(t=>t.text==='Nieuwe naam').files[0],path);
+ assert(!model.resolveTask(body,0).includes(path));
+});
+test('file signatures reject active documents disguised as images',()=>{
+ const types=load('app/persoonlijk/fileTypes.ts');
+ assert.equal(types.personalFileType(new Uint8Array(Buffer.from('%PDF-1.7'))),'application/pdf');
+ assert.equal(types.personalFileType(new Uint8Array(Buffer.from('<svg onload="bad()"/>'))),null);
+ assert.equal(types.personalFileType(new Uint8Array([137,80,78,71,13,10,26,10])),'image/png');
+});
+test('file uploads enforce authentication, same origin, signature and owner storage path',async()=>{
+ const types=load('app/persoonlijk/fileTypes.ts');let uploads=[];
+ const route=load('app/api/persoonlijk/bijlage/route.ts',{'../../../persoonlijk/model':model,'../../../persoonlijk/fileTypes':types,'../../../persoonlijk/access.server':{personalContext:async()=>({profile,db:{storage:{from:()=>({upload:async(...args)=>{uploads.push(args);return{error:null};}})}}}),personalHeaders:{'Cache-Control':'private, no-store'}}});
+ function upload(content,origin='https://app.example.invalid') {const form=new FormData();form.set('file',new File([content],'test.pdf',{type:'application/pdf'}));return new Request('https://app.example.invalid/api/persoonlijk/bijlage',{method:'POST',headers:{Origin:origin},body:form});}
+ assert.equal((await route.POST(upload('%PDF-1.7','https://other.example.invalid'))).status,403);
+ assert.equal((await route.POST(upload('<svg/>'))).status,400);assert.equal(uploads.length,0);
+ const response=await route.POST(upload('%PDF-1.7'));assert.equal(response.status,200);
+ const data=await response.json();assert(data.attachment.path.startsWith(`${owner}/tasks/`));assert.equal(data.attachment.type,'application/pdf');assert.equal(uploads[0][2].upsert,false);
+ const denied=load('app/api/persoonlijk/bijlage/route.ts',{'../../../persoonlijk/model':model,'../../../persoonlijk/fileTypes':types,'../../../persoonlijk/access.server':{personalContext:async()=>({error:new Response(null,{status:403})}),personalHeaders:{}}});
+ assert.equal((await denied.POST(upload('%PDF-1.7'))).status,403);
+});
+test('cleanup only deletes own task files and reports files blocked by storage',async()=>{
+ const types=load('app/persoonlijk/fileTypes.ts');let removed=[];
+ const route=load('app/api/persoonlijk/bijlage/route.ts',{'../../../persoonlijk/model':model,'../../../persoonlijk/fileTypes':types,'../../../persoonlijk/access.server':{personalContext:async()=>({profile,db:{storage:{from:()=>({remove:async paths=>{removed.push(...paths);return {data:paths.map(name=>({name})),error:null};}})}}}),personalHeaders:{}}});
+ const req=paths=>request('DELETE',{paths});
+ for(const path of [`${other}/tasks/test.pdf`,`${owner}/_imports/test.pdf`,`${owner}/tasks/../test.pdf`])assert.equal((await route.DELETE(req([path]))).status,400);
+ assert.equal(removed.length,0);assert.equal((await route.DELETE(req([`${owner}/tasks/test.pdf`]))).status,200);
+ const sql=fs.readFileSync('app/supabase/migrations/20261030112316_personal_task_file_cleanup.sql','utf8');
+ assert(sql.includes("split_part(name,'/',2)='tasks'"));assert(sql.includes('not exists(select 1 from public.personal_notes'));assert(sql.includes('private.is_personal_workspace_owner()'));
 });
