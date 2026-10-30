@@ -247,3 +247,15 @@ test('an incomplete photo import blocks every sibling from the same order in the
  const items=dashboard.buildItems([photoReceipt()],[photo('one',{expectedPhotoCount:2,importedPhotoCount:1,importWarnings:['Tweede foto ontbreekt']}),photo('two')]);assert.equal(items.length,0);
  const html=renderToStaticMarkup(React.createElement(dashboard.photoBlock,{images:[photo('one',{expectedPhotoCount:2,importedPhotoCount:1,importWarnings:['Tweede foto ontbreekt']})],receipt:photoReceipt(),onDelete(){},onUnlink(){}}));assert.match(html,/Foto-import onvolledig/);assert.match(html,/printen voor deze bestelling geblokkeerd/);assert.match(html,/Foto 1 van 2/);
 });
+
+test('a missing source photo is visible as an error and printing enables only after all images load',()=>{
+ const html=dashboard.sheet({items:copies(2),plan:{date:'2026-10-31'}});
+ assert.match(html,/photo-load-error/);assert.match(html,/Open de bronmail/);
+ const nodes={'print-registration-note':{},'print-sheet':{disabled:true}};
+ const images=[{complete:true,naturalWidth:0},{complete:true,naturalWidth:100}];
+ const context={document:{getElementById:id=>nodes[id],querySelectorAll:()=>images},window:{}};
+ vm.createContext(context);vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1],context);
+ context.marzipanImageStateChanged();assert.equal(nodes['print-sheet'].disabled,true);assert.match(nodes['print-registration-note'].textContent,/1 foto/);
+ images[0]={complete:false,naturalWidth:0};context.marzipanImageStateChanged();assert.equal(nodes['print-sheet'].disabled,true);assert.match(nodes['print-registration-note'].textContent,/laden/);
+ images[0]={complete:true,naturalWidth:100};context.marzipanImageStateChanged();assert.equal(nodes['print-sheet'].disabled,false);
+});

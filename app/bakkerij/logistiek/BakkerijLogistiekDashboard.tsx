@@ -3672,7 +3672,8 @@ function createMarzipanPhotoPrintHtml(input: {
     return `
       <article class="print-item ${item.shape} ${preserveRectangle ? "keep-rectangular" : ""} ${proCollegeLogo ? "pro-college-logo" : ""} ${includeLabel ? "" : "no-label"} ${item.needsCheck ? "needs-check" : ""}" style="--item-size:${printSizeCm}cm;${layoutStyle}">
         <div class="photo-frame">
-          <img src="${escapeAttribute(item.photoUrl)}" alt="${escapeAttribute(item.customerName)}">
+          <img src="${escapeAttribute(item.photoUrl)}" alt="${escapeAttribute(item.customerName)}" onload="marzipanImageStateChanged()" onerror="this.parentElement.classList.add('photo-load-error'); marzipanImageStateChanged()">
+          <span class="photo-error">Foto niet beschikbaar bij de webshop. Open de bronmail en voeg de originele foto opnieuw toe.</span>
         </div>
         ${
           includeLabel
@@ -3949,6 +3950,10 @@ function createMarzipanPhotoPrintHtml(input: {
         color: #444;
         margin-top: 0.4mm;
       }
+      .photo-error { display: none; }
+      .photo-load-error { display:flex; align-items:center; justify-content:center; background:#fff4e8; }
+      .photo-load-error img { display:none; }
+      .photo-load-error .photo-error { display:block; max-width:75%; padding:12px; text-align:center; color:#922d1d; font-size:14px; line-height:1.5; }
       .needs-check .photo-frame {
         border-color: #111;
         border-style: solid;
@@ -4005,6 +4010,17 @@ function createMarzipanPhotoPrintHtml(input: {
       }
     </style>
     <script>
+      function marzipanImageStateChanged() {
+        var images = Array.from(document.querySelectorAll("main img"));
+        var status = document.getElementById("print-registration-note");
+        var button = document.getElementById("print-sheet");
+        if (!status || !button || !images.length) return;
+        var broken = images.filter(function(image) { return image.complete && image.naturalWidth === 0; }).length;
+        var loading = images.some(function(image) { return !image.complete; });
+        button.disabled = broken > 0 || loading;
+        status.textContent = broken ? broken + " foto('s) niet geladen. Controleer de bronmail; dit vel kan zo niet worden afgedrukt." : loading ? "Foto’s laden…" : "Foto’s geladen · bekijken telt niet als print";
+      }
+      if (document.addEventListener) document.addEventListener("DOMContentLoaded", marzipanImageStateChanged);
       function printMarzipanSheet() {
         var status = document.getElementById("print-registration-note");
         var images = Array.from(document.querySelectorAll("main img"));
@@ -4041,7 +4057,7 @@ function createMarzipanPhotoPrintHtml(input: {
       <div class="action-buttons">
         <span id="print-registration-note" class="print-registration-note">Bekijken telt niet als print</span>
         <button type="button" class="secondary" onclick="if (window.opener) window.close(); else window.history.back();">Terug</button>
-        <button type="button" onclick="printMarzipanSheet()">Afdrukken</button>
+        <button id="print-sheet" type="button" disabled onclick="printMarzipanSheet()">Afdrukken</button>
         <button id="confirm-print" type="button" disabled onclick="confirmMarzipanSheet()">Afdruk gelukt</button>
       </div>
     </div>
