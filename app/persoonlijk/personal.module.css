@@ -37,3 +37,16 @@
 .fileUpload input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }
 .fileUpload:focus-within { outline:2px solid currentColor; outline-offset:2px; }
 .fileUpload:has(input:disabled) { opacity:.45; cursor:wait; }
+
+.taskAttachmentIcons { display:flex; align-items:center; flex-wrap:wrap; gap:2px; }
+.taskAttachmentIcons:empty { display:none; }
+.attachmentDialog { border:0; border-radius:16px; padding:0; width:min(560px,calc(100vw - 32px)); max-height:85dvh; margin:auto; background:#fff; color:#334638; box-shadow:0 20px 80px #0004; }
+.attachmentDialog::backdrop { background:#17251c88; }
+.attachmentPreview { display:flex; flex-direction:column; max-height:85dvh; }
+.attachmentPreview header { display:flex; align-items:center; gap:12px; padding:10px 12px 10px 18px; border-bottom:1px solid #e4eadd; }
+.attachmentPreview header span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; }
+.attachmentPreview header button { width:44px; height:44px; flex:none; border:0; border-radius:50%; background:#f1f5ee; color:inherit; font-size:28px; cursor:pointer; }
+.attachmentPreview img { display:block; width:100%; min-height:0; max-height:65dvh; object-fit:contain; }
+.attachmentPreview iframe { border:0; width:100%; height:60dvh; min-height:180px; }
+.attachmentPreview footer { display:flex; justify-content:space-between; padding:12px 18px; gap:14px; font-size:13px; }
+.attachmentPreview a { color:inherit; text-decoration:underline; }

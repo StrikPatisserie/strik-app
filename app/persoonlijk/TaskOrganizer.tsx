@@ -2,10 +2,12 @@
 import {useEffect,useRef,useState,type FormEvent} from "react";
 import Icon from "../productie/ProductionIcon";
 import {addTask,editTaskText,resolveTask,addTaskCategory,removeTaskCategory,taskCategories,moveTaskCategory,setTaskPriority,taskLines,toggleTask,TASK_FALLBACK_CATEGORY,taskPriorityGroups,type TaskPriority,type PersonalAttachment} from "./model";
+import TaskAttachmentPreview,{AttachmentIcon} from "./TaskAttachmentPreview";
 import s from "./personal.module.css";
 function Pencil(){return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14v6Z"/></svg>;}
 export default function TaskOrganizer({body,disabled,onChange,attachments=[],onUpload,onResolve}:{body:string;disabled:boolean;attachments?:PersonalAttachment[];onUpload?:(index:number,file:File)=>Promise<void>;onResolve?:(index:number)=>Promise<boolean|undefined>;onChange:(body:string)=>Promise<boolean|undefined>}){
  const [text,setText]=useState(""),[parent,setParent]=useState<number>(),[editingTask,setEditingTask]=useState<number>(),[error,setError]=useState(""),[category,setCategory]=useState(""),[newCategory,setNewCategory]=useState(""),[addingCategory,setAddingCategory]=useState(false);
+ const [preview,setPreview]=useState<PersonalAttachment|null>(null);
  const [newPriority,setNewPriority]=useState<TaskPriority>("normal");
  const input=useRef<HTMLInputElement>(null),categoryInput=useRef<HTMLInputElement>(null);
  const tasks=taskLines(body),categories=[TASK_FALLBACK_CATEGORY,...taskCategories(body)],selected=categories.includes(category)?category:"";
@@ -39,18 +41,20 @@ export default function TaskOrganizer({body,disabled,onChange,attachments=[],onU
    {group.tasks.filter(task=>task.category===name).map(task=><div key={task.index} className={s.taskItem} style={{marginInlineStart:`min(${Math.min(task.depth,8)*16}px, 18%)`}}>
     <div className={`${s.taskRow} ${task.done?s.completedTask:""}`}>
      <label className={s.taskCheck}><input type="checkbox" checked={task.done} disabled={disabled} onChange={()=>void change(toggleTask(body,task.index))}/><span>{task.text}{task.priority!=="normal"&&<small className={s.taskBadge}>{task.priority==="priority"?"★ Prioriteit":"Later"}</small>}</span></label>
+     <div className={s.taskAttachmentIcons}>{task.files.map(path=>{const file=attachments.find(file=>file.path===path);return file?<button type="button" key={path} className={s.iconButton} title={file.name} aria-label={`Bekijk bijlage: ${file.name}`} onClick={()=>setPreview(file)}><AttachmentIcon/></button>:null;})}</div>
      <div className={s.taskTools}>
-      {onUpload&&<label className={s.fileUpload} title="Afbeelding of pdf toevoegen">📎<input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" aria-label={`Bijlage toevoegen aan ${task.text}`} disabled={disabled} onChange={event=>{const file=event.target.files?.[0];event.target.value="";if(file)void onUpload(task.index,file);}}/></label>}
+      {onUpload&&<label className={s.fileUpload} title="Afbeelding of pdf toevoegen"><AttachmentIcon/><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" aria-label={`Bijlage toevoegen aan ${task.text}`} disabled={disabled} onChange={event=>{const file=event.target.files?.[0];event.target.value="";if(file)void onUpload(task.index,file);}}/></label>}
       <details className={s.taskOptions}><summary aria-label={`Opties voor ${task.text}`} title="Categorie en prioriteit"><Icon name="settings" size={16}/></summary><div>{task.depth===0&&<label>Categorie<select aria-label={`Categorie van ${task.text}`} value={task.category} disabled={disabled} onChange={event=>{event.currentTarget.closest("details")?.removeAttribute("open");resetComposer();void change(moveTaskCategory(body,task.index,event.target.value));}}>{categories.map(value=><option key={value} value={value}>{value}</option>)}</select></label>}<label>Prioriteit<select aria-label={`Prioriteit van ${task.text}`} value={task.priority} disabled={disabled} onChange={event=>void change(setTaskPriority(body,task.index,event.target.value as TaskPriority))}><option value="normal">Normaal</option><option value="priority">Prioriteit</option><option value="later">Voor later</option></select></label><div className={s.mobileTaskActions}><button disabled={disabled} onClick={event=>{event.currentTarget.closest("details")?.removeAttribute("open");setParent(undefined);setEditingTask(task.index);setText(task.text);}}>Bewerken</button><button disabled={disabled||task.depth>=8} onClick={event=>{event.currentTarget.closest("details")?.removeAttribute("open");setEditingTask(undefined);setParent(task.index);setText("");}}>Subtaak toevoegen</button></div></div></details>
       <button className={`${s.iconButton} ${s.taskEditAction}`} disabled={disabled} aria-label={`Bewerken: ${task.text}`} title="Bewerken" onClick={()=>{setParent(undefined);setEditingTask(task.index);setText(task.text);}}><Pencil/></button>
       <button className={`${s.iconButton} ${s.taskChildAction}`} disabled={disabled||task.depth>=8} aria-label={`Subtaak toevoegen aan ${task.text}`} title="Subtaak toevoegen" onClick={()=>{setEditingTask(undefined);setParent(task.index);setText("");}}><Icon name="plus" size={17}/></button>
       <button className={`${s.iconButton} ${s.resolveButton}`} disabled={disabled} aria-label={`Oplossen: ${task.text}, inclusief subtaken verwijderen`} title="Oplossen · taak en subtaken verwijderen" onClick={()=>void resolve(task.index)}><Icon name="trash" size={16}/></button>
      </div>
     </div>
-    {!!task.files.length&&<div className={s.attachments}>{task.files.map(path=>{const file=attachments.find(file=>file.path===path);return file?<a key={path} href={`/api/persoonlijk/bijlage?${new URLSearchParams({path:file.path,name:file.name,view:"1"})}`} target="_blank" rel="noopener noreferrer">↗ {file.name}</a>:null;})}</div>}
+
     {(editingTask===task.index||parent===task.index)&&composer()}
    </div>)}
   </section>)}</section>)}</div>
+  {preview&&<TaskAttachmentPreview key={preview.path} file={preview} onClose={()=>setPreview(null)}/>}
   {!tasks.some(task=>!selected||task.category===selected)&&<p className={s.empty}>Nog geen taken in deze categorie.</p>}
  </section>;
 }
