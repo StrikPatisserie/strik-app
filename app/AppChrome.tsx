@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import BottomNav from "./BottomNav";
 import LogoutButton from "./LogoutButton";
 import NotificationMonitor from "./NotificationMonitor";
+import WeddingAppointmentMonitor from "./winkel/WeddingAppointmentMonitor";
 import WinkelSidebar from "./WinkelSidebar";
 import type { FeatureVisibilitySettings } from "./featureVisibility";
 import type { UserProfile } from "./lib/supabase/types";
@@ -43,12 +44,13 @@ export default function AppChrome({
   const isWelcomeArea = pathname === "/";
 
   if (isAuthArea || isPrintArea || isPublicCampaign || isProductionPreview || isProductionWorkspace) {
-    return <>{children}</>;
+    return <>{!isAuthArea && !isPrintArea && pathname !== "/menu-preview" && <WeddingAppointmentMonitor key={profile?.id || "guest"} profile={profile} />}{children}</>;
   }
 
   return (
     <>
       <NotificationMonitor />
+      <WeddingAppointmentMonitor key={profile?.id || "guest"} profile={profile} />
       <LogoutButton profile={profile} />
       <div data-app-frame className="app-frame min-h-dvh">
         <div className="flex min-h-dvh flex-row">

@@ -151,6 +151,11 @@ export function isWinkelIpadAccount(
   );
 }
 
+export function canReceiveZiekerstraatWeddingAlerts(profile: UserProfile | null | undefined) {
+  return Boolean(profile?.active && canAccessWinkelStore(profile, "ziekerstraat") &&
+    profile.email.trim().toLowerCase() === "strikpatisserieziekerstraat@gmail.com");
+}
+
 export function getDepartmentAccount(
   profile: UserProfile | null | undefined
 ) {
