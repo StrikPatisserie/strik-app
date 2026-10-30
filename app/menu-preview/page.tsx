@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { weddingAlertPreviewDocument } from "./weddingAlertPreviewDocument";
 import Link from "next/link";
 import BruidstaartStudioConfigurator from "../bruidstaart-studio/BruidstaartStudioConfigurator";
 import CompactStaffOverview from "../CompactStaffOverview";
@@ -308,6 +309,15 @@ export default async function MenuPreviewPage({
   searchParams: Promise<{ menu?: string; store?: string }>;
 }>) {
   const params = await searchParams;
+  if (params.menu === "bruidstaart-melding") {
+    return <main className="min-h-dvh bg-[#f8f6f1] px-3 py-5 text-[#49342d] sm:p-6">
+      <div className="mx-auto max-w-4xl">
+        <p className="mb-3 text-sm font-bold">Ontwerpvoorstel · alleen voorbeeldgegevens · nog niet actief op de winkel-iPad</p>
+        <iframe title="Preview bruidstaartmelding Ziekerstraat" sandbox="allow-scripts" srcDoc={weddingAlertPreviewDocument} className="h-[830px] w-full border-0" />
+        <p className="mt-3 text-sm">Kies bovenaan Ochtend of 15 min vooraf en probeer de melding weg te klikken.</p>
+      </div>
+    </main>;
+  }
   const activeKey: PreviewKey = isPreviewKey(params.menu) ? params.menu : "winkel";
   const active = previews[activeKey];
   const activeMainKey: PreviewKey =
