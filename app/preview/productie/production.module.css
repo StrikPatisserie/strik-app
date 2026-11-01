@@ -535,3 +535,33 @@
  .cleaningLane .departmentLabel > .textLink svg { width:17px; height:17px; }
  .departmentLabel .weddingLoadError { writing-mode:horizontal-tb; font-size:8px; overflow-wrap:anywhere; }
 }
+
+.fitCanvas { min-width:0; transform-origin:top left; }
+@media(min-width:801px) {
+ .root.screenFit { height:100dvh; min-height:0; overflow:hidden; }
+ .screenFit .main { min-height:0; overflow:hidden; padding-bottom:0; }
+ .screenFit .plannerWithRequests { align-items:start; }
+ .screenFit .plannerWithRequests:has(> aside) { grid-template-columns:minmax(0,1fr) 230px; gap:10px; }
+ .screenFit .departmentLabel,.screenFit .cleaningLane .departmentLabel { min-height:126px; padding:7px 4px; gap:5px; }
+ .screenFit .dayCell,.screenFit .cleaningLane .dayCell { min-height:0; padding:5px; gap:4px; }
+ .screenFit .taskCard { padding:6px; gap:4px; }
+ .screenFit .boardFooter { padding-top:5px; padding-bottom:4px; }
+ .screenFit .fitCanvas[data-screen-density="compact"] .departmentLabel { min-height:108px; gap:4px; padding-top:5px; padding-bottom:5px; }
+ .screenFit .fitCanvas[data-screen-density="compact"] .departmentLabel h2 { font-size:10px; }
+ .screenFit .fitCanvas[data-screen-density="compact"] .taskOpen strong { font-size:12px; }
+ .screenFit .fitCanvas[data-screen-density="compact"] .taskOpen > span { font-size:10px; margin-top:2px; }
+ .screenFit .fitCanvas[data-screen-density="compact"] .taskOpen small { font-size:9px; margin-top:3px; }
+ .screenFit .fitCanvas[data-screen-density="dense"] .departmentLabel { min-height:90px; gap:3px; padding-top:4px; padding-bottom:4px; }
+ .screenFit .fitCanvas[data-screen-density="dense"] .departmentLabel h2 { font-size:9px; }
+ .screenFit .fitCanvas[data-screen-density="dense"] .dayCell { padding:3px; gap:3px; }
+ .screenFit .fitCanvas[data-screen-density="dense"] .taskCard { padding:4px; gap:3px; }
+ .screenFit .fitCanvas[data-screen-density="dense"] .taskOpen strong { font-size:10px; }
+ .screenFit .fitCanvas[data-screen-density="dense"] .taskOpen > span { font-size:9px; margin-top:1px; }
+ .screenFit .fitCanvas[data-screen-density="dense"] .taskOpen small { font-size:8px; margin-top:2px; }
+ .screenFit .fitCanvas[data-screen-density="dense"] .cellAdd { min-height:15px; padding:1px; }
+ .screenFit .fitCanvas[data-screen-density="dense"] .recipeNudge { font-size:8px; padding-top:3px; gap:2px 4px; }
+ .screenFit .fitCanvas[data-screen-density="dense"] .recipeNudge button { font-size:8px; }
+}
+@media print { .screenFit .main { height:auto !important; overflow:visible; }.fitCanvas { width:100% !important; transform:none !important; } }
+
+@media print { .root.screenFit { height:auto !important; min-height:0; overflow:visible; } }

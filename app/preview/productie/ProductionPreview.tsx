@@ -4,6 +4,7 @@
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import usePlanningScreenFit from "../../productie/usePlanningScreenFit";
 import WeddingWeekLane from "../../productie/WeddingWeekLane";
 import QuickRecipeForm from "../../productie/QuickRecipeForm";
 import ProductionRequests from "../../productie/ProductionRequests";
@@ -80,6 +81,8 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
   const [query, setQuery] = useState("");
   const [day, setDay] = useState(today);
   const [wall, setWall] = useState(false);
+  const screenFit=wall&&view==="planning";
+  const {viewportRef,canvasRef}=usePlanningScreenFit(screenFit);
   const [largeText, setLargeText] = useState(false);
   const [weekend, setWeekend] = useState(false);
   const [modal, setModal] = useState<Modal>(null);
@@ -235,10 +238,10 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
     </article>;
   }
 
-  return <WorkspaceContext.Provider value={{demo,recipes:recipeList,canManage,saving}}><div className={`${s.root} ${wall ? s.wall : ""} ${largeText ? s.largeText : ""}`} style={style} data-production-preview={demo || undefined} aria-busy={saving}>
+  return <WorkspaceContext.Provider value={{demo,recipes:recipeList,canManage,saving}}><div className={`${s.root} ${wall ? s.wall : ""} ${screenFit?s.screenFit:""} ${largeText ? s.largeText : ""}`} style={style} data-production-preview={demo || undefined} aria-busy={saving}>
     {!wall && <ProductionNavigation active={view} boards={availableBoards} canManage={canManage} canBakery={canBakery} demo={demo} activeBoard={board} onNavigate={navigate} onBoard={id=>{navigate("planning");chooseBoard(id);}} />}
 
-    <main className={s.main} data-production-content={view!=="planning"?"":undefined}>
+    <main ref={viewportRef} className={s.main} data-production-content={view!=="planning"?"":undefined}><div ref={canvasRef} className={s.fitCanvas}>
       {view!=="planning" && <><div className={s.previewBar}><span><i />{demo ? "Preview · voorbeeldgegevens" : "STRAK gepland · gedeelde werkversie"}</span><span>{demo ? (storageError ? "Bewaren niet mogelijk · wijzigingen vervallen bij herladen" : "Wijzigingen blijven alleen in deze browser") : saving ? "Bezig met opslaan…" : `Opgeslagen in Supabase · bijgewerkt ${syncedAt ? new Intl.DateTimeFormat("nl-NL",{timeZone:"Europe/Amsterdam",hour:"2-digit",minute:"2-digit"}).format(new Date(syncedAt)) : ""}`}</span>{demo ? <button onClick={() => setModal({ type: "reset" })}>Herstel voorbeeld</button> : <button disabled={saving} onClick={()=>void onRefresh?.()}>Verversen</button>}</div>
       <header className={s.header}><div className={s.heading}><span className={s.eyebrow}>STRAK gepland{wall ? " · SCHERMMODUS" : ""}</span><h1>{NAV.find(n => n.id === view)?.label || "Instellingen"}</h1></div>
         <div className={s.headerActions}>{(view === "catalog" || view === "recipes") && canManage && <button className={s.primaryButton} onClick={() => setModal({ type: "item" })}><Icon name="plus" />Los onderdeel toevoegen</button>}</div>
@@ -304,7 +307,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
         <div className={s.settingsGrid}><section className={s.settingCard}><Icon name="screen" size={24} /><h2>Jouw weekbord</h2><p>Pas het bord aan voor de werkplek of het grote scherm.</p><label className={s.checkboxRow}><input type="checkbox" checked={weekend} onChange={e => setWeekend(e.target.checked)} /><span>Zondag ook tonen</span></label><label className={s.checkboxRow}><input type="checkbox" checked={largeText} onChange={e => setLargeText(e.target.checked)} /><span>Grotere tekst in het weekbord</span></label><button className={s.secondaryButton} onClick={() => { navigate("planning"); setWall(true); }}><Icon name="screen" />Open XL-schermstand</button></section><section className={s.settingCard}><Icon name="box" size={24} /><h2>{demo ? "Van preview naar productie" : "Werkversie in gebruik"}</h2><p>{demo ? "Deze versie gebruikt uitsluitend voorbeeldgegevens en bewaart je aanpassingen lokaal." : "Je planning en onderdelen worden gedeeld opgeslagen. Bestellingen, verbruik en verkoopprognoses worden in volgende stappen aangesloten."}</p><ol><li>Weekbord en werkwijze samen beoordelen.</li><li>Recepten, grondstoffen en koppelingen controleren en overzetten.</li><li>Met één afdeling testen en daarna uitbreiden.</li><li>Bestellingen, voorraad en verkoopgegevens aansluiten.</li></ol>{demo ? <button className={s.textLink} onClick={() => setModal({ type: "reset" })}>Voorbeeldgegevens herstellen</button> : canManage && <Link className={s.textLink} href="/bakkerij/productie/beheer/recepten">Receptuurgegevens beheren</Link>}</section></div>
         {canManage && !!state.removedTasks?.length && <section className={s.settingCard}><h2>Verwijderde taken</h2><p>Geplande taken blijven herstelbaar. Recepten en onderdelen zijn behouden.</p><div className={s.removedTaskList}>{[...state.removedTasks].reverse().map(({task})=><div key={task.id}><span><strong>{state.items.find(i=>i.id===task.itemId)?.name}</strong><small>{dateLabel(task.date,true)} · {task.operation}</small></span><button disabled={saving} className={s.secondaryButton} onClick={()=>void restore(task.id)}>Herstellen</button></div>)}</div></section>}
       </>}
-    </main>
+    </div></main>
     {message && <div className={`${s.toast} ${notificationError ? s.errorToast : ""}`} role="status"><Icon name={notificationError ? "warning" : "check"} /><span>{message}</span><button onClick={() => setMessage("")} aria-label="Melding sluiten"><Icon name="close" size={16} /></button></div>}
     {quickRecipeItem&&<ModalFrame title="Recept snel invoeren" subtitle={state.items.find(i=>i.id===quickRecipeItem)?.name} onClose={()=>setQuickRecipeItem(null)}><div className={s.dialogBody}>{live?<QuickRecipeForm item={state.items.find(i=>i.id===quickRecipeItem)!} ingredients={ingredientList} getRevision={()=>revisionRef.current} recipeRevision={live.recipeRevision} onSaved={onRefresh||(()=>Promise.resolve())} onClose={()=>setQuickRecipeItem(null)}/>:<p>In de live omgeving kun je hier de basisopbrengst, grondstoffen en werkwijze vastleggen.</p>}</div></ModalFrame>}
     {modal?.type==="offer" && offer && <ModalFrame wide title={`Weekaanbieding · week ${weekNumber(week)}`} subtitle={offer.label} onClose={()=>setModal(null)}><div className={s.dialogBody}><img className={s.offerFull} src={offer.imageUrl} alt={`Weekaanbieding week ${weekNumber(week)}`}/></div><footer className={s.dialogFooter}><button className={s.primaryButton} onClick={()=>setModal(null)}>Terug naar het bord</button></footer></ModalFrame>}
