@@ -267,7 +267,6 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
         <div className={s.plannerWithRequests}><div className={s.plannerBoardColumn}>
         <section className={s.board} aria-label="Weekbord">
           <div className={s.boardHeader}><div className={s.departmentColumn}>Afdeling</div>{days.map(d => <div key={d} className={`${s.dayHeading} ${d === today ? s.today : ""}`}><strong>{dateLabel(d)}</strong><span>{d === today ? (demo ? "Voorbeeld: vandaag" : "Vandaag") : `${weekTasks.filter(t => t.date === d).length} taken`}</span><DayRhythm board={board} date={d}/></div>)}</div>
-          {board==="patisserie" && <CleaningWeekLane days={days} day={day} today={today} rows={state.cleaning || []} canManage={canManage} canCheck={!live || live.departments.some(id=>departmentsFor("patisserie").some(d=>d.id===id))} saving={saving} statusFilter={statusFilter} selected={modal?.type==="cleaning"?modal:null} Dialog={ModalFrame} onOpen={selection=>setModal(selection?{type:"cleaning",...selection}:null)} onCommand={clean}/>}
           {visibleDepartments.map(dep => {
             if(dep.id==="bruidstaarten")return <WeddingWeekLane key={dep.id} week={week} days={days} day={day} today={today} state={state} canManage={canManage} saving={saving} demo={demo} statusFilter={statusFilter} Dialog={ModalFrame} onUpdate={updateWedding}/>;
             const tasks = filtered.filter(t => t.departmentId === dep.id);
@@ -281,6 +280,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
               </div>)}
             </div>;
           })}
+          {board==="patisserie" && <CleaningWeekLane days={days} day={day} today={today} rows={state.cleaning || []} canManage={canManage} canCheck={!live || live.departments.some(id=>departmentsFor("patisserie").some(d=>d.id===id))} saving={saving} statusFilter={statusFilter} selected={modal?.type==="cleaning"?modal:null} Dialog={ModalFrame} onOpen={selection=>setModal(selection?{type:"cleaning",...selection}:null)} onCommand={clean}/>}
         </section>
         <footer className={s.boardFooter}><span><i />Gepland <i className={s.activeLegend} />Bezig <i className={s.doneLegend} />Klaar <i className={s.blockedLegend} />Geblokkeerd</span><span>{canManage ? "Sleep om te verplaatsen · open een taak om te wijzigen" : "Open een taak voor details en status"}</span>{!weekend && (weekTasks.some(t => t.date === end) || (board==="patisserie" && state.cleaning?.some(d=>d.date===end))) && <button onClick={() => setWeekend(true)}>Zondag heeft taken · toon zondag</button>}</footer>
         </div>{live&&<ProductionRequests board={board} week={week} onPlanned={onRefresh}/>}</div>
