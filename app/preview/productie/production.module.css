@@ -565,3 +565,5 @@
 @media print { .screenFit .main { height:auto !important; overflow:visible; }.fitCanvas { width:100% !important; transform:none !important; } }
 
 @media print { .root.screenFit { height:auto !important; min-height:0; overflow:visible; } }
+
+@media(min-width:801px) { .cleaningPlanLabel { display:none; } }
