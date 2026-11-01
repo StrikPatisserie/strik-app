@@ -27,3 +27,7 @@ export async function saveRecipePlanDocument(revision:number,recipeRevision:numb
   if(result.error)throw new ProductionStoreError(result.error.code==="40001"?"De planning of recepten zijn intussen gewijzigd. Ververs het voorstel; er is niets opgeslagen.":"De productieopdracht is niet opgeslagen.",result.error.code==="40001"?409:503);
   return Number(result.data);
 }
+export async function saveQuickRecipeDocument(revision:number,recipeRevision:number,planner:unknown,recipes:unknown,actor:string){
+ const result=await db().rpc('production_save_quick_recipe',{p_revision:revision,p_recipe_revision:recipeRevision,p_planner:planner,p_recipes:recipes,p_actor:actor});
+ if(result.error)throw new ProductionStoreError(result.error.code==='40001'?'Planning of recepten zijn intussen gewijzigd. Ververs eerst; er is niets opgeslagen.':'Het werkrecept is niet opgeslagen.',result.error.code==='40001'?409:503);
+}

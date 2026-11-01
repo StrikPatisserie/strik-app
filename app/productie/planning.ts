@@ -1,3 +1,4 @@
+import type {ProductionRequest} from "./requestPlanning";
 // Pure production rules, shared by the preview and the future server adapter.
 // Dates are local calendar dates. They are deliberately not elapsed 24h periods.
 export const DEPARTMENTS = [
@@ -52,7 +53,7 @@ export type ProductionStaffingSettings = { departmentIds:string[]; people:Produc
 export type CleaningCheck = { id:string; label:string; done:boolean; completedAt?:string; completedBy?:string };
 export type CleaningDay = { id:string; date:string; main:CleaningCheck|null; daily:CleaningCheck[] };
 export type CleaningCommand = { kind:"plan"; date:string; main:string; daily:string[]; repeatDates:string[] } | {kind:"check";date:string;checkId:string;done:boolean} | {kind:"remove";date:string} | {kind:"move";date:string;to:string};
-export type PreviewState = { version: 1; items: Item[]; tasks: Task[]; removedTasks?: RemovedTask[]; staffing?:ProductionStaffingSettings; cleaning?:CleaningDay[] };
+export type PreviewState = { version: 1; items: Item[]; tasks: Task[]; productionRequests?:ProductionRequest[]; removedTasks?: RemovedTask[]; staffing?:ProductionStaffingSettings; cleaning?:CleaningDay[] };
 export function cleaningProgress(day:CleaningDay) {
   const checks=[...(day.main?[day.main]:[]),...day.daily],done=checks.filter(c=>c.done).length;
   return {done,total:checks.length,complete:checks.length>0 && done===checks.length};
@@ -330,4 +331,10 @@ export function matchesProductionSearch(query:string,values:(string|undefined)[]
   const normalize=(value:string)=>value.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("nl-NL");
   const haystack=normalize(values.filter(Boolean).join(" "));
   return normalize(query).trim().split(/\s+/).filter(Boolean).every(part=>haystack.includes(part));
+}
+
+export function validProductionRequests(value:unknown):value is ProductionRequest[]{
+ if(!Array.isArray(value)||value.length>5000)return false;
+ const ids=new Set<string>();
+ try{return value.every((r:ProductionRequest)=>{if(!r||typeof r.id!=='string'||!r.id||r.id.length>200||ids.has(r.id)||typeof r.itemId!=='string'||!r.itemId||!Number.isFinite(r.quantity)||r.quantity<=0||r.quantity>1000000||typeof r.note!=='string'||r.note.length>2000||typeof r.createdBy!=='string'||!r.createdBy||!Number.isFinite(Date.parse(r.createdAt)))return false;ids.add(r.id);if(r.neededBy)addDays(r.neededBy,0);return (!r.cancelledAt||Number.isFinite(Date.parse(r.cancelledAt)))&&(!r.plannedTaskId||typeof r.plannedTaskId==='string');});}catch{return false;}
 }

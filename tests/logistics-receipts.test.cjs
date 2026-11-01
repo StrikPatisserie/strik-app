@@ -130,7 +130,7 @@ test('already stored receipts can recover an explicit delivery address without u
 });
 
 const dashboard = load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx', {
-  react: React, 'react/jsx-runtime': require('react/jsx-runtime'),
+  "../../productie/ProductionRequests":{}, react: React, 'react/jsx-runtime': require('react/jsx-runtime'),
   '../../StrikUI': {}, './routePrintWindow': {}, './routePrintPagination': {}, './arendPrintSession': {},
   './specialSchoolDelivery': {}, './specialProCollegeDelivery': {}, './receiptDelivery': delivery,
   './webshopPhotoIdentity': load('app/bakkerij/logistiek/webshopPhotoIdentity.ts'), './BusinessDeliveries': {}, './PhotoPrintChoiceModal': {}, './usePhotoPrintHistory': {}, './photoPrintTracking': {},

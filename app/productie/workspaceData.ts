@@ -1,5 +1,5 @@
 import type { RecepturenData } from "../bakkerij/recepturen/recepturenApi";
-import { type DepartmentId, type DemoRecipe, type ItemUnit, type PreviewState, type Task, DEPARTMENTS, addDays, validRecipePlan, validStaffingSettings, validCleaningDays } from "./planning";
+import { type DepartmentId, type DemoRecipe, type ItemUnit, type PreviewState, type Task, validProductionRequests, DEPARTMENTS, addDays, validRecipePlan, validStaffingSettings, validCleaningDays } from "./planning";
 
 export type IngredientView = { id: string; name: string; supplier: string; unit: string; linked: boolean; specification: string; allergens: string };
 export type LiveWorkspace = {
@@ -69,6 +69,7 @@ export function seedWorkspace(data: RecepturenData): PreviewState {
 export function syncRecipeCatalog(state: PreviewState, data: RecepturenData): PreviewState {
   const source = seedWorkspace({...data,manualProductionPlanningItems:[],recipes:data.recipes.map(r=>({...r,productionRequests:[]}))});
   const known = new Set(state.items.map(i=>i.id));
+  const linkedRecipes=new Set(state.items.map(i=>i.recipeId).filter(Boolean));
   const recipes = recipeViews(data);
   const items = state.items.map(item=> {
     if (!item.recipeId) return item;
@@ -76,12 +77,13 @@ export function syncRecipeCatalog(state: PreviewState, data: RecepturenData): Pr
     if (!recipe || recipe.unit!==item.unit) return {...item,recipeId:undefined,note:`${item.note}\nReceptkoppeling opnieuw controleren: bronrecept of eenheid gewijzigd.`};
     return {...item,name:recipe.name,kind:recipe.type==="semiFinished"?"component" as const:"product" as const,productionBlocked:!!recipe.reviewRequired};
   });
-  return {...state,items:[...items,...source.items.filter(i=>!known.has(i.id))]};
+  return {...state,items:[...items,...source.items.filter(i=>!known.has(i.id)&&(!i.recipeId||!linkedRecipes.has(i.recipeId)))]};
 }
 export function validWorkspace(value: unknown, recipes: DemoRecipe[]): value is PreviewState {
   if (!value || typeof value !== "object") return false;
   const state = value as PreviewState;
   if (state.version !== 1 || !Array.isArray(state.items) || !Array.isArray(state.tasks) || state.items.length > 15000 || state.tasks.length > 15000) return false;
+  if(state.productionRequests!==undefined && !validProductionRequests(state.productionRequests))return false;
   if(state.staffing!==undefined && !validStaffingSettings(state.staffing))return false;
   if(state.cleaning!==undefined && !validCleaningDays(state.cleaning))return false;
   const ids = new Set<string>(), tasks = new Map<string, Task>(), batches = new Set<string>();

@@ -5,6 +5,8 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import WeddingWeekLane from "../../productie/WeddingWeekLane";
+import QuickRecipeForm from "../../productie/QuickRecipeForm";
+import ProductionRequests from "../../productie/ProductionRequests";
 import CleaningWeekLane from "../../productie/CleaningWeekLane";
 import { scheduleWedding, type WeddingProductionOrder } from "../../productie/weddingPlanning";
 const OfferManager=dynamic(()=>import("../../bakkerij/recepturen/RecepturenApp"),{loading:()=> <p role="status">Aanbiedingbeheer laden…</p>});
@@ -59,6 +61,7 @@ function newId(prefix: string) { return `${prefix}-${crypto.randomUUID()}`; }
 
 export default function ProductionPreview({live,onRefresh,initialView="planning",initialBoard,initialDepartment,initialWeek}:{live?:LiveWorkspace;onRefresh?:()=>Promise<void>;initialView?:string;initialBoard?:BoardId;initialDepartment?:DepartmentId;initialWeek?:string}) {
   const demo = !live, canManage = !live || live.canManage;
+  const [quickRecipeItem,setQuickRecipeItem]=useState<string|null>(null);
   const today = live?.today || DEMO_TODAY;
   const recipeList = live?.recipes || demoRecipes;
   const ingredientList = live?.ingredients || demoIngredients;
@@ -228,6 +231,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
         <span>{task.operation}</span>
         <small><span className={s.statusDot} />{STATUS_LABELS[task.status]}{task.minutes !== undefined && <span className={s.effort}><Icon name="clock" size={11} />{durationLabel(task.minutes)}</span>}{issues.length > 0 && <span className={s.taskWarning} title={issues.join(" ")}><Icon name="warning" size={12} /><span className={s.srOnly}>Controlepunt</span></span>}{task.source === "order" && <span className={s.orderTag}>Order</span>}</small>
       </button>
+      {item.kind!=="activity"&&!item.recipeId&&<div className={s.recipeNudge}><span>Tip: leg dit recept vast</span><button type="button" disabled={saving||!!live&&!live.departments.includes(item.departmentId)} onClick={()=>setQuickRecipeItem(item.id)}>Recept aanvullen ↗</button></div>}
     </article>;
   }
 
@@ -257,6 +261,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
         </section>
         <div className={s.mobileDays} role="group" aria-label="Kies dag">{days.map(d => <button key={d} data-today={d===today || undefined} aria-pressed={day === d} onClick={() => setDay(d)}>{dateLabel(d)}</button>)}</div>
         <div className={s.mobileRhythm}><DayRhythm board={board} date={day}/></div>
+        <div className={s.plannerWithRequests}><div className={s.plannerBoardColumn}>
         <section className={s.board} aria-label="Weekbord">
           <div className={s.boardHeader}><div className={s.departmentColumn}>Afdeling</div>{days.map(d => <div key={d} className={`${s.dayHeading} ${d === today ? s.today : ""}`}><strong>{dateLabel(d)}</strong><span>{d === today ? (demo ? "Voorbeeld: vandaag" : "Vandaag") : `${weekTasks.filter(t => t.date === d).length} taken`}</span><DayRhythm board={board} date={d}/></div>)}</div>
           {board==="patisserie" && <CleaningWeekLane days={days} day={day} today={today} rows={state.cleaning || []} canManage={canManage} canCheck={!live || live.departments.some(id=>departmentsFor("patisserie").some(d=>d.id===id))} saving={saving} statusFilter={statusFilter} selected={modal?.type==="cleaning"?modal:null} Dialog={ModalFrame} onOpen={selection=>setModal(selection?{type:"cleaning",...selection}:null)} onCommand={clean}/>}
@@ -275,6 +280,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
           })}
         </section>
         <footer className={s.boardFooter}><span><i />Gepland <i className={s.activeLegend} />Bezig <i className={s.doneLegend} />Klaar <i className={s.blockedLegend} />Geblokkeerd</span><span>{canManage ? "Sleep om te verplaatsen · open een taak om te wijzigen" : "Open een taak voor details en status"}</span>{!weekend && (weekTasks.some(t => t.date === end) || (board==="patisserie" && state.cleaning?.some(d=>d.date===end))) && <button onClick={() => setWeekend(true)}>Zondag heeft taken · toon zondag</button>}</footer>
+        </div>{live&&<ProductionRequests board={board} week={week} onPlanned={onRefresh}/>}</div>
       </> : view === "catalog" ? <>
         <div className={s.sectionIntro}><p>Alles wat je maakt, ook zonder uitgewerkt recept.</p><span>{state.items.filter(i=>i.kind==="product").length} eindproducten · {state.items.filter(i=>i.kind==="component").length} halffabricaten</span></div>
         <div className={s.listToolbar}><Search value={query} onChange={setQuery} placeholder="Zoek op naam of artikelnummer…" /><select aria-label="Type onderdeel" value={kindFilter} onChange={e => setKindFilter(e.target.value)}><option value="all">Alle typen</option><option value="product">Eindproducten</option><option value="component">Halffabricaten</option><option value="activity">Werkzaamheden</option></select><DepartmentSelect value={department} onChange={setDepartment} /></div>
@@ -300,6 +306,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
       </>}
     </main>
     {message && <div className={`${s.toast} ${notificationError ? s.errorToast : ""}`} role="status"><Icon name={notificationError ? "warning" : "check"} /><span>{message}</span><button onClick={() => setMessage("")} aria-label="Melding sluiten"><Icon name="close" size={16} /></button></div>}
+    {quickRecipeItem&&<ModalFrame title="Recept snel invoeren" subtitle={state.items.find(i=>i.id===quickRecipeItem)?.name} onClose={()=>setQuickRecipeItem(null)}><div className={s.dialogBody}>{live?<QuickRecipeForm item={state.items.find(i=>i.id===quickRecipeItem)!} ingredients={ingredientList} getRevision={()=>revisionRef.current} recipeRevision={live.recipeRevision} onSaved={onRefresh||(()=>Promise.resolve())} onClose={()=>setQuickRecipeItem(null)}/>:<p>In de live omgeving kun je hier de basisopbrengst, grondstoffen en werkwijze vastleggen.</p>}</div></ModalFrame>}
     {modal?.type==="offer" && offer && <ModalFrame wide title={`Weekaanbieding · week ${weekNumber(week)}`} subtitle={offer.label} onClose={()=>setModal(null)}><div className={s.dialogBody}><img className={s.offerFull} src={offer.imageUrl} alt={`Weekaanbieding week ${weekNumber(week)}`}/></div><footer className={s.dialogFooter}><button className={s.primaryButton} onClick={()=>setModal(null)}>Terug naar het bord</button></footer></ModalFrame>}
     {modal?.type==="offer-manage" && canManage && <ModalFrame wide title="Weekaanbieding beheren" onClose={()=>{setModal(null);void onRefresh?.();}}><div className={`${s.dialogBody} ${s.resourceSurface}`}><OfferManager embedded hideTopNav initialTab="beheer" lockedTab="beheer" initialBeheerView="voorpagina" initialOfferWeek={week}/></div><footer className={s.dialogFooter}><button className={s.primaryButton} onClick={()=>{setModal(null);void onRefresh?.();}}>Terug naar het bord</button></footer></ModalFrame>}
     {modal?.type === "task" && <TaskForm state={state} initial={modal} today={today} onClose={() => setModal(null)} onPlan={command=>plan(command,modal.refreshId)} />}

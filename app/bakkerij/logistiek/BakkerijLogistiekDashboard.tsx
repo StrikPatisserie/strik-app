@@ -9,6 +9,7 @@ import BusinessDeliveries from "./BusinessDeliveries";
 import { hasIncompleteWebshopPhotos, webshopPhotoDuplicateKey } from "./webshopPhotoIdentity";
 import { PhotoPrintChoiceModal } from "./PhotoPrintChoiceModal";
 import { usePhotoPrintHistory } from "./usePhotoPrintHistory";
+import ProductionRequests from "../../productie/ProductionRequests";
 import { buildPhotoPrintGroups, selectPhotoPrintItems, type PhotoPrintGroup, type PhotoPrintMode, type PhotoPrintSelection } from "./photoPrintTracking";
 import {
   AREND_PRINT_SESSION_KEY,
@@ -11504,6 +11505,7 @@ export default function BakkerijLogistiekDashboard() {
         </div>
       ) : (
       <>
+      <details className="mb-3 rounded-2xl border border-[#d7dfce] bg-[#fffdf6] p-3"><summary className="cursor-pointer text-sm font-bold">Productieverzoeken aan de bakkerij</summary><div className="mt-3"><ProductionRequests logistics/></div></details>
       <section className="relative rounded-2xl border border-[#e8e4de] bg-white/95 p-2.5 shadow-sm sm:p-3">
         <div className="grid gap-3 md:grid-cols-[minmax(17rem,1fr)_auto] md:items-start">
           <div className="min-w-0">

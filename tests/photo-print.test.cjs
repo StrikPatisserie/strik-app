@@ -69,14 +69,14 @@ test('selection keeps different customers and different print formats separate',
 });
 
 const dashboard = load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx', {
-  react: React, '../../StrikUI': {}, './BusinessDeliveries': {}, './routePrintPagination': load('app/bakkerij/logistiek/routePrintPagination.ts'), './routePrintWindow': {}, './receiptDelivery': {}, './arendPrintSession': {}, './webshopPhotoIdentity': photoIdentity,
+  "../../productie/ProductionRequests":{}, react: React, '../../StrikUI': {}, './BusinessDeliveries': {}, './routePrintPagination': load('app/bakkerij/logistiek/routePrintPagination.ts'), './routePrintWindow': {}, './receiptDelivery': {}, './arendPrintSession': {}, './webshopPhotoIdentity': photoIdentity,
   './specialSchoolDelivery': {}, './specialProCollegeDelivery': {}, './PhotoPrintChoiceModal': {}, './usePhotoPrintHistory': {}, './photoPrintTracking': tracking,
 }, {}, 'exports.sheet = createMarzipanPhotoPrintHtml; exports.pushCopies = pushMarzipanPrintCopies; exports.open = openMarzipanPhotoSheet; exports.buildItems = buildMarzipanPrintItems; exports.photoBlock = WebshopImageBlock;');
 
 test('confirming the same sheet twice registers one job, while a failed save can be retried', async () => {
   const sheet = { document: { open() {}, write() {}, close() {} }, focus() {} };
   const { open } = load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx', {
-    react: React, '../../StrikUI': {}, './BusinessDeliveries': {}, './routePrintPagination': load('app/bakkerij/logistiek/routePrintPagination.ts'), './routePrintWindow': {}, './receiptDelivery': {}, './arendPrintSession': {}, './webshopPhotoIdentity': photoIdentity,
+    "../../productie/ProductionRequests":{}, react: React, '../../StrikUI': {}, './BusinessDeliveries': {}, './routePrintPagination': load('app/bakkerij/logistiek/routePrintPagination.ts'), './routePrintWindow': {}, './receiptDelivery': {}, './arendPrintSession': {}, './webshopPhotoIdentity': photoIdentity,
     './specialSchoolDelivery': {}, './specialProCollegeDelivery': {}, './PhotoPrintChoiceModal': {}, './usePhotoPrintHistory': {}, './photoPrintTracking': tracking,
   }, { window: { open: () => sheet } }, 'exports.open = openMarzipanPhotoSheet;');
   let saves = 0;
