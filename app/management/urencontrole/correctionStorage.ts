@@ -57,11 +57,14 @@ export function correctionResult(record: CorrectionRecord): CorrectionResult {
 // Minimal read projection for the management overview; no payloads or rule snapshots.
 export async function correctionAuditOverview(from:string,to:string):Promise<import("./correctionAudit").CorrectionAuditOverview>{
  try{
-  const {data,error,count}=await db().from("tamigo_hours_corrections").select("id,shift_id,state,reference,before_snapshot,after_values,observed_snapshot,created_at,finished_at,reason,result_message",{count:"exact"}).in("state",["applied","applying","unknown"]).gte("reference->>date",from).lt("reference->>date",to).order("created_at",{ascending:true}).limit(1000);
+  const {data,error,count}=await db().from("tamigo_hours_corrections").select("id,actor_id,shift_id,state,reference,before_snapshot,after_values,observed_snapshot,created_at,finished_at,reason,result_message",{count:"exact"}).in("state",["applied","applying","unknown"]).gte("reference->>date",from).lt("reference->>date",to).order("created_at",{ascending:true}).limit(1000);
   if(error||!data||count===null||count>data.length)return {available:false,corrections:[]};
+  const actorIds=[...new Set(data.map(row=>row.actor_id as string).filter(Boolean))];
+  const actors=new Map<string,string>();
+  if(actorIds.length){const {data:profiles}=await db().from("profiles").select("id,full_name").in("id",actorIds);for(const profile of profiles||[])if(profile.full_name?.trim())actors.set(profile.id,profile.full_name.trim());}
   return {available:true,corrections:data.map(row=>{
    const before=row.before_snapshot as import("./reviewTypes").ReviewShift,after=row.after_values as import("./correctionTypes").CorrectionValues,reference=row.reference as import("./correctionTypes").CorrectionReference,observed=row.observed_snapshot as import("./reviewTypes").ReviewShift|null;
-   return {id:row.id,shiftId:row.shift_id,observedShiftId:observed?.id||null,employeeId:before.employeeId!,departmentId:before.departmentId!,date:reference.date,state:row.state as "applied"|"applying"|"unknown",createdAt:row.created_at,finishedAt:row.finished_at,reason:row.reason,message:row.result_message||"",before:{start:before.start.iso,end:before.end.iso,breakMinutes:before.breakMinutes,netMinutes:before.reportedNetMinutes},after:{start:after.start,end:after.end,breakMinutes:after.breakMinutes,netMinutes:after.netMinutes}};
+   return {id:row.id,actorName:actors.get(row.actor_id)||"Onbekende beheerder",shiftId:row.shift_id,observedShiftId:observed?.id||null,employeeId:before.employeeId!,departmentId:before.departmentId!,date:reference.date,state:row.state as "applied"|"applying"|"unknown",createdAt:row.created_at,finishedAt:row.finished_at,reason:row.reason,message:row.result_message||"",before:{start:before.start.iso,end:before.end.iso,breakMinutes:before.breakMinutes,netMinutes:before.reportedNetMinutes},after:{start:after.start,end:after.end,breakMinutes:after.breakMinutes,netMinutes:after.netMinutes}};
   })};
  }catch{return {available:false,corrections:[]};}
 }

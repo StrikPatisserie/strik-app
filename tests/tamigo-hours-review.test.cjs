@@ -486,3 +486,11 @@ test('original registration survives a chain of replacement service IDs and newe
  const result=audit.correctionAuditForShift(actual,{available:true,corrections:[last,first]});assert.equal(result.records.length,2);assert.equal(result.original.start,instant('07:15'));assert.equal(result.status,'corrected');
  assert.equal(audit.correctionAuditForShift(actual,{available:true,corrections:[first,last,{...last,id:'c3',state:'unknown',createdAt:'2026-10-06T10:00:00Z'}]}).status,'uncertain');
 });
+
+test('short correction log shows only the changed fields in local time',()=>{
+ const audit=load(base+'correctionAudit.ts');const before={start:'2026-10-26T06:15:00.000Z',end:'2026-10-26T17:00:00.000Z',breakMinutes:0,netMinutes:645};
+ assert.equal(audit.correctionChangeText({before,after:{...before,start:'2026-10-26T06:30:00.000Z',netMinutes:630}}),'Start 07:15 → 07:30');
+ assert.equal(audit.correctionChangeText({before,after:{...before,breakMinutes:30}}),'Pauze 0 → 30 min');
+ assert.equal(audit.correctionChangeText({before,after:{...before,end:'2026-10-26T16:45:00.000Z',breakMinutes:15}}),'Einde 18:00 → 17:45 · Pauze 0 → 15 min');
+ assert.match(audit.correctionChangeText({before,after:{...before,end:'2026-10-27T00:00:00.000Z'}}),/26 okt.*18:00 → 27 okt.*01:00/);
+});

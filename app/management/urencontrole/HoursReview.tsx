@@ -7,7 +7,7 @@ import { DEFAULT_REVIEW_VIEW, focusFlags, missingReviewEmployee, selectReviewRow
 import { reviewAccessSummary } from "./reviewAccess";
 import { createHoursReviewDemo } from "./demo";
 import CorrectionEditor from "./CorrectionEditor";
-import {correctionAuditForShift,type CorrectionAuditOverview,type AuditValues} from "./correctionAudit";
+import {correctionAuditForShift,correctionChangeText,type CorrectionAuditOverview} from "./correctionAudit";
 import { formatMinutes, formatStamp, formatTime, localDate, reviewPeriodBounds, reviewPeriodLabel } from "./reviewTime";
 import { DEFAULT_REVIEW_CONFIG, FLAG_LABELS, TIME_ZONE, type DayStatus, type FlagType, type ReviewConfig, type ReviewDataset, type ReviewRow, type ReviewShift, type ReviewThresholds } from "./reviewTypes";
 import styles from "./hoursReview.module.css";
@@ -116,7 +116,6 @@ function OverlapComparison({ pair, onClose }: { pair: [ReviewShift, ReviewShift]
     <p className={styles.muted}>Twee afzonderlijke werkelijke registraties. Controleer in Tamigo of beide horen te bestaan; deze vergelijking wijzigt geen dienst.</p>
   </dialog>;
 }
-function AuditTimes({label,values}:{label:string;values:AuditValues}){return <div><strong>{label}</strong><b>{formatStamp(values.start)} – {formatStamp(values.end)}</b><span>{formatMinutes(values.breakMinutes)} pauze · {formatMinutes(values.netMinutes)} netto</span></div>;}
 function ReviewCard({ row, demo, expanded, onToggle, config, reviewMonth, onChanged, onCompare, correctionAudit }: { correctionAudit?:CorrectionAuditOverview; row: ReviewRow; demo: boolean; expanded: boolean; onToggle: () => void; config: ReviewConfig; reviewMonth: string; onChanged: () => void; onCompare: (current: ReviewShift, other: ReviewShift) => void }) {
   const source = row.actual || row.planned!;
   const unassigned = missingReviewEmployee(source);
@@ -141,7 +140,7 @@ function ReviewCard({ row, demo, expanded, onToggle, config, reviewMonth, onChan
       <span><strong>{overlap.duplicate ? "Mogelijk dubbel" : "Tegelijk geregistreerd"}:</strong> {overlap.shift.departmentName} · {formatStamp(overlap.shift.start.iso)} – {formatStamp(overlap.shift.end.iso)} · {formatMinutes(overlap.minutes)} overlap</span>
       <button type="button" onClick={() => onCompare(row.actual!, overlap.shift)} aria-label={`Vergelijk met dienst bij ${overlap.shift.departmentName} vanaf ${formatStamp(overlap.shift.start.iso)}`}>Vergelijk dienst</button>
     </div>)}</div> : null}
-    {audit?<section className={styles.auditPanel} aria-label="Onze correcties voor deze dienst"><h3>Onze correcties</h3><p>De bewaarde registratie vóór onze wijziging. Dit bewijst niet wie deze oorspronkelijk heeft ingevoerd.</p><div className={styles.auditComparison}><AuditTimes label={audit.latest?"Vóór onze eerste correctie":"Vóór de correctiepoging"} values={audit.original}/>{audit.latest?<AuditTimes label="Na laatste bevestigde correctie" values={audit.latest.after}/>:null}<AuditTimes label="Nu in Tamigo" values={{start:row.actual!.start.iso,end:row.actual!.end.iso,breakMinutes:row.actual!.breakMinutes,netMinutes:row.actual!.reportedNetMinutes}}/></div>{audit.status!=="corrected"?<p className={styles.warning}>{audit.status==="uncertain"?"De uitkomst is nog niet bevestigd. Controleer de correctiehistorie; verstuur niet opnieuw.":"De actuele registratie wijkt af van de laatst bevestigde correctie. Controleer de dienst en de historie."}</p>:null}<ul>{audit.records.map(item=><li key={item.id}><strong>{item.state==="applied"?"Bevestigd":"Nog te controleren"} · {formatStamp(item.finishedAt||item.createdAt)}</strong><span>{item.reason}</span>{item.message?<small>{item.message}</small>:null}</li>)}</ul><p>De controlepunten blijven zichtbaar; een correctie is geen automatische goedkeuring van de hele dienst.</p></section>:null}
+    {audit?<section className={styles.auditPanel} aria-label="Wijzigingen aan deze dienst"><h3>Wijzigingen</h3><ul>{audit.records.map(item=><li key={item.id}><strong>{item.actorName||"Onbekende beheerder"}</strong><time dateTime={item.finishedAt||item.createdAt}>{new Intl.DateTimeFormat("nl-NL",{timeZone:TIME_ZONE,day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}).format(new Date(item.finishedAt||item.createdAt))}</time><span>{correctionChangeText(item)}</span>{item.state!=="applied"?<em>Nog niet bevestigd</em>:null}</li>)}</ul>{audit.status==="changed"?<small>Actuele registratie wijkt af van de laatste correctie.</small>:null}</section>:null}
     <div className={styles.detailHeading}><strong>{STATUS_LABELS[row.status]}</strong><span>Oorspronkelijke registratie blijft behouden</span></div>
     <div className={styles.comparison}>
       <div className={styles.timeCell}><small>Gepland</small><SourceTimes shift={row.planned} />{row.planned ? <span>{row.planned.departmentName}</span> : null}</div>
