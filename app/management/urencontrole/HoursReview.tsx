@@ -116,6 +116,11 @@ function OverlapComparison({ pair, onClose }: { pair: [ReviewShift, ReviewShift]
     <p className={styles.muted}>Twee afzonderlijke werkelijke registraties. Controleer in Tamigo of beide horen te bestaan; deze vergelijking wijzigt geen dienst.</p>
   </dialog>;
 }
+function CompactShiftRange({shift}:{shift:ReviewShift|null}){
+ if(!shift)return <>—</>;
+ const nextDay=shift.start.ms!==null&&shift.end.ms!==null&&localDate(shift.start.ms)!==localDate(shift.end.ms);
+ return <span title={`${formatStamp(shift.start.iso)} — ${formatStamp(shift.end.iso)}`}>{originalTime(shift.start)} – {originalTime(shift.end)}{nextDay?" (+1 dag)":""}</span>;
+}
 function ReviewCard({ row, demo, expanded, onToggle, config, reviewMonth, onChanged, onCompare, correctionAudit }: { correctionAudit?:CorrectionAuditOverview; row: ReviewRow; demo: boolean; expanded: boolean; onToggle: () => void; config: ReviewConfig; reviewMonth: string; onChanged: () => void; onCompare: (current: ReviewShift, other: ReviewShift) => void }) {
   const source = row.actual || row.planned!;
   const unassigned = missingReviewEmployee(source);
@@ -141,15 +146,15 @@ function ReviewCard({ row, demo, expanded, onToggle, config, reviewMonth, onChan
       <button type="button" onClick={() => onCompare(row.actual!, overlap.shift)} aria-label={`Vergelijk met dienst bij ${overlap.shift.departmentName} vanaf ${formatStamp(overlap.shift.start.iso)}`}>Vergelijk dienst</button>
     </div>)}</div> : null}
     {audit?<section className={styles.auditPanel} aria-label="Wijzigingen aan deze dienst"><h3>Wijzigingen</h3><ul>{audit.records.map(item=><li key={item.id}><strong>{item.actorName||"Onbekende beheerder"}</strong><time dateTime={item.finishedAt||item.createdAt}>{new Intl.DateTimeFormat("nl-NL",{timeZone:TIME_ZONE,day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}).format(new Date(item.finishedAt||item.createdAt))}</time><span>{correctionChangeText(item)}</span>{item.state!=="applied"?<em>Nog niet bevestigd</em>:null}</li>)}</ul>{audit.status==="changed"?<small>Actuele registratie wijkt af van de laatste correctie.</small>:null}</section>:null}
-    <div className={styles.detailHeading}><strong>{STATUS_LABELS[row.status]}</strong><span>Oorspronkelijke registratie blijft behouden</span></div>
-    <div className={styles.comparison}>
-      <div className={styles.timeCell}><small>Gepland</small><SourceTimes shift={row.planned} />{row.planned ? <span>{row.planned.departmentName}</span> : null}</div>
-      <div className={styles.timeCell}><small>Geregistreerd in Tamigo</small><SourceTimes shift={row.actual} /><b>Netto {formatMinutes(row.originalNetMinutes)}</b>{row.actual?.date && row.actual.date !== row.date ? <span>Startdatum {row.actual.date}</span> : null}</div>
-      <div className={`${styles.timeCell} ${styles.proposed}`}><small>{row.proposal?.basis === "planning" ? "Voorstel volgens oorspronkelijke planning" : "Voorstel · beoordelen"}</small>{proposalTimes}{row.proposal ? <><span>{pauseText(row.proposal.breakMinutes)}</span><b>Netto {formatMinutes(row.proposal.netMinutes)}{row.deltaMinutes === null ? "" : ` · verschil ${formatMinutes(row.deltaMinutes, true)}`}</b></> : <span>Geen volledig voorstel</span>}</div>
-    </div>
+    <div className={styles.detailHeading}><strong>{STATUS_LABELS[row.status]}</strong></div>
+    <div className={styles.detailComparison}><table><caption className="sr-only">Planning, registratie en voorstel vergelijken</caption><thead><tr><th scope="col">Dienst</th><th scope="col">Tijden</th><th scope="col">Pauze</th><th scope="col">Netto</th></tr></thead><tbody>
+      <tr><th scope="row">Gepland</th><td><CompactShiftRange shift={row.planned}/></td><td>{row.planned?formatMinutes(row.planned.breakMinutes):"—"}</td><td>{row.planned?formatMinutes(row.planned.reportedNetMinutes):"—"}</td></tr>
+      <tr><th scope="row">Tamigo</th><td><CompactShiftRange shift={row.actual}/></td><td>{row.actual?formatMinutes(row.actual.breakMinutes):"—"}</td><td>{formatMinutes(row.originalNetMinutes)}</td></tr>
+      <tr className={styles.proposalDetail}><th scope="row">Voorstel{row.proposal?.basis==="planning"?<small>volgens planning</small>:null}</th><td>{proposalTimes}</td><td>{row.proposal?formatMinutes(row.proposal.breakMinutes):"—"}</td><td>{row.proposal?formatMinutes(row.proposal.netMinutes):"—"}</td></tr>
+    </tbody></table></div>
     <CorrectionEditor row={row} config={config} reviewMonth={reviewMonth} demo={demo} onChanged={onChanged} />
     {row.actual?.comments.some(comment => comment?.trim()) ? <div className={styles.comments}>{row.actual.comments.map((comment, index) => comment?.trim() ? <blockquote key={index}><strong>Oorspronkelijke {index ? "extra opmerking" : "opmerking"}</strong>{comment}</blockquote> : null)}</div> : null}
-    {flags.length ? <ul className={styles.flags}>{flags.map((flag, index) => <li key={`${flag.type}:${index}`}><strong>{FLAG_LABELS[flag.type]}:</strong> {flag.message}</li>)}</ul> : <p className={styles.noFlags}>{row.status === "nog_gepland" ? "Deze dienst is nog niet afgelopen. Geen ontbrekende gewerkte uren vastgesteld." : "Geen melding volgens de huidige regels. Deze registratie is niet automatisch goedgekeurd."}</p>}
+    {flags.length ? <details className={styles.explanation}><summary>Waarom dit voorstel? <span>{flags.length}</span></summary><ul className={styles.flags}>{flags.map((flag,index)=><li key={`${flag.type}:${index}`}><strong>{FLAG_LABELS[flag.type]}:</strong> {flag.message}</li>)}</ul></details> : <p className={styles.noFlags}>{row.status==="nog_gepland"?"Nog gepland":"Geen controlepunten"}</p>}
     <SourceDetails row={row} demo={demo} />
     </div>
   </article>;

@@ -110,7 +110,7 @@ export default function CorrectionEditor({ row, config, reviewMonth, demo, onCha
     finally { setBusy(false); }
   }
   return <>
-    <div className={styles.correctionActions}><button type="button" className={styles.primary} disabled={!row.proposal} onClick={() => open("proposal")}>Voorstel overnemen</button><button type="button" onClick={() => open("manual")}>Zelf aanpassen</button><span className={styles.muted}>Altijd eerst controleren en bevestigen</span></div>
+    <div className={styles.correctionActions}><button type="button" className={styles.primary} disabled={!row.proposal} onClick={() => open("proposal")}>Voorstel overnemen</button><button type="button" onClick={() => open("manual")}>Zelf aanpassen</button></div>
     {mode ? <dialog ref={dialog} className={styles.correctionDialog} aria-labelledby={`correction-title-${row.id}`} onCancel={event => { if (busy) event.preventDefault(); }} onClose={() => { setMode(null); if (result?.state === "applied" && !demo) onChanged(); }}>
       <div className={styles.dialogHeading}><div><h2 id={`correction-title-${row.id}`}>{result ? "Uitkomst correctie" : preview ? "Controleer de wijziging" : "Dienst corrigeren"}</h2><p>{actual.employeeName} · {actual.departmentName} · {actual.date ? new Intl.DateTimeFormat("nl-NL", { timeZone: "UTC", weekday: "short", day: "numeric", month: "long" }).format(new Date(`${actual.date}T12:00:00Z`)) : "datum onbekend"}</p></div><button type="button" disabled={busy} aria-label="Correctie sluiten" onClick={() => dialog.current?.close()}>×</button></div>
       {demo ? <p className={styles.demo}>Voorbeeldmodus · alleen fictieve gegevens · niets wordt naar Tamigo verstuurd</p> : null}

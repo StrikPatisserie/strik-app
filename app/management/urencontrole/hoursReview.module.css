@@ -226,3 +226,26 @@
 .auditPanel li { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 12px; font-size:.7rem; }
 .auditPanel time { color:#657467; font-size:.65rem; font-variant-numeric:tabular-nums; }
 .auditPanel small,.auditPanel em { font-size:.65rem; color:#7e5b21; }
+
+/* The expanded comparison is a quiet, compact inset rather than another main row. */
+.rowDetail { padding:10px 14px; background:#f7f8f4; }
+.detailHeading { margin-bottom:6px; font-size:.68rem; color:#657467; }
+.detailComparison { max-width:660px; overflow-x:auto; border-left:2px solid #bbccb1; padding-left:10px; }
+.detailComparison table { border-collapse:collapse; width:100%; font-size:.69rem; font-variant-numeric:tabular-nums; }
+.detailComparison :is(th,td) { padding:5px 10px 5px 0; text-align:left; border-bottom:1px solid #e3e8dd; white-space:nowrap; }
+.detailComparison thead th { font-size:.6rem; font-weight:600; color:#7b8978; padding-top:0; }
+.detailComparison tbody th { font-weight:600; color:#5a6e5a; }
+.detailComparison td strong { font-size:inherit; font-weight:650; }
+.detailComparison tr:last-child :is(th,td) { border:0; }
+.detailComparison .proposalDetail { background:#ebf1e5; }
+.detailComparison .proposalDetail th { padding-left:5px; color:#35563b; }
+.detailComparison small { display:block; font-size:.55rem; font-weight:400; }
+.rowDetail > .correctionActions { gap:6px; margin:9px 0; }
+.root .rowDetail > .correctionActions button { min-height:34px; padding:5px 10px; font-size:.68rem; }
+.explanation { margin:8px 0; font-size:.67rem; }
+.explanation > summary { display:list-item; cursor:pointer; width:fit-content; padding:5px 0; color:#657467; }
+.explanation > summary span { display:inline-block; font-size:.58rem; padding:1px 5px; border-radius:4px; background:#e6ecdf; }
+.explanation .flags { max-width:900px; font-size:.68rem; margin:6px 0; padding-left:12px; }
+.rowDetail > .sourceDetails > summary { font-size:.65rem; min-height:32px; }
+@media (hover:none) { .root .rowDetail > .correctionActions button { min-height:44px; } .explanation > summary { min-height:40px; align-content:center; } }
+@media (max-width:500px) { .rowDetail { padding:9px; } .detailComparison { padding-left:6px; } .detailComparison :is(th,td) { padding-right:8px; } }
