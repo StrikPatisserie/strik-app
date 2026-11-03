@@ -63,7 +63,7 @@ export default function PersonalWorkspace({ownerId="",demo=false,compact=false,i
  async function open(id:string){if(!leave())return;const serial=++noteSerial.current;try{const note=demo?demoNotes.find(n=>n.id===id):(await json(`/api/persoonlijk?id=${encodeURIComponent(id)}`)).note;if(note&&serial===noteSerial.current){showNote(note);}}catch(e){if(serial===noteSerial.current)setError((e as Error).message);}}
  function add(){if(!leave())return;noteSerial.current++;const note=newPersonalNote(compact?"TO DO":book||"Mijn notities");setDraft(note);setHistories(current=>({...current,[note.id]:startTimeline(note)}));setSaved(null);setEditing(true);}
  async function save(next=draft,restoring?:NoteTimeline){
-  if(!next||savingLock.current)return;savingLock.current=true;setSaving(true);setError("");
+  if(!next||savingLock.current)return;noteSerial.current++;savingLock.current=true;setSaving(true);setError("");
   try{
    const payload=personalInput(input(next),ownerId||"00000000-0000-4000-8000-000000000000"),note:PersonalNote=demo?{...next,...payload,revision:next.revision+1,updated_at:new Date().toISOString()}:(await json("/api/persoonlijk",{method:next.revision?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...payload,revision:next.revision})})).note;
    if(demo)setDemoNotes(current=>[note,...current.filter(n=>n.id!==note.id)]);
