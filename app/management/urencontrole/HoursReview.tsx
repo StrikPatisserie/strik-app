@@ -210,13 +210,12 @@ export default function HoursReview({ demo = false }: { demo?: boolean }) {
     <section className={styles.panel}>
       <div className={styles.heading}><p><strong>{sort === "employee" ? "Medewerkers op alfabet." : sort === "date" ? "Diensten op datum en begintijd." : "Meldingen eerst."}</strong> Open een dienst voor de details.</p><button type="button" disabled={loading} onClick={() => { setRefresh(refresh + 1); setExpandedId(null); }}>Vernieuwen</button></div>
       <div className={styles.filters}>
-        <label>Periode<select value={period} onChange={event => { setPeriod(event.target.value as "calendar" | "payroll"); setPage(1); setExpandedId(null); }}><option value="payroll">Loonperiode · 26 t/m 25</option><option value="calendar">Kalendermaand</option></select></label>
+        <label>Periode<select value={period} onChange={event => { setPeriod(event.target.value as "calendar" | "payroll"); setPage(1); setExpandedId(null); }}><option value="payroll">{bounds ? reviewPeriodLabel(month, "payroll") : "Loonperiode"}</option><option value="calendar">{bounds ? reviewPeriodLabel(month, "calendar") : "Kalendermaand"}</option></select></label>
         <label>{period === "payroll" ? `Loonperiode${bounds ? ` ${Number(month.slice(5))}` : ""}` : "Maand"}<input type="month" min="2000-01" max="2100-12" value={month} onChange={event => { setMonth(event.target.value); setPage(1); setExpandedId(null); if (!event.target.value) setDataset(null); }} /></label>
         <label>Afdeling / winkel<select value={department} onChange={event => { setDepartment(event.target.value); setEmployee(""); setPage(1); }}><option value="">Alle afdelingen</option>{departments.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         <label>Medewerker<select value={employee} onChange={event => { setEmployee(event.target.value); setPage(1); }}><option value="">Alle medewerkers</option>{employees.map(([id, name]) => <option key={id} value={id}>{name} · {id.slice(-6)}</option>)}</select></label>
         <label>Meldingstype<select value={flagType} onChange={event => { setFlagType(event.target.value); if (event.target.value && view !== "unassigned") setView("attention"); setPage(1); setExpandedId(null); }}><option value="">Alle meldingen</option>{Object.entries(FLAG_LABELS).map(([id, label]) => <option key={id} value={id as FlagType}>{label}</option>)}</select></label>
       </div>
-      {bounds ? <p className={styles.periodRange}>{reviewPeriodLabel(month, period)}</p> : null}
       <div className={styles.tools}>
       <label className={styles.check}><input type="checkbox" checked={showNonWork} onChange={event => { setShowNonWork(event.target.checked); setPage(1); }} />Verlof / andere activiteiten ({rows.filter(row => row.status === "niet_werk").length})</label>
     <RulesEditor config={config} departments={departments} onChange={next => { setConfig(next); setPage(1); }} />
