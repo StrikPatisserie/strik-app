@@ -7,7 +7,7 @@ import { DEFAULT_REVIEW_VIEW, focusFlags, missingReviewEmployee, selectReviewRow
 import { reviewAccessSummary } from "./reviewAccess";
 import { createHoursReviewDemo } from "./demo";
 import CorrectionEditor from "./CorrectionEditor";
-import { formatMinutes, formatStamp, formatTime, localDate, reviewPeriodBounds } from "./reviewTime";
+import { formatMinutes, formatStamp, formatTime, localDate, reviewPeriodBounds, reviewPeriodLabel } from "./reviewTime";
 import { DEFAULT_REVIEW_CONFIG, FLAG_LABELS, TIME_ZONE, type DayStatus, type FlagType, type ReviewConfig, type ReviewDataset, type ReviewRow, type ReviewShift, type ReviewThresholds } from "./reviewTypes";
 import styles from "./hoursReview.module.css";
 
@@ -133,11 +133,11 @@ function ReviewCard({ row, demo, expanded, onToggle, config, reviewMonth, onChan
       <span className={styles.focus}><strong>{unassigned ? "Zonder medewerker" : flags[0] ? FLAG_LABELS[flags[0].type] : row.status === "nog_gepland" ? "Nog gepland" : row.status === "niet_werk" ? "Verlof / andere activiteit" : "Geen melding"}{!unassigned && flags.length > 1 ? <span className={styles.moreFlags}>+{flags.length - 1}</span> : null}</strong><span>{unassigned ? "Apart van de urencontrole" : flags[0]?.type === "overlap" ? "Open voor de andere dienst en overlappende tijden" : row.status === "uitzondering" ? "Verklaring aanwezig · beoordelen" : row.flags.length ? "Ter beoordeling" : "Niet beoordeeld"}{commentCount ? " · opmerking" : ""}</span></span>
       <span className={`${styles.chevron} ${expanded ? styles.chevronOpen : ""}`} aria-hidden="true">⌄</span>
     </button>
+    <div id={detailId} className={styles.rowDetail} hidden={!expanded}>
     {row.actual && row.overlaps?.length ? <div className={styles.overlapLinks}>{row.overlaps.map(overlap => <div key={overlap.shift.id}>
       <span><strong>{overlap.duplicate ? "Mogelijk dubbel" : "Tegelijk geregistreerd"}:</strong> {overlap.shift.departmentName} · {formatStamp(overlap.shift.start.iso)} – {formatStamp(overlap.shift.end.iso)} · {formatMinutes(overlap.minutes)} overlap</span>
       <button type="button" onClick={() => onCompare(row.actual!, overlap.shift)} aria-label={`Vergelijk met dienst bij ${overlap.shift.departmentName} vanaf ${formatStamp(overlap.shift.start.iso)}`}>Vergelijk dienst</button>
     </div>)}</div> : null}
-    <div id={detailId} className={styles.rowDetail} hidden={!expanded}>
     <div className={styles.detailHeading}><strong>{STATUS_LABELS[row.status]}</strong><span>Oorspronkelijke registratie blijft behouden</span></div>
     <div className={styles.comparison}>
       <div className={styles.timeCell}><small>Gepland</small><SourceTimes shift={row.planned} />{row.planned ? <span>{row.planned.departmentName}</span> : null}</div>
@@ -204,7 +204,6 @@ export default function HoursReview({ demo = false }: { demo?: boolean }) {
   const shown = filtered.slice((currentPage - 1) * 25, currentPage * 25);
   const { incompleteSources, dayBlocked, notice } = reviewAccessSummary(dataset?.checks || []);
   const bounds = /^\d{4}-(0[1-9]|1[0-2])$/.test(month) && +month.slice(0, 4) >= 2000 && +month.slice(0, 4) <= 2100 ? reviewPeriodBounds(month, period) : null;
-  const formatDate = (date: string) => new Intl.DateTimeFormat("nl-NL", { timeZone: "UTC", day: "numeric", month: "long", year: "numeric" }).format(new Date(`${date}T12:00:00Z`));
   return <StrikShell extraWide backHref="/management"><div className={styles.root}>
     <StrikPageHeader title="Urencontrole" icon={strikIcons.managementSchedule} />
     {demo ? <p className={styles.demo}>Preview met fictieve diensten · geen Tamigo-verzoeken</p> : null}
@@ -212,12 +211,12 @@ export default function HoursReview({ demo = false }: { demo?: boolean }) {
       <div className={styles.heading}><p><strong>{sort === "employee" ? "Medewerkers op alfabet." : sort === "date" ? "Diensten op datum en begintijd." : "Meldingen eerst."}</strong> Open een dienst voor de details.</p><button type="button" disabled={loading} onClick={() => { setRefresh(refresh + 1); setExpandedId(null); }}>Vernieuwen</button></div>
       <div className={styles.filters}>
         <label>Periode<select value={period} onChange={event => { setPeriod(event.target.value as "calendar" | "payroll"); setPage(1); setExpandedId(null); }}><option value="payroll">Loonperiode · 26 t/m 25</option><option value="calendar">Kalendermaand</option></select></label>
-        <label>{period === "payroll" ? "Loonperiode" : "Maand"}<input type="month" min="2000-01" max="2100-12" value={month} onChange={event => { setMonth(event.target.value); setPage(1); setExpandedId(null); if (!event.target.value) setDataset(null); }} /></label>
+        <label>{period === "payroll" ? `Loonperiode${bounds ? ` ${Number(month.slice(5))}` : ""}` : "Maand"}<input type="month" min="2000-01" max="2100-12" value={month} onChange={event => { setMonth(event.target.value); setPage(1); setExpandedId(null); if (!event.target.value) setDataset(null); }} /></label>
         <label>Afdeling / winkel<select value={department} onChange={event => { setDepartment(event.target.value); setEmployee(""); setPage(1); }}><option value="">Alle afdelingen</option>{departments.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         <label>Medewerker<select value={employee} onChange={event => { setEmployee(event.target.value); setPage(1); }}><option value="">Alle medewerkers</option>{employees.map(([id, name]) => <option key={id} value={id}>{name} · {id.slice(-6)}</option>)}</select></label>
         <label>Meldingstype<select value={flagType} onChange={event => { setFlagType(event.target.value); if (event.target.value && view !== "unassigned") setView("attention"); setPage(1); setExpandedId(null); }}><option value="">Alle meldingen</option>{Object.entries(FLAG_LABELS).map(([id, label]) => <option key={id} value={id as FlagType}>{label}</option>)}</select></label>
       </div>
-      {bounds ? <p className={styles.periodRange}>{period === "payroll" ? "Loonperiode" : "Kalendermaand"} {new Intl.DateTimeFormat("nl-NL", { timeZone: "UTC", month: "long", year: "numeric" }).format(new Date(`${month}-01T12:00:00Z`))} · {formatDate(bounds.from)} t/m {formatDate(new Date(Date.parse(`${bounds.to}T12:00:00Z`) - 86400000).toISOString().slice(0, 10))}</p> : null}
+      {bounds ? <p className={styles.periodRange}>{reviewPeriodLabel(month, period)}</p> : null}
       <div className={styles.tools}>
       <label className={styles.check}><input type="checkbox" checked={showNonWork} onChange={event => { setShowNonWork(event.target.checked); setPage(1); }} />Verlof / andere activiteiten ({rows.filter(row => row.status === "niet_werk").length})</label>
     <RulesEditor config={config} departments={departments} onChange={next => { setConfig(next); setPage(1); }} />

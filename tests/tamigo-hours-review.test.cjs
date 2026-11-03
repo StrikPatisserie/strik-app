@@ -464,3 +464,10 @@ test('employee and date sorting order the entire filtered selection without chan
  const anna=presentation.selectReviewRows(rows,{view:'all',sort:'date',employee:'Anna'});
  assert.deepEqual(Array.from(anna.rows,row=>row.actual.id),['a-anna-early','a-anna-late']);
 });
+
+test('numbered payroll labels follow the ending month and retain exact year boundaries',()=>{
+ assert.equal(time.reviewPeriodLabel('2026-11','payroll'),'Loonperiode 11 · 26 okt t/m 25 nov 2026');
+ assert.equal(time.reviewPeriodLabel('2026-01','payroll'),'Loonperiode 1 · 26 dec 2025 t/m 25 jan 2026');
+ assert.equal(time.reviewPeriodLabel('2026-02','payroll'),'Loonperiode 2 · 26 jan t/m 25 feb 2026');
+ assert.equal(time.reviewPeriodLabel('2028-02','calendar'),'Kalendermaand · 1 feb t/m 29 feb 2028');
+});

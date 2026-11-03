@@ -89,3 +89,12 @@ export function reviewPeriodBounds(month: string, period: "calendar" | "payroll"
   const date = (monthIndex: number, day: number) => new Date(Date.UTC(year, monthIndex, day)).toISOString().slice(0, 10);
   return { from: date(index - 1, 26), to: date(index, 26), fetchFrom: date(index - 1, 25), fetchTo: date(index, 27) };
 }
+
+export function reviewPeriodLabel(month: string, period: "calendar" | "payroll") {
+  const bounds = reviewPeriodBounds(month, period);
+  const start = new Date(`${bounds.from}T12:00:00Z`);
+  const end = new Date(Date.parse(`${bounds.to}T12:00:00Z`) - 86400000);
+  const format = (date: Date, year: boolean) => new Intl.DateTimeFormat("nl-NL", { timeZone: "UTC", day: "numeric", month: "short", ...(year ? { year: "numeric" } as const : {}) }).format(date);
+  const title = period === "payroll" ? `Loonperiode ${Number(month.slice(5))}` : "Kalendermaand";
+  return `${title} · ${format(start, start.getUTCFullYear() !== end.getUTCFullYear())} t/m ${format(end, true)}`;
+}

@@ -99,6 +99,28 @@
 .sourceGrid button { margin-top:10px; }
 .footer { display:flex; flex-wrap:wrap; justify-content:space-between; gap:4px 15px; }
 .pagination { display:flex; justify-content:center; align-items:center; flex-wrap:wrap; gap:14px; font-size:.75rem; padding:6px 0; }
+/* Compact ledger rows retain the full comparison when expanded. */
+.root .rowSummary { padding:6px 10px; min-height:46px; }
+.rowGrid { gap:0; }
+.listHeader { padding:7px 10px 7px 13px; font-size:.62rem; }
+.rowSummary > :not(:first-child),.listHeader > :not(:first-child) { padding-left:10px; }
+.rowSummary > :not(:first-child):not(:last-child) { border-left:1px solid #e7ece2; }
+.rowSummary .identity,.rowSummary .timeCell,.rowSummary .difference,.rowSummary .focus { gap:1px; overflow-wrap:normal; }
+.rowSummary .identity strong,.rowSummary .timeCell strong,.rowSummary .difference strong { font-size:.72rem; line-height:1.25; }
+.rowSummary .identity > span,.rowSummary .timeCell > span { font-size:.59rem; line-height:1.3; }
+.rowSummary .focus > strong { font-size:.64rem; line-height:1.3; }
+.rowSummary .focus > span { display:none; }
+.rowSummary .proposed { border-left:1px solid #d3ddcc; }
+.reviewRow:nth-child(odd) > .rowSummary { background:#f8faf5; }
+.root .rowSummary[aria-expanded=true] { background:#eaf1e5; }
+.overlapLinks { padding:0 0 10px; }
+@media (max-width:850px) {
+ .root .rowSummary { padding:9px 10px; }
+ .rowSummary > :not(:first-child),.listHeader > :not(:first-child) { padding-left:0; }
+ .rowSummary > :not(:first-child):not(:last-child) { border-left:0; }
+ .rowSummary .identity strong,.rowSummary .timeCell strong,.rowSummary .difference strong { font-size:.78rem; }
+ .rowSummary .identity > span,.rowSummary .timeCell > span { font-size:.65rem; }
+}
 @media (max-width:1150px) {
  .rowGrid { grid-template-columns:minmax(130px,1.2fr) repeat(2,minmax(130px,1fr)) minmax(65px,.6fr) minmax(145px,1fr) 16px; gap:10px; }
  .planSummary,.listHeader > span:nth-child(2) { display:none; }
