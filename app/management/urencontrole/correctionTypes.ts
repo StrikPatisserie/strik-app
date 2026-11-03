@@ -16,10 +16,11 @@ export type CorrectionRecord = {
   id: string; actorId: string; reference: CorrectionReference; before: ReviewShift; after: CorrectionValues;
   originalNetMinutes: number | null; reason: string; mode: CorrectionDraft["mode"]; payload: TamigoShiftUpdate;
   state: CorrectionState; createdAt: string; expiresAt: string; finishedAt: string | null; message: string;
-  rules: ReviewConfig | null;
+  rules: ReviewConfig | null; verification?: ImportVerification;
 };
+export type ImportVerification = {transport:"v2-import";planned:string[];otherActual:string[]};
 // Deliberately no employee, department, activity or comment editing in the UI.
 export type TamigoShiftUpdate = {
-  ShiftId: string; EmployeeId: string; StartTime: string; EndTime: string; BreakCode: string;
+  ShiftId: string; EmployeeId: string; DepartmentId:string; PlanStatusCode:3; StartTime: string; EndTime: string; BreakCode: string | null;
   Comment: string | null; IsAvailable: boolean; IsExchange: boolean; ShiftActivityId: string | null;
 };

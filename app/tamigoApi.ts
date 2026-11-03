@@ -2211,10 +2211,11 @@ export function tamigoHoursWritesEnabled() {
 }
 export async function updateTamigoActualShift(payload: import("./management/urencontrole/correctionTypes").TamigoShiftUpdate): Promise<unknown> {
   if (!tamigoHoursWritesEnabled()) throw new TamigoConfigurationError("Terugschrijven van uren is nog niet ingeschakeld.");
-  const response = await fetch(createTamigoUrl(`/Shifts/${encodeURIComponent(payload.ShiftId)}/`), {
-    method: "PUT",
+  if(payload.PlanStatusCode!==3 || !payload.DepartmentId || !payload.EmployeeId || !payload.ShiftId) throw new TamigoConfigurationError("Alleen een gecontroleerde open werkelijke dienst kan worden geïmporteerd.");
+  const response = await fetch(createTamigoUrl("/v2/Shifts/Import",{validateConfiguredWarnings:"true",runInBackground:"false"}), {
+    method: "POST",
     headers: { Accept: "application/json", "Content-Type": "application/json", "x-tamigo-token": await getTamigoAccessToken() },
-    body: JSON.stringify(payload), cache: "no-store", signal: AbortSignal.timeout(20000),
+    body: JSON.stringify([payload]), cache: "no-store", signal: AbortSignal.timeout(20000),
   });
   // No automatic retries: a timed-out request may already have changed Tamigo.
   if (!response.ok) throw new TamigoApiError("Tamigo kon de correctie niet bevestigen.", response.status);

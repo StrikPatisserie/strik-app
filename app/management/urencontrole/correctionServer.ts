@@ -2,17 +2,17 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { getTamigoStatusCode, tamigoHoursWritesEnabled, updateTamigoActualShift } from "../../tamigoApi";
 import { getTamigoHoursDayStatus } from "./reviewServer";
-import { readCorrectionContext, type CorrectionContext } from "./correctionContext";
-import { correctionDraft, correctionReference, correctionValues, CorrectionError, originalNet, overlaps, sameValues, sourceWriteBlockers, updatePayload } from "./correctionRules";
+import { readCorrectionContext, type CorrectionReadReference, type CorrectionContext } from "./correctionContext";
+import { importVerification, surroundingShiftsMatch, importResponseSuccess } from "./importVerification";
+import { correctionDraft, correctionReference, correctionValues, CorrectionError, originalNet, sameValues, sourceWriteBlockers, updatePayload } from "./correctionRules";
 import { buildHoursReview, validateConfig } from "./reviewRules";
 import { localDate } from "./reviewTime";
-import { isRecord } from "./reviewSource";
 import { correctionResult, correctionStore, type CorrectionStore } from "./correctionStorage";
 import type { CorrectionDraft, CorrectionPreview, CorrectionRecord, CorrectionReference, CorrectionResult, TamigoShiftUpdate } from "./correctionTypes";
 import type { DayStatus, ReviewConfig, ReviewShift } from "./reviewTypes";
 
 type Dependencies = {
-  read(reference: CorrectionReference): Promise<CorrectionContext>;
+  read(reference: CorrectionReadReference): Promise<CorrectionContext>;
   day(department: string, date: string): Promise<DayStatus>;
   write(payload: TamigoShiftUpdate): Promise<unknown>;
   store: CorrectionStore; enabled(): boolean; now(): number; id(): string;
@@ -21,10 +21,10 @@ function datesFor(start: string, end: string) {
   return [localDate(Date.parse(start)), localDate(Date.parse(end) - 1)];
 }
 function protectedFieldsMatch(before: ReviewShift, observed: ReviewShift) {
-  return before.id === observed.id && before.employeeId === observed.employeeId && before.departmentId === observed.departmentId && before.kind === observed.kind && before.activity === observed.activity && before.planStatusCode === observed.planStatusCode && before.comments.every((comment, index) => (comment || "") === (observed.comments[index] || ""));
+  return before.employeeId === observed.employeeId && before.departmentId === observed.departmentId && before.kind === observed.kind && before.activity === observed.activity && before.planStatusCode === observed.planStatusCode && before.employeeApproved===observed.employeeApproved && before.comments.every((comment, index) => (comment || "") === (observed.comments[index] || ""));
 }
 function verifiedResult(record: CorrectionRecord, current: CorrectionContext) {
-  return sameValues(current.before, record.after) && protectedFieldsMatch(record.before, current.before)
+  return surroundingShiftsMatch(record,current) && sameValues(current.before, record.after) && protectedFieldsMatch(record.before, current.before)
     && current.raw.IsAvailable === record.payload.IsAvailable && current.raw.IsExchange === record.payload.IsExchange
     && (current.raw.ShiftActivityId ?? null) === record.payload.ShiftActivityId && !sourceWriteBlockers(current.raw, current.before).length;
 }
@@ -39,13 +39,15 @@ export function createCorrectionService(deps: Dependencies) {
       if (!expected || expected.start !== after.start || expected.end !== after.end || Math.abs(expected.breakMinutes - after.breakMinutes) > .001) throw new CorrectionError("Het voorstel past niet meer bij het actuele rooster en de regels. Haal het overzicht opnieuw op of kies Zelf aanpassen.", 409);
     }
     const blockers = sourceWriteBlockers(context.raw, before);
+    if(before.start.ms!==null&&before.end.ms!==null&&!(Date.parse(after.start)<before.end.ms&&Date.parse(after.end)>before.start.ms))blockers.push("De nieuwe tijden overlappen de oorspronkelijke dienst niet. De import zou een extra dienst kunnen maken; pas dit rechtstreeks in Tamigo aan.");
     if (!deps.enabled()) blockers.push("Terugschrijven is nog niet ingeschakeld. De koppeling moet eerst worden vrijgegeven.");
     if (!context.complete) blockers.push("Niet alle afdelingen zijn volledig gelezen. Overlap kan niet betrouwbaar worden uitgesloten.");
     if (Date.parse(after.end) > deps.now()) blockers.push("Werkelijke uren in de toekomst kunnen niet worden opgeslagen.");
     if (before.start.iso === after.start && before.end.iso === after.end && (before.breakCode || "") === after.breakCode && before.breakMinutes === after.breakMinutes) blockers.push("Er is niets veranderd aan deze dienst.");
-    const others = context.dataset.actual.filter(shift => shift.id !== before.id && shift.employeeId === before.employeeId && shift.kind === "work");
+    const others = context.dataset.actual.filter(shift => shift.id !== before.id && shift.employeeId === before.employeeId);
     if (others.some(shift => shift.start.ms === null || shift.end.ms === null || shift.issues.length || shift.alternatives?.length)) blockers.push("Een andere dienst van deze medewerker is onvolledig; controleer eerst de mogelijke overlap.");
-    if (others.some(shift => overlaps(after, before, shift))) blockers.push("De correctie overlapt met een andere werkelijke dienst van deze medewerker.");
+    if(before.start.ms!==null&&before.end.ms!==null&&others.some(shift=>shift.start.ms!==null&&shift.end.ms!==null&&before.start.ms! < shift.end.ms && before.end.ms! > shift.start.ms))blockers.push("De oorspronkelijke dienst overlapt al met een andere werkelijke registratie; controleer deze eerst in Tamigo.");
+    if (others.some(shift => shift.id!==before.id&&shift.start.ms!==null&&shift.end.ms!==null&&Date.parse(after.start)<shift.end.ms&&Date.parse(after.end)>shift.start.ms)) blockers.push("De correctie overlapt met een andere werkelijke dienst van deze medewerker.");
     const dates = new Set([...datesFor(after.start, after.end), ...(before.start.iso && before.end.iso ? datesFor(before.start.iso, before.end.iso) : [before.date])]);
     const statuses = await Promise.all([...dates].map(async date => ({ date, status: await deps.day(reference.departmentId, date) })));
     for (const { date, status } of statuses) if (status.state !== "open") blockers.push(status.state === "closed" ? `De urenstaat van ${date} is gesloten. Er worden geen dagen heropend.` : `Dagstatus ${date} niet bevestigd${status.httpStatus ? ` (HTTP ${status.httpStatus})` : ""}. ${status.message}`);
@@ -73,7 +75,7 @@ export function createCorrectionService(deps: Dependencies) {
     const net = originalNet(context.before);
     const preview: CorrectionPreview = { id: null, expiresAt: null, before: context.before, after, originalNetMinutes: net, deltaMinutes: net === null ? null : after.netMinutes - net, reason: draft.reason, mode: draft.mode, blockers, warnings: ["Alleen deze werkelijke dienst wordt aangepast. Planning en oorspronkelijke opmerkingen blijven behouden; er worden geen dagen gesloten."] };
     if (!blockers.length) {
-      const record: CorrectionRecord = { id: deps.id(), actorId, reference, before: structuredClone(context.before), after, originalNetMinutes: net, reason: draft.reason, mode: draft.mode, rules: config, payload: updatePayload(context.raw, context.before, after), state: "prepared", createdAt: new Date(deps.now()).toISOString(), expiresAt: new Date(deps.now() + 10 * 60000).toISOString(), finishedAt: null, message: "" };
+      const record: CorrectionRecord = { id: deps.id(), actorId, reference, before: structuredClone(context.before), after, originalNetMinutes: net, reason: draft.reason, mode: draft.mode, rules: config, verification:importVerification(context), payload: updatePayload(context.raw, context.before, after), state: "prepared", createdAt: new Date(deps.now()).toISOString(), expiresAt: new Date(deps.now() + 10 * 60000).toISOString(), finishedAt: null, message: "" };
       await deps.store.create(record);
       preview.id = record.id; preview.expiresAt = record.expiresAt;
     }
@@ -91,7 +93,9 @@ export function createCorrectionService(deps: Dependencies) {
     const record = claimed.record;
     try {
       const draft: CorrectionDraft = { ...record.after, reason: record.reason, mode: record.mode };
+      if(record.payload.PlanStatusCode!==3||record.payload.DepartmentId!==record.before.departmentId||record.verification?.transport!=="v2-import")throw new CorrectionError("Dit voorstel hoort bij de oude schrijfmethode. Bereid de correctie opnieuw voor.",409);
       const checked = await assess(record.reference, draft, record.rules);
+      if(!surroundingShiftsMatch(record,checked.context))throw new CorrectionError("De planning of een andere dienst van deze medewerker is intussen gewijzigd. Controleer het voorstel opnieuw.",409);
       if (checked.blockers.length) throw new CorrectionError(checked.blockers.join(" "), 409);
       const payload = updatePayload(checked.context.raw, checked.context.before, checked.after);
       if (Object.keys(payload).length !== Object.keys(record.payload).length || !Object.entries(payload).every(([key, value]) => record.payload[key as keyof TamigoShiftUpdate] === value)) throw new CorrectionError("De dienstvelden zijn gewijzigd. Controleer het voorstel opnieuw.", 409);
@@ -106,8 +110,8 @@ export function createCorrectionService(deps: Dependencies) {
       const status = getTamigoStatusCode(error);
       if ([401, 403].includes(status)) {
         try {
-          const current = await deps.read({ ...record.reference, revision: "verify" });
-          if (current.before.sourceRevision === record.reference.revision) {
+          const current = await deps.read({ ...record.reference, revision: "verify",verifyEmployeeId:record.before.employeeId || undefined,verifyAfter:record.after });
+          if (current.before.sourceRevision === record.reference.revision && surroundingShiftsMatch(record,current)) {
             const message = status === 401
               ? "Tamigo heeft de correctie afgewezen (HTTP 401). De bron is ongewijzigd teruggelezen. Controleer de sessie, aanvraaginhoud en veldformaten; deze fout bewijst geen ontbrekende schrijfrechten."
               : "Tamigo geeft geen toestemming voor deze correctie (HTTP 403). De bron is ongewijzigd teruggelezen. Controleer de schrijfrechten van de koppeling.";
@@ -122,13 +126,13 @@ export function createCorrectionService(deps: Dependencies) {
     }
     // Read back independently, even after HTTP 200; never report unverified success.
     try {
-      const current = await deps.read({ ...record.reference, revision: "verify" });
-      if (isRecord(response) && response.Success === true && verifiedResult(record, current)) {
+      const current = await deps.read({ ...record.reference, revision: "verify",verifyEmployeeId:record.before.employeeId || undefined,verifyAfter:record.after });
+      if (importResponseSuccess(response) === true && verifiedResult(record, current)) {
         const message = "Correctie opgeslagen en teruggelezen in Tamigo. De oorspronkelijke registratie is bewaard in de historie.";
         await deps.store.finish(id, "applied", message, current.before);
         return { id, state: "applied", message };
       }
-      if (isRecord(response) && response.Success === false && current.before.sourceRevision === record.reference.revision) {
+      if (importResponseSuccess(response) === false && current.before.sourceRevision === record.reference.revision && surroundingShiftsMatch(record,current)) {
         const message = "Tamigo heeft deze correctie afgewezen; de bronregistratie is ongewijzigd teruggelezen. Er wordt niets opnieuw verzonden.";
         await deps.store.finish(id, "rejected", message, current.before);
         return { id, state: "rejected", message };
@@ -143,7 +147,7 @@ export function createCorrectionService(deps: Dependencies) {
     if (!record) throw new CorrectionError("Correctie niet gevonden.", 404);
     if (!["applying", "unknown"].includes(record.state)) return correctionResult(record);
     try {
-      const current = await deps.read({ ...record.reference, revision: "verify" });
+      const current = await deps.read({ ...record.reference, revision: "verify",verifyEmployeeId:record.before.employeeId || undefined,verifyAfter:record.after });
       if (verifiedResult(record, current)) {
         const message = "De correctie is alsnog exact teruggelezen in Tamigo. Er is niets opnieuw verzonden.";
         await deps.store.finish(id, "applied", message, current.before, record.state, actorId);

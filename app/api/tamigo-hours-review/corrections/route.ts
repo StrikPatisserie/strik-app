@@ -13,11 +13,12 @@ const headers = { "Cache-Control": "private, no-store", Pragma: "no-cache" };
 function json(value: unknown, status = 200) { return Response.json(value, { status, headers }); }
 export async function GET(request: Request) {
   if (!hasFullAccess(await getCurrentProfile())) return json({ message: "Alleen bevoegde beheerders kunnen correcties inzien." }, 403);
-  const shift = new URL(request.url).searchParams.get("shift");
+  const params=new URL(request.url).searchParams,shift=params.get("shift"),employee=params.get("employee");
+  if(employee&&!validUuid(employee))return json({message:"Ongeldige medewerker."},400);
   if (!validUuid(shift)) return json({ message: "Ongeldige dienst." }, 400);
   const [codes, ready, history] = await Promise.allSettled([
     fetchTamigoHoursReviewSource({ kind: "breakcodes" }).then(breakOptions),
-    correctionStore.ready(), correctionStore.history(shift.toLowerCase()),
+    correctionStore.ready(), correctionStore.history(shift.toLowerCase(),employee?.toLowerCase()||undefined),
   ]);
   return json({ enabled: tamigoHoursWritesEnabled(), storageReady: ready.status === "fulfilled" && ready.value,
     options: codes.status === "fulfilled" ? codes.value : null,

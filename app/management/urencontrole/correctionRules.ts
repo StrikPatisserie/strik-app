@@ -61,14 +61,15 @@ export function sourceWriteBlockers(raw: Record<string, unknown>, shift: ReviewS
   if (shift.kind !== "work") blockers.push("Verlof, ziekte en andere activiteiten worden hier niet aangepast.");
   if (shift.planStatusCode !== "3") blockers.push("Alleen een werkelijke, niet gesloten dienst kan worden aangepast.");
   if (shift.issues.length || shift.alternatives?.length) blockers.push("De bron is onduidelijk. Controleer deze dienst in Tamigo.");
+  if(shift.start.ms===null||shift.end.ms===null)blockers.push("Begin en einde van de oorspronkelijke dienst zijn nodig om een extra importdienst uit te sluiten.");
   if (shift.breakMinutes === null) blockers.push("De oorspronkelijke pauzeduur is onbekend.");
   const gross = durationMinutes(shift.start, shift.end);
   if (gross !== null && gross > 1440) blockers.push("De oorspronkelijke dienst is langer dan 24 uur. Controleer deze datumafwijking rechtstreeks in Tamigo.");
   if (gross !== null && shift.breakMinutes !== null && shift.reportedNetMinutes !== null && Math.abs(gross - shift.breakMinutes - shift.reportedNetMinutes) > 1) blockers.push("Het oorspronkelijke netto urentotaal wijkt af van tijden en pauze. Controleer deze dienst in Tamigo.");
-  const activitySupported = raw.ShiftActivityId === null || (typeof raw.ShiftActivityId === "string" && UUID.test(raw.ShiftActivityId));
+  const activitySupported = raw.ShiftActivityId == null || (typeof raw.ShiftActivityId === "string" && UUID.test(raw.ShiftActivityId));
   const comment = raw.Comments ?? raw.Comment;
   if (typeof raw.IsAvailable !== "boolean" || typeof raw.IsExchange !== "boolean" || !activitySupported || (comment !== null && comment !== undefined && typeof comment !== "string")) blockers.push("Niet alle vereiste dienstvelden zijn beschikbaar voor veilig terugschrijven.");
-  // The documented update DTO cannot faithfully represent these extra fields.
+  // This deliberately limited import mapping does not copy these extra fields.
   if (populated(raw.Comments2) || (populated(raw.AbsencePercentage) && Number(raw.AbsencePercentage) !== 0) || ["ShiftActivities", "Tasks", "CompetencyId", "SkillExternalId", "BreakStartTime", "ActivityId", "GroupId"].some(key => populated(raw[key]))) blockers.push("Deze dienst heeft extra opmerkingen, activiteiten of details die de gedocumenteerde schrijffunctie niet volledig ondersteunt. Pas deze aan in Tamigo.");
   return blockers;
 }
@@ -81,7 +82,7 @@ export function updatePayload(raw: Record<string, unknown>, shift: ReviewShift, 
     const suffix = `${sign}${String(Math.floor(Math.abs(offset) / 60)).padStart(2, "0")}${String(Math.abs(offset) % 60).padStart(2, "0")}`;
     return `/Date(${ms}${suffix})/`;
   }
-  return { ShiftId: shift.id, EmployeeId: shift.employeeId!, StartTime: microsoftDate(after.start), EndTime: microsoftDate(after.end), BreakCode: after.breakCode, Comment: shift.comments[0], IsAvailable: raw.IsAvailable as boolean, IsExchange: raw.IsExchange as boolean, ShiftActivityId: typeof raw.ShiftActivityId === "string" ? raw.ShiftActivityId : null };
+  return { ShiftId: shift.id, EmployeeId: shift.employeeId!, DepartmentId:shift.departmentId!, PlanStatusCode:3, StartTime: microsoftDate(after.start), EndTime: microsoftDate(after.end), BreakCode: after.breakCode || null, Comment: shift.comments[0], IsAvailable: raw.IsAvailable as boolean, IsExchange: raw.IsExchange as boolean, ShiftActivityId: typeof raw.ShiftActivityId === "string" ? raw.ShiftActivityId : null };
 }
 export function originalNet(shift: ReviewShift) {
   const gross = durationMinutes(shift.start, shift.end);

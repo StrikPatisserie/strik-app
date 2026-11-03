@@ -2,12 +2,13 @@ import "server-only";
 import { fetchTamigoHoursReviewSource } from "../../tamigoApi";
 import { dedupeReviewShifts, normalizeReviewShift, sourceRecords, isRecord } from "./reviewSource";
 import { correctionRevision } from "./correctionRevision";
-import { breakOptions, CorrectionError } from "./correctionRules";
+import { sameValues, breakOptions, CorrectionError } from "./correctionRules";
 import { REVIEW_VERSION, type ReviewDataset, type ReviewShift } from "./reviewTypes";
-import type { BreakOption, CorrectionReference } from "./correctionTypes";
+import type { CorrectionValues, BreakOption, CorrectionReference } from "./correctionTypes";
 
 export type CorrectionContext = { raw: Record<string, unknown>; before: ReviewShift; dataset: ReviewDataset; options: BreakOption[]; complete: boolean };
-export async function readCorrectionContext(reference: CorrectionReference): Promise<CorrectionContext> {
+export type CorrectionReadReference=CorrectionReference&{verifyEmployeeId?:string;verifyAfter?:CorrectionValues};
+export async function readCorrectionContext(reference: CorrectionReadReference): Promise<CorrectionContext> {
   const [withParents, withoutParents, breaks] = await Promise.allSettled([
     fetchTamigoHoursReviewSource({ kind: "departments", includeParents: true }),
     fetchTamigoHoursReviewSource({ kind: "departments", includeParents: false }),
@@ -45,15 +46,17 @@ export async function readCorrectionContext(reference: CorrectionReference): Pro
         if (code === "1" || code === "2") dataset.planned.push(shift);
         else {
           dataset.actual.push(shift);
-          if (shift.id.toLowerCase() === reference.shiftId && shift.departmentId?.toLowerCase() === reference.departmentId) matchingRaw.push(raw);
+          matchingRaw.push(raw);
         }
       }
       dataset.coverage.planned.push(department.id); dataset.coverage.actual.push(department.id);
     }
   }
   dataset.planned = dedupeReviewShifts(dataset.planned); dataset.actual = dedupeReviewShifts(dataset.actual);
-  const before = dataset.actual.find(row => row.id.toLowerCase() === reference.shiftId && row.departmentId?.toLowerCase() === reference.departmentId);
-  if (!before || !matchingRaw.length) throw new CorrectionError("De oorspronkelijke werkelijke dienst is niet teruggevonden. Er is niets gewijzigd.", 409);
+  const candidates=reference.revision==="verify"&&reference.verifyEmployeeId&&reference.verifyAfter?dataset.actual.filter(row=>row.employeeId===reference.verifyEmployeeId&&row.departmentId?.toLowerCase()===reference.departmentId&&row.planStatusCode==="3"&&sameValues(row,reference.verifyAfter!)):[];
+  const before = candidates.length===1?candidates[0]:dataset.actual.find(row => row.id.toLowerCase() === reference.shiftId && row.departmentId?.toLowerCase() === reference.departmentId);
+  const originals=before?matchingRaw.filter(raw=>String(raw.ShiftId).toLowerCase()===before.id.toLowerCase()&&String(raw.DepartmentId).toLowerCase()===reference.departmentId):[];
+  if (!before || !originals.length) throw new CorrectionError("De oorspronkelijke werkelijke dienst is niet teruggevonden. Er is niets gewijzigd.", 409);
   if (before.date !== reference.date || (reference.revision !== "verify" && before.sourceRevision !== reference.revision) || before.alternatives?.length) throw new CorrectionError("De dienst is inmiddels gewijzigd of heeft tegenstrijdige bronversies. Haal het overzicht opnieuw op.", 409);
-  return { raw: matchingRaw[0], before, dataset, options, complete };
+  return { raw: originals[0], before, dataset, options, complete };
 }

@@ -37,7 +37,7 @@ export default function CorrectionEditor({ row, config, reviewMonth, demo, onCha
         let data: Access;
         if (demo) data = { enabled: false, storageReady: true, options: DEMO_OPTIONS, history: [], historyAvailable: true, message: "Fictieve correctie oefenen; er worden geen API-verzoeken uitgevoerd." };
         else {
-          const response = await fetch(`/api/tamigo-hours-review/corrections?shift=${encodeURIComponent(actual!.id)}`, { cache: "no-store", signal: controller.signal });
+          const response = await fetch(`/api/tamigo-hours-review/corrections?shift=${encodeURIComponent(actual!.id)}${actual!.employeeId?`&employee=${encodeURIComponent(actual!.employeeId)}`:""}`, { cache: "no-store", signal: controller.signal });
           data = await response.json();
           if (!response.ok) throw new Error(data.message || "Pauzecodes en historie konden niet worden geladen.");
         }
@@ -95,7 +95,7 @@ export default function CorrectionEditor({ row, config, reviewMonth, demo, onCha
     if (demo) return;
     setBusy(true);
     try {
-      const response = await fetch(`/api/tamigo-hours-review/corrections?shift=${encodeURIComponent(actual!.id)}`, { cache: "no-store" });
+      const response = await fetch(`/api/tamigo-hours-review/corrections?shift=${encodeURIComponent(actual!.id)}${actual!.employeeId?`&employee=${encodeURIComponent(actual!.employeeId)}`:""}`, { cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error();
       setAccess(data);
@@ -139,9 +139,9 @@ export default function CorrectionEditor({ row, config, reviewMonth, demo, onCha
       </form>}
       {error ? <p role="alert" className={styles.error}>{error}</p> : null}
       {preview && !result ? <div className={styles.actions}><button type="button" disabled={busy || uncertain} onClick={() => setPreview(null)}>Terug naar aanpassen</button><button type="button" className={styles.primary} disabled={busy || uncertain || !preview.id || preview.blockers.length > 0} onClick={commit}>{busy ? "Opslaan en teruglezen…" : demo ? "Fictieve correctie bevestigen" : "Bevestigen en opslaan in Tamigo"}</button></div> : null}
-      <details className={styles.correctionHistory} open={uncertain || result?.state === "unknown"}><summary>Correctiehistorie · oorspronkelijke registraties</summary>
+      <details className={styles.correctionHistory} open={uncertain || result?.state === "unknown"}><summary>Correctiehistorie · oorspronkelijke registraties van deze medewerker</summary>
         {!demo ? <button type="button" disabled={busy} onClick={refreshHistory}>Historie vernieuwen</button> : null}
-        {access?.historyAvailable ? access.history.length ? access.history.map(item => <article key={item.id}><strong>{HISTORY_LABELS[item.state]}</strong><p>{formatStamp(item.createdAt)} · {item.reason}</p><p>Was: {formatStamp(item.before.start.iso)} — {formatStamp(item.before.end.iso)} · {formatMinutes(item.before.breakMinutes)} pauze</p><p>Correctie: {formatStamp(item.after.start)} — {formatStamp(item.after.end)} · {formatMinutes(item.after.breakMinutes)} pauze · {formatMinutes(item.after.netMinutes)} netto</p><p>{item.message}</p>{["unknown", "applying"].includes(item.state) ? <button type="button" disabled={busy} onClick={() => verifyResult(item.id)}>Uitkomst opnieuw controleren · niets verzenden</button> : null}</article>) : <p>Er zijn nog geen correcties opgeslagen voor deze dienst.</p> : <p>De correctiehistorie is niet beschikbaar. Dit betekent niet dat er geen eerdere correcties zijn.</p>}
+        {access?.historyAvailable ? access.history.length ? access.history.map(item => <article key={item.id}><strong>{HISTORY_LABELS[item.state]}</strong><p>{formatStamp(item.createdAt)} · {item.reason}</p><p>Was: {formatStamp(item.before.start.iso)} — {formatStamp(item.before.end.iso)} · {formatMinutes(item.before.breakMinutes)} pauze</p><p>Correctie: {formatStamp(item.after.start)} — {formatStamp(item.after.end)} · {formatMinutes(item.after.breakMinutes)} pauze · {formatMinutes(item.after.netMinutes)} netto</p><p>{item.message}</p>{["unknown", "applying"].includes(item.state) ? <button type="button" disabled={busy} onClick={() => verifyResult(item.id)}>Uitkomst opnieuw controleren · niets verzenden</button> : null}</article>) : <p>Er zijn nog geen correcties opgeslagen voor deze medewerker.</p> : <p>De correctiehistorie is niet beschikbaar. Dit betekent niet dat er geen eerdere correcties zijn.</p>}
       </details>
       {busy ? <p role="status" className={styles.muted}>Even wachten op de controle. Er wordt nooit automatisch opnieuw verzonden.</p> : null}
     </dialog> : null}
