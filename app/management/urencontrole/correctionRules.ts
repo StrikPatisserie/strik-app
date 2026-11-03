@@ -82,7 +82,7 @@ export function updatePayload(raw: Record<string, unknown>, shift: ReviewShift, 
     const suffix = `${sign}${String(Math.floor(Math.abs(offset) / 60)).padStart(2, "0")}${String(Math.abs(offset) % 60).padStart(2, "0")}`;
     return `/Date(${ms}${suffix})/`;
   }
-  return { ShiftId: shift.id, EmployeeId: shift.employeeId!, DepartmentId:shift.departmentId!, PlanStatusCode:3, StartTime: microsoftDate(after.start), EndTime: microsoftDate(after.end), BreakCode: after.breakCode || null, Comment: shift.comments[0], IsAvailable: raw.IsAvailable as boolean, IsExchange: raw.IsExchange as boolean, ShiftActivityId: typeof raw.ShiftActivityId === "string" ? raw.ShiftActivityId : null };
+  return { ShiftId: shift.id, EmployeeId: shift.employeeId!, DepartmentId:shift.departmentId!, PlanStatusCode:3, PlanStatus:"actual", StartTime: microsoftDate(after.start), EndTime: microsoftDate(after.end), BreakCode: after.breakCode || null, Comment: shift.comments[0], IsAvailable: raw.IsAvailable as boolean, IsExchange: raw.IsExchange as boolean, ShiftActivityId: typeof raw.ShiftActivityId === "string" ? raw.ShiftActivityId : null };
 }
 export function originalNet(shift: ReviewShift) {
   const gross = durationMinutes(shift.start, shift.end);

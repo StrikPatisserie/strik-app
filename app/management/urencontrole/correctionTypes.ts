@@ -21,6 +21,6 @@ export type CorrectionRecord = {
 export type ImportVerification = {transport:"v2-import";planned:string[];otherActual:string[]};
 // Deliberately no employee, department, activity or comment editing in the UI.
 export type TamigoShiftUpdate = {
-  ShiftId: string; EmployeeId: string; DepartmentId:string; PlanStatusCode:3; StartTime: string; EndTime: string; BreakCode: string | null;
+  ShiftId: string; EmployeeId: string; DepartmentId:string; PlanStatusCode:3; PlanStatus:"actual"; StartTime: string; EndTime: string; BreakCode: string | null;
   Comment: string | null; IsAvailable: boolean; IsExchange: boolean; ShiftActivityId: string | null;
 };

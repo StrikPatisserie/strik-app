@@ -39,6 +39,7 @@ export function createCorrectionService(deps: Dependencies) {
       if (!expected || expected.start !== after.start || expected.end !== after.end || Math.abs(expected.breakMinutes - after.breakMinutes) > .001) throw new CorrectionError("Het voorstel past niet meer bij het actuele rooster en de regels. Haal het overzicht opnieuw op of kies Zelf aanpassen.", 409);
     }
     const blockers = sourceWriteBlockers(context.raw, before);
+    if (!after.breakCode) blockers.push("Een dienst zonder pauze kan nu niet via de import worden opgeslagen: Tamigo kan automatisch een pauzecode toekennen. Pas deze dienst rechtstreeks in Tamigo aan.");
     if(before.start.ms!==null&&before.end.ms!==null&&!(Date.parse(after.start)<before.end.ms&&Date.parse(after.end)>before.start.ms))blockers.push("De nieuwe tijden overlappen de oorspronkelijke dienst niet. De import zou een extra dienst kunnen maken; pas dit rechtstreeks in Tamigo aan.");
     if (!deps.enabled()) blockers.push("Terugschrijven is nog niet ingeschakeld. De koppeling moet eerst worden vrijgegeven.");
     if (!context.complete) blockers.push("Niet alle afdelingen zijn volledig gelezen. Overlap kan niet betrouwbaar worden uitgesloten.");
@@ -93,7 +94,7 @@ export function createCorrectionService(deps: Dependencies) {
     const record = claimed.record;
     try {
       const draft: CorrectionDraft = { ...record.after, reason: record.reason, mode: record.mode };
-      if(record.payload.PlanStatusCode!==3||record.payload.DepartmentId!==record.before.departmentId||record.verification?.transport!=="v2-import")throw new CorrectionError("Dit voorstel hoort bij de oude schrijfmethode. Bereid de correctie opnieuw voor.",409);
+      if(record.payload.PlanStatusCode!==3||record.payload.PlanStatus!=="actual"||record.payload.DepartmentId!==record.before.departmentId||record.verification?.transport!=="v2-import")throw new CorrectionError("Dit voorstel hoort bij de oude schrijfmethode. Bereid de correctie opnieuw voor.",409);
       const checked = await assess(record.reference, draft, record.rules);
       if(!surroundingShiftsMatch(record,checked.context))throw new CorrectionError("De planning of een andere dienst van deze medewerker is intussen gewijzigd. Controleer het voorstel opnieuw.",409);
       if (checked.blockers.length) throw new CorrectionError(checked.blockers.join(" "), 409);

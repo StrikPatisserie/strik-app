@@ -185,7 +185,7 @@ test('write adapter is explicitly gated and sends one synchronous v2 import POST
  const api=loader({}, {process:{env},fetch:async(url,options)=>{calls.push({url:String(url),...options});return Response.json([{Success:true}]);}})('app/tamigoApi.ts');
  const payload=rules.updatePayload(rawShift(),normalized(rawShift()),rules.correctionValues(draft(),normalized(rawShift()),options));
  await assert.rejects(()=>api.updateTamigoActualShift(payload));assert.equal(calls.length,0);
- env.TAMIGO_HOURS_WRITE_ENABLED='1';await api.updateTamigoActualShift(payload);assert.equal(calls.length,1);assert.equal(calls[0].method,'POST');const url=new URL(calls[0].url);assert(url.pathname.endsWith('/v2/Shifts/Import'));assert.equal(url.searchParams.get('validateConfiguredWarnings'),'true');assert.equal(url.searchParams.get('runInBackground'),'false');const body=JSON.parse(calls[0].body);assert.equal(body.length,1);assert.equal(body[0].Comment,'  Oorspronkelijke notitie  ');assert.equal(body[0].PlanStatusCode,3);
+ env.TAMIGO_HOURS_WRITE_ENABLED='1';await api.updateTamigoActualShift(payload);assert.equal(calls.length,1);assert.equal(calls[0].method,'POST');const url=new URL(calls[0].url);assert(url.pathname.endsWith('/v2/Shifts/Import'));assert.equal(url.searchParams.get('validateConfiguredWarnings'),'true');assert.equal(url.searchParams.get('runInBackground'),'false');const body=JSON.parse(calls[0].body);assert.equal(body.length,1);assert.equal(body[0].Comment,'  Oorspronkelijke notitie  ');assert.equal(body[0].PlanStatusCode,3);assert.equal(body[0].PlanStatus,'actual');
 });
 test('an uncertain applied request can be reconciled by reading only, with no resend',async()=>{
  const f=fixture({timeoutAfterWrite:true});await f.service.prepare(actor,f.reference,draft(),types.DEFAULT_REVIEW_CONFIG);
@@ -250,7 +250,7 @@ test('v2 import cannot create a detached extra service or replace an ambiguous i
 });
 test('no-break and no-activity use null while import always fixes the employee, department and actual/open status',()=>{
  const raw=rawShift({ShiftActivityId:undefined});const before=normalized(raw),after=rules.correctionValues(draft({start:'2026-10-05T08:00',end:'2026-10-05T10:00',breakCode:''}),before,options),payload=rules.updatePayload(raw,before,after);
- assert.equal(payload.BreakCode,null);assert.equal(payload.ShiftActivityId,null);assert.equal(payload.PlanStatusCode,3);assert.equal(payload.DepartmentId,department);assert.equal(payload.EmployeeId,employee);
+ assert.equal(payload.BreakCode,null);assert.equal(payload.ShiftActivityId,null);assert.equal(payload.PlanStatusCode,3);assert.equal(payload.PlanStatus,'actual');assert.equal(payload.DepartmentId,department);assert.equal(payload.EmployeeId,employee);
 });
 test('changed planning or sibling actual services block the commit before import',async()=>{
  for(const field of ['planned','actual']){
@@ -309,3 +309,13 @@ test('employee history keeps an older uncertain correction visible after the ser
  const history=await adapter.history(employee,employee);assert.equal(history.length,1);assert.equal(history[0].id,intentId);assert(calls.every(filter=>filter.includes('before_snapshot->>employeeId.ilike.')));
  const denied=routeFixture({id:actor,active:true,role:'manager'});assert.equal((await denied.route.GET(new Request('https://example.test/api/tamigo-hours-review/corrections?shift='+shiftId+'&employee=bad-filter'))).status,400);
 });
+
+ test('no-break imports are blocked because Tamigo automatically recalculates breaks',async()=>{
+ const f=fixture();const p=await f.service.prepare(actor,f.reference,draft({breakCode:''}),types.DEFAULT_REVIEW_CONFIG);assert.equal(p.id,null);assert.match(p.blockers.join(' '),/automatisch een pauzecode/);assert.equal(f.attempts.length,0);
+ });
+ test('legacy numeric-only import intent is rejected before transport',async()=>{
+ const f=fixture();await f.service.prepare(actor,f.reference,draft(),types.DEFAULT_REVIEW_CONFIG);delete f.records.get(intentId).payload.PlanStatus;assert.equal((await f.service.commit(actor,intentId,true)).state,'rejected');assert.equal(f.attempts.length,0);
+ });
+ test('an automatically added break never counts as the requested successful correction',async()=>{
+ const f=fixture();await f.service.prepare(actor,f.reference,draft(),types.DEFAULT_REVIEW_CONFIG);const originalWrite=f.deps.write;f.deps.write=async p=>{const response=await originalWrite(p);f.setRaw({BreakCode:'1',BreakCodeHours:.25,ShiftHours:8.75});return response;};assert.equal((await f.service.commit(actor,intentId,true)).state,'unknown');assert.equal(f.attempts.length,1);
+ });

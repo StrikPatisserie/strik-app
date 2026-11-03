@@ -2,6 +2,14 @@
 
 De controlepagina en afgeschermde correctieflow zijn op 23 oktober 2026 gepubliceerd. De productiemigratie voor correctiehistorie is op 28 oktober 2026 uitgevoerd en gecontroleerd. De eerste door Feline gekozen en bevestigde praktijkcorrectie is afgewezen met HTTP 401; de oorspronkelijke dienst is daarna ongewijzigd teruggelezen. Terugschrijven is daarom opnieuw uitgeschakeld. Nieuwe diensten, verlof, ziekte, salarisexports en het openen/sluiten van dagen vallen buiten deze functie.
 
+## Praktijkproef 3 november — statusnaam en automatische pauze
+
+De v2-import wijst een aanvraag met alleen `PlanStatusCode:3` expliciet af: `Plan Status is invalid. Valid plan status: actual / planned`. De adapter stuurt daarom daarnaast `PlanStatus:"actual"` en blokkeert oude voorstellen zonder dit veld. De afgewezen aanvragen zijn ongewijzigd teruggelezen.
+
+Een vervolgens geaccepteerde, door Feline gekozen starttijdcorrectie behield dienst-ID, medewerker, afdeling, eindtijd, planning en overige diensten, maar Tamigo kende bij `BreakCode:null` automatisch code 2 / 30 minuten pauze toe. De onafhankelijke hercontrole markeerde dit terecht als onzeker, omdat nul pauze was gevraagd. Er is niet opnieuw geïmporteerd na die afwijking. De historische blokkering blijft staan totdat de exact bedoelde waarden onafhankelijk zijn bevestigd.
+
+Nieuwe importvoorstellen zonder expliciete pauzecode worden geblokkeerd: de import bewaart nul pauze niet bewezen. Deze diensten moeten voorlopig rechtstreeks in Tamigo worden aangepast. De algemene productieschakelaar blijft uit; de proef gaf alleen de ene gekozen dienst vrij.
+
 ## Huidige versie — v2-import, 3 november 2026
 
 De correctie-adapter is omgebouwd naar één synchrone `POST /v2/Shifts/Import?validateConfiguredWarnings=true&runInBackground=false` met een array van één dienst. Payload: bestaande dienst-, medewerker- en afdelings-ID, `PlanStatusCode:3`, begin/einde met Amsterdam-offset, pauzecode of null, oorspronkelijke opmerking, IsAvailable/IsExchange en ShiftActivityId of null. Er worden geen DELETE-calls, imports met status 1/2/5 of blinde herhaalacties toegevoegd. Het oude voorstel uit de PUT-periode kan niet via de import worden bevestigd.
