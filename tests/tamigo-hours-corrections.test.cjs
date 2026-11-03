@@ -319,3 +319,11 @@ test('employee history keeps an older uncertain correction visible after the ser
  test('an automatically added break never counts as the requested successful correction',async()=>{
  const f=fixture();await f.service.prepare(actor,f.reference,draft(),types.DEFAULT_REVIEW_CONFIG);const originalWrite=f.deps.write;f.deps.write=async p=>{const response=await originalWrite(p);f.setRaw({BreakCode:'1',BreakCodeHours:.25,ShiftHours:8.75});return response;};assert.equal((await f.service.commit(actor,intentId,true)).state,'unknown');assert.equal(f.attempts.length,1);
  });
+
+test('overview audit is date-scoped, omits internal payloads and reports incomplete history explicitly',async()=>{
+ const f=fixture();await f.service.prepare(actor,f.reference,draft(),types.DEFAULT_REVIEW_CONFIG);const r=f.records.get(intentId),calls=[];
+ const row={id:r.id,shift_id:r.reference.shiftId,reference:r.reference,before_snapshot:r.before,after_values:r.after,observed_snapshot:{id:'replacement'},state:'applied',created_at:r.createdAt,finished_at:null,reason:r.reason,result_message:'Verified',update_payload:{secret:'not-for-summary'}};
+ let count=1,error=null;const adapter=loader({'../../lib/supabase/admin':{createAdminClient:()=>({from:()=>{const q={};for(const method of ['select','in','gte','lt','order'])q[method]=(...args)=>{calls.push([method,...args]);return q;};q.limit=async()=>({data:[row],error,count});return q;}})}})(base+'correctionStorage.ts');
+ const result=await adapter.correctionAuditOverview('2026-09-26','2026-10-26');assert.equal(result.available,true);assert.equal(result.corrections[0].observedShiftId,'replacement');assert(!('update_payload' in result.corrections[0]));assert(!('comments' in result.corrections[0].before));assert(calls.some(c=>c[0]==='gte'&&c[1]==='reference->>date'&&c[2]==='2026-09-26'));assert(calls.some(c=>c[0]==='lt'&&c[2]==='2026-10-26'));
+ count=1001;assert.equal((await adapter.correctionAuditOverview('2026-09-26','2026-10-26')).available,false);count=1;error={message:'failure'};assert.equal((await adapter.correctionAuditOverview('2026-09-26','2026-10-26')).available,false);
+});

@@ -296,7 +296,7 @@ test('unconfirmed approval is not an access failure; absent day probes do not im
 const access=load('app/lib/auth/access.ts');
 function apiRoute(profile){
  const calls=[];
- const route=loader({'@/app/lib/auth/session':{getCurrentProfile:async()=>profile},'@/app/lib/auth/access':access,'@/app/management/urencontrole/reviewServer':{getTamigoHoursReviewMonth:async month=>{calls.push(month);return {month,actual:[]};},getTamigoHoursDayStatus:async()=>{calls.push('status');return {state:'unknown'};}}})('app/api/tamigo-hours-review/route.ts');
+ const route=loader({'@/app/lib/auth/session':{getCurrentProfile:async()=>profile},'@/app/lib/auth/access':access,'@/app/management/urencontrole/correctionStorage':{correctionAuditOverview:async()=>({available:true,corrections:[]})},'@/app/management/urencontrole/reviewServer':{getTamigoHoursReviewMonth:async month=>{calls.push(month);return {month,actual:[]};},getTamigoHoursDayStatus:async()=>{calls.push('status');return {state:'unknown'};}}})('app/api/tamigo-hours-review/route.ts');
  return {route,calls};
 }
 test('API denies non-managers before reading any employee data and exposes no write methods',async()=>{
@@ -470,4 +470,19 @@ test('numbered payroll labels follow the ending month and retain exact year boun
  assert.equal(time.reviewPeriodLabel('2026-01','payroll'),'Loonperiode 1 · 26 dec 2025 t/m 25 jan 2026');
  assert.equal(time.reviewPeriodLabel('2026-02','payroll'),'Loonperiode 2 · 26 jan t/m 25 feb 2026');
  assert.equal(time.reviewPeriodLabel('2028-02','calendar'),'Kalendermaand · 1 feb t/m 29 feb 2028');
+});
+
+test('correction badges require a confirmed matching service and never mix sibling services',()=>{
+ const audit=load(base+'correctionAudit.ts'),actual=shift('a1','08:00','17:00',{ShiftHours:8.5,BreakCodeHours:.5});
+ const record={id:'c1',shiftId:'a1',observedShiftId:'a1',employeeId:actual.employeeId,departmentId:actual.departmentId,date:actual.date,state:'applied',createdAt:'2026-10-06T08:00:00Z',finishedAt:null,reason:'Test',message:'',before:{start:instant('07:45'),end:actual.end.iso,breakMinutes:15,netMinutes:540},after:{start:actual.start.iso,end:actual.end.iso,breakMinutes:30,netMinutes:510}};
+ const overview={available:true,corrections:[record]};assert.equal(audit.correctionAuditForShift(actual,overview).status,'corrected');assert.equal(audit.correctionAuditForShift({...actual,id:'sibling'},overview),null);assert.equal(audit.correctionAuditForShift(actual,{available:false,corrections:[record]}),null);
+ assert.equal(audit.correctionAuditForShift({...actual,breakMinutes:15},overview).status,'changed');assert.equal(audit.correctionAuditForShift(actual,{available:true,corrections:[{...record,state:'unknown'}]}).status,'uncertain');
+ assert.equal(audit.correctionAuditForShift({...actual,employeeId:'someone-else'},overview),null);
+});
+test('original registration survives a chain of replacement service IDs and newer uncertainty is retained',()=>{
+ const audit=load(base+'correctionAudit.ts'),actual=shift('latest','08:00','17:00',{ShiftHours:8.5,BreakCodeHours:.5});const values={start:actual.start.iso,end:actual.end.iso,breakMinutes:30,netMinutes:510};
+ const baseRecord={employeeId:actual.employeeId,departmentId:actual.departmentId,date:actual.date,state:'applied',finishedAt:null,reason:'Test',message:'',before:values,after:values};
+ const first={...baseRecord,id:'c1',shiftId:'original',observedShiftId:'middle',createdAt:'2026-10-06T08:00:00Z',before:{...values,start:instant('07:15')}};const last={...baseRecord,id:'c2',shiftId:'middle',observedShiftId:'latest',createdAt:'2026-10-06T09:00:00Z'};
+ const result=audit.correctionAuditForShift(actual,{available:true,corrections:[last,first]});assert.equal(result.records.length,2);assert.equal(result.original.start,instant('07:15'));assert.equal(result.status,'corrected');
+ assert.equal(audit.correctionAuditForShift(actual,{available:true,corrections:[first,last,{...last,id:'c3',state:'unknown',createdAt:'2026-10-06T10:00:00Z'}]}).status,'uncertain');
 });

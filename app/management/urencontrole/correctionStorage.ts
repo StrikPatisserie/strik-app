@@ -53,3 +53,15 @@ export const correctionStore: CorrectionStore = {
 export function correctionResult(record: CorrectionRecord): CorrectionResult {
   return { id: record.id, state: record.state, message: record.message || (record.state === "applying" ? "Deze correctie wordt verwerkt. Verstuur deze niet opnieuw." : "Deze correctie is al verwerkt; er is niets opnieuw verzonden.") };
 }
+
+// Minimal read projection for the management overview; no payloads or rule snapshots.
+export async function correctionAuditOverview(from:string,to:string):Promise<import("./correctionAudit").CorrectionAuditOverview>{
+ try{
+  const {data,error,count}=await db().from("tamigo_hours_corrections").select("id,shift_id,state,reference,before_snapshot,after_values,observed_snapshot,created_at,finished_at,reason,result_message",{count:"exact"}).in("state",["applied","applying","unknown"]).gte("reference->>date",from).lt("reference->>date",to).order("created_at",{ascending:true}).limit(1000);
+  if(error||!data||count===null||count>data.length)return {available:false,corrections:[]};
+  return {available:true,corrections:data.map(row=>{
+   const before=row.before_snapshot as import("./reviewTypes").ReviewShift,after=row.after_values as import("./correctionTypes").CorrectionValues,reference=row.reference as import("./correctionTypes").CorrectionReference,observed=row.observed_snapshot as import("./reviewTypes").ReviewShift|null;
+   return {id:row.id,shiftId:row.shift_id,observedShiftId:observed?.id||null,employeeId:before.employeeId!,departmentId:before.departmentId!,date:reference.date,state:row.state as "applied"|"applying"|"unknown",createdAt:row.created_at,finishedAt:row.finished_at,reason:row.reason,message:row.result_message||"",before:{start:before.start.iso,end:before.end.iso,breakMinutes:before.breakMinutes,netMinutes:before.reportedNetMinutes},after:{start:after.start,end:after.end,breakMinutes:after.breakMinutes,netMinutes:after.netMinutes}};
+  })};
+ }catch{return {available:false,corrections:[]};}
+}

@@ -1,7 +1,8 @@
 import { getCurrentProfile } from "@/app/lib/auth/session";
 import { hasFullAccess } from "@/app/lib/auth/access";
 import { getTamigoHoursDayStatus, getTamigoHoursReviewMonth } from "@/app/management/urencontrole/reviewServer";
-import { monthBounds } from "@/app/management/urencontrole/reviewTime";
+import { correctionAuditOverview } from "@/app/management/urencontrole/correctionStorage";
+import { monthBounds,reviewPeriodBounds } from "@/app/management/urencontrole/reviewTime";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,7 +21,9 @@ export async function GET(request: Request) {
     const period = url.searchParams.get("period") || "calendar";
     if (period !== "calendar" && period !== "payroll") return Response.json({ message: "Kies kalendermaand of loonperiode." }, { status: 400, headers });
     try { monthBounds(month); } catch { return Response.json({ message: "Kies een geldige maand." }, { status: 400, headers }); }
-    return Response.json(await getTamigoHoursReviewMonth(month, period), { headers });
+    const bounds=reviewPeriodBounds(month,period);
+    const [dataset,correctionAudit]=await Promise.all([getTamigoHoursReviewMonth(month,period),correctionAuditOverview(bounds.from,bounds.to)]);
+    return Response.json({...dataset,correctionAudit}, { headers });
   } catch {
     return Response.json({ message: "De urencontrole kon niet geladen worden. Er zijn geen registraties gewijzigd." }, { status: 502, headers });
   }

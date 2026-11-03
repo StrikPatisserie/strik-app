@@ -75,6 +75,7 @@ export type SourceCheck = {
   message: string; httpStatus?: number; rows?: number; fields?: string[];
 };
 export type ReviewDataset = {
+  correctionAudit?: import("./correctionAudit").CorrectionAuditOverview;
   month: string;
   period?: "calendar" | "payroll";
   generatedAt: string;
