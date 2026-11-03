@@ -137,3 +137,25 @@ if (getenv('STRIK_MAIL_PREVIEW_DIR')) {
     file_put_contents($dir . '/klantbevestiging.html', strik_sinterklaas_letter_customer_mail_html($preview));
 }
 echo "All Sinterklaas mail tests passed; no real emails sent.\n";
+
+// Provenance is stored alongside the order; browser-supplied history cannot replace it.
+$options = array();
+$input = fixture();
+$input['_actor'] = array('id' => 'staff-1', 'name' => 'Medewerker Een');
+$input['createdBy'] = array('id' => 'spoof', 'name' => 'Verzonnen');
+$input['audit'] = array(array('action' => 'fake'));
+$created = strik_sinterklaas_letter_save(new TestLetterRequest($input), false);
+check($created['createdBy']['id'] === 'staff-1', 'Creator must come from server actor.');
+check(count($created['audit']) === 1 && $created['audit'][0]['action'] === 'created', 'Creation is recorded once.');
+$edited = strik_sinterklaas_letter_save(new TestLetterRequest(array('id' => $created['id'], 'notes' => 'Gewijzigde notitie', '_actor' => array('id' => 'staff-2', 'name' => 'Medewerker Twee'), 'createdBy' => null, 'audit' => array())), false);
+check($edited['createdBy']['id'] === 'staff-1', 'Editor cannot overwrite creator.');
+check(count($edited['audit']) === 2 && $edited['audit'][1]['actor']['id'] === 'staff-2', 'Editor and full history persist.');
+$change = array_values(array_filter($edited['audit'][1]['changes'], function($change) { return $change['field'] === 'notes'; }));
+check(count($change) === 1 && $change[0]['after'] === 'Gewijzigde notitie', 'Changed values are preserved.');
+$again = strik_sinterklaas_letter_save(new TestLetterRequest(array('id' => $created['id'], '_actor' => array('id' => 'staff-2', 'name' => 'Medewerker Twee'))), false);
+check(count($again['audit']) === 2, 'No-op save does not add a change.');
+$legacy = fixture(); $legacy['id'] = 'legacy-order';
+$old = strik_sinterklaas_letter_save(new TestLetterRequest($legacy), false);
+$old_edit = strik_sinterklaas_letter_save(new TestLetterRequest(array('id' => 'legacy-order', 'notes' => 'Nieuw', '_actor' => array('id' => 'staff-2', 'name' => 'Medewerker Twee'))), false);
+check($old_edit['createdBy'] === null, 'Unknown historical creator is not invented.');
+echo "PASS order creator, edit history, unchanged saves and legacy provenance\n";

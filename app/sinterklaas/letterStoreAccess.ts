@@ -24,13 +24,12 @@ export function letterShopName(id: string) {
 export function getLetterStoreScope(profile: UserProfile | null | undefined): LetterStoreScope {
   if (!profile?.active) return [];
   const email = profile.email?.trim().toLowerCase();
-  const ipad = LETTER_ORDER_SHOPS.find((shop) => email === `strikpatisserie${shop.id}@gmail.com`);
+  const ipad = LETTER_ORDER_SHOPS.find((shop) => email === `strikpatisserie${shop.id}@gmail.com` || (shop.id === "heyendaal" && email === "strikpatisserieheyendaalseweg@gmail.com"));
   if (ipad) return [ipad.id];
   if (hasFullAccess(profile)) return null;
   if (profile.role?.trim().toLowerCase() !== "winkel") return null;
-  const store = normalizeLetterShop(profile.store);
-  if (store) return [store];
-  return LETTER_ORDER_SHOPS.filter((shop) => profile.permissions?.[`stores.${shop.id}`]).map((shop) => shop.id);
+  // Personal staff accounts work across stores; only shared iPads have a fixed scope.
+  return LETTER_ORDER_SHOPS.map((shop) => shop.id);
 }
 
 export function letterOrderShop(order: { pickupLocation?: unknown; shop?: unknown }) {

@@ -15,7 +15,11 @@ export type ChocolateLetterLine = {
   specialRequests?: ("glutenvrij" | "notenvrij" | "vegan" | "lactosevrij")[];
 };
 
+export type LetterOrderActor = { id: string; name: string };
+export type LetterOrderAudit = { actor: LetterOrderActor; at: string; action: "created" | "updated"; changes: { field: string; before: unknown; after: unknown }[] };
 export type ChocolateLetterOrder = {
+  createdBy?: LetterOrderActor | null;
+  audit?: LetterOrderAudit[];
   id: string;
   year: string;
   code: string;

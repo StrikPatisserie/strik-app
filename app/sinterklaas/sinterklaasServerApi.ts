@@ -198,6 +198,15 @@ export async function proxySinterklaasMutation(
         }
       }
     }
+    if (endpoint === "sinterklaas-letter-orders" && method !== "DELETE") {
+      let params: Record<string, unknown>;
+      try { params = JSON.parse(body); } catch { return jsonError("Geen geldige bestelling ontvangen."); }
+      if (!params || typeof params !== "object" || Array.isArray(params)) return jsonError("Geen geldige bestelling ontvangen.");
+      // Identity always comes from the authenticated server session, never browser input.
+      delete params.createdBy; delete params.updatedBy; delete params.audit;
+      params._actor = { id: profile.id, name: profile.full_name?.trim() || profile.email };
+      body = JSON.stringify(params);
+    }
     const response = await fetch(getWordPressUrl(endpoint, mutationRequestUrl), {
       method,
       headers: {

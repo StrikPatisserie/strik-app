@@ -44,7 +44,7 @@ test('each store iPad is fixed to its own location, including older generic stor
     assert.equal(JSON.stringify(stores.getLetterStoreScope({...profile(id), role: 'admin'})), JSON.stringify([id]));
   }
   assert.equal(stores.getLetterStoreScope({active: true, role: 'admin', email: 'beheer@example.invalid'}), null);
-  assert.equal(stores.getLetterStoreScope({...profile(), email: 'staff@example.invalid', store: 'winkel'}).length, 0);
+  assert.equal(stores.getLetterStoreScope({...profile(), email: 'staff@example.invalid', store: 'winkel'}).length, 4);
   assert.equal(stores.normalizeLetterShop('Strik Brakkenstein · Heyendaalseweg 217'), 'heyendaal');
   assert.equal(stores.normalizeLetterShop('Strik Nijmegen-Oost · Daalseweg 254'), 'daalseweg');
 });
@@ -99,7 +99,7 @@ test('management keeps all-store access and invalid/mismatched IDs fail without 
     assert.equal(api.calls.filter(call => call.method !== 'GET').length, 0);
   }
   const unassigned = server({...profile(), email: 'staff@example.invalid', store: 'winkel'});
-  assert.equal((await unassigned.mutate('POST', row('new', 'Heyendaal'))).status, 403);
+  assert.equal((await unassigned.mutate('POST', row('new', 'Heyendaal'))).status, 200);
 });
 
 test('cross-store warning is present only when the destination will become inaccessible', () => {
@@ -119,3 +119,15 @@ test('duplicate or extra query IDs cannot change the store-checked mutation targ
   assert.equal(sent.url.searchParams.has('id[]'), false);
   assert.equal(sent.url.searchParams.has('shop'), false);
 });
+
+test('personal shop staff see and edit every store, never online orders', async()=>{
+ const api=server({...profile(),id:'staff-id',full_name:'Test Medewerker',email:'personal@example.invalid',store:null});
+ assert.equal((await (await api.get()).json()).orders.map(row=>row.id).join(','),'own,foreign');
+ assert.equal((await api.mutate('PATCH',{id:'foreign',notes:'Gewijzigd',_actor:{id:'fake',name:'Fake'},createdBy:{id:'fake'},audit:[]})).status,200);
+ const body=JSON.parse(api.calls.find(c=>c.method==='PATCH').body);
+ assert.equal(body._actor.id,'staff-id');assert.equal(body._actor.name,'Test Medewerker');
+ assert.equal('createdBy' in body,false);assert.equal('audit' in body,false);
+ assert.equal((await api.mutate('PATCH',{id:'online',notes:'verboden'})).status,403);
+});
+
+test('Heyendaalseweg shared iPad keeps its store scope under its real account name',()=>assert.equal(JSON.stringify(stores.getLetterStoreScope({...profile(),email:'strikpatisserieheyendaalseweg@gmail.com',store:null})),JSON.stringify(['heyendaal'])));

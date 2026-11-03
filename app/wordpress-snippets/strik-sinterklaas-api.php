@@ -906,6 +906,23 @@ function strik_sinterklaas_letter_save($request, $send_emails = true) {
         return new WP_Error('strik_sinterklaas_invalid_letter_order', 'Vul minimaal klantnaam en letters in.', array('status' => 400));
     }
 
+    // Preserve stored provenance, ignoring any creator/history supplied by a client.
+    $order['createdBy'] = isset($existing['createdBy']) ? $existing['createdBy'] : null;
+    $order['audit'] = isset($existing['audit']) && is_array($existing['audit']) ? $existing['audit'] : array();
+    $actor_input = isset($params['_actor']) && is_array($params['_actor']) ? $params['_actor'] : array();
+    $actor = array('id' => strik_sinterklaas_text(isset($actor_input['id']) ? $actor_input['id'] : '', 120), 'name' => strik_sinterklaas_text(isset($actor_input['name']) ? $actor_input['name'] : '', 180));
+    $fields = array('customerName', 'customerEmail', 'phone', 'shop', 'pickupDate', 'pickupLocation', 'status', 'notes', 'lines', 'giftWrap', 'paidAmountCents', 'totalCents', 'productionDone', 'pickedUp');
+    $changes = array();
+    foreach ($fields as $field) {
+        $before = isset($existing[$field]) ? $existing[$field] : null;
+        $after = isset($order[$field]) ? $order[$field] : null;
+        if (!empty($existing) && $before !== $after) $changes[] = array('field' => $field, 'before' => $before, 'after' => $after);
+    }
+    if ($actor['id'] !== '' && $actor['name'] !== '' && (empty($existing) || !empty($changes))) {
+        if (empty($existing)) $order['createdBy'] = $actor;
+        $order['audit'][] = array('actor' => $actor, 'at' => $order['updatedAt'], 'action' => empty($existing) ? 'created' : 'updated', 'changes' => $changes);
+    }
+
     $email_changed = !empty($existing) && isset($existing['customerEmail']) && $existing['customerEmail'] !== $order['customerEmail'];
     $details_changed = !empty($existing) && (
         $email_changed

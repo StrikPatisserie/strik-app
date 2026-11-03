@@ -22,6 +22,7 @@ import B2BLetterLineBadges from "../B2BLetterLineBadges";
 import { isFullyPaid, openAmountCents, paidAmountCents } from "../letterPayments";
 import StoreLetterShopForm from "./StoreLetterShopForm";
 import LetterOrderCard from "./LetterOrderCard";
+import LetterOrderHistory from "./LetterOrderHistory";
 import { LetterOrdersColumns, LetterOrdersHeader } from "./LetterOrdersLayout";
 import listStyles from "./LetterOrders.module.css";
 import { LETTER_ORDER_SHOPS, canViewStoreLetterOrder, letterOrderShop, letterShopName, type LetterStoreScope } from "../letterStoreAccess";
@@ -520,6 +521,7 @@ function OrderRow({
           {isDone && <p className={listStyles.muted}>Productie klaar: {doneAtLabel || "datum onbekend"}</p>}
         </div>
       </div>
+      <LetterOrderHistory order={order} />
       <div className={listStyles.detailActions}>
         {order.status !== "geannuleerd" && <button type="button" className={isPickedUp ? listStyles.button : listStyles.primary} disabled={updatingId === order.id} onClick={() => onTogglePickedUp(order)}>{updatingId === order.id ? "Bezig…" : isPickedUp ? "Ophalen terugdraaien" : openAmount === 0 ? "Meegegeven" : "Open bedrag afrekenen & meegeven"}</button>}
         <button type="button" className={`${listStyles.quiet} ${listStyles.danger}`} disabled={updatingId === `${order.id}-delete`} onClick={() => onDelete(order)}>{updatingId === `${order.id}-delete` ? "Bezig…" : "Bestelling verwijderen"}</button>
@@ -618,6 +620,7 @@ function OrderRow({
               Ophaalherinnering niet verstuurd: {order.customerReminderError}
             </p>
           )}
+          <LetterOrderHistory order={order} />
           {extraLines.length > 0 && (
             <details className="mt-1">
               <summary className="cursor-pointer text-xs font-black text-[#24551d]">
@@ -1512,7 +1515,7 @@ export default function SinterklaasLettersClient({
       <div className={listStyles.meta}><span>Bestellingen <b>{visibleOrders.length}</b></span><span>Letters <b>{visibleOrders.reduce((total, order) => total + totalPieces(order), 0)}</b></span><span>Nog af te rekenen <b>{formatMoney(outstanding)}</b></span></div>
       <div className={listStyles.tools}>
         <input className={listStyles.search} aria-label="Zoek winkelbestellingen" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Zoek klant, ordernummer of letter…" />
-        {storeScope?.length === 1 ? <span className={listStyles.scope}>Afhaalwinkel: <b>{letterShopName(storeScope[0])}</b></span> : <select aria-label="Filter op afhaalwinkel" value={selectedShop} onChange={(event) => setSelectedShop(event.target.value)}><option value="">{storeScope === null ? "Alle winkels" : "Mijn winkels"}</option>{LETTER_ORDER_SHOPS.filter((shop) => storeScope === null || storeScope.includes(shop.id)).map((shop) => <option key={shop.id} value={shop.id}>{shop.name}</option>)}</select>}
+        {storeScope?.length === 1 ? <span className={listStyles.scope}>Afhaalwinkel: <b>{letterShopName(storeScope[0])}</b></span> : <select aria-label="Filter op afhaalwinkel" value={selectedShop} onChange={(event) => setSelectedShop(event.target.value)}><option value="">{storeScope === null || storeScope.length === LETTER_ORDER_SHOPS.length ? "Alle winkels" : "Mijn winkels"}</option>{LETTER_ORDER_SHOPS.filter((shop) => storeScope === null || storeScope.includes(shop.id)).map((shop) => <option key={shop.id} value={shop.id}>{shop.name}</option>)}</select>}
         <input className={listStyles.year} aria-label="Jaar winkelbestellingen" inputMode="numeric" value={year} onChange={(event) => setYear(event.target.value)} />
         <button type="button" className={listStyles.button} onClick={() => void loadOrders(year, search)}>↻ Ververs</button>
       </div>

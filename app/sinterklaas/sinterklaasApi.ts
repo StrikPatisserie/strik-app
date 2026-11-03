@@ -125,6 +125,11 @@ export function normalizeLetterOrder(value: unknown): ChocolateLetterOrder | nul
     customerConfirmationError: textFrom(value.customerConfirmationError),
     customerReminderSentForDate: textFrom(value.customerReminderSentForDate),
     customerReminderError: textFrom(value.customerReminderError),
+    createdBy: isRecord(value.createdBy) && textFrom(value.createdBy.id) ? {id: textFrom(value.createdBy.id), name: textFrom(value.createdBy.name)} : null,
+    audit: Array.isArray(value.audit) ? value.audit.flatMap(entry => {
+      if (!isRecord(entry) || !isRecord(entry.actor) || !textFrom(entry.actor.id) || !textFrom(entry.at) || !["created", "updated"].includes(textFrom(entry.action))) return [];
+      return [{actor: {id: textFrom(entry.actor.id), name: textFrom(entry.actor.name)}, at: textFrom(entry.at), action: entry.action === "created" ? "created" as const : "updated" as const, changes: Array.isArray(entry.changes) ? entry.changes.flatMap(change => isRecord(change) && textFrom(change.field) ? [{field: textFrom(change.field), before: change.before, after: change.after}] : []) : []}];
+    }) : [],
     createdAt: textFrom(value.createdAt),
     updatedAt: textFrom(value.updatedAt),
   };
