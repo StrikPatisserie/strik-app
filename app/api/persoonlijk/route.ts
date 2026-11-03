@@ -11,6 +11,7 @@ export async function GET(request:Request) {
   if(search)query=query.ilike("search_text",`%${search.replace(/[\\%_]/g,"\\$&")}%`);
   if(notebook)query=query.eq("notebook",notebook);
   if(url.searchParams.get("view")==="pinned")query=query.eq("pinned",true);
+  if(url.searchParams.get("view")==="todo")query=query.ilike("notebook","to%do%");
   if(url.searchParams.get("view")==="tasks")query=query.gt("open_tasks",0).ilike("notebook","to%do%");
   const [result,books]=await Promise.all([query.order("pinned",{ascending:false}).order("updated_at",{ascending:false}).order("id").range(offset,offset+49),db.rpc("personal_notebook_names")]);
   if(result.error||books.error)return Response.json({message:"Je persoonlijke opslag is nog niet bereikbaar. Er is niets gewijzigd."},{status:503,headers:personalHeaders});

@@ -6,8 +6,10 @@ import TaskAttachmentPreview,{AttachmentIcon} from "./TaskAttachmentPreview";
 import s from "./personal.module.css";
 function Paperclip(){return <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m21 11-9 9a6 6 0 0 1-8.5-8.5l10-10a4 4 0 0 1 5.7 5.7l-10 10a2 2 0 0 1-2.8-2.8L16 5"/></svg>;}
 function Pencil(){return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14v6Z"/></svg>;}
-export default function TaskOrganizer({body,disabled,onChange,attachments=[],onUpload,onResolve}:{body:string;disabled:boolean;attachments?:PersonalAttachment[];onUpload?:(index:number,file:File)=>Promise<void>;onResolve?:(index:number)=>Promise<boolean|undefined>;onChange:(body:string)=>Promise<boolean|undefined>}){
+export default function TaskOrganizer({body,disabled,onChange,attachments=[],onUpload,onResolve,onDraftChange}:{body:string;disabled:boolean;onDraftChange?:(busy:boolean)=>void;attachments?:PersonalAttachment[];onUpload?:(index:number,file:File)=>Promise<void>;onResolve?:(index:number)=>Promise<boolean|undefined>;onChange:(body:string)=>Promise<boolean|undefined>}){
  const [text,setText]=useState(""),[parent,setParent]=useState<number>(),[editingTask,setEditingTask]=useState<number>(),[error,setError]=useState(""),[category,setCategory]=useState(""),[newCategory,setNewCategory]=useState(""),[addingCategory,setAddingCategory]=useState(false);
+ useEffect(()=>{onDraftChange?.(!!text.trim()||parent!==undefined||editingTask!==undefined||addingCategory||!!newCategory.trim());},[text,parent,editingTask,addingCategory,newCategory,onDraftChange]);
+ useEffect(()=>()=>onDraftChange?.(false),[onDraftChange]);
  const taskId=useId();
  const [preview,setPreview]=useState<PersonalAttachment|null>(null);
  const [newPriority,setNewPriority]=useState<TaskPriority>("normal");

@@ -172,3 +172,7 @@ test('cleanup only deletes own task files and reports files blocked by storage',
  const sql=fs.readFileSync('app/supabase/migrations/20261030112316_personal_task_file_cleanup.sql','utf8');
  assert(sql.includes("split_part(name,'/',2)='tasks'"));assert(sql.includes('not exists(select 1 from public.personal_notes'));assert(sql.includes('private.is_personal_workspace_owner()'));
 });
+
+test('compact todo list remains owner-scoped and includes completed and empty todo notes',async()=>{
+ const ctx=context([input()]),response=await routes(ctx.value).GET(new Request('https://app.example.invalid/api/persoonlijk?view=todo'));assert.equal(response.status,200);assert(ctx.calls.some(c=>c[0]==='eq'&&c[1]==='owner_id'&&c[2]===owner));assert(ctx.calls.some(c=>c[0]==='ilike'&&c[1]==='notebook'&&c[2]==='to%do%'));assert(!ctx.calls.some(c=>c[0]==='gt'&&c[1]==='open_tasks'));assert.equal(access.canAccessPath({...profile,personal_workspace:false},'/persoonlijk/mini'),false);
+});

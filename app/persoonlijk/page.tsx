@@ -4,4 +4,4 @@ import { canAccessPersonalNotes } from "../lib/auth/access";
 import PersonalWorkspace from "./PersonalWorkspace";
 export const dynamic="force-dynamic";
 export const metadata={title:"Mijn to-do’s · Strik",robots:{index:false,follow:false}};
-export default async function PersonalPage(){const profile=await requireCurrentProfile();if(!canAccessPersonalNotes(profile))notFound();return <PersonalWorkspace ownerId={profile.id}/>;}
+export default async function PersonalPage(){const profile=await requireCurrentProfile();if(!canAccessPersonalNotes(profile))notFound();return <PersonalWorkspace key={profile.id} ownerId={profile.id}/>;}

@@ -42,6 +42,7 @@ export default function AppChrome({
     pathname === "/bruidstaarten/agenda/voorbeeld/bevestiging" ||
     pathname === "/bruidstaarten/voorbeeld";
   const isWelcomeArea = pathname === "/";
+  if (pathname === "/persoonlijk/mini") return <>{children}</>;
 
   if (isAuthArea || isPrintArea || isPublicCampaign || isProductionPreview || isProductionWorkspace) {
     return <>{!isAuthArea && !isPrintArea && pathname !== "/menu-preview" && <WeddingAppointmentMonitor key={profile?.id || "guest"} profile={profile} />}{children}</>;
