@@ -1,3 +1,4 @@
+import { loadReadyProductionRecipients } from "../productie/productionReadiness.server";
 import { createClient } from "@supabase/supabase-js";
 import { requireAdminProfile } from "@/app/lib/auth/session";
 import { requireSupabasePublicConfig, requireSupabaseServiceRoleKey } from "@/app/lib/supabase/config";
@@ -17,6 +18,9 @@ export default async function OnlineLetterOrdersPage() {
     .select("id,order_number,customer_name,customer_email,phone,notes,requested_date,pickup_location,gift_wrap,gift_wrap_price_cents,fulfillment_status,created_at,letter_order_items(quantity,logo,logo_storage_path,unit_price_cents,logo_price_cents,letter_products(letter,flavour,size,style))")
     .eq("channel", "ONLINE").order("created_at", { ascending: false }).limit(100);
   const orders = (data || []) as unknown as OnlineLetterOrder[];
+  const seasons=[...new Set(orders.map(order=>order.requested_date.slice(0,4)))];
+  const ready=new Set((await Promise.all(seasons.map(season=>loadReadyProductionRecipients(season).catch(()=>new Set<string>())))).flatMap(set=>[...set]));
+  for(const order of orders)if(order.fulfillment_status==="NEW" && ready.has(`central:${order.id}`))order.fulfillment_status="READY";
   const photoUrls = new Map<string, string>();
   for (const order of orders) {
     for (const item of order.letter_order_items) {

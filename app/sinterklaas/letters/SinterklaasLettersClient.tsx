@@ -352,7 +352,7 @@ function statusClasses(order: ChocolateLetterOrder) {
   if (order.pickedUp || order.status === "opgehaald") {
     return "bg-[#ece7de] text-[#6b645b]";
   }
-  if (order.productionDone || order.status === "klaar") {
+  if (order.productionChecklistReady || order.productionDone || order.status === "klaar") {
     return "bg-[#dcebd8] text-[#24551d]";
   }
   if (order.status === "geannuleerd") {
@@ -364,7 +364,7 @@ function statusClasses(order: ChocolateLetterOrder) {
 
 function statusLabel(order: ChocolateLetterOrder) {
   if (order.pickedUp || order.status === "opgehaald") return "Opgehaald";
-  if (order.productionDone || order.status === "klaar") return "Klaar";
+  if (order.productionChecklistReady || order.productionDone || order.status === "klaar") return "Klaar";
   if (order.status === "geannuleerd") return "Geannuleerd";
 
   return "Besteld";

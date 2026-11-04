@@ -121,7 +121,7 @@
 }
 
 @page letter-distribution {
-  size: A4 landscape;
+  size: A4 portrait;
   margin: 12mm;
   @bottom-left { content: "Strik Patisserie / Verdeellijst chocoladeletters"; font: 8pt Arial, sans-serif; color: #111; }
   @bottom-right { content: "Pagina " counter(page) " / " counter(pages); font: 8pt Arial, sans-serif; color: #111; }
@@ -129,3 +129,29 @@
 @media print {
   .distributionSheet { page: letter-distribution; }
 }
+
+/* Compact portrait distribution, with one unbroken cutout per order and crate. */
+.distributionSheet { width:210mm; min-width:700px; padding:9mm; font-size:8pt; }
+.distributionSheet h2 { font-size:14pt; }
+.distributionSheet .brand { font-size:7pt; }
+.distributionSheet .date { font-size:9pt; }
+.distributionSheet .summary { margin-top:2mm; padding:2mm 0; }
+.distributionSheet .summary dd { font-size:13pt; }
+.distributionSheet .crateGuide { font-size:7pt; margin-top:2mm !important; }
+.distributionOverview { margin:2mm 0 4mm; }
+.distributionOverview .columns th { height:auto; font-size:7pt; padding:1mm; }
+.distributionOverview .row > * { height:auto; padding:1mm; font-size:8pt; }
+.distributionOverview tbody th { padding:1mm; font-size:7.5pt; }
+.overviewExtras { font-size:7pt; font-weight:700; }
+.distributionSheet .crateTitle { font-size:12pt; margin-bottom:3mm; padding:2mm 0; border-width:1pt; }
+.crateTitle span { font-size:9pt; }
+.customerCutout { margin:0 0 4mm; padding:2.5mm; border:.7pt dashed #555; break-inside:avoid; page-break-inside:avoid; }
+.cutoutHeader { display:flex; flex-wrap:wrap; align-items:baseline; gap:1mm 3mm; margin-bottom:1.5mm; font-size:8pt; }
+.cutoutHeader > strong { font-size:10pt; }
+.cutoutHeader small { font-size:7pt; }
+.cutoutLine { display:flex; flex-wrap:wrap; align-items:center; gap:2mm; padding:.7mm 0; font-size:8pt; }
+.cutoutLine .checkBox { width:3mm; height:3mm; border-width:.6pt; border-radius:0; }
+.cutoutLine > strong:first-of-type { min-width:7mm; }
+.inlineLogo { display:inline-flex; align-items:center; gap:1mm; white-space:nowrap; }
+.cutoutNotes { margin-top:1mm !important; font-size:7.5pt; white-space:pre-wrap; }
+@media print { .distributionSheet { width:100%; min-width:0; padding:0; } }

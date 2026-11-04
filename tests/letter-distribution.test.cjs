@@ -38,10 +38,10 @@ test('distribution follows four actual crates and keeps each order, shop and spe
  const crates=elements(sheet,n=>n.type==='section').map(n=>({name:n.props['aria-label'],content:text(n),quantities:elements(n,c=>c.props['data-distribution-quantity']).map(c=>c.props['data-distribution-quantity'])}));
  assert.deepEqual(crates.map(c=>c.name),['Winkelbestellingen','Winkelvoorraad','Online Lettershop','B2B-bestellingen']);
  assert.deepEqual(crates.map(c=>c.quantities),[[3,2],[10],[7],[20,2]]);
- assert.match(crates[0].content,/Jansen.*CL-jansen-1.*Apart inpakken.*Heyendaal.*Jansen.*CL-jansen-2/s);
+ assert.match(crates[0].content,/Jansen.*CL-jansen-1.*Heyendaal.*Apart inpakken.*Jansen.*CL-jansen-2/s);
  assert.match(crates[1].content,/Winkelvoorraad.*Ziekerstraat/);
  assert.match(crates[2].content,/Derksen.*CL-derksen/);
- assert.match(crates[3].content,/Wouwse Plantage/);assert.match(crates[3].content,/LET OP: logo · notenvrij.*Met logo/);
+ assert.match(crates[3].content,/Wouwse Plantage/);assert.match(crates[3].content,/Met logo.*LOGO!.*notenvrij/);
  assert.equal(crates.flatMap(c=>c.quantities).reduce((a,b)=>a+b,0),44);
  assert.equal(JSON.stringify(result),before);
 });
@@ -133,4 +133,42 @@ test('per-line B2B logos override the old general logo agreement, including pack
  const logo=result.rows.find(row=>row.key.endsWith('|logo')),plainRow=result.rows.find(row=>!row.key.endsWith('|logo'));
  assert.equal(logo.orders,10);assert.equal(plainRow.orders,3);
  assert.equal(result.rows.length,2);
+});
+
+ test('all variants of one order share one cutout, while different orders stay separate',()=>{
+ const order={id:'one',code:'CL-1',customerName:'Samen',source:'winkel',shop:'lent',pickupDate:'2026-11-06',status:'besteld',notes:'',lines:[line({letter:'A',quantity:2}),line({letter:'B',quantity:3})]};
+ const result=helper.combineProductionOrders([batch()],[order],[]).batches[0];
+ const cutouts=elements(ProductionDistributionSheet({batch:result}),node=>node.props.className==='customerCutout');
+ assert.equal(cutouts.length,1);assert.deepEqual(elements(cutouts[0],node=>node.props['data-distribution-quantity']).map(node=>node.props['data-distribution-quantity']),[2,3]);
+ const css=fs.readFileSync(base+'ProductionPrint.module.css','utf8');assert.match(css,/@page letter-distribution\s*{\s*size: A4 portrait/);assert.match(css,/customerCutout[^}]*break-inside:avoid/s);
+ });
+ const readiness=load(base+'productionReadiness.ts');
+ test('ready means every unchanged row is fully produced, and undo or revised demand removes readiness',()=>{
+ const a=row({orders:5,recipients:[{id:'wordpress:a',source:'winkel',quantity:2,customerName:'A'},{id:'wordpress:b',source:'winkel',quantity:3,customerName:'B'}]});
+ const b=row({key:'b',orders:1,recipients:[{id:'wordpress:a',source:'winkel',quantity:1,customerName:'A'}]});
+ const current=[{id:batchId,rows:[a,b]}];
+ const saved=rows=>[{batch_id:batchId,rows}];
+ assert.equal(readiness.readyProductionRecipients(current,saved([{...a,produced:5},{...b,produced:0}])).has('wordpress:a'),false);
+ assert.equal(readiness.readyProductionRecipients(current,saved([{...a,produced:5},{...b,produced:0}])).has('wordpress:b'),true);
+ assert.equal(readiness.readyProductionRecipients(current,saved([{...a,produced:5},{...b,produced:1}])).size,2);
+ assert.equal(readiness.readyProductionRecipients(current,saved([{...a,produced:4},{...b,produced:1}])).size,0);
+ assert.equal(readiness.readyProductionRecipients([{id:batchId,rows:[{...a,orders:6},b]}],saved([{...a,produced:5},{...b,produced:1}])).size,0);
+ assert.equal(readiness.readyProductionRecipients(current,[]).size,0);
+ assert.equal(readiness.readyProductionRecipients(current,saved([{...a,produced:5},{...b,produced:1}]),{'wordpress:a':4}).has('wordpress:a'),false,'unallocated items cannot be reported as ready');
+ });
+
+test('readiness enriches only authorized scoped responses, never mutates fulfillment or leaks other recipients',async()=>{
+ const rows=[row({orders:5,recipients:[{id:'wordpress:a',source:'winkel',quantity:5,customerName:'A'}]})];
+ let reads=0;
+ const api=load(base+'productionReadiness.server.ts',{
+  'server-only':{},
+  '@/app/lib/supabase/admin':{createAdminClient:()=>({from:()=>({select:()=>({in:async()=>({data:[{batch_id:batchId,rows:[{...rows[0],produced:5}]}]})})})})},
+  '../../sinterklaasServerApi':{loadProductionWordPressOrders:async()=>({letters:[],b2b:[]})},
+  './productionData.server':{loadCentralProduction:async(season,closed)=>{reads++;assert.equal(closed,true);return{batches:[batch({rows})],assignments:[],orderQuantities:{}};}},
+ });
+ const denied=Response.json({message:'Geen toegang'},{status:403});
+ assert.equal(await api.withProductionReadiness(denied,'2026','wordpress'),denied);assert.equal(reads,0);
+ const response=await api.withProductionReadiness(Response.json({orders:[{id:'a',status:'besteld'},{id:'c',status:'opgehaald'}],total:2}),'2026','wordpress');
+ const data=await response.json();assert.equal(data.orders[0].productionChecklistReady,true);assert.equal(data.orders[0].status,'besteld');assert.equal(data.orders[1].productionChecklistReady,false);assert.equal(data.total,2);assert.equal(response.headers.get('cache-control'),'no-store');
+ assert.equal(JSON.stringify(data).includes('recipients'),false);
 });

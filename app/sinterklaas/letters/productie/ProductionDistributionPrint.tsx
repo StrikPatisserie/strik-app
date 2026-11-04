@@ -16,6 +16,8 @@ const CRATES = [
 const shops:Record<string,string>={ziekerstraat:"Ziekerstraat",heyendaal:"Heyendaal",daalseweg:"Daalseweg",lent:"Lent"};
 const date=(value:string)=>new Intl.DateTimeFormat("nl-NL",{day:"numeric",month:"long",year:"numeric",timeZone:"UTC"}).format(new Date(`${value}T12:00:00Z`));
 
+const logoMark=()=><strong className={styles.inlineLogo}><svg viewBox="0 0 20 20" width="13" height="13" aria-hidden="true"><rect x="2" y="2" width="16" height="16" rx="1" fill="none" stroke="currentColor"/><circle cx="7" cy="7" r="2" fill="none" stroke="currentColor"/><path d="m3 16 5-5 3 3 3-4 4 6" fill="none" stroke="currentColor"/></svg> LOGO!</strong>;
+
 export function ProductionDistributionSheet({batch}:Readonly<{batch:ProductionBatchSeed}>) {
   const rows=batch.rows.filter(row=>row.orders+row.stock>0);
   const total=rows.reduce((sum,row)=>sum+row.orders+row.stock,0);
@@ -35,19 +37,25 @@ export function ProductionDistributionSheet({batch}:Readonly<{batch:ProductionBa
     </header>
     <table className={`${styles.table} ${styles.distributionOverview}`}><thead><tr className={styles.columns}><th>Letter / uitvoering</th>{CRATES.slice(0,4).map(crate=><th key={crate.id}>{crate.number} · {crate.label}</th>)}<th>Totaal</th></tr></thead><tbody>{productionSections(rows).flatMap(section=>section.groups.flatMap(group=>group.rows.map(row=>{
       const variant=productionVariant(row.label),sources=new Map(productionSourceBreakdown(row).map(item=>[item.id,item.quantity]));
-      return <tr key={row.key} className={styles.row}><th scope="row"><strong>{variant.letter} · {group.label} · {section.label}</strong>{variant.extras.length>0&&<div className={styles.distributionSpecial}>LET OP: {variant.extras.join(" · ")}</div>}{(sources.get("onbekend")||0)>0&&<div>Herkomst onbekend: {sources.get("onbekend")}</div>}</th>{CRATES.slice(0,4).map(crate=><td key={crate.id} className={styles.quantity}>{sources.get(crate.id)||"—"}</td>)}<td className={styles.total}>{row.orders+row.stock}</td></tr>;
+      return <tr key={row.key} className={styles.row}><th scope="row"><strong>{variant.letter} · {group.label} · {section.label}</strong>{variant.extras.length>0&&<span className={styles.overviewExtras}> · {variant.extras.map(extra=>extra.toLowerCase()==="logo"?"LOGO!":extra).join(" · ")}</span>}{(sources.get("onbekend")||0)>0&&<div>Herkomst onbekend: {sources.get("onbekend")}</div>}</th>{CRATES.slice(0,4).map(crate=><td key={crate.id} className={styles.quantity}>{sources.get(crate.id)||"—"}</td>)}<td className={styles.total}>{row.orders+row.stock}</td></tr>;
     })))}</tbody></table>
     {crates.map(crate=><section key={crate.id} className={styles.crateSection} aria-label={crate.label}>
       <h2 className={styles.crateTitle}>{crate.number?`Krat ${crate.number} / `:""}{crate.label}<span>{crate.groups.reduce((sum,group)=>sum+group.total,0)} stuks</span></h2>
-      {crate.groups.map(group=><table key={group.row.key} className={`${styles.table} ${styles.distributionTable}`}>
-        <colgroup><col className={styles.distributionDoneCol}/><col className={styles.distributionQuantityCol}/><col/><col className={styles.distributionDestinationCol}/></colgroup>
-        <thead><tr className={styles.groupHeading}><th colSpan={4}><div><h3><strong>{group.variant.letter}</strong> {group.group} · {group.style}</h3><span>{group.total} stuks / {crate.label}</span></div>{group.variant.extras.length>0&&<p className={styles.distributionSpecial}>LET OP: {group.variant.extras.join(" · ")}</p>}</th></tr><tr className={styles.columns}><th>Klaar</th><th>Aantal</th><th>Klant / bestemming</th><th>Vestiging / leverdatum</th></tr></thead>
-        <tbody>{group.recipients.map((item,index)=><tr key={`${item.id}-${index}`} className={styles.row} data-unresolved={item.unresolved||undefined}>
-          <td className={styles.done}><span className={styles.checkBox} aria-label="Verdeling afvinken"/></td><td className={styles.total} data-distribution-quantity={item.quantity}>{item.quantity}×</td>
-          <td className={styles.distributionCustomer}><strong>{item.customerName}</strong>{"code" in item&&item.code&&<small>{item.code}</small>}{item.notes&&<p className={item.unresolved?styles.distributionSpecial:styles.recipientNotes}>{item.unresolved?"CONTROLE: ":"Opmerking: "}{item.notes}</p>}</td>
-          <td className={styles.distributionDestination}>{"shop" in item&&item.shop&&<strong>{shops[item.shop]||item.shop}</strong>}{"date" in item&&item.date&&<span>{date(item.date)}</span>}</td>
-        </tr>)}</tbody>
-      </table>)}
+      {Array.from(crate.groups.reduce((customers,group)=>{
+        group.recipients.forEach(item=>{
+          const identity=JSON.stringify([item.id,"shop" in item?item.shop:"","date" in item?item.date:""]);
+          const customer=customers.get(identity)||{item,lines:[] as {group:typeof group;quantity:number}[]};
+          customer.lines.push({group,quantity:item.quantity});customers.set(identity,customer);
+        });return customers;
+      },new Map<string,{item:(typeof crate.groups)[number]["recipients"][number];lines:{group:(typeof crate.groups)[number];quantity:number}[]}>())).map(([identity,{item,lines}])=><div key={identity} className={styles.customerCutout}>
+        <header className={styles.cutoutHeader}><strong>{item.customerName}</strong>{lines.every(({group})=>group.variant.extras.some(extra=>extra.toLowerCase()==="logo"))&&logoMark()}{"code" in item&&item.code&&!item.code.startsWith("b2b-")&&<small>{item.code}</small>}{"shop" in item&&item.shop&&<span>{shops[item.shop]||item.shop}</span>}{"date" in item&&item.date&&<span>{date(item.date)}</span>}</header>
+        <div className={styles.cutoutLines}>{lines.map(({group,quantity},index)=><div key={`${group.row.key}-${index}`} className={styles.cutoutLine} data-unresolved={item.unresolved||undefined}>
+          <span className={styles.checkBox} aria-label="Verdeling afvinken"/><strong data-distribution-quantity={quantity}>{quantity}×</strong><span><b>{group.variant.letter}</b> · {group.group} · {group.style}</span>
+          {!lines.every(({group})=>group.variant.extras.some(extra=>extra.toLowerCase()==="logo"))&&group.variant.extras.some(extra=>extra.toLowerCase()==="logo")&&logoMark()}
+          {group.variant.extras.filter(extra=>extra.toLowerCase()!=="logo").map(extra=><strong key={extra}>{extra}</strong>)}
+        </div>)}</div>
+        {item.notes&&<p className={styles.cutoutNotes}>{item.unresolved?"CONTROLE: ":""}{item.notes}</p>}
+      </div>)}
     </section>)}
     {!total&&<p className={styles.empty}>Geen letters te verdelen in deze ronde.</p>}
     <footer className={styles.footer}>Controleer bij iedere klant ook foto/logo, allergiewensen en het inpakken. De vakjes op deze lijst zijn voor het verdelen; de productievoortgang blijft apart in de app staan.</footer>
@@ -55,5 +63,5 @@ export function ProductionDistributionSheet({batch}:Readonly<{batch:ProductionBa
 }
 
 export default function ProductionDistributionPrint({batch,onClose}:Readonly<{batch:ProductionBatchSeed;onClose:()=>void}>) {
-  return createPortal(<div className={styles.overlay} role="dialog" aria-modal="true" aria-labelledby="distribution-print-title"><div className={styles.toolbar}><div><h2 id="distribution-print-title">Verdelen / printvoorbeeld</h2><p>A4 liggend · zwart-wit · per krat, letter en klant</p></div><div className={styles.actions}><button type="button" onClick={onClose}>Sluiten</button><button type="button" className={styles.printButton} onClick={()=>window.print()}>Print verdeellijst</button></div></div><div className={styles.paperViewport}><ProductionDistributionSheet batch={batch}/></div></div>,document.body);
+  return createPortal(<div className={styles.overlay} role="dialog" aria-modal="true" aria-labelledby="distribution-print-title"><div className={styles.toolbar}><div><h2 id="distribution-print-title">Verdelen / printvoorbeeld</h2><p>A4 portret · compact · uitknippen per klantbestelling</p></div><div className={styles.actions}><button type="button" onClick={onClose}>Sluiten</button><button type="button" className={styles.printButton} onClick={()=>window.print()}>Print verdeellijst</button></div></div><div className={styles.paperViewport}><ProductionDistributionSheet batch={batch}/></div></div>,document.body);
 }

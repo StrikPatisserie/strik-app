@@ -114,6 +114,7 @@ export function normalizeLetterOrder(value: unknown): ChocolateLetterOrder | nul
     paidAmountCents,
     paidAt: textFrom(value.paidAt),
     totalCents,
+    productionChecklistReady: boolFrom(value.productionChecklistReady),
     productionDone: boolFrom(value.productionDone),
     productionDoneAt: textFrom(value.productionDoneAt),
     productionDoneBy: textFrom(value.productionDoneBy),
@@ -216,6 +217,7 @@ export function normalizeB2BOrder(value: unknown): SinterklaasB2BOrder | null {
     packagingChecked: boolFrom(value.packagingChecked),
     textChecked: boolFrom(value.textChecked),
     textInstructions: textFrom(value.textInstructions),
+    productionChecklistReady: boolFrom(value.productionChecklistReady),
     productionDone: boolFrom(value.productionDone),
     letterProductionDone: value.letterProductionDone === undefined
       ? boolFrom(value.productionDone)

@@ -93,24 +93,25 @@ function storeOrderRow(letter: string, flavour: string, size: string, style: str
 }
 
 
-export async function loadCentralProduction(season: string) {
+export async function loadCentralProduction(season: string, includeClosed = false) {
   const db = createAdminClient() as unknown as SupabaseClient;
   const batchesRequest = (async () => {
-    const extendedResult = await db
+    const extendedQuery = db
       .from("letter_production_batches")
       .select("id,production_start_date,production_date,pickup_from_date,order_deadline_at,status,minimum_lead_days")
       .eq("season", Number(season))
-      .neq("status", "CLOSED")
       .order("production_date");
+
+    const extendedResult = await (includeClosed ? extendedQuery : extendedQuery.neq("status", "CLOSED"));
 
     if (!extendedResult.error) return extendedResult;
 
-    return db
+    const fallbackQuery = db
       .from("letter_production_batches")
       .select("id,production_date,status,minimum_lead_days")
       .eq("season", Number(season))
-      .neq("status", "CLOSED")
       .order("production_date");
+    return includeClosed ? fallbackQuery : fallbackQuery.neq("status", "CLOSED");
   })();
   const [batchesResult, allocationsResult, targetsResult, partsResult, itemsResult, storeOrdersResult, assignmentsResult] = await Promise.all([
     batchesRequest,
@@ -259,6 +260,11 @@ export async function loadCentralProduction(season: string) {
     };
   });
 
+  const orderQuantities:Record<string,number>={};
+  for(const item of items)if(item.letter_orders?.requested_date.startsWith(season)) {
+    const id=`central:${item.letter_orders.id}`;
+    orderQuantities[id]=(orderQuantities[id]||0)+item.quantity;
+  }
   if (loadError) throw new Error(loadError.message);
-  return { batches: batchSeeds, centralUnplannedCount, assignments:(assignmentsResult.data||[]) as B2BProductionAssignment[] };
+  return { batches: batchSeeds, centralUnplannedCount, orderQuantities, assignments:(assignmentsResult.data||[]) as B2BProductionAssignment[] };
 }

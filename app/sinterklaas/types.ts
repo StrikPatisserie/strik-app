@@ -42,6 +42,7 @@ export type ChocolateLetterOrder = {
   paidAmountCents: number;
   paidAt: string;
   totalCents: number;
+  productionChecklistReady?: boolean;
   productionDone: boolean;
   productionDoneAt: string;
   productionDoneBy: string;
@@ -103,6 +104,7 @@ export type SinterklaasB2BOrder = {
   packagingChecked: boolean;
   textChecked: boolean;
   textInstructions: string;
+  productionChecklistReady?: boolean;
   productionDone: boolean;
   letterProductionDone: boolean;
   packed: boolean;

@@ -1682,6 +1682,7 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
         {(warnings.length > 0 || confirmationNeedsAttention) && <p className={styles.warning}>! {confirmationNeedsAttention ? "Controleer interne back-up" : warnings[0]}{warnings.length > 1 ? ` · +${warnings.length - 1}` : ""}</p>}
       </div>
       <div>
+        {order.productionChecklistReady && !order.cancelled && <span className={styles.status} style={{background:"#dcebd8",color:"#24551d"}}>✓ Letters klaar</span>}
         <span className={styles.status} data-status={order.cancelled ? "geannuleerd" : order.status}>{statusLabel}</span>
         {!archived && !order.cancelled && (order.status === "aanvraag" || order.status === "offerte") && <button type="button" className={styles.approveLink} aria-label={`Aanvraag goedkeuren van ${order.customerName}`} onClick={() => onApprove(order)}>Goedkeuren →</button>}
         {order.status === "akkoord" && !order.cancelled && <p className={styles.next} style={order.entered ? { color: "#52725c" } : undefined}>{order.entered ? "✓ Ingevoerd" : "! Nog invoeren"}</p>}

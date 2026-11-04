@@ -1,3 +1,4 @@
+import { withProductionReadiness } from "@/app/sinterklaas/letters/productie/productionReadiness.server";
 import {
   proxySinterklaasGet,
   proxySinterklaasMutation,
@@ -13,7 +14,7 @@ export const dynamic = "force-dynamic";
 const ENDPOINT = "sinterklaas-b2b-orders";
 
 export async function GET(request: Request) {
-  const response = await proxySinterklaasGet(request, ENDPOINT);
+  const response = await withProductionReadiness(await proxySinterklaasGet(request, ENDPOINT), new URL(request.url).searchParams.get("year") || String(new Date().getFullYear()), "b2b");
   if (!response.ok) return response;
   const data = await response.clone().json().catch(() => ({}));
   const year = new URL(request.url).searchParams.get("year") || String(new Date().getFullYear());
