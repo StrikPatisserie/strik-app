@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
-function load(file,imports={},globals={}){const exports={};const code=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;vm.runInNewContext(code,{exports,Intl,Date,Map,Set,...globals,require:name=>imports[name]||{}});return exports;}
+function load(file,imports={},globals={}){const exports={};const code=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;vm.runInNewContext(code,{exports,Intl,Date,Map,Set,URL,...globals,require:name=>imports[name]||{}});return exports;}
 const model=load('app/management/homeDayRevenue.ts');
 const access=load('app/lib/auth/access.ts');
 const plain=value=>JSON.parse(JSON.stringify(value));
@@ -45,15 +45,17 @@ test('only active management accounts can retrieve revenue; other users never tr
 test('storage outage is not presented as a zero-turnover day or seeded data',async()=>{const api=endpoint({active:true,role:'manager'},{status:'seed'}),response=await api.get();assert.equal(response.status,503);assert.equal('shops' in await response.json(),false);});
 
 function clientHarness(){
- let time='2026-11-03T22:59:00Z',cursor=0,mounted=false,status=200,payload=model.latestHomeDayRevenue([record('Lent','2026-11-03',1234.56)],new Date(time));
- const state=[],effects=[],intervals=[],listeners={},requests=[];
+ let time='2026-11-03T22:59:00Z',cursor=0,effectCursor=0,status=200,payload=model.latestHomeDayRevenue([record('Lent','2026-11-03',1234.56)],new Date(time));
+ const state=[],effects=[],effectSlots=[],intervals=[],listeners={},requests=[];
  class Clock extends Date{constructor(...args){super(...(args.length?args:[time]));}static now(){return new Date(time).getTime();}}
  const doc={visibilityState:'visible',addEventListener:(name,fn)=>listeners[name]=fn,removeEventListener:name=>delete listeners[name]};
  const window={setInterval:fn=>{intervals.push(fn);return intervals.length;},clearInterval:()=>{},setTimeout:()=>1,clearTimeout:()=>{},addEventListener:(name,fn)=>listeners[name]=fn,removeEventListener:name=>delete listeners[name]};
- const hooks={useState:initial=>{const i=cursor++;if(!(i in state))state[i]=initial;return[state[i],next=>state[i]=typeof next==='function'?next(state[i]):next];},useEffect:fn=>{if(!mounted)effects.push(fn);}};
+ const hooks={useState:initial=>{const i=cursor++;if(!(i in state))state[i]=initial;return[state[i],next=>state[i]=typeof next==='function'?next(state[i]):next];},useEffect:(fn,deps)=>{const i=effectCursor++,old=effectSlots[i];if(!old||deps.some((dep,j)=>dep!==old.deps[j]))effects.push(()=>{old?.cleanup?.();effectSlots[i]={deps,cleanup:fn()};});}};
  const client=load('app/HomeDayRevenue.tsx',{'react':hooks,'react/jsx-runtime':require('react/jsx-runtime'),'./management/homeDayRevenue':model},{Date:Clock,window,document:doc,AbortController,fetch:async(url,options)=>{requests.push({url,options});return{status,ok:status===200,json:async()=>payload};}});
- function render(){cursor=0;const element=client.default();if(!mounted){mounted=true;effects.splice(0).forEach(fn=>fn());}return element?require('react-dom/server').renderToStaticMarkup(element):'';}
- return{render,requests,advance:value=>{time=value;},status:value=>{status=value;},payload:value=>{payload=value;},hide:value=>{doc.visibilityState=value?'hidden':'visible';},tick:async()=>{intervals.forEach(fn=>fn());await new Promise(resolve=>setImmediate(resolve));},ready:async()=>{render();await new Promise(resolve=>setImmediate(resolve));},focus:async()=>{listeners.focus?.();await new Promise(resolve=>setImmediate(resolve));}};
+ function tree(){cursor=0;effectCursor=0;const element=client.default();effects.splice(0).forEach(fn=>fn());return element;}
+ function render(){const element=tree();return element?require('react-dom/server').renderToStaticMarkup(element):'';}
+ async function click(label){function find(node){if(Array.isArray(node))return node.map(find).find(Boolean);if(!node?.props)return null;if(node.type==='button'&&node.props['aria-label']===label)return node;return find(node.props.children);}const button=find(tree());assert(button);assert.equal(Boolean(button.props.disabled),false);button.props.onClick();render();await new Promise(resolve=>setImmediate(resolve));}
+ return{render,click,requests,advance:value=>{time=value;},status:value=>{status=value;},payload:value=>{payload=value;},hide:value=>{doc.visibilityState=value?'hidden':'visible';},tick:async()=>{intervals.forEach(fn=>fn());await new Promise(resolve=>setImmediate(resolve));},ready:async()=>{render();await new Promise(resolve=>setImmediate(resolve));},focus:async()=>{listeners.focus?.();await new Promise(resolve=>setImmediate(resolve));}};
 }
 test('open home screen polls, switches date at midnight and receives today without a page reload',async()=>{
  const h=clientHarness();await h.ready();assert.match(h.render(),/vandaag · di 3 nov/);assert.match(h.render(),/1\.234,56/);
@@ -114,4 +116,25 @@ test('private history reader normalizes stored daily rows and ignores unsupporte
  assert(result.calls.some(([key,value])=>key==='key'&&value==='management_revenue_daily_history'));
  assert.equal((await read({schema:2,records:[record('Lent','2025-11-04',1000)]})).rows.length,0);
  assert.equal((await read(null,{message:'offline'})).rows.length,0);
+});
+
+test('navigation shows exact historical days, skips days without reports and preserves reference dates',()=>{
+ const records=[record('Lent','2026-11-01',900),record('Lent','2026-11-03',1200),record('Heyendaal','2026-11-04',500),record('Lent','2026-10-25',1000)];
+ const now=new Date('2026-11-04T20:00:00+01:00');
+ const selected=model.latestHomeDayRevenue(records,now,[],'2026-11-01');
+ assert.equal(selected.date,'2026-11-01');assert.equal(selected.shops[3].amount,900);assert.equal(selected.shops[0].amount,null);assert.equal(selected.shops[3].week.index,90);
+ assert.deepEqual(plain(selected.navigation),{previous:'2026-10-25',next:'2026-11-03',latest:'2026-11-04'});
+ const oldest=model.latestHomeDayRevenue(records,now,[],'2026-10-25');assert.equal(oldest.navigation.previous,null);
+ const latest=model.latestHomeDayRevenue(records,now);assert.equal(latest.navigation.next,null);assert.equal(latest.date,'2026-11-04');
+});
+test('subtle controls fetch the selected day and down arrow returns to live latest mode',async()=>{
+ const h=clientHarness(),rows=[record('Lent','2026-11-02',800),record('Lent','2026-11-03',1234.56)],now=new Date('2026-11-04');
+ h.payload(model.latestHomeDayRevenue(rows,now));await h.ready();
+ h.payload(model.latestHomeDayRevenue(rows,now,[],'2026-11-02'));await h.click('Vorige omzetdag');
+ assert.equal(h.requests.at(-1).url,'/api/home-day-revenue?date=2026-11-02');assert.match(h.render(),/800,00/);
+ await h.tick();assert.equal(h.requests.at(-1).url,'/api/home-day-revenue?date=2026-11-02');
+ h.payload(model.latestHomeDayRevenue(rows,now));await h.click('Terug naar vandaag / nieuwste omzet');assert.equal(h.requests.at(-1).url,'/api/home-day-revenue');assert.match(h.render(),/1\.234,56/);
+});
+test('invalid date query is rejected before retrieving private revenue',async()=>{
+ const api=endpoint({active:true,role:'manager'});const response=await api.get(new Request('https://app.strik-patisserie.nl/api/home-day-revenue?date=2026-02-31'));assert.equal(response.status,400);assert.equal(api.reads(),0);
 });

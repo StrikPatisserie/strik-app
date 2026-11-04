@@ -3,7 +3,7 @@ import type { RevenueDayRecord, RevenueShop } from "./revenueData";
 export const HOME_REVENUE_SHOPS: RevenueShop[] = ["Heyendaal", "Ziekerstraat", "Daalseweg", "Lent"];
 export type HomeRevenueComparison = { date: string; amount: number | null; index: number | null };
 export type HomeDayRevenueRow = { shop: RevenueShop; date: string | null; amount: number | null; week?: HomeRevenueComparison; year?: HomeRevenueComparison };
-export type HomeDayRevenue = { date: string | null; shops: HomeDayRevenueRow[] };
+export type HomeDayRevenue = { date: string | null; shops: HomeDayRevenueRow[]; navigation?: { previous: string | null; next: string | null; latest: string | null } };
 
 export function amsterdamDateKey(now: Date): string {
   const parts = new Intl.DateTimeFormat("en-CA", {timeZone:"Europe/Amsterdam",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(now);
@@ -14,7 +14,7 @@ function validDay(date:string) {
 }
 /** Only actual imported daily closings; never weekly Excel seeds or forecasts.
  * Keep dates per shop so a late report cannot silently turn yesterday into today. */
-export function latestHomeDayRevenue(records: RevenueDayRecord[], now = new Date(), history: RevenueDayRecord[] = []): HomeDayRevenue {
+export function latestHomeDayRevenue(records: RevenueDayRecord[], now = new Date(), history: RevenueDayRecord[] = [], selectedDate: string | null = null): HomeDayRevenue {
   const today = amsterdamDateKey(now);
   const latest = new Map<RevenueShop, RevenueDayRecord>();
   const byDay = new Map<string, RevenueDayRecord>();
@@ -34,8 +34,12 @@ export function latestHomeDayRevenue(records: RevenueDayRecord[], now = new Date
     }
     if (!previous || record.date > previous.date || (record.date === previous.date && timestamp(record) >= timestamp(previous))) latest.set(record.shop, record);
   }
+  const dates=[...new Set([...liveByDay.values()].map(record=>record.date))].sort();
+  const latestDate=dates.at(-1)||null;
+  const selected=selectedDate && validDay(selectedDate) && selectedDate<=today ? selectedDate : null;
+  const displayDate=selected || latestDate;
   const shops = HOME_REVENUE_SHOPS.map(shop => {
-    const record = latest.get(shop);
+    const record = selected ? liveByDay.get(`${shop}:${selected}`) : latest.get(shop);
     if (!record) return {shop,date:null,amount:null};
     const compare = (days:number):HomeRevenueComparison => {
       const date = new Date(`${record.date}T12:00:00Z`);
@@ -47,7 +51,7 @@ export function latestHomeDayRevenue(records: RevenueDayRecord[], now = new Date
     };
     return {shop,date:record.date,amount:record.amount,week:compare(7),year:compare(364)};
   });
-  return {date: shops.flatMap(row=>row.date?[row.date]:[]).sort().at(-1) || null,shops};
+  return {date: displayDate,shops,navigation:{previous:dates.filter(date=>displayDate && date<displayDate).at(-1)||null,next:dates.find(date=>displayDate && date>displayDate)||null,latest:latestDate}};
 }
 export function revenueDateLabel(date:string,now:Date):string {
   if (!validDay(date)) return "";

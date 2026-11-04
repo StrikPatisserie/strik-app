@@ -11,6 +11,7 @@ export default function HomeDayRevenue() {
   const [unavailable,setUnavailable]=useState(false);
   const [denied,setDenied]=useState(false);
   const [comparison,setComparison]=useState<"week"|"year">("week");
+  const [selectedDate,setSelectedDate]=useState<string|null>(null);
   useEffect(()=>{
     let active=true,loading=false;
     let controller:AbortController|null=null;
@@ -19,7 +20,7 @@ export default function HomeDayRevenue() {
       loading=true;setNow(new Date());controller=new AbortController();
       const timeout=window.setTimeout(()=>controller?.abort(),15000);
       try {
-        const response=await fetch("/api/home-day-revenue",{cache:"no-store",signal:controller.signal});
+        const response=await fetch(selectedDate?`/api/home-day-revenue?date=${encodeURIComponent(selectedDate)}`:"/api/home-day-revenue",{cache:"no-store",signal:controller.signal});
         if (!active) return;
         if (response.status===401||response.status===403){setDenied(true);setData(null);return;}
         if (!response.ok) throw Error("unavailable");
@@ -33,7 +34,7 @@ export default function HomeDayRevenue() {
     const focus=()=>void refresh();
     window.addEventListener("focus",focus);document.addEventListener("visibilitychange",focus);
     return()=>{active=false;controller?.abort();window.clearInterval(interval);window.removeEventListener("focus",focus);document.removeEventListener("visibilitychange",focus);};
-  },[]);
+  },[selectedDate]);
   if(denied)return null;
   const dateLabel=data?.date&&now?revenueDateLabel(data.date,now):"";
   const hasYearComparison=data?.shops.some(row=>row.year?.amount!=null);
@@ -41,7 +42,10 @@ export default function HomeDayRevenue() {
   return <section aria-label="Dagomzet winkels" className="mt-5 max-w-2xl border-y border-[#60705a]/20 py-3">
     <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[0.62rem] text-[#60705a]">
       <h2 className="font-bold uppercase tracking-[0.12em]">Dagomzet</h2>
-      {dateLabel&&<span>{dateLabel}</span>}
+      {dateLabel&&<span aria-live="polite">{dateLabel}</span>}
+      <nav aria-label="Dagomzet per dag bekijken" className="flex items-center gap-0.5">
+        {([{label:"Vorige omzetdag",path:"m12 4-5 5 5 5",date:data?.navigation?.previous},{label:"Volgende omzetdag",path:"m6 4 5 5-5 5",date:data?.navigation?.next},{label:"Terug naar vandaag / nieuwste omzet",path:"M9 3v12m-5-5 5 5 5-5",date:null}] as const).map((button,index)=><button key={button.label} type="button" title={button.label} aria-label={button.label} disabled={index===2?!selectedDate:!button.date} onClick={()=>setSelectedDate(button.date||null)} className="inline-flex size-7 items-center justify-center rounded-full transition-colors hover:bg-white/50 focus-visible:outline-2 focus-visible:outline-offset-1 disabled:opacity-25 disabled:hover:bg-transparent"><svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={button.path}/></svg></button>)}
+      </nav>
       {hasYearComparison?<label className="ml-auto flex items-center gap-1">Index t.o.v.<select className="bg-transparent text-inherit outline-offset-2" aria-label="Omzetindex vergelijken met" value={comparison} onChange={event=>setComparison(event.target.value as "week"|"year")}><option value="week">vorige week</option><option value="year">vorig jaar</option></select></label>:<span className="ml-auto">Index t.o.v. vorige week</span>}
       {unavailable&&<span role="status">{data?"Bijwerken lukt even niet":"Tijdelijk niet beschikbaar"}</span>}
     </div>
