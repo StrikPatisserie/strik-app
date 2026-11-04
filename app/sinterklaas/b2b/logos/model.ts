@@ -1,7 +1,7 @@
 import type {SinterklaasB2BOrder} from "../../types";
-export type OrderLogo={id:string;name:string;content_type:string;size:number;quantity:number;width_cm:number;height_cm:number;created_at:string;updated_at:string};
+export type OrderLogo={printed_at?:string|null;printed_by_name?:string|null;printed_quantity?:number|null;printed_width_cm?:number|null;printed_height_cm?:number|null;id:string;name:string;content_type:string;size:number;quantity:number;width_cm:number;height_cm:number;created_at:string;updated_at:string};
 export type PrintLogo={id:string;quantity:number;width_cm:number;height_cm:number};
-export const LOGO_COLUMNS="id,name,content_type,size,quantity,width_cm,height_cm,created_at,updated_at";
+export const LOGO_COLUMNS="id,name,content_type,size,quantity,width_cm,height_cm,created_at,updated_at,printed_at,printed_by_name,printed_quantity,printed_width_cm,printed_height_cm";
 export const MAX_LOGO_SIZE=4*1024*1024;
 export function logoOrderRequested(order:Pick<SinterklaasB2BOrder,"logo"|"letterLines"|"orderText">) {
   return Boolean(order.logo?.trim()||order.letterLines?.some(line=>line.withLogo)||/\b(?:eigen logo|met logo|inclusief.*logo)\b/i.test(order.orderText));
@@ -25,4 +25,8 @@ export function logoPrintLayout(items:PrintLogo[]) {
     x+=item.width_cm+.3;rowHeight=Math.max(rowHeight,item.height_cm);
   }
   return cells;
+}
+
+export function logoPrintedFor(logo:OrderLogo) {
+ return Boolean(logo.printed_at&&logo.printed_quantity===logo.quantity&&Number(logo.printed_width_cm)===Number(logo.width_cm)&&Number(logo.printed_height_cm)===Number(logo.height_cm));
 }

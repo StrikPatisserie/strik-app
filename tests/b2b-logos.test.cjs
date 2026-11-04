@@ -42,7 +42,7 @@ test('upload verifies actual bytes, keeps originals and replacement preserves qu
  async function upload(file,replace=false){const form=new FormData();form.set('file',file);if(replace){form.set('id',id);form.set('updatedAt',db.rows[0].updated_at);}return api.POST(new Request('https://app.test/api/b2b-logos?orderId=one&year=2026',{method:'POST',body:form,headers:{origin:'https://app.test'}}));}
  let response=await upload(new File(['<script>bad</script>'],'fake.png',{type:'image/png'}));assert.equal(response.status,400);assert.equal(db.writes,0);
  const bytes=Buffer.from([137,80,78,71,13,10,26,10]);response=await upload(new File([bytes],'logo.png',{type:'image/png'}));assert.equal(response.status,200);assert.equal(db.rows[1].bytes_base64,bytes.toString('base64'));assert.equal(db.rows[1].width_cm,3);
- db.rows[0].quantity=90;db.rows[0].width_cm=2;response=await upload(new File([bytes],'new.png',{type:'image/png'}),true);assert.equal(response.status,200);assert.equal(db.rows[0].quantity,90);assert.equal(db.rows[0].width_cm,2);assert.equal(db.rows[0].name,'new.png');
+ db.rows[0].quantity=90;db.rows[0].width_cm=2;db.rows[0].printed_at="2026-11-04T12:00:00Z";response=await upload(new File([bytes],'new.png',{type:'image/png'}),true);assert.equal(response.status,200);assert.equal(db.rows[0].quantity,90);assert.equal(db.rows[0].width_cm,2);assert.equal(db.rows[0].name,'new.png');assert.equal(db.rows[0].printed_at,null,'a replaced logo must be printed again');
 });
 test('unauthorized file routes return before touching metadata, files or request bodies',async()=>{
  const db=repository(),api=route(db,{error:new Response('Forbidden',{status:403})});
@@ -99,4 +99,23 @@ test('missing-logo icons use red state, while uploaded logos use normal styling 
  assert.match(html(true),/data-missing="true"/);assert.doesNotMatch(html(false),/data-missing/);
  const row=fs.readFileSync('app/sinterklaas/b2b/SinterklaasB2BClient.tsx','utf8');assert.doesNotMatch(row,/Logo nog niet gecontroleerd/);assert.match(row,/Nog geen logo geüpload — controleer/);assert.match(row,/logoAttachmentCount===0/);
  const dialog=fs.readFileSync(base+'OrderLogosDialog.tsx','utf8');assert.match(dialog,/onCountChange\?\.\(replace\?logos.length:logos.length\+uploaded\)/);assert.match(dialog,/onCountChange\?\.\(logos.length-1\)/);
+});
+test('print checkmark is manual, records the actor and exact settings, and resets on changed print settings',async()=>{
+ const db=repository([row()]),api=route(db,{profile:{id:'actor',full_name:'Feline',email:'feline@example.invalid'}});
+ let response=await api.PATCH(request('PATCH',{...row(),printed:true,printed_at:'forged',printed_by_name:'forged'}));assert.equal(response.status,200);
+ let current=db.rows[0];assert(current.printed_at);assert.notEqual(current.printed_at,'forged');assert.equal(current.printed_by,'actor');assert.equal(current.printed_by_name,'Feline');assert.equal(current.printed_quantity,1);assert.equal(model.logoPrintedFor(current),true);
+ const printedAt=current.printed_at;response=await api.PATCH(request('PATCH',{...current,name:'Renamed logo'}));assert.equal(response.status,200);assert.equal(db.rows[0].printed_at,printedAt,'renaming does not unprint the image');
+ response=await api.PATCH(request('PATCH',{...db.rows[0],quantity:20}));assert.equal(response.status,200);assert.equal(db.rows[0].printed_at,null);assert.equal(model.logoPrintedFor(db.rows[0]),false);
+ response=await api.PATCH(request('PATCH',{...db.rows[0],printed:true}));assert.equal(response.status,200);assert.equal(db.rows[0].printed_quantity,20);
+ response=await api.PATCH(request('PATCH',{...db.rows[0],printed:false}));assert.equal(response.status,200);assert.equal(db.rows[0].printed_at,null);
+});
+test('reprinting an already confirmed logo requires explicit confirmation on the server',async()=>{
+ let generated=0;const db=repository([{...row(),printed_at:'2026-11-04T12:00:00Z'}]);
+ const api=load('app/api/b2b-logos/print/route.ts',{
+  '@/app/sinterklaas/b2b/logos/access.server':{logoHeaders:{},logoContext:async()=>({db,orderId:'one',year:2026})},
+  '@/app/sinterklaas/b2b/logos/model':model,'@/app/sinterklaas/b2b/logos/print.server':{createLogoPrint:async()=>{generated++;return Buffer.from('%PDF-test');}},
+ });
+ let response=await api.POST(request('POST',{logos:[choice({quantity:1})]}));assert.equal(response.status,409);assert.equal(generated,0);
+ response=await api.POST(request('POST',{logos:[choice({quantity:1})],confirmReprint:true}));assert.equal(response.status,200);assert.equal(generated,1);
+ assert.equal(db.rows[0].printed_at,'2026-11-04T12:00:00Z','generating a PDF never confirms physical printing');
 });

@@ -4,6 +4,7 @@ import {personalFileType} from "@/app/persoonlijk/fileTypes";
 export const dynamic="force-dynamic";
 export const runtime="nodejs";
 const fail=(message:string,status=400)=>Response.json({message},{status,headers:logoHeaders});
+const clearPrinted={printed_at:null,printed_by:null,printed_by_name:null,printed_quantity:null,printed_width_cm:null,printed_height_cm:null};
 const validId=(id:unknown)=>typeof id==="string"&&/^[a-f0-9-]{36}$/i.test(id);
 export async function GET(request:Request) {
  const c=await logoContext(request);if(c.error)return c.error;
@@ -26,7 +27,7 @@ export async function POST(request:Request) {
   const bytes=new Uint8Array(await file.arrayBuffer()),type=personalFileType(bytes);
   if(!type)return fail("Kies een JPG, PNG, WebP of PDF. Exporteer een EPS/SVG eerst naar PNG of PDF.");
   if(id&&(!validId(id)||typeof version!=="string"))return fail("Ongeldig logo.");
-  const data={name:file.name.slice(0,180).replace(/[\r\n\x00]/g," ")||"logo",content_type:type,bytes_base64:Buffer.from(bytes).toString("base64"),size:file.size,updated_at:new Date().toISOString(),updated_by:c.profile.id};
+  const data={...clearPrinted,name:file.name.slice(0,180).replace(/[\r\n\x00]/g," ")||"logo",content_type:type,bytes_base64:Buffer.from(bytes).toString("base64"),size:file.size,updated_at:new Date().toISOString(),updated_by:c.profile.id};
   const result=id?await c.db.from("b2b_order_logos").update(data).eq("id",id).eq("order_id",c.orderId).eq("season",c.year).eq("updated_at",version).select(LOGO_COLUMNS).maybeSingle():await c.db.from("b2b_order_logos").insert({...data,order_id:c.orderId,season:c.year,created_by:c.profile.id}).select(LOGO_COLUMNS).single();
   if(result.error)return fail("Uploaden is mislukt. Probeer opnieuw.",503);
   if(!result.data)return fail("Het logo is intussen gewijzigd. Vernieuw eerst de lijst.",409);
@@ -36,9 +37,16 @@ export async function POST(request:Request) {
 export async function PATCH(request:Request) {
  const c=await logoContext(request,true);if(c.error)return c.error;
  try {
-  const item=await request.json() as OrderLogo;
+  const item=await request.json() as OrderLogo & {printed?:boolean};
   if(!validLogoPrint(item)||typeof item.updated_at!=="string"||typeof item.name!=="string"||!item.name.trim()||item.name.length>180)return fail("Controleer naam, aantal en formaat.");
-  const result=await c.db.from("b2b_order_logos").update({name:item.name.trim(),quantity:item.quantity,width_cm:item.width_cm,height_cm:item.height_cm,updated_at:new Date().toISOString(),updated_by:c.profile.id}).eq("id",item.id).eq("order_id",c.orderId).eq("season",c.year).eq("updated_at",item.updated_at).select(LOGO_COLUMNS).maybeSingle();
+  if(item.printed!==undefined&&typeof item.printed!=="boolean")return fail("Ongeldige printbevestiging.");
+  if(item.printed&&item.quantity<1)return fail("Kies eerst het geprinte aantal.");
+  const current=await c.db.from("b2b_order_logos").select("quantity,width_cm,height_cm").eq("id",item.id).eq("order_id",c.orderId).eq("season",c.year).eq("updated_at",item.updated_at).maybeSingle();
+  if(current.error)return fail("Logo laden is mislukt.",503);if(!current.data)return fail("Dit logo is intussen gewijzigd. Vernieuw eerst de lijst.",409);
+  const changed=current.data.quantity!==item.quantity||Number(current.data.width_cm)!==item.width_cm||Number(current.data.height_cm)!==item.height_cm;
+  const now=new Date().toISOString();
+  const printState=item.printed===true?{printed_at:now,printed_by:c.profile.id,printed_by_name:c.profile.full_name?.trim()||c.profile.email||"Medewerker",printed_quantity:item.quantity,printed_width_cm:item.width_cm,printed_height_cm:item.height_cm}:item.printed===false||changed?clearPrinted:{};
+  const result=await c.db.from("b2b_order_logos").update({...printState,name:item.name.trim(),quantity:item.quantity,width_cm:item.width_cm,height_cm:item.height_cm,updated_at:now,updated_by:c.profile.id}).eq("id",item.id).eq("order_id",c.orderId).eq("season",c.year).eq("updated_at",item.updated_at).select(LOGO_COLUMNS).maybeSingle();
   if(result.error)return fail("Opslaan is mislukt.",503);if(!result.data)return fail("Dit logo is intussen gewijzigd. Vernieuw eerst de lijst.",409);
   return Response.json({logo:result.data},{headers:logoHeaders});
  }catch{return fail("Het logo kon niet worden opgeslagen.");}
