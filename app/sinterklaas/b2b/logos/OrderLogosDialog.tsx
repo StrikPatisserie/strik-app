@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 import {useEffect,useRef,useState} from "react";
 import {createPortal} from "react-dom";
-import {type OrderLogo,logoPrintLayout,logoPrintedFor} from "./model";
+import {type OrderLogo,logoPrintLayout,logoPrintedFor,LOGO_MAX_PRINT_HEIGHT} from "./model";
 import s from "./Logos.module.css";
 function BlobPreview({logo,url}:{logo:OrderLogo;url:string}) {
  return logo.content_type==="application/pdf"?<a href={url} target="_blank" rel="noreferrer" className={s.preview} style={{display:"grid",placeItems:"center"}}>PDF bekijken</a>:<a href={url} target="_blank" rel="noreferrer"><img src={url} loading="lazy" decoding="async" alt={logo.name} className={s.preview}/></a>;
@@ -65,13 +65,13 @@ export default function OrderLogosDialog({orderId,year,customer,startPrint,onCou
   {!loading&&!logos.length&&<p className={s.status}>{startPrint?"Upload eerst een logo om een printvel te maken.":"Nog geen logo’s opgeslagen bij deze bestelling."}</p>}
   <div className={s.grid}>{logos.map(logo=><article key={logo.id} className={s.card}><div><BlobPreview logo={logo} url={fileUrl(logo)}/><a href={fileUrl(logo,true)} className={s.small}>Download origineel</a></div><div>
    <input className={s.name} aria-label={`Naam van ${logo.name}`} value={logo.name} maxLength={180} disabled={busy} onChange={event=>update(logo.id,{name:event.target.value})}/>
-   <div className={s.fields}><label>Aantal<input type="number" min="0" max="2000" step="1" value={logo.quantity} disabled={busy} onChange={event=>update(logo.id,{quantity:Number(event.target.value)})}/></label><label>Breedte (cm)<input type="number" min="0.5" max="19" step="0.1" value={logo.width_cm} disabled={busy} onChange={event=>update(logo.id,{width_cm:Number(event.target.value)})}/></label><label>Hoogte (cm)<input type="number" min="0.5" max="27" step="0.1" value={logo.height_cm} disabled={busy} onChange={event=>update(logo.id,{height_cm:Number(event.target.value)})}/></label></div>
+   <div className={s.fields}><label>Aantal<input type="number" min="0" max="2000" step="1" value={logo.quantity} disabled={busy} onChange={event=>update(logo.id,{quantity:Number(event.target.value)})}/></label><label>Breedte (cm)<input type="number" min="0.5" max="19" step="0.1" value={logo.width_cm} disabled={busy} onChange={event=>update(logo.id,{width_cm:Number(event.target.value)})}/></label><label>Hoogte (cm)<input type="number" min="0.5" max={LOGO_MAX_PRINT_HEIGHT} step="0.1" value={logo.height_cm} disabled={busy} onChange={event=>update(logo.id,{height_cm:Number(event.target.value)})}/></label></div>
    <p className={s.small}>Past binnen dit formaat; verhouding blijft behouden.{logo.content_type==="application/pdf"?" Van een PDF gebruiken we de eerste pagina.":""} Aantal 0 = niet printen.</p>
    <label className={s.printed}><input type="checkbox" checked={logoPrintedFor(logo)} disabled={busy||logo.quantity<1} onChange={event=>void save(logo,event.target.checked)}/> Geprint</label>
    {logo.printed_at&&<p className={s.small}>{logoPrintedFor(logo)?"Afgevinkt":"Eerder geprint; aantal of formaat gewijzigd"} · {logo.printed_by_name||"Medewerker"} · {new Intl.DateTimeFormat("nl-NL",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit",timeZone:"Europe/Amsterdam"}).format(new Date(logo.printed_at))}</p>}
    <div className={s.actions}><button type="button" className={s.button} disabled={busy} onClick={()=>void save(logo)}>Bewaren</button><button type="button" className={s.button} disabled={busy} onClick={()=>{replaceTarget.current=logo;replaceInput.current?.click();}}>Vervangen</button><button type="button" className={`${s.button} ${s.delete}`} disabled={busy} onClick={()=>void remove(logo)}>Verwijderen</button></div>
   </div></article>)}</div>
   {status&&<p role="status" className={s.status}>{status}</p>}
-  {pdf&&<section><p className={s.small}>A4 · werkelijke grootte / 100% · niet ‘passen op pagina’. Vink daarna zelf ‘Geprint’ aan.</p><div className={s.actions}><a className={`${s.button} ${s.primary}`} href={pdf} target="_blank" rel="noreferrer">Open PDF om te printen</a><a href={pdf} download="Strik-logo-printvel.pdf" className={s.button}>PDF downloaden</a></div><iframe src={pdf} title="Voorbeeld logo-printvel" className={s.frame}/></section>}
+  {pdf&&<section><p className={s.small}>A4 · werkelijke grootte / 100% · niet ‘passen op pagina’. Onderaan blijft 5 cm vrij. Vink daarna zelf ‘Geprint’ aan.</p><div className={s.actions}><a className={`${s.button} ${s.primary}`} href={pdf} target="_blank" rel="noreferrer">Open PDF om te printen</a><a href={pdf} download="Strik-logo-printvel.pdf" className={s.button}>PDF downloaden</a></div><iframe src={pdf} title="Voorbeeld logo-printvel" className={s.frame}/></section>}
  </dialog>,document.body);
 }

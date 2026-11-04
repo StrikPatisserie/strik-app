@@ -12,7 +12,7 @@ test('logo controls cover standalone letters, packages, explicit logo agreements
 test('A4 layout uses exact centimeters, keeps each requested count and never runs outside printable margins',()=>{
  const items=[choice({quantity:63}),choice({id:id2,quantity:17,width_cm:4.2,height_cm:2.1})],cells=model.logoPrintLayout(items);
  assert.equal(cells.length,80);assert.equal(cells.filter(item=>item.id===id2).length,17);
- for(const cell of cells){assert(cell.x>=1&&cell.y>=1);assert(cell.x+cell.width<=20.000001);assert(cell.y+cell.height<=28.700001);}
+ for(const cell of cells){assert(cell.x>=.5&&cell.y>=.6);assert(cell.x+cell.width<=20.500001);assert(cell.y+cell.height<=24.700001);}
  assert.equal(cells[0].width,3);assert.equal(cells[0].height,3);assert(cells.at(-1).page>0);
  for(const items of [[choice({quantity:0})],[choice({quantity:2001})],[choice({width_cm:20})],[choice({height_cm:28})],[choice(),choice()],[choice({quantity:101,width_cm:19,height_cm:27})]])assert.throws(()=>model.logoPrintLayout(items));
 });
@@ -118,4 +118,12 @@ test('reprinting an already confirmed logo requires explicit confirmation on the
  let response=await api.POST(request('POST',{logos:[choice({quantity:1})]}));assert.equal(response.status,409);assert.equal(generated,0);
  response=await api.POST(request('POST',{logos:[choice({quantity:1})],confirmReprint:true}));assert.equal(response.status,200);assert.equal(generated,1);
  assert.equal(db.rows[0].printed_at,'2026-11-04T12:00:00Z','generating a PDF never confirms physical printing');
+});
+
+test('printer safety reserves 50 mm below every logo, uses 5 mm side margins and never shrinks requested dimensions',()=>{
+ const cells=model.logoPrintLayout([choice({quantity:100})]);
+ assert.equal(cells[0].x,.5);assert.equal(cells[0].y,.6);assert.equal(cells.filter(cell=>cell.page===0&&cell.y===.6).length,6,'six 3 cm logos fit across the wider print area');
+ for(const cell of cells){assert(29.7-cell.y-cell.height>=5-.000001);assert.equal(cell.width,3);assert.equal(cell.height,3);}
+ assert.throws(()=>model.logoPrintLayout([choice({height_cm:24.2,quantity:1})]),/5 cm vrij/);
+ const large=model.logoPrintLayout([choice({height_cm:24.1,quantity:1})]);assert.equal(large.length,1);assert(Math.abs(29.7-large[0].y-large[0].height-5)<.000001);
 });
