@@ -11,7 +11,7 @@ function load(file, imports = {}, expose = '') {
   return exports;
 }
 const campaignModule = load('app/bakkerij/logistiek/sinterklaasAcquisitionCampaign.ts');
-const dashboard = load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx', {'./routePrintPagination':load('app/bakkerij/logistiek/routePrintPagination.ts')}, 'exports.suggest = buildAcquisitionSuggestions; exports.inPeriod = isAcquisitionCampaignDate; exports.print = createBusRoutePrintHtml; exports.iceStops = fixedShopIceStops; exports.reconcile = reconcileRouteDraftRounds;');
+const dashboard = load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx', {'./sinterklaasAcquisitionCampaign':campaignModule,'./routePrintPagination':load('app/bakkerij/logistiek/routePrintPagination.ts')}, 'exports.suggest = buildAcquisitionSuggestions; exports.inPeriod = isAcquisitionCampaignDate; exports.print = createBusRoutePrintHtml; exports.iceStops = fixedShopIceStops; exports.reconcile = reconcileRouteDraftRounds;exports.early=isEarlyPackingReceipt;exports.stats=buildStats;exports.day=dayPlanWithReceiptTotals;');
 const stop = (id, label, detail) => ({ id, sourceId: id, label, detail, badges: [] });
 const routes = [{ id: 'r1', vehicle: 'Bus A', title: 'Ronde 1', stops: [
   stop('west', 'Bedrijf', '6541 AA Nijmegen'),
@@ -37,7 +37,7 @@ test('the two photos list exactly 23 packages, using the existing addresses', ()
 test('remaining stock stays plannable after the old deadline and suggested stops disappear only after placement', () => {
   const campaign = campaignModule.emptySinterklaasAcquisitionCampaign();
   assert.equal(dashboard.inPeriod('2026-10-20', campaign), false);
-  for (const date of ['2026-10-21', '2026-10-28', '2026-11-10']) assert.equal(dashboard.inPeriod(date, campaign), true);
+  for (const date of ['2026-10-21', '2026-10-28', '2026-11-03']) assert.equal(dashboard.inPeriod(date, campaign), true);
   const routed = structuredClone(routes), placed = new Set();
   while (placed.size < 23) {
     const suggestions = dashboard.suggest(campaign, routed, '2026-10-28');
@@ -87,11 +87,11 @@ test('the API accepts planning after 17 October and still rejects dates before t
     '@/app/lib/bakeryLogisticsAuth': { canAccessLogisticsRequest: async () => true },
     '@/app/lib/bakeryLogisticsStorage': { markLogisticsAcquisitionDelivered: async () => { saved++; return campaignModule.emptySinterklaasAcquisitionCampaign(); } },
   });
-  for (const [date, expected] of [['2026-10-17', 400], ['2026-10-21', 200], ['2026-11-10', 200]]) {
+  for (const [date, expected] of [['2026-10-17', 400], ['2026-10-21', 200], ['2026-11-10', 400]]) {
     const response = await api.POST(new Request('https://example.test/api', { method: 'POST', body: JSON.stringify({ action: 'deliver', stopId: campaignModule.sinterklaasAcquisitionStops[0].id, date }) }));
     assert.equal(response.status, expected);
   }
-  assert.equal(saved, 2);
+  assert.equal(saved, 1);
 });
 
 test('package stops remain prominent and complete on the route print', () => {
@@ -139,4 +139,27 @@ test('manual package selection can place an unsuggested campaign package or a cu
   assert.equal(placement.stop.id,selected.id);assert.equal(placement.routeId,'r1');assert.equal(placement.afterStopId,'shop:lent');
   formFor(['custom','r1',' Extra bedrijf ',' Adres 8 '],{onAdd(){},onCustomAdd:(...args)=>{custom=args;}}).props.onSubmit({preventDefault(){}});
   assert.deepEqual(custom,['r1','Brievenbuspakketje · Extra bedrijf','SINTERKLAASFOLDER · Adres 8']);
+});
+
+test('finished package campaign is absent from current suggestions and saved routes, while history stays intact',()=>{
+ const campaign=campaignModule.emptySinterklaasAcquisitionCampaign();
+ assert.equal(dashboard.inPeriod('2026-11-04',campaign),false);assert.equal(dashboard.suggest(campaign,routes,'2026-11-04').length,0);
+ const packageStop={...stop('acquisition:done','Pakketje','Straat'),badges:['acquisitie']};
+ const manual={...stop('manual:package','Brievenbuspakketje · Test','SINTERKLAASFOLDER · Straat'),badges:[]};
+ const ordinary=stop('manual:ordinary','Extra winkelbezoek','Straat');
+ const draft={date:'2026-11-04',routes:[{...routes[0],stops:[packageStop,manual,ordinary]}],excludedSourceIds:[]};
+ const result=dashboard.reconcile(draft,[],{pressure:'laag'});
+ assert.equal(result.flatMap(r=>r.stops).map(s=>s.id).join(','),'manual:ordinary');
+ assert.equal(draft.routes[0].stops.length,3,'Stored archive is not changed');
+ const historical=dashboard.reconcile({...draft,date:'2026-11-03'},[],{pressure:'laag'});assert.equal(historical[0].stops.length,3);
+});
+test('early packing count uses actual deadlines, including pickups and exactly 10:00, not every critical customer',()=>{
+ const receipt=(time,extra={})=>({id:time,customer:'Voorbeeld',time,tags:[],lines:[],note:'',customerNote:'',fulfillment:'bezorgen',...extra});
+ for(const time of ['07:30','09:00-10:00','voor 09:45','10:00'])assert.equal(dashboard.early(receipt(time)),true,time);
+ for(const time of ['10:01','09:00-11:00','geen tijd',''])assert.equal(dashboard.early(receipt(time)),false,time);
+ assert.equal(dashboard.early(receipt('09:30',{fulfillment:'afhalen',tags:['afhalen']})),true);
+ assert.equal(dashboard.early(receipt('',{customer:'Radboud UMC',tags:['zorg']})),false,'No deadline is not an early closing');
+ const plan=dashboard.day({date:'2026-11-04'},[receipt('09:00'),receipt('10:00'),receipt('13:00')]);
+ const stat=dashboard.stats(plan,{assortedPastry:0,petitFours:0,marzipanAndCreamCakes:0}).find(s=>s.label==='Pakbonnen');
+ assert.equal(stat.value,'3');assert.equal(stat.earlyCount,2);
 });

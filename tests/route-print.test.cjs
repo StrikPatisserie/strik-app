@@ -35,6 +35,7 @@ test('screen print buttons stay disabled until the latest order data has loaded'
   assert.match(blocked, /aria-label="Route printen voor Bus A"[^>]*disabled=""/);
   const ready = renderToStaticMarkup(React.createElement(Panel, { ...props, routePrintBlockedReason: '' }));
   assert.doesNotMatch(ready, /aria-label="Route printen voor Bus A"[^>]*disabled=""/);
+  assert(!ready.includes('Brievenbuspakketjes'), 'Closed or missing campaigns do not show a package panel');
 });
 test('all ten screen stops, including the four business addresses, appear on the route print', () => {
   const input = routeInput();

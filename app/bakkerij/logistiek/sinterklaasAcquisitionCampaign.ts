@@ -6,8 +6,8 @@ import type {
 export const sinterklaasAcquisitionCampaignId =
   "sinterklaas-pakketjes-resterend-2026-10-21";
 export const sinterklaasAcquisitionStartDate = "2026-10-21";
-// The remaining physical stock stays available until it has all been planned.
-export const sinterklaasAcquisitionEndDate: string = "";
+// All packages are finished; retain past deliveries as archive only.
+export const sinterklaasAcquisitionEndDate: string = "2026-11-03";
 // Keep the original campaign's saved progress intact as an archive.
 export const sinterklaasAcquisitionSettingKey =
   "bakery_logistics_acquisition_remaining_20261021";

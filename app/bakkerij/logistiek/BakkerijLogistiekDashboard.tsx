@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createRouteSaveQueue } from "./routeSaveQueue";
+import { sinterklaasAcquisitionEndDate } from "./sinterklaasAcquisitionCampaign";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
 import { getRoutePrintBlockedReason, openRoutePrintWindow } from "./routePrintWindow";
 import { routePrintPaginationScript } from "./routePrintPagination";
@@ -101,12 +102,14 @@ type DayPlan = {
   iceTubs: number;
   tempexBoxes: number;
   criticalWindows: number;
+  earlyOrderCount?: number;
   criticalDetail: string;
   isFuture: boolean;
 };
 
 type DayStat = {
   label: string;
+  earlyCount?: number;
   value?: string;
   alert?: boolean;
   metrics?: {
@@ -1201,6 +1204,7 @@ function dayPlanWithReceiptTotals(
     iceTubs,
     tempexBoxes: Math.ceil(iceTubs / 3),
     criticalWindows: receipts.filter(isCriticalReceipt).length,
+    earlyOrderCount: receipts.filter(isEarlyPackingReceipt).length,
   };
 }
 
@@ -1236,6 +1240,7 @@ function buildStats(
     {
       label: "Pakbonnen",
       value: String(plan.orderCount),
+      earlyCount: plan.earlyOrderCount || 0,
       alert: showPressureSignals && plan.orderCount > 35,
     },
     {
@@ -6097,6 +6102,10 @@ function isLargeReceipt(receipt: ReceiptSummary) {
   );
 }
 
+function isEarlyPackingReceipt(receipt: ReceiptSummary) {
+  return routeDeadlineMinutes(receipt) <= 600 || hasExplicitEarlyInstruction(receipt);
+}
+
 function isCriticalReceipt(receipt: ReceiptSummary) {
   return (
     isPriorityEarlyDelivery(receipt) ||
@@ -9067,6 +9076,8 @@ function reconcileRouteDraftRounds(
       .map((draftStop) => {
         const sourceKey = draftStop.sourceId || draftStop.id;
         if (excludedSourceIds.has(sourceKey) || usedSourceKeys.has(sourceKey)) return null;
+        if (sinterklaasAcquisitionEndDate && routeDraft.date > sinterklaasAcquisitionEndDate &&
+          (sourceKey.startsWith("acquisition:") || draftStop.badges.includes("acquisitie") || /^Brievenbuspakketje\s*·/i.test(draftStop.label))) return null;
         if (
           sourceKey.startsWith("manual:") ||
           sourceKey.startsWith("acquisition:")
@@ -11701,6 +11712,7 @@ export default function BakkerijLogistiekDashboard() {
                 <p className="flex shrink-0 items-center gap-1 text-sm font-black leading-none tabular-nums">
                   {stat.alert && <WarningIcon />}
                   {stat.value}
+                  {stat.earlyCount !== undefined && <><span className="font-normal text-[#8a8178]" aria-hidden="true">/</span><span className={stat.earlyCount > 0 ? "text-[#b43e2b]" : "text-[#8a8178]"} title={`${stat.earlyCount} pakbonnen uiterlijk 10:00`} aria-label={`${stat.earlyCount} pakbonnen uiterlijk 10:00`}>{stat.earlyCount}</span></>}
                 </p>
               </div>
             )}
@@ -12830,7 +12842,7 @@ function RoutesPanel({
         )}
       </div>
 
-      {(acquisitionSuggestions.length > 0 || acquisitionMessage || routeRounds.length > 0) && (
+      {acquisitionCampaign && isAcquisitionCampaignDate(selectedPlan.date, acquisitionCampaign) && (
         <section className="overflow-hidden rounded-xl border border-[#edc7a8] bg-[#fffaf2]">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#edc7a8] px-3 py-2 text-[#713519]">
             <h3 className="text-xs font-bold">Brievenbuspakketjes</h3>
