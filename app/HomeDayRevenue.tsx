@@ -37,12 +37,12 @@ export default function HomeDayRevenue() {
   if(denied)return null;
   const dateLabel=data?.date&&now?revenueDateLabel(data.date,now):"";
   const hasYearComparison=data?.shops.some(row=>row.year?.amount!=null);
-  const comparisonLabel=comparison==="year"?"vorig jaar (52 weken)":"vorige week";
+  const comparisonLabel=comparison==="year"?"vorig jaar":"vorige week";
   return <section aria-label="Dagomzet winkels" className="mt-5 max-w-2xl border-y border-[#60705a]/20 py-3">
     <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[0.62rem] text-[#60705a]">
       <h2 className="font-bold uppercase tracking-[0.12em]">Dagomzet</h2>
       {dateLabel&&<span>{dateLabel}</span>}
-      {hasYearComparison?<label className="ml-auto flex items-center gap-1">Index t.o.v.<select className="bg-transparent text-inherit outline-offset-2" aria-label="Omzetindex vergelijken met" value={comparison} onChange={event=>setComparison(event.target.value as "week"|"year")}><option value="week">vorige week</option><option value="year">vorig jaar (52 weken)</option></select></label>:<span className="ml-auto">Index t.o.v. vorige week</span>}
+      {hasYearComparison?<label className="ml-auto flex items-center gap-1">Index t.o.v.<select className="bg-transparent text-inherit outline-offset-2" aria-label="Omzetindex vergelijken met" value={comparison} onChange={event=>setComparison(event.target.value as "week"|"year")}><option value="week">vorige week</option><option value="year">vorig jaar</option></select></label>:<span className="ml-auto">Index t.o.v. vorige week</span>}
       {unavailable&&<span role="status">{data?"Bijwerken lukt even niet":"Tijdelijk niet beschikbaar"}</span>}
     </div>
     <dl className="grid grid-cols-2 gap-x-5 gap-y-2 sm:grid-cols-4">

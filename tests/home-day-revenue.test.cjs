@@ -90,7 +90,7 @@ test('a delayed shop compares its own report date, not the date in the widget he
 });
 test('home screen shows compact index badges and offers year comparison when historical days exist',async()=>{
  const h=clientHarness();h.payload(model.latestHomeDayRevenue([record('Lent','2026-11-03',1100),record('Lent','2026-10-27',1000),record('Lent','2025-11-04',900)],new Date('2026-11-04')));await h.ready();
- const html=h.render();assert.match(html,/Index t.o.v./);assert.match(html,/vorig jaar \(52 weken\)/);assert.match(html,/Index 110 t.o.v. vorige week/);assert.match(html,/100 is gelijk/);
+ const html=h.render();assert.match(html,/Index t.o.v./);assert.match(html,/vorig jaar/);assert.match(html,/Index 110 t.o.v. vorige week/);assert.match(html,/100 is gelijk/);
 });
 
 test('historical daily export feeds year comparisons without becoming current revenue',()=>{
