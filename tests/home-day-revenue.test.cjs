@@ -33,6 +33,7 @@ test('corrected copies use the most recent import without mutating stored record
 });
 function endpoint(profile,storage={status:'wordpress'}){let reads=0;const api=load('app/api/home-day-revenue/route.ts',{
  'next/server':{NextResponse:{json:(body,init)=>Response.json(body,init)}},'@/app/lib/auth/session':{getCurrentProfile:async()=>profile},'@/app/lib/auth/access':access,
+ '@/app/management/revenueHistoryServer':{getRevenueComparisonHistory:async()=>[]},
  '@/app/management/revenueServer':{getStoredRevenueData:async()=>{reads++;return{storage,data:{dailyRecords:[record('Lent','2026-11-03',1234.56,{note:'private note',messageId:'private-message'})],cashRecords:['private cash'],records:['private weekly']}};}},'@/app/management/homeDayRevenue':model,
  });return{get:api.GET,reads:()=>reads};}
 test('only active management accounts can retrieve revenue; other users never trigger a data read',async()=>{
@@ -63,4 +64,54 @@ test('open home screen polls, switches date at midnight and receives today witho
 test('lost access hides the widget; a network error keeps the last known figures with a compact status',async()=>{
  const h=clientHarness();await h.ready();h.status(503);await h.tick();assert.match(h.render(),/1\.234,56/);assert.match(h.render(),/Bijwerken lukt even niet/);
  h.status(403);await h.tick();assert.equal(h.render(),'');
+});
+
+test('week index compares the same shop seven days earlier with 100 as equal turnover',()=>{
+ const rows=[record('Lent','2026-11-03',1100),record('Lent','2026-10-27',1000),record('Heyendaal','2026-10-27',20)];
+ const result=model.latestHomeDayRevenue(rows,new Date('2026-11-04')).shops[3];
+ assert.deepEqual(plain(result.week),{date:'2026-10-27',amount:1000,index:110});
+ const equal=model.latestHomeDayRevenue([record('Lent','2026-11-03',1000),record('Lent','2026-10-27',1000)],new Date('2026-11-04')).shops[3];assert.equal(equal.week.index,100);
+});
+test('year index compares 52 weeks earlier, preserving weekday across leap years',()=>{
+ for(const date of ['2026-11-03','2024-03-05','2027-01-01']){
+  const reference=new Date(`${date}T12:00:00Z`);reference.setUTCDate(reference.getUTCDate()-364);
+  const previous=reference.toISOString().slice(0,10);
+  const row=model.latestHomeDayRevenue([record('Lent',date,900),record('Lent',previous,1000)],new Date(`${date}T19:00:00+01:00`)).shops[3];
+  assert.equal(row.year.date,previous);assert.equal(row.year.index,90);assert.equal(reference.getUTCDay(),new Date(date).getUTCDay());
+ }
+});
+test('missing or zero reference is no index, while zero current turnover is a valid index zero',()=>{
+ const result=model.latestHomeDayRevenue([record('Lent','2026-11-03',1000),record('Lent','2026-10-27',0)],new Date('2026-11-04')).shops[3];assert.equal(result.week.index,null);assert.equal(result.week.amount,0);assert.equal(result.year.index,null);assert.equal(result.year.amount,null);
+ const zero=model.latestHomeDayRevenue([record('Lent','2026-11-03',0),record('Lent','2026-10-27',1000)],new Date('2026-11-04')).shops[3];assert.equal(zero.week.index,0);
+});
+test('a delayed shop compares its own report date, not the date in the widget heading',()=>{
+ const result=model.latestHomeDayRevenue([record('Heyendaal','2026-11-04',900),record('Lent','2026-11-03',1234.56),record('Lent','2026-10-27',1000)],new Date('2026-11-04T20:00:00+01:00'));
+ assert.equal(result.date,'2026-11-04');assert.equal(result.shops[3].week.date,'2026-10-27');assert.equal(result.shops[3].week.index,123.5);
+});
+test('home screen shows compact index badges and offers year comparison when historical days exist',async()=>{
+ const h=clientHarness();h.payload(model.latestHomeDayRevenue([record('Lent','2026-11-03',1100),record('Lent','2026-10-27',1000),record('Lent','2025-11-04',900)],new Date('2026-11-04')));await h.ready();
+ const html=h.render();assert.match(html,/Index t.o.v./);assert.match(html,/vorig jaar \(52 weken\)/);assert.match(html,/Index 110 t.o.v. vorige week/);assert.match(html,/100 is gelijk/);
+});
+
+test('historical daily export feeds year comparisons without becoming current revenue',()=>{
+ const history=[record('Lent','2025-11-04',1000,{source:'manual'}),record('Lent','2026-01-25',1200,{source:'manual'})];
+ const empty=model.latestHomeDayRevenue([],new Date('2026-11-04'),history);assert.equal(empty.date,null);assert(empty.shops.every(row=>row.amount===null));
+ const current=model.latestHomeDayRevenue([record('Lent','2026-11-03',1100)],new Date('2026-11-04'),history);assert.equal(current.shops[3].year.index,110);assert.equal(current.date,'2026-11-03');
+});
+test('app records override overlapping export dates even if the file was imported later',()=>{
+ const current=record('Lent','2026-11-03',1100),baseline=record('Lent','2025-11-04',1000,{updatedAt:'2025-11-04T20:00:00Z'});
+ const history=[record('Lent','2025-11-04',500,{updatedAt:'2026-11-04T10:00:00Z'})];
+ assert.equal(model.latestHomeDayRevenue([current,baseline],new Date('2026-11-04'),history).shops[3].year.index,110);
+});
+
+test('private history reader normalizes stored daily rows and ignores unsupported schemas',async()=>{
+ const revenueData=load('app/management/revenueData.ts');
+ async function read(value,error=null){const calls=[];const chain={select:fields=>{calls.push(['select',fields]);return chain;},eq:(key,v)=>{calls.push([key,v]);return chain;},maybeSingle:async()=>({data:value?{value}:null,error})};
+ const server=load('app/management/revenueHistoryServer.ts',{'../lib/supabase/admin':{createAdminClient:()=>({from:table=>{calls.push(['table',table]);return chain;}})},'./revenueData':revenueData});
+ return {rows:await server.getRevenueComparisonHistory(),calls};}
+ const result=await read({schema:1,records:[record('Lent','2025-12-29',1234.56),{date:'bad',shop:'unknown'}]});
+ assert.equal(result.rows.length,1);assert.equal(result.rows[0].date,'2025-12-29');assert.equal(result.rows[0].year,2026);assert.equal(result.rows[0].amount,1234.56);
+ assert(result.calls.some(([key,value])=>key==='key'&&value==='management_revenue_daily_history'));
+ assert.equal((await read({schema:2,records:[record('Lent','2025-11-04',1000)]})).rows.length,0);
+ assert.equal((await read(null,{message:'offline'})).rows.length,0);
 });
