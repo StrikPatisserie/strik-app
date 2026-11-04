@@ -1,5 +1,6 @@
 "use client";
 
+import {BUSINESS_PICKUP_LOCATIONS,businessPickupLabel} from "../lib/businessPickupLocations";
 import Image from "next/image";
 import { createQuoteRequestId, sendBusinessFolderQuote } from "@/app/lib/businessFolderSubmission";
 import { useEffect, useRef, useState, type ReactNode, type FormEvent } from "react";
@@ -52,7 +53,7 @@ export default function KerstB2BConcept() {
   const [recipientCount, setRecipientCount] = useState(25);
   const [budget, setBudget] = useState(20);
   const [quoteOpen, setQuoteOpen] = useState(false);
-  const [contact, setContact] = useState({ company: "", contactName: "", email: "", phone: "", date: "", delivery: "pickup", address: "", wishes: "", consent: false, website: "" });
+  const [contact, setContact] = useState({ company: "", contactName: "", email: "", phone: "", date: "", delivery: "pickup", pickupLocation:"", address: "", wishes: "", consent: false, website: "" });
   const [saving, setSaving] = useState(false);
   const [savedSignature, setSavedSignature] = useState("");
   const [saveError, setSaveError] = useState("");
@@ -71,7 +72,7 @@ export default function KerstB2BConcept() {
   const totalExcl = roundMoney(singleTotal(false) + packageExcl.total);
   const total = includeVat ? totalIncl : totalExcl;
   const hasSelection = selectedSingles.length > 0 || packagePrice.lines.length > 0;
-  const quotePayload = { season: "kerst", company: contact.company, contactName: contact.contactName, email: contact.email, phone: contact.phone, wishes: contact.wishes, consent: contact.consent, website: contact.website, delivery: { method: contact.delivery, address: contact.address, momentType: "date", date: contact.date }, selection: { singles, contents, packageCount, vegan } };
+  const quotePayload = { season: "kerst", company: contact.company, contactName: contact.contactName, email: contact.email, phone: contact.phone, wishes: contact.wishes, consent: contact.consent, website: contact.website, delivery: { method: contact.delivery, pickupLocation:contact.pickupLocation, address: contact.address, momentType: "date", date: contact.date }, selection: { singles, contents, packageCount, vegan } };
   const quoteSignature = JSON.stringify(quotePayload);
   const quoteSubmitted = savedSignature === quoteSignature;
   const suggestions = christmasProducts.filter((product) => christmasUnitPrice(product, recipientCount, includeVat) <= budget);
@@ -101,7 +102,7 @@ export default function KerstB2BConcept() {
       "Verpakking: graag in overleg een passende tas of doos; eventuele meerkosten apart bevestigen.", ""] : []),
     "PRIJSINDICATIE", `Producttotaal: ${money(totalExcl)} excl. btw / ${money(totalIncl)} incl. btw`,
     "Eventuele extra verpakking en bezorging zijn nog af te stemmen en niet inbegrepen.", "",
-    "LEVERING", contact.delivery === "pickup" ? "Afhalen bij Strik" : `Bezorgen op aanvraag: ${contact.address.trim() || "adres nog af te stemmen"}`,
+    "LEVERING", contact.delivery === "pickup" ? businessPickupLabel(contact.pickupLocation) : `Bezorgen op aanvraag: ${contact.address.trim() || "adres nog af te stemmen"}`,
     `Gewenste datum: ${contact.date ? new Intl.DateTimeFormat("nl-NL", { dateStyle: "long", timeZone: "UTC" }).format(new Date(`${contact.date}T12:00:00Z`)) : "in overleg"}`,
     ...(contact.wishes.trim() ? ["", "WENSEN / LOGO / KAARTJE", contact.wishes.trim()] : []), "",
     "Graag ontvang ik jullie bevestiging van beschikbaarheid, verpakking, definitieve prijs en levermoment. Dit is een aanvraag, nog geen bestelling.", "",
@@ -115,6 +116,7 @@ export default function KerstB2BConcept() {
       setSaveError("Vul je bedrijfsnaam, contactpersoon en een geldig e-mailadres in.");
       return;
     }
+    if(contact.delivery==="pickup"&&!BUSINESS_PICKUP_LOCATIONS.some(location=>location.id===contact.pickupLocation)){setSaveError("Kies een afhaalvestiging.");return;}
     setSaving(true); setSaveError("");
     try {
       if (pendingRequest.current?.signature !== quoteSignature) pendingRequest.current = { signature: quoteSignature, id: createQuoteRequestId() };
@@ -224,6 +226,7 @@ export default function KerstB2BConcept() {
       <div className={styles.quoteTotal}><span>Producttotaal · {vatLabel}</span><strong>{money(total)}</strong></div><p className={styles.smallNote}>{money(totalIncl)} incl. btw / {money(totalExcl)} excl. btw. Eventuele extra verpakking en bezorging apart af te stemmen.</p>
       {!hasSelection ? <p role="status" className={styles.empty}>Je aanvraag is leeg. Kies eerst een cadeau of stel een pakket samen.</p> : <form onSubmit={submitQuote} className={styles.quoteForm}>
         <div className={styles.formGrid}><label>Bedrijf<input required autoComplete="organization" maxLength={180} value={contact.company} onChange={(event) => setContact({ ...contact, company: event.target.value })} /></label><label>Contactpersoon<input required autoComplete="name" maxLength={160} value={contact.contactName} onChange={(event) => setContact({ ...contact, contactName: event.target.value })} /></label><label>E-mailadres<input required type="email" autoComplete="email" maxLength={254} value={contact.email} onChange={(event) => setContact({ ...contact, email: event.target.value })} /></label><label>Telefoon · optioneel<input type="tel" autoComplete="tel" value={contact.phone} onChange={(event) => setContact({ ...contact, phone: event.target.value })} /></label><label>Gewenste datum · of in overleg<input type="date" value={contact.date} onChange={(event) => setContact({ ...contact, date: event.target.value })} /></label><label>Afhalen of bezorgen<select value={contact.delivery} onChange={(event) => setContact({ ...contact, delivery: event.target.value })}><option value="pickup">Afhalen bij Strik</option><option value="delivery">Bezorgen · prijs op aanvraag</option></select></label></div>
+        {contact.delivery === "pickup" && <label>Gewenste afhaalvestiging<select required aria-label="Gewenste afhaalvestiging" value={contact.pickupLocation} onChange={event=>setContact({...contact,pickupLocation:event.target.value})}><option value="">Kies een vestiging</option>{BUSINESS_PICKUP_LOCATIONS.map(location=><option key={location.id} value={location.id}>{location.label}</option>)}</select></label>}
         {contact.delivery === "delivery" && <label>Afleveradres<input autoComplete="street-address" value={contact.address} onChange={(event) => setContact({ ...contact, address: event.target.value })} /></label>}
         <label>Wensen · verpakking, logo of kaartje<textarea rows={3} maxLength={2000} value={contact.wishes} onChange={(event) => setContact({ ...contact, wishes: event.target.value })} placeholder="Vertel ons wat jullie cadeau bijzonder maakt." /></label>
         <label className={styles.honeypot} aria-hidden="true">Laat dit veld leeg<input name="quote-check" type="text" tabIndex={-1} autoComplete="off" value={contact.website} onChange={(event) => setContact({ ...contact, website: event.target.value })} /></label>

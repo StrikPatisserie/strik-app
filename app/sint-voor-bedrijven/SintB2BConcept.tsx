@@ -1,5 +1,6 @@
 "use client";
 
+import {BUSINESS_PICKUP_LOCATIONS,businessPickupLabel} from "../lib/businessPickupLocations";
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -146,6 +147,7 @@ export default function SintB2BConcept() {
   const [includeVat, setIncludeVat] = useState(true);
   const [giftWrap, setGiftWrap] = useState<Record<string, boolean>>({});
   const [delivery, setDelivery] = useState<Delivery>("pickup");
+  const [pickupLocation,setPickupLocation]=useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryMomentType, setDeliveryMomentType] = useState<DeliveryMomentType>("date");
   const [requestedDeliveryDate, setRequestedDeliveryDate] = useState("");
@@ -251,9 +253,10 @@ export default function SintB2BConcept() {
       : "Gewenste leverweek: nog niet gekozen";
   const hasRequestedDeliveryMoment = deliveryMomentType === "date" ? Boolean(requestedDeliveryDate) : Boolean(selectedDeliveryWeek);
   const hasValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-  const canSubmitQuote = Boolean(company.trim() && hasValidEmail && hasRequestedDeliveryMoment);
+  const hasPickupLocation=delivery!=="pickup"||BUSINESS_PICKUP_LOCATIONS.some(location=>location.id===pickupLocation);
+  const canSubmitQuote = Boolean(company.trim() && hasValidEmail && hasRequestedDeliveryMoment && hasPickupLocation);
   const quotePayload = { season: "sint", company, contactName: contact, email, phone, wishes, consent: newsletterConsent, website,
-    delivery: { method: delivery, address: deliveryAddress, momentType: deliveryMomentType, date: requestedDeliveryDate, weekStart: requestedDeliveryWeek },
+    delivery: { method: delivery, pickupLocation, address: deliveryAddress, momentType: deliveryMomentType, date: requestedDeliveryDate, weekStart: requestedDeliveryWeek },
     selection: { lines: selected.map(line => {
       const letter = letterLines.find(letter => letter.id === line.key);
       return { productId: line.product.id, quantity: line.quantity, choice: choices[line.product.id] || defaultProductChoice(line.product), customColors: customColors[line.product.id] || "", withLogo: line.withLogo, withGiftWrap: line.withGiftWrap, ...(letter ? { letter: { letter: letter.letter, size: letter.size, chocolate: letter.chocolate, exceptions: letter.specialRequests } } : {}) };
@@ -284,6 +287,7 @@ export default function SintB2BConcept() {
     !company.trim() ? "de bedrijfsnaam" : "",
     !hasValidEmail ? "een geldig e-mailadres" : "",
     !hasRequestedDeliveryMoment ? "een gewenst levermoment" : "",
+    !hasPickupLocation ? "een afhaalvestiging" : "",
   ].filter(Boolean).join(", ");
   const offerText = [
     "Beste Strik Patisserie,",
@@ -310,7 +314,7 @@ export default function SintB2BConcept() {
     "Onder voorbehoud: het levermoment is pas definitief nadat Strik Patisserie de aanvraag heeft goedgekeurd.",
     "",
     "LEVERING",
-    delivery === "pickup" ? "Ophalen bij Strik - gratis" : delivery === "nijmegen" ? `Bezorgen in/rondom Nijmegen - ${NIJMEGEN_DELIVERY_FEE_LABEL} (afhankelijk van het afleveradres)` : "Bezorgen buiten Nijmegen - prijs op aanvraag",
+    delivery === "pickup" ? `${businessPickupLabel(pickupLocation)} - gratis` : delivery === "nijmegen" ? `Bezorgen in/rondom Nijmegen - ${NIJMEGEN_DELIVERY_FEE_LABEL} (afhankelijk van het afleveradres)` : "Bezorgen buiten Nijmegen - prijs op aanvraag",
     ...(delivery !== "pickup" ? [`Afleveradres: ${deliveryAddress.trim() || "nog af te stemmen"}`] : []),
     "",
     "PRIJSINDICATIE",
@@ -486,6 +490,7 @@ export default function SintB2BConcept() {
         <form noValidate onSubmit={(event) => { event.preventDefault(); return submitQuote(); }}>
         <fieldset className="mt-5 rounded-xl border border-[#eadbc3] bg-white p-4"><legend className="px-1 text-sm font-black text-[#60190f]">Gewenst levermoment <span className="text-[#d62d1d]">*</span></legend><div className="grid gap-2 sm:grid-cols-2">{([{value:"date",label:"Specifieke dag"},{value:"week",label:"Leverweek"}] as const).map((option)=><label key={option.value} className={`cursor-pointer rounded-xl border px-3 py-2 text-sm font-black ${deliveryMomentType===option.value?"border-[#d62d1d] bg-[#fff0e8]":"border-[#dfd0b7] bg-[#fffaf0]"}`}><input type="radio" name="deliveryMomentType" value={option.value} checked={deliveryMomentType===option.value} onChange={()=>setDeliveryMomentType(option.value)} className="mr-2 accent-[#d62d1d]"/>{option.label}</label>)}</div>{deliveryMomentType==="date"?<label className="mt-3 block text-xs font-black text-[#60190f]">Kies je gewenste leverdag<input required aria-label="Gewenste leverdag" type="date" value={requestedDeliveryDate} onChange={(event)=>setRequestedDeliveryDate(event.target.value)} className="mt-1.5 h-11 w-full rounded-xl border border-[#dfd0b7] bg-white px-3 text-sm font-bold"/></label>:<label className="mt-3 block text-xs font-black text-[#60190f]">Kies je gewenste leverweek<select required aria-label="Gewenste leverweek" value={requestedDeliveryWeek} onChange={(event)=>setRequestedDeliveryWeek(event.target.value)} className="mt-1.5 h-11 w-full rounded-xl border border-[#dfd0b7] bg-white px-3 text-sm font-bold"><option value="">Kies een week</option>{DELIVERY_WEEK_OPTIONS.map((option)=><option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}<p className="mt-3 rounded-lg bg-[#fff0e8] px-3 py-2 text-[.68rem] font-bold leading-snug text-[#8a3928]">Dit is een voorkeur. Het levermoment is pas definitief nadat Strik Patisserie je aanvraag heeft goedgekeurd.</p></fieldset>
         <fieldset className="mt-5"><legend className="text-sm font-black text-[#60190f]">Hoe wil je jouw cadeaus ontvangen?</legend><div className="mt-2 grid gap-2 sm:grid-cols-3">{([{value:"pickup", label:"Ophalen", detail:"Gratis"},{value:"nijmegen", label:"Bezorgen Nijmegen e.o.", detail:`+ ${NIJMEGEN_DELIVERY_FEE_LABEL} · afhankelijk van adres`},{value:"custom", label:"Overig adres", detail:"Prijs op aanvraag"}] as const).map((option) => <label key={option.value} className={`cursor-pointer rounded-xl border p-3 text-sm ${delivery === option.value ? "border-[#d62d1d] bg-[#fff0e8]" : "border-[#dfd0b7] bg-white"}`}><input type="radio" name="delivery" value={option.value} checked={delivery === option.value} onChange={() => setDelivery(option.value)} className="mr-2 accent-[#d62d1d]"/><strong>{option.label}</strong><span className="mt-1 block pl-5 text-xs text-[#7e493c]">{option.detail}</span></label>)}</div></fieldset>
+        {delivery === "pickup" && <label className="mt-3 block text-sm font-bold text-[#60190f]">Gewenste afhaalvestiging<select required aria-label="Gewenste afhaalvestiging" value={pickupLocation} onChange={event=>setPickupLocation(event.target.value)} className="mt-2 h-12 w-full rounded-xl border border-[#dfd0b7] bg-white px-4"><option value="">Kies een vestiging</option>{BUSINESS_PICKUP_LOCATIONS.map(location=><option key={location.id} value={location.id}>{location.label}</option>)}</select></label>}
         {delivery !== "pickup" && <label className="mt-3 block text-sm font-bold text-[#60190f]">Afleveradres<input value={deliveryAddress} onChange={(event) => setDeliveryAddress(event.target.value)} placeholder="Straat, huisnummer, postcode en plaats" className="mt-2 h-12 w-full rounded-xl border border-[#dfd0b7] bg-white px-4"/></label>}
         <div className="mt-5 space-y-2 border-t border-[#eadbc3] pt-4 text-sm"><div className="flex justify-between"><span>Producten incl. gekozen logo&apos;s</span><strong>{money(subtotal)}</strong></div><div className="flex justify-between"><span>Bezorgen</span><strong>{delivery === "pickup" ? "Gratis" : delivery === "nijmegen" ? NIJMEGEN_DELIVERY_FEE_LABEL : "Op aanvraag"}</strong></div></div>
         <div className="mt-4 flex justify-between gap-3 border-t-2 border-[#60190f] pt-4 text-xl font-black"><span>Producttotaal {includeVat ? "incl." : "excl."} btw</span><span className="text-right">{money(total)}{delivery !== "pickup" && <small className="block text-xs">+ bezorgkosten</small>}</span></div>

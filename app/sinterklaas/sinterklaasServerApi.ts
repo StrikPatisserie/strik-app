@@ -72,7 +72,7 @@ function createWordPressErrorResponse(endpoint: string, status: number) {
   );
 }
 
-async function getAuthorizedSinterklaasProfile(endpoint: string) {
+export async function getAuthorizedSinterklaasProfile(endpoint: string) {
   const profile = await getCurrentProfile();
   return canAccessSinterklaas(profile) || (["sinterklaas-mailing", "sinterklaas-b2b-orders"].includes(endpoint) && canAccessPath(profile, "/kerst")) ? profile : null;
 }

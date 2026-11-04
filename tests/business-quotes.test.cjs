@@ -145,3 +145,14 @@ test('folder conversion preserves letter charges, logo, dietary requirements, wr
   assert.equal(editableFolderOrderText('Handmatige bestelling met eigen afspraken'), null);
   assert.equal(editableFolderOrderText('BEDRIJF EN CONTACT\nGEKOZEN SINTERKLAASPRODUCTEN\nOnbekende invoer\nPRIJSINDICATIE\n€ 10,00'), null);
 });
+
+test('all four shops and Malden are canonical pickup options in quote, snapshot and original order',()=>{
+ const {BUSINESS_PICKUP_LOCATIONS}=load('app/lib/businessPickupLocations.ts');assert.equal(BUSINESS_PICKUP_LOCATIONS.length,5);
+ for(const location of BUSINESS_PICKUP_LOCATIONS){const input=fixture();input.delivery={method:'pickup',pickupLocation:location.id,momentType:'date',date:'2026-12-18'};const result=build(input);assert.equal(result.snapshot.delivery.pickupLocation,location.id);assert.match(result.order.deliveryMethod,new RegExp(location.label.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));assert(result.quoteText.includes(location.label));}
+ const input=fixture();input.delivery={method:'pickup',pickupLocation:'malden',momentType:'date',date:'2026-12-18'};
+ assert.match(build(input).order.deliveryMethod,/Bakkerij Malden · Ambachtsweg 4/);
+ const total=build(input).order.totalExVat;
+ input.delivery.pickupLocation='lent';assert.equal(build(input).order.totalExVat,total);
+ for(const value of ['', 'forged', '<script>']){input.delivery.pickupLocation=value;assert.throws(()=>build(input),/afhaalvestiging/);}
+ input.delivery={method:'pickup',momentType:'date',date:'2026-12-18'};assert.equal(build(input).order.deliveryMethod,'Afhalen bij Strik','old requests remain compatible');
+});

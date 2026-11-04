@@ -1,3 +1,4 @@
+import {BUSINESS_PICKUP_LOCATIONS,businessPickupLabel} from "./businessPickupLocations";
 import { createHash } from "node:crypto";
 import { christmasPackage, christmasProducts, christmasUnitPrice, money, roundMoney } from "@/app/kerst-voor-bedrijven/christmasProducts";
 import { defaultProductChoice, pricedProduct, productChoiceCandidates, productChoiceLabel, productLogoPrice, products, productSupportsLogo, productUnitPrice, tierFor } from "@/app/sint-voor-bedrijven/sintProducts";
@@ -54,6 +55,8 @@ export function buildBusinessFolderQuote(value: unknown) {
   const delivery = record(input.delivery);
   if (!["pickup", "delivery", "nijmegen", "custom"].includes(String(delivery.method))) throw new Error("Kies afhalen of bezorgen.");
   const method = String(delivery.method);
+  const pickupLocation=method==="pickup"?text(delivery.pickupLocation,80):"";
+  if(method==="pickup"&&delivery.pickupLocation!==undefined&&!BUSINESS_PICKUP_LOCATIONS.some(item=>item.id===pickupLocation))throw new Error("Kies een geldige afhaalvestiging.");
   const address = method === "pickup" ? "" : text(delivery.address, 1400);
   const momentType = delivery.momentType === "week" ? "week" : "date";
   const deliveryDate = momentType === "date" ? date(delivery.date) : date(delivery.weekStart);
@@ -62,7 +65,7 @@ export function buildBusinessFolderQuote(value: unknown) {
   const end = deliveryDate ? new Date(`${deliveryDate}T12:00:00Z`) : null;
   if (end && momentType === "week") end.setUTCDate(end.getUTCDate() + 6);
   const deliveryDateEnd = momentType === "week" && end ? end.toISOString().slice(0, 10) : "";
-  const deliveryLabel = method === "pickup" ? "Afhalen bij Strik" : method === "nijmegen" ? "Bezorgen in/rondom Nijmegen · € 10–15 in overleg" : "Bezorgen · prijs op aanvraag";
+  const deliveryLabel = method === "pickup" ? businessPickupLabel(pickupLocation) : method === "nijmegen" ? "Bezorgen in/rondom Nijmegen · € 10–15 in overleg" : "Bezorgen · prijs op aanvraag";
   const momentLabel = formatBusinessDeliveryMoment(deliveryDate, deliveryDateEnd);
   const selection = record(input.selection);
   const rows: string[] = [];
@@ -137,7 +140,7 @@ export function buildBusinessFolderQuote(value: unknown) {
   const reference = `${season.toUpperCase()}26-${requestId.replaceAll("-", "").slice(0, 12).toUpperCase()}`;
   const quoteText = ["BEDRIJF EN CONTACT", `Bedrijf: ${company}`, ...(contactName ? [`Contactpersoon: ${contactName}`] : []), `E-mail: ${email}`, ...(phone ? [`Telefoon: ${phone}`] : []), "", ...rows, "", "PRIJSINDICATIE", `${money(totalEx)} excl. btw / ${money(totalIncl)} incl. btw`, "Extra verpakking en bezorging in overleg.", "", "GEWENSTE LEVERING", momentLabel, deliveryLabel, ...(address ? [`Afleveradres: ${address}`] : []), ...(wishes ? ["", "WENSEN", wishes] : [])].join("\n");
   if (Buffer.byteLength(quoteText, "utf8") > 45000) throw new Error("Deze aanvraag is te uitgebreid. Verdeel de producten over twee aanvragen.");
-  const snapshot = { season, company, contactName, email, phone, wishes, consent, delivery: { method, address, momentType, date: deliveryDate }, selection: snapshotSelection };
+  const snapshot = { season, company, contactName, email, phone, wishes, consent, delivery: { method, address, momentType, date: deliveryDate, ...(pickupLocation?{pickupLocation}:{}) }, selection: snapshotSelection };
   const payloadHash = createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");
   return {
     requestId, reference, payloadHash, snapshot, quoteText, consent,

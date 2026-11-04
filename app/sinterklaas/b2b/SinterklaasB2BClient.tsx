@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import OrderLogos from "./logos/OrderLogos";
+import {logoOrderRequested} from "./logos/model";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import styles from "./B2BOrders.module.css";
 import GroupedLetterEditor from "./GroupedLetterEditor";
@@ -1675,7 +1677,7 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
     <div className={styles.orderMain}>
       <div className={styles.date}>{compactDeliveryWindow(order)}<small>{deliveryDateHint}</small>{dueSoon(order) && <small className={styles.warning}>Binnen 2 dagen</small>}</div>
       <div className={styles.customer}>
-        <h3>{order.customerName}</h3>
+        <h3>{order.customerName}{!archived&&(logoOrderRequested(order)||expanded)&&<OrderLogos orderId={order.id} year={order.year} customer={order.customerName}/>}</h3>
         <p className={styles.orderProduct}><B2BProductText text={orderSummary || "Bestelling nog invullen"} /></p>
         <p className={styles.delivery}>{order.deliveryMethod || "Levering nog afspreken"}{order.season === "sint-kerst" ? " · Sint & Kerst" : ""}</p>
         {order.reminderEmailError && <p className={styles.warning}>! Interne controlewaarschuwing niet bevestigd</p>}

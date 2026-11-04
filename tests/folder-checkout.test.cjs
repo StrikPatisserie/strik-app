@@ -12,6 +12,7 @@ function load(file, imports = {}, globals = {}) {
   } }).outputText;
   vm.runInNewContext(source, { exports, Error, TypeError, AbortController, setTimeout, clearTimeout, Uint8Array, ...globals, require(name) {
     if (name in imports) return imports[name];
+    if (name === '../lib/businessPickupLocations') return load('app/lib/businessPickupLocations.ts', {'../lettershop/shops':load('app/lettershop/shops.ts')});
     if (name === './b2bMetaTracking') return load('app/lib/b2bMetaTracking.ts', {}, globals);
     if (name === '@/app/lib/businessFolderSubmission') return load('app/lib/businessFolderSubmission.ts', {}, globals);
     if (name === 'react/jsx-runtime') return require(name);
@@ -201,10 +202,12 @@ test('Sint submit explains missing delivery/contact details instead of silently 
   await quote.submit();
   assert.match(find(quote.render(), node => node.props?.role === 'alert').props.children, /gewenst levermoment/);
   quote.field('Gewenste leverdag', '2026-11-23');
+  await quote.submit();assert.equal(quote.calls.length,0);assert.match(find(quote.render(), node=>node.props?.role==='alert').props.children,/afhaalvestiging/);
+  quote.field('Gewenste afhaalvestiging','malden');
   await quote.submit();
   assert.equal(quote.calls.length, 1);
   assert.equal(quote.calls[0].body.selection.lines[0].letter.letter, 'S');
-  assert.equal(quote.calls[0].body.delivery.date, '2026-11-23');
+  assert.equal(quote.calls[0].body.delivery.date, '2026-11-23');assert.equal(quote.calls[0].body.delivery.pickupLocation,'malden');
   assert.match(find(quote.render(), node => node.props?.role === 'status').props.children.join(''), /SINT26-F12345671234/);
   await quote.submit();
   assert.equal(quote.calls.length, 1);
@@ -212,7 +215,7 @@ test('Sint submit explains missing delivery/contact details instead of silently 
 
 test('Sint network failures remain visible and retry keeps the same request ID', async () => {
   const quote = sintQuote({ ok: false, json: async () => ({ message: 'Aanvraag opgeslagen; mail nog niet verstuurd.' }) });
-  quote.field('Bedrijfsnaam', 'Voorbeeld BV'); quote.field('E-mailadres', 'test@example.invalid'); quote.field('Gewenste leverdag', '2026-11-23');
+  quote.field('Bedrijfsnaam', 'Voorbeeld BV'); quote.field('E-mailadres', 'test@example.invalid'); quote.field('Gewenste leverdag', '2026-11-23');quote.field('Gewenste afhaalvestiging','lent');
   await quote.submit(); await quote.submit();
   assert.match(find(quote.render(), node => node.props?.role === 'alert').props.children, /opgeslagen/);
   assert.equal(quote.calls[0].body.requestId, quote.calls[1].body.requestId);
