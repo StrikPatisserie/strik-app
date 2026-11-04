@@ -84,3 +84,19 @@ test('print endpoint rejects foreign IDs and validates quantity limits before re
  response=await api.POST(request('POST',{logos:[choice({quantity:3000})]}));assert.equal(response.status,400);assert.equal(generated,0);
  response=await api.POST(request('POST',{logos:[choice({quantity:2})]}));assert.equal(response.status,200);assert.equal(response.headers.get('content-type'),'application/pdf');assert.equal(generated,1);
 });
+test('overview attachment counts are scoped, paginated, and unknown on storage failure rather than a false missing warning',async()=>{
+ async function read(rows,fail=false){const requests=[];const db={from:()=>({select:columns=>{assert.equal(columns,'order_id');return{eq:(key,year)=>{assert.equal(year,2026);return{in:(key,ids)=>{assert.deepEqual(Array.from(ids),['one','two','three']);return{order:()=>({range:async(start,end)=>{requests.push([start,end]);return{data:rows.slice(start,end+1),error:fail?{}:null};}})};}};}};}})};
+ const server=load(base+'counts.server.ts',{'server-only':{},'@/app/lib/supabase/admin':{createAdminClient:()=>db}});
+ return{data:await server.withLogoCounts([{id:'one'},{id:'two'},{id:'three'}],'2026'),requests};}
+ let result=await read([{order_id:'one'},{order_id:'one'},{order_id:'two'}]);assert.deepEqual(Array.from(result.data,order=>order.logoAttachmentCount),[2,1,0]);
+ result=await read(Array.from({length:501},()=>({order_id:'one'})));assert.equal(result.data[0].logoAttachmentCount,501);assert.equal(result.requests.length,2);
+ result=await read([],true);assert(result.data.every(order=>order.logoAttachmentCount===null));
+});
+test('missing-logo icons use red state, while uploaded logos use normal styling and dialog mutations notify the overview',()=>{
+ const React=require('react'),jsx=require('react/jsx-runtime');
+ const component=load(base+'OrderLogos.tsx',{'react':React,'react/jsx-runtime':jsx,'next/dynamic':{default:()=>()=>null},'./Logos.module.css':{default:new Proxy({},{get:(_,name)=>String(name)})}});
+ const html=missing=>require('react-dom/server').renderToStaticMarkup(React.createElement(component.default,{orderId:'one',year:'2026',customer:'Test',missing}));
+ assert.match(html(true),/data-missing="true"/);assert.doesNotMatch(html(false),/data-missing/);
+ const row=fs.readFileSync('app/sinterklaas/b2b/SinterklaasB2BClient.tsx','utf8');assert.doesNotMatch(row,/Logo nog niet gecontroleerd/);assert.match(row,/Nog geen logo geüpload — controleer/);assert.match(row,/logoAttachmentCount===0/);
+ const dialog=fs.readFileSync(base+'OrderLogosDialog.tsx','utf8');assert.match(dialog,/onCountChange\?\.\(replace\?logos.length:logos.length\+uploaded\)/);assert.match(dialog,/onCountChange\?\.\(logos.length-1\)/);
+});

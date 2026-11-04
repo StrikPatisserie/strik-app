@@ -213,6 +213,7 @@ export function normalizeB2BOrder(value: unknown): SinterklaasB2BOrder | null {
         : "akkoord",
     entered: boolFrom(value.entered),
     productionScheduled: boolFrom(value.productionScheduled),
+    logoAttachmentCount: typeof value.logoAttachmentCount==="number"&&Number.isInteger(value.logoAttachmentCount)&&value.logoAttachmentCount>=0 ? value.logoAttachmentCount : null,
     logoChecked: boolFrom(value.logoChecked),
     packagingChecked: boolFrom(value.packagingChecked),
     textChecked: boolFrom(value.textChecked),

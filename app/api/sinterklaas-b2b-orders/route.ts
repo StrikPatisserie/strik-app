@@ -1,3 +1,4 @@
+import {withLogoCounts} from "@/app/sinterklaas/b2b/logos/counts.server";
 import { withProductionReadiness } from "@/app/sinterklaas/letters/productie/productionReadiness.server";
 import {
   proxySinterklaasGet,
@@ -18,7 +19,7 @@ export async function GET(request: Request) {
   if (!response.ok) return response;
   const data = await response.clone().json().catch(() => ({}));
   const year = new URL(request.url).searchParams.get("year") || String(new Date().getFullYear());
-  const existing = Array.isArray(data.orders) ? data.orders : [];
+  const existing = await withLogoCounts(Array.isArray(data.orders) ? data.orders : [],year);
   const existingIds = new Set(existing.map((order: { id?: string }) => order.id));
   const historical = [...b2bOrderHistory, ...b2bOrderHistoryExtra]
     .filter((order) => order.year === year && !existingIds.has(order.id))

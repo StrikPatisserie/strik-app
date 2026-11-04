@@ -789,7 +789,9 @@ function updateOrderList(
   orders: SinterklaasB2BOrder[],
   nextOrder: SinterklaasB2BOrder
 ) {
-  return [nextOrder, ...orders.filter((order) => order.id !== nextOrder.id)].sort(
+  const previous=orders.find(order=>order.id===nextOrder.id);
+  const updated=nextOrder.logoAttachmentCount==null&&previous?.logoAttachmentCount!=null?{...nextOrder,logoAttachmentCount:previous.logoAttachmentCount}:nextOrder;
+  return [updated, ...orders.filter((order) => order.id !== nextOrder.id)].sort(
     compareOrdersByDeliveryDate
   );
 }
@@ -812,7 +814,6 @@ function orderWarnings(order: SinterklaasB2BOrder) {
   if (order.status !== "akkoord" || order.cancelled || order.delivered || (order.deliveryDate && order.deliveryDate < addDays(todayIso(), -7))) return [];
   return [
     order.department !== "bakkerij" && order.letterLines.length === 0 && "Letterregels nog uitsplitsen",
-    Boolean(order.logo) && !order.logoChecked && "Logo nog niet gecontroleerd",
     Boolean(order.textInstructions) && !order.textChecked && "Tekst nog niet gecontroleerd",
     Boolean(order.packaging) && !order.packagingChecked && "Verpakking nog niet gecontroleerd",
   ].filter((warning): warning is string => Boolean(warning));
@@ -1637,7 +1638,7 @@ function B2BOrderEditor({ order, season, onClose, onSaved }: Readonly<{
   </>;
 }
 
-function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryConfirmation, onCustomerConfirmation, onQuotation, onApprove }: Readonly<{
+function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryConfirmation, onCustomerConfirmation, onQuotation, onApprove, onLogoCount }: Readonly<{
   order: SinterklaasB2BOrder;
   updatingId: string;
   onToggle: (order: SinterklaasB2BOrder, key: "entered" | "productionScheduled" | "productionDone" | "letterProductionDone" | "packed" | "delivered" | "logoChecked" | "textChecked" | "packagingChecked") => void;
@@ -1647,6 +1648,7 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
   onCustomerConfirmation: (order: SinterklaasB2BOrder) => void;
   onQuotation: (order: SinterklaasB2BOrder) => void;
   onApprove: (order: SinterklaasB2BOrder) => void;
+  onLogoCount: (id:string,count:number) => void;
 }>) {
   const [expanded, setExpanded] = useState(false);
   const group = parseLetterGroup(order.letterOrderText);
@@ -1677,9 +1679,10 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
     <div className={styles.orderMain}>
       <div className={styles.date}>{compactDeliveryWindow(order)}<small>{deliveryDateHint}</small>{dueSoon(order) && <small className={styles.warning}>Binnen 2 dagen</small>}</div>
       <div className={styles.customer}>
-        <h3>{order.customerName}{!archived&&(logoOrderRequested(order)||expanded)&&<OrderLogos orderId={order.id} year={order.year} customer={order.customerName}/>}</h3>
+        <h3>{order.customerName}{!archived&&(logoOrderRequested(order)||expanded)&&<OrderLogos orderId={order.id} year={order.year} customer={order.customerName} missing={logoOrderRequested(order)&&order.logoAttachmentCount===0} onCountChange={count=>onLogoCount(order.id,count)}/>}</h3>
         <p className={styles.orderProduct}><B2BProductText text={orderSummary || "Bestelling nog invullen"} /></p>
         <p className={styles.delivery}>{order.deliveryMethod || "Levering nog afspreken"}{order.season === "sint-kerst" ? " · Sint & Kerst" : ""}</p>
+        {!archived&&!order.cancelled&&logoOrderRequested(order)&&order.logoAttachmentCount===0&&<p className={styles.warning} style={{color:"#b23827"}}>! Nog geen logo geüpload — controleer</p>}
         {order.reminderEmailError && <p className={styles.warning}>! Interne controlewaarschuwing niet bevestigd</p>}
         {(warnings.length > 0 || confirmationNeedsAttention) && <p className={styles.warning}>! {confirmationNeedsAttention ? "Controleer interne back-up" : warnings[0]}{warnings.length > 1 ? ` · +${warnings.length - 1}` : ""}</p>}
       </div>
@@ -2079,7 +2082,7 @@ export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ sea
           <div className={styles.columns}><span>Levering</span><span>Klant & bestelling</span><span>Status</span><span>Totaal ex. btw</span><span /></div>
           {loading ? <p className={styles.empty} role="status">Bestellingen laden…</p> : groupedOrders.map(([key, group]) => <section key={key}>
             <div className={styles.month}><h2>{monthLabel(key)}</h2><span>{group.length} {group.length === 1 ? "bestelling" : "bestellingen"}</span></div>
-            {group.map(order => <B2BOrderRow key={order.id} order={order} updatingId={updatingId} onToggle={toggleStatus} onEdit={openEditOrderDialog}
+            {group.map(order => <B2BOrderRow key={order.id} onLogoCount={(id,count)=>setOrders(current=>current.map(item=>item.id===id?{...item,logoAttachmentCount:count}:item))} order={order} updatingId={updatingId} onToggle={toggleStatus} onEdit={openEditOrderDialog}
               onDelete={nextOrder => { setError(""); setDeleteTarget(nextOrder); setDeleteReason(""); setDeleteReasonNote(""); }}
               onRetryConfirmation={nextOrder => void resendConfirmation(nextOrder)} onCustomerConfirmation={nextOrder => { setConfirmationIsUpdate(customerConfirmationNeedsUpdate(nextOrder)); setConfirmationTarget(nextOrder); }} onQuotation={setQuotationTarget} onApprove={setApprovalTarget} />)}
           </section>)}
