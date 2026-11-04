@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createRouteSaveQueue } from "./routeSaveQueue";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
 import { getRoutePrintBlockedReason, openRoutePrintWindow } from "./routePrintWindow";
 import { routePrintPaginationScript } from "./routePrintPagination";
@@ -6267,10 +6268,7 @@ function groupShopStops(
   return shopKeys
     .map((shopKey) => {
       const shopMeta = shopRouteMeta[shopKey];
-      const stopLabel =
-        shopKey === "lent"
-          ? "Winkel Lent vers + houdbaar"
-          : shopMeta.label;
+      const stopLabel = shopMeta.label;
       const shopReceipts = receipts.filter(
         (receipt) =>
           isShopReceipt(receipt) &&
@@ -6314,86 +6312,15 @@ function groupShopStops(
         detail: detailParts.join(" · "),
         badges: [
           "winkel",
-          ...(shopKey === "lent" ? ["vers + houdbaar"] : []),
           ...(pastryUnits >= 80 || shopReceipts.length >= 2 ? ["druk"] : []),
         ],
       };
     });
 }
 
-type FixedShopLoad = "fresh" | "shelf";
-
-function isFreshShopLine(line: ReceiptLine) {
-  if (isProductOptionLine(line) || isIceTubLineDescription(line.description)) {
-    return false;
-  }
-
-  const description = lineSearchDescription(line);
-
-  return (
-    isAssortedPastryLine(line) ||
-    isPetitFourLine(line) ||
-    isMarzipanOrCreamCakeProductLine(line) ||
-    /\b(?:gebak|taart|vlaai|tompouce|soes|slof|tartelette|bavarois|mousse|slagroom|creme|cupcake|cakepop|macaron|croissant|broodje|worstenbrood|saucijzen|appelflap|appelbol)\b/.test(
-      description
-    )
-  );
-}
-
-function fixedShopStop(input: {
-  receipts: ReceiptSummary[];
-  shopKey: ShopKey;
-  load: FixedShopLoad;
-  label: string;
-}): RouteStop {
-  const shopMeta = shopRouteMeta[input.shopKey];
-  const lines = input.receipts
-    .filter(
-      (receipt) =>
-        isShopReceipt(receipt) &&
-        !isIceReceiptSummary(receipt) &&
-        shopKeyForReceipt(receipt) === input.shopKey
-    )
-    .flatMap((receipt) => receipt.lines)
-    .filter(
-      (line) =>
-        !isProductOptionLine(line) &&
-        !isIceTubLineDescription(line.description) &&
-        (input.load === "fresh" ? isFreshShopLine(line) : !isFreshShopLine(line))
-    );
-  const units = lines.reduce(
-    (total, line) => total + numericQuantity(line.quantity),
-    0
-  );
-  const loadLabel = input.load === "fresh" ? "vers" : "houdbaar";
-  const detailParts = [shopMeta.address];
-
-  if (lines.length) {
-    detailParts.push(
-      units > 0
-        ? `${formatCompactNumber(units)} ${loadLabel}`
-        : `${lines.length} regels ${loadLabel}`
-    );
-  } else {
-    detailParts.push(
-      input.load === "fresh" ? "vaste verse stop" : "vaste houdbare stop"
-    );
-  }
-
-  return {
-    id: `shop-${input.shopKey}-${input.load}`,
-    sourceId:
-      input.load === "fresh"
-        ? `shop:${input.shopKey}`
-        : `shop:${input.shopKey}:shelf`,
-    learningKey: `shop:${input.shopKey}:${input.load}`,
-    learningLabel: input.label,
-    learningTarget: shopMeta.address,
-    learningKind: "shop",
-    label: input.label,
-    detail: detailParts.join(" · "),
-    badges: ["winkel", loadLabel],
-  };
+function fixedShopStop(input: { receipts: ReceiptSummary[]; shopKey: ShopKey; label: string }): RouteStop {
+  const stop = groupShopStops(input.receipts, [input.shopKey], [])[0];
+  return { ...stop, label: input.label, learningLabel: input.label };
 }
 
 function fixedShopIceStops(input: {
@@ -6429,18 +6356,18 @@ function fixedShopIceStops(input: {
   }];
 }
 
-function lentEmballageStop(): RouteStop {
-  const shopMeta = shopRouteMeta.lent;
+function shopEmballageStop(shopKey: ShopKey): RouteStop {
+  const shopMeta = shopRouteMeta[shopKey];
 
   return {
-    id: "shop-lent-emballage",
-    sourceId: "shop:lent:emballage",
-    learningKey: "shop:lent:emballage",
-    learningLabel: "Winkel Lent · emballage",
+    id: `shop-${shopKey}-emballage`,
+    sourceId: `shop:${shopKey}:emballage`,
+    learningKey: `shop:${shopKey}:emballage`,
+    learningLabel: `${shopMeta.label} · emballage`,
     learningTarget: shopMeta.address,
     learningKind: "shop",
-    label: "Winkel Lent · emballage",
-    detail: `${shopMeta.address} · alleen indien er tijd is · direct na de laatste klantstop in Lent, Elst, Bemmel of Gendt`,
+    label: `${shopMeta.label} · emballage`,
+    detail: `${shopMeta.address} · alleen indien er tijd is`,
     badges: ["emballage", "indien tijd"],
   };
 }
@@ -8368,8 +8295,7 @@ function buildWeekdayFixedRouteRounds(
     fixedShopStop({
       receipts,
       shopKey: "heyendaalseweg",
-      load: "fresh",
-      label: "Winkel Heyendaalseweg vers",
+      label: "Winkel Heyendaalseweg",
     }),
     ...asStops(cityBridgeReceipts, "A-city-bridge-"),
     ...asStops(busASchoolReceipts.slice(0, 1), "A-school-south-"),
@@ -8378,8 +8304,7 @@ function buildWeekdayFixedRouteRounds(
     fixedShopStop({
       receipts,
       shopKey: "daalseweg",
-      load: "fresh",
-      label: "Winkel Daalseweg vers",
+      label: "Winkel Daalseweg",
     }),
     ...asStops(sintMaartenskliniekReceipts, "A-maartens-"),
     ...radboudUniversityReceipts.map((receipt) =>
@@ -8391,23 +8316,13 @@ function buildWeekdayFixedRouteRounds(
     ...asStops(busAFlexibleFirstReceipts, "A-map-yellow-early-"),
   ];
   const busASecondStops: RouteStop[] = [
-    fixedShopStop({
-      receipts,
-      shopKey: "heyendaalseweg",
-      load: "shelf",
-      label: "Winkel Heyendaalseweg houdbaar",
-    }),
+    shopEmballageStop("heyendaalseweg"),
     ...fixedShopIceStops({
       receipts,
       shopKey: "heyendaalseweg",
       label: "IJs Heyendaal",
     }),
-    fixedShopStop({
-      receipts,
-      shopKey: "daalseweg",
-      load: "shelf",
-      label: "Winkel Daalseweg houdbaar",
-    }),
+    shopEmballageStop("daalseweg"),
     ...fixedShopIceStops({
       receipts,
       shopKey: "daalseweg",
@@ -8420,8 +8335,7 @@ function buildWeekdayFixedRouteRounds(
     fixedShopStop({
       receipts,
       shopKey: "ziekerstraat",
-      load: "fresh",
-      label: "Winkel Ziekerstraat vers",
+      label: "Winkel Ziekerstraat",
     }),
     ...groupShopStops(receipts, ["lent"], []),
     ...fixedShopIceStops({
@@ -8433,7 +8347,7 @@ function buildWeekdayFixedRouteRounds(
     ...asStops(busBFirstProCollegeReceipts, "B-pro-college-north-"),
     ...asStops(driesReceipts, "B-dries-"),
     ...asStops(lentEmballageAreaReceipts, "B-lent-area-"),
-    ...(addLentEmballageStop ? [lentEmballageStop()] : []),
+    ...(addLentEmballageStop ? [shopEmballageStop("lent")] : []),
     ...asStops(sanadomeReceipts, "B-sanadome-"),
     ...asStops(fixedOutsideReceipts, "B-map-blue-"),
     ...asStops(busBFlexibleFirstReceipts, "B-map-yellow-early-"),
@@ -8458,7 +8372,7 @@ function buildWeekdayFixedRouteRounds(
       tone: busRouteMeta.A.tone,
       stops: busAFirstStops,
       reason:
-        "Stadroute rood: verse winkels, vroege adressen en efficiënte doorsteken langs de Sint Annastraat.",
+        "Stadroute rood: winkels, vroege adressen en efficiënte doorsteken langs de Sint Annastraat.",
       load: routeLoadLineForStops(busAFirstStops),
       loadProfile,
     }),
@@ -8521,6 +8435,25 @@ function buildWeekdayFixedRouteRounds(
 }
 
 function buildRouteRounds(
+  plan: DayPlan, receipts: ReceiptSummary[], loadProfile: DayLoadProfile,
+  routeLearning: RouteLearningSummary | null
+): RouteRound[] {
+  const rounds = buildBaseRouteRounds(plan, receipts, loadProfile, routeLearning);
+  const stops = rounds.flatMap(route => route.stops);
+  const packagingByRoute = new Map<string, RouteStop[]>();
+  for (const shopKey of Object.keys(shopRouteMeta) as ShopKey[]) {
+    if (stops.some(stop => routeStopSourceKey(stop) === `shop:${shopKey}:emballage`)) continue;
+    const delivery = rounds.find(route => route.stops.some(stop => routeStopSourceKey(stop) === `shop:${shopKey}`));
+    if (!delivery) continue;
+    const target = rounds.find(route => route.vehicle === delivery.vehicle && routeRoundNumber(route) === 2) || delivery;
+    packagingByRoute.set(target.id, [...(packagingByRoute.get(target.id) || []), shopEmballageStop(shopKey)]);
+  }
+  return rounds.map(route => ({ ...refreshRouteRoundAfterManualMove({ ...route,
+    stops: placeLentEmballageAfterLastAreaStop([...route.stops, ...(packagingByRoute.get(route.id) || [])]),
+  }, loadProfile), reason: route.reason }));
+}
+
+function buildBaseRouteRounds(
   plan: DayPlan,
   receipts: ReceiptSummary[],
   loadProfile: DayLoadProfile,
@@ -8644,7 +8577,7 @@ function buildRouteRounds(
         routeLearning
       ).map((receipt) => routeStopForReceipt(receipt, `${bus.id}-first-`)),
       ...(addLentEmballageStop && bus.id === lentBusId
-        ? [lentEmballageStop()]
+        ? [shopEmballageStop("lent")]
         : []),
     ]);
     const secondStops = [
@@ -8782,7 +8715,7 @@ function buildSaturdayRouteRounds(
         routeLearning
       ).map((receipt) => routeStopForReceipt(receipt, `${bus.id}-first-`)),
       ...(addLentEmballageStop && bus.id === "B"
-        ? [lentEmballageStop()]
+        ? [shopEmballageStop("lent")]
         : []),
     ]);
     const secondStops = [
@@ -9133,7 +9066,7 @@ function reconcileRouteDraftRounds(
     const stops = draftRoute.stops
       .map((draftStop) => {
         const sourceKey = draftStop.sourceId || draftStop.id;
-        if (excludedSourceIds.has(sourceKey)) return null;
+        if (excludedSourceIds.has(sourceKey) || usedSourceKeys.has(sourceKey)) return null;
         if (
           sourceKey.startsWith("manual:") ||
           sourceKey.startsWith("acquisition:")
@@ -9194,15 +9127,7 @@ function reconcileRouteDraftRounds(
     );
   });
 
-  return reconciledRoutes.map((route) =>
-    refreshRouteRoundAfterManualMove(
-      {
-        ...route,
-        stops: placeLentEmballageAfterLastAreaStop(route.stops),
-      },
-      loadProfile
-    )
-  );
+  return reconciledRoutes.map(route => refreshRouteRoundAfterManualMove(route, loadProfile));
 }
 
 function buildReceiptLines(receipt: ReceiptSeed, plan: DayPlan): ReceiptLine[] {
@@ -9719,6 +9644,10 @@ export default function BakkerijLogistiekDashboard() {
   const [batchLoadState, setBatchLoadState] = useState<BatchLoadState>("idle");
   const [loadedBatchDate, setLoadedBatchDate] = useState("");
   const [batchReloadCounter, setBatchReloadCounter] = useState(0);
+  const routeSaveQueueRef = useRef<ReturnType<typeof createRouteSaveQueue> | null>(null);
+  if (routeSaveQueueRef.current === null) routeSaveQueueRef.current = createRouteSaveQueue();
+  const pendingRouteDateRef = useRef("");
+  const routeViewDateRef = useRef("");
   const [routeSaveState, setRouteSaveState] = useState<RouteSaveState>("idle");
   const [routeSaveMessage, setRouteSaveMessage] = useState("");
   const [isImporting, setIsImporting] = useState(false);
@@ -9783,6 +9712,8 @@ export default function BakkerijLogistiekDashboard() {
     () => buildReceiptSummaries(selectedPlan, activeImportedBatch),
     [selectedPlan, activeImportedBatch]
   );
+  const excludedSourcesKey = JSON.stringify(routeDraft?.excludedSourceIds || []);
+  const routeExcludedSourceIds = useMemo(() => JSON.parse(excludedSourcesKey) as string[], [excludedSourcesKey]);
   const receiptSummaries = useMemo(
     () => {
       const overriddenReceipts = applyReceiptOverrides(
@@ -9793,7 +9724,7 @@ export default function BakkerijLogistiekDashboard() {
       const receiptsAfterLegacyDeletion = applyLegacyProCollegeFullDeletion(
         overriddenReceipts,
         selectedPlan.date,
-        routeDraft?.excludedSourceIds || []
+        routeExcludedSourceIds
       );
 
       return applyFixedCustomerDefaults(
@@ -9805,7 +9736,7 @@ export default function BakkerijLogistiekDashboard() {
       baseReceiptSummaries,
       fixedCustomers,
       receiptOverrides,
-      routeDraft,
+      routeExcludedSourceIds,
       selectedPlan.date,
     ]
   );
@@ -10134,6 +10065,11 @@ export default function BakkerijLogistiekDashboard() {
   }, []);
 
   useEffect(() => {
+    if (routeViewDateRef.current !== selectedPlan.date) {
+      routeViewDateRef.current = selectedPlan.date;
+      pendingRouteDateRef.current = "";
+    }
+    if (pendingRouteDateRef.current === selectedPlan.date) return;
     if (routeDraft?.date === selectedPlan.date) {
       setManualRouteRounds(
         reconcileRouteDraftRounds(routeDraft, automaticRouteRounds, loadProfile)
@@ -10331,59 +10267,40 @@ export default function BakkerijLogistiekDashboard() {
   }
 
   async function saveRouteDraft(
-    routeRoundsToSave: RouteRound[],
-    learn = true,
+    routeRoundsToSave: RouteRound[], learn = true,
     excludedSourceIds = excludedRouteStopSourceIds
   ) {
+    const date = selectedPlan.date;
+    pendingRouteDateRef.current = date;
     setRouteSaveState("saving");
-    setRouteSaveMessage(
-      learn
-        ? "route opslaan en routegeheugen bijwerken..."
-        : "routeconcept opslaan..."
-    );
-
-    try {
+    setRouteSaveMessage(learn ? "route opslaan en routegeheugen bijwerken..." : "routeconcept opslaan...");
+    const payload = JSON.stringify({ date, routes: serializeRouteRounds(routeRoundsForPersistence(routeRoundsToSave)),
+      baselineRoutes: learn ? serializeRouteRounds(automaticRouteRounds) : undefined, excludedSourceIds, learn });
+    const job = routeSaveQueueRef.current!.enqueue(async () => {
       const response = await fetch("/api/bakkerij-logistiek/route-draft", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          date: selectedPlan.date,
-          routes: serializeRouteRounds(
-            routeRoundsForPersistence(routeRoundsToSave)
-          ),
-          baselineRoutes: learn
-            ? serializeRouteRounds(automaticRouteRounds)
-            : undefined,
-          excludedSourceIds,
-          learn,
-        }),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: payload,
       });
-      const data = (await response.json()) as {
-        ok?: boolean;
-        routeDraft?: RouteDraftSummary | null;
-        routeLearning?: RouteLearningSummary | null;
-        message?: string;
-      };
-
-      if (!response.ok || !data.ok || !data.routeDraft) {
-        throw new Error(data.message || "Route opslaan is niet gelukt.");
-      }
-
-      setRouteDraft(data.routeDraft);
-      setRouteLearning(data.routeLearning || null);
+      const data = await response.json() as { ok?: boolean; routeDraft?: RouteDraftSummary | null; routeLearning?: RouteLearningSummary | null; message?: string };
+      if (!response.ok || !data.ok || !data.routeDraft) throw new Error(data.message || "Route opslaan is niet gelukt.");
+      return data;
+    }, !learn);
+    try {
+      const data = await job.promise;
+      if (!data || !job.isLatest()) return false;
+      if (pendingRouteDateRef.current === date) pendingRouteDateRef.current = "";
+      if (dateStateRef.current.selectedDate !== date) return false;
+      setRouteDraft(data.routeDraft!);
+      if (data.routeLearning !== undefined) setRouteLearning(data.routeLearning);
       setRouteHasUnsavedChanges(false);
       setRouteSaveState("saved");
-      setRouteSaveMessage(
-        learn
-          ? `route opgeslagen om ${getUploadTime()}`
-          : `routeconcept bewaard om ${getUploadTime()}`
-      );
+      setRouteSaveMessage(learn ? `route opgeslagen om ${getUploadTime()}` : `routeconcept bewaard om ${getUploadTime()}`);
       return true;
     } catch (error) {
+      if (!job.isLatest() || dateStateRef.current.selectedDate !== date) return false;
+      // Retain the visible edits and offer another save, rather than reverting them.
+      setRouteHasUnsavedChanges(true);
       setRouteSaveState("error");
-      setRouteSaveMessage(
-        error instanceof Error ? error.message : "Route opslaan is niet gelukt."
-      );
+      setRouteSaveMessage(error instanceof Error ? error.message : "Route opslaan is niet gelukt.");
       return false;
     }
   }
@@ -10865,6 +10782,9 @@ export default function BakkerijLogistiekDashboard() {
   }
 
   async function resetRouteDraft() {
+    routeSaveQueueRef.current!.invalidate();
+    pendingRouteDateRef.current = "";
+    await routeSaveQueueRef.current!.settled();
     const currentRoutes = manualRouteRounds || automaticRouteRounds;
     const acquisitionPlacements = currentRoutes.flatMap((route) =>
       route.stops
@@ -12759,7 +12679,10 @@ function RoutesPanel({
   const [dragging, setDragging] = useState<RouteDragState | null>(null);
   const [dropIndicator, setDropIndicator] =
     useState<RouteDropIndicator | null>(null);
-  const routeGroups = routeGroupsFor(routeRounds);
+  const routeGroups = useMemo(() => routeGroupsFor(routeRounds), [routeRounds]);
+  const routeTimingsByVehicle = useMemo(() => new Map(routeGroups.map(group =>
+    [group.vehicle, buildRouteGroupTimings(group.routes)]
+  )), [routeGroups]);
   const plannedBusDepartures = (["A", "B"] as BusId[]).reduce(
     (departures, bus) => {
       const firstRoute = routeRounds.find(
@@ -12796,10 +12719,8 @@ function RoutesPanel({
     event.stopPropagation();
     event.dataTransfer.dropEffect = "move";
     if (targetRouteId) {
-      setDropIndicator({
-        routeId: targetRouteId,
-        position: "end",
-      });
+      setDropIndicator(current => current?.routeId === targetRouteId && current.position === "end"
+        ? current : { routeId: targetRouteId, position: "end" });
     }
   }
 
@@ -12815,11 +12736,9 @@ function RoutesPanel({
     event.dataTransfer.dropEffect = "move";
 
     const rect = event.currentTarget.getBoundingClientRect();
-    setDropIndicator({
-      routeId: targetRouteId,
-      stopId: targetStopId,
-      position: event.clientY < rect.top + rect.height / 2 ? "before" : "after",
-    });
+    const position = event.clientY < rect.top + rect.height / 2 ? "before" : "after";
+    setDropIndicator(current => current?.routeId === targetRouteId && current.stopId === targetStopId && current.position === position
+      ? current : { routeId: targetRouteId, stopId: targetStopId, position });
   }
 
   function handleStopDrop(
@@ -13017,10 +12936,7 @@ function RoutesPanel({
               : "border-[#ead178] bg-[#fff0b8] text-[#6f5212]";
           const busId = busIdFromVehicleName(group.vehicle);
           const departureOverride = busId ? plannedBusDepartures[busId] : "";
-          const routeTimings = buildRouteGroupTimings(
-            group.routes,
-            departureOverride
-          );
+          const routeTimings = routeTimingsByVehicle.get(group.vehicle)!;
 
           return (
             <article
@@ -13232,7 +13148,7 @@ function RoutesPanel({
                               <span className="sm:hidden">SINT</span>
                               <span className="hidden sm:inline">SINT PAKKETJE</span>
                             </span>
-                          ) : isLentEmballageStop(stop) ? (
+                          ) : routeStopSourceKey(stop).endsWith(":emballage") ? (
                             <span
                               title="Alleen meenemen indien er tijd is"
                               className="flex items-center gap-1 whitespace-nowrap rounded-full border border-[#e3c45d] bg-[#fff4bf] px-1.5 py-1 text-[0.6rem] font-black tracking-normal text-[#705510]"

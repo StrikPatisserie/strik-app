@@ -292,7 +292,7 @@ export async function POST(request: Request) {
         )
       );
     }
-    const routeLearning = await getLogisticsRouteLearning();
+    const routeLearning = shouldLearn ? await getLogisticsRouteLearning() : undefined;
 
     return NextResponse.json({
       ok: true,
