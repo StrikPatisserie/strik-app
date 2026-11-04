@@ -35,7 +35,7 @@ function endpoint(profile,storage={status:'wordpress'}){let reads=0;const api=lo
  'next/server':{NextResponse:{json:(body,init)=>Response.json(body,init)}},'@/app/lib/auth/session':{getCurrentProfile:async()=>profile},'@/app/lib/auth/access':access,
  '@/app/management/revenueHistoryServer':{getRevenueComparisonHistory:async()=>[]},
  '@/app/management/revenueServer':{getStoredRevenueData:async()=>{reads++;return{storage,data:{dailyRecords:[record('Lent','2026-11-03',1234.56,{note:'private note',messageId:'private-message'})],cashRecords:['private cash'],records:['private weekly']}};}},'@/app/management/homeDayRevenue':model,
- });return{get:api.GET,reads:()=>reads};}
+ });return{get:(request=new Request("https://app.strik-patisserie.nl/api/home-day-revenue"))=>api.GET(request),reads:()=>reads};}
 test('only active management accounts can retrieve revenue; other users never trigger a data read',async()=>{
  for(const profile of [null,{active:false,role:'manager'},...['winkel','bakkerij','logistiek','medewerker'].map(role=>({active:true,role,permissions:{'management.view':true}}))]){
   const api=endpoint(profile),response=await api.get();assert.equal(response.status,403);assert.equal(api.reads(),0);assert.match(response.headers.get('cache-control'),/private, no-store/);

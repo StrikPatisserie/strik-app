@@ -8,10 +8,10 @@ import { getRevenueComparisonHistory } from "@/app/management/revenueHistoryServ
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const headers = {"Cache-Control":"private, no-store, max-age=0",Vary:"Cookie"};
-export async function GET(request?: Request) {
+export async function GET(request: Request) {
   const profile = await getCurrentProfile();
   if (!hasFullAccess(profile)) return NextResponse.json({message:"Geen toegang tot dagomzet."},{status:403,headers});
-  const date=request ? new URL(request.url).searchParams.get("date") : null;
+  const date=new URL(request.url).searchParams.get("date");
   if(date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0,10)!==date))return NextResponse.json({message:"Ongeldige datum."},{status:400,headers});
   try {
     const [{data,storage},history] = await Promise.all([getStoredRevenueData(),getRevenueComparisonHistory()]);
