@@ -82,13 +82,13 @@ test('source changes during export stop cutover and unlock WordPress without imp
 });
 test('recipe save preserves financial and invoice history for production accounts and protects missing revisions',async()=>{
  const projections=load('app/bakkerij/recepturen/recipeAccess.ts');let calls=0;
- const store=load('app/productie/recipeStore.server.ts',{'server-only':{},'../bakkerij/recepturen/recipeAccess':projections,'../lib/auth/access':access,'./documents.server':{ProductionStoreError:StoreError,saveDocument:async()=>{calls++;return 5;},readDocument:async()=>null}});
+ const store=load('app/productie/recipeStore.server.ts',{'../lib/auth/weeklyOffers':load('app/lib/auth/weeklyOffers.ts',{'./access':access}),'server-only':{},'../bakkerij/recepturen/recipeAccess':projections,'../lib/auth/access':access,'./documents.server':{ProductionStoreError:StoreError,saveDocument:async()=>{calls++;return 5;},readDocument:async()=>null}});
  const current=fixture();current.invoiceImports=[{id:'history',lines:[{totalPrice:123}]}];const incoming=projections.recipeDataForProduction(current);incoming.recipes[0].costPrice=0;incoming.storageRevision=4;
  const merged=store.mergeRecipeSave(current,incoming,bakery);assert.equal(merged.recipes[0].costPrice,888);assert.equal(merged.invoiceImports.length,1);
  await assert.rejects(store.saveSharedRecipes({data:current,revision:4},{...incoming,storageRevision:undefined},manager),/verouderd/);assert.equal(calls,0);
 });
 test('image downloads are private and unavailable to anonymous users',async()=>{
- let reads=0;const api=load('app/api/recepturen/media/[id]/route.ts',{'@/app/lib/auth/session':{getCurrentProfile:async()=>null},'@/app/productie/access':rights,'@/app/productie/media.server':{readProductionImage:async()=>{reads++;return null;}}});
+ let reads=0;const api=load('app/api/recepturen/media/[id]/route.ts',{'@/app/weeklyOffers.server':{loadWeeklyOffers:async()=>[]},'@/app/lib/auth/session':{getCurrentProfile:async()=>null},'@/app/productie/access':rights,'@/app/productie/media.server':{readProductionImage:async()=>{reads++;return null;}}});
  assert.equal((await api.GET(new Request('https://example.invalid'),{params:Promise.resolve({id:'a'.repeat(64)})})).status,403);assert.equal(reads,0);
 });
 test('a legacy recipe with a missing ingredient stays visible but cannot generate or finish production tasks',async()=>{

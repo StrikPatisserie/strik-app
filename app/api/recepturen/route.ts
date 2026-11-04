@@ -1,3 +1,4 @@
+import {canManageWeeklyOffers,weeklyOffersChanged} from "@/app/lib/auth/weeklyOffers";
 import { recipeStorageAuthHeaders } from "@/app/lib/recipeStorageAuth";
 import { getCurrentProfile } from "@/app/lib/auth/session";
 import { hasFullAccess, canAccessBakkerijPatisserie, canAccessBakkerijIjsChocolade } from "@/app/lib/auth/access";
@@ -215,6 +216,12 @@ export async function PUT(request: Request) {
     if (!isRecepturenData(incomingData)) return NextResponse.json({ message: "Ongeldige recepturendata." }, { status: 400 });
     const shared = await readDocument<RecepturenData>("recipes");
     if (shared) return NextResponse.json(await saveSharedRecipes(shared,incomingData as RecepturenData,profile), {headers:{"Cache-Control":"private, no-store"}});
+    if(!canManageWeeklyOffers(profile)) {
+      const response=await fetchWordPressRecepturen();const current=await readWordPressResponse(response);
+      if(!response.ok||!isRecepturenData(current))return NextResponse.json({message:"De bestaande aanbiedingen konden niet worden gecontroleerd. Er is niets opgeslagen."},{status:503});
+      if((incomingData as RecepturenData).bakeryHome===undefined)incomingData={...(incomingData as RecepturenData),bakeryHome:(current as RecepturenData).bakeryHome};
+      if(weeklyOffersChanged(current as RecepturenData,incomingData as RecepturenData))return NextResponse.json({message:"Alleen Feline kan weekaanbiedingen beheren."},{status:403});
+    }
     if (!financialAccess) {
       const currentResponse = await fetchWordPressRecepturen();
       const current = await readWordPressResponse(currentResponse);

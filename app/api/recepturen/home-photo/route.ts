@@ -1,6 +1,6 @@
 import { recipeStorageAuthHeaders } from "@/app/lib/recipeStorageAuth";
 import { getCurrentProfile } from "@/app/lib/auth/session";
-import { hasFullAccess } from "@/app/lib/auth/access";
+import { canManageWeeklyOffers } from "@/app/lib/auth/weeklyOffers";
 import { NextResponse } from "next/server";
 import { ProductionStoreError, readDocument } from "@/app/productie/documents.server";
 import { storeProductionImage } from "@/app/productie/media.server";
@@ -59,7 +59,9 @@ async function uploadToWordPress(formData: FormData, endpoint: string) {
 }
 
 export async function POST(request: Request) {
-  if (!hasFullAccess(await getCurrentProfile())) return Response.json({ message: "Alleen managers kunnen deze gegevens beheren." }, { status: 403 });
+  if (!canManageWeeklyOffers(await getCurrentProfile())) return Response.json({ message: "Alleen Feline kan weekaanbiedingen beheren." }, { status: 403 });
+  const origin=request.headers.get("origin");
+  if(origin&&origin!==new URL(request.url).origin)return Response.json({message:"Ongeldige website."},{status:403});
   const incoming = await request.formData().catch(() => null);
 
   if (!incoming) {

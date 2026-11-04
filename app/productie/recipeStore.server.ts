@@ -1,4 +1,5 @@
 import "server-only";
+import {canManageWeeklyOffers,weeklyOffersChanged} from "../lib/auth/weeklyOffers";
 import type { RecepturenData } from "../bakkerij/recepturen/recepturenApi";
 import { recipeDataForProduction, mergeProductionUpdates } from "../bakkerij/recepturen/recipeAccess";
 import { hasFullAccess } from "../lib/auth/access";
@@ -30,6 +31,7 @@ export async function saveSharedRecipes(current:ProductionDocument<RecepturenDat
     const before=current.data[key]?.length || 0, after=list?.length ?? before;
     if (hasFullAccess(profile) && before>=50 && before-after>=10 && after<before*.85) throw new ProductionStoreError("Opslaan geblokkeerd: er ontbreken veel bestaande recepten of grondstoffen. Ververs de pagina.",409);
   }
+  if(!canManageWeeklyOffers(profile)&&weeklyOffersChanged(current.data,incoming))throw new ProductionStoreError("Alleen Feline kan weekaanbiedingen beheren.",403);
   const data=mergeRecipeSave(current.data,incoming,profile);
   const revision=await saveDocument("recipes",current.revision,data,profile.id,"Recepturen bijgewerkt");
   return {...(hasFullAccess(profile)?data:recipeDataForProduction(data)),financialAccess:hasFullAccess(profile),storageRevision:revision,storageProvider:"supabase"};

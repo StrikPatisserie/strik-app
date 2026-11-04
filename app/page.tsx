@@ -7,6 +7,7 @@ import { filterAllowedItems, hasFullAccess } from "./lib/auth/access";
 import HomeDayRevenue from "./HomeDayRevenue";
 import { getCurrentProfile } from "./lib/auth/session";
 import type { UserProfile } from "./lib/supabase/types";
+import {canManageWeeklyOffers} from "./lib/auth/weeklyOffers";
 import WelcomeHighlights from "./WelcomeHighlights";
 
 const baseSections = [
@@ -167,7 +168,7 @@ export default async function Home() {
           </div>
         </div>
 
-        <WelcomeHighlights />
+        <WelcomeHighlights canEditOffers={canManageWeeklyOffers(profile)} />
 
         <details className="group relative z-20 mt-8 w-full max-w-4xl lg:mt-4">
           <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 rounded-[1.3rem] bg-[#fffaf0] px-3 py-2.5 text-[#49342d] shadow-[0_12px_35px_rgba(73,52,45,.16)] transition hover:-translate-y-0.5 hover:shadow-[0_15px_40px_rgba(73,52,45,.22)] sm:inline-flex sm:min-w-[28rem] sm:px-4 [&::-webkit-details-marker]:hidden">

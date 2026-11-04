@@ -2,8 +2,10 @@
 
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
+import dynamic from "next/dynamic";
+import WeekOfferImage from "./WeekOfferImage";
+const WeeklyOfferEditor=dynamic(()=>import("./WeeklyOfferEditor"));
 import { useEffect, useState } from "react";
-import { fetchRecepturenData } from "./bakkerij/recepturen/recepturenApi";
 import type { BakeryHomeOffer } from "./bakkerij/recepturen/types";
 import {
   NEWS_API_URL,
@@ -153,7 +155,8 @@ function formatNewsDate(value: string) {
   }).format(date);
 }
 
-export default function WelcomeHighlights() {
+export default function WelcomeHighlights({canEditOffers=false}:{canEditOffers?:boolean}) {
+  const [editingOffer,setEditingOffer]=useState(false);
   const [events, setEvents] = useState<TeamAgendaEvent[]>([]);
   const [agendaStatus, setAgendaStatus] = useState("Agenda laden...");
   const [agendaView, setAgendaView] = useState<"week" | "month">("week");
@@ -205,16 +208,13 @@ export default function WelcomeHighlights() {
     }
 
     async function loadOffer() {
-      const result = await fetchRecepturenData();
-      if (ignoreResult) return;
-
-      if (result.ok) {
-        const loadedOffers = result.data.bakeryHome?.offers || [];
-        setOffers(loadedOffers);
-        setOfferStatus(loadedOffers.length ? "" : "Nog geen aanbiedingen ingesteld");
-      } else {
-        setOfferStatus("Aanbieding niet beschikbaar");
-      }
+      try {
+        const response=await fetch("/api/weekly-offers",{cache:"no-store"});
+        if(!response.ok)throw Error("unavailable");
+        const result=await response.json() as {offers:BakeryHomeOffer[]};
+        if(ignoreResult)return;
+        setOffers(result.offers);setOfferStatus(result.offers.length?"":"Nog geen aanbiedingen ingesteld");
+      } catch {if(!ignoreResult)setOfferStatus("Aanbieding niet beschikbaar");}
     }
 
     async function loadNews() {
@@ -241,6 +241,15 @@ export default function WelcomeHighlights() {
 
   const offer =
     offers.find((item) => item.weekStart === selectedWeek) || null;
+  useEffect(()=>{
+    const timer=window.setTimeout(()=>{
+      for(const week of [addDays(selectedWeek,-7),addDays(selectedWeek,7)]) {
+        const next=offers.find(item=>item.weekStart===week);
+        if(next?.imageUrl){const image=new Image();image.src=next.imageUrl;}
+      }
+    },300);
+    return()=>window.clearTimeout(timer);
+  },[offers,selectedWeek]);
   const visibleAgendaEvents = agendaEventsForPeriod(
     events,
     agendaAnchor,
@@ -384,19 +393,15 @@ export default function WelcomeHighlights() {
 
         <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-[0.9rem] bg-transparent">
           {offer?.imageUrl ? (
-            <span className="block h-full max-h-full max-w-full overflow-hidden rounded-[0.7rem] shadow-sm aspect-[210/297]">
-              <img
-                src={offer.imageUrl}
-                alt={offer.label || `Weekaanbieding week ${weekNumber(selectedWeek)}`}
-                className="h-full w-full object-contain"
-              />
-            </span>
+            <WeekOfferImage key={`${selectedWeek}:${offer.imageUrl}`} src={offer.imageUrl} alt={offer.label || `Weekaanbieding week ${weekNumber(selectedWeek)}`}/>
           ) : (
             <p className="rounded-xl bg-white/60 px-4 py-6 text-center text-xs font-medium text-[#63765c]">
               {offerStatus || "Geen aanbieding in deze week"}
             </p>
           )}
         </div>
+        {canEditOffers&&<button type="button" onClick={()=>setEditingOffer(true)} className="mt-2 shrink-0 self-center rounded-lg px-3 py-1.5 text-[0.65rem] font-semibold text-[#63765c] hover:bg-white/50">{offer?"Aanbieding wijzigen":"+ Aanbieding toevoegen"}</button>}
+        {canEditOffers&&editingOffer&&<WeeklyOfferEditor key={selectedWeek} week={selectedWeek} offer={offer} onSaved={next=>{setOffers(next);setOfferStatus("");}} onClose={()=>setEditingOffer(false)}/>}
       </article>
 
       <Link
