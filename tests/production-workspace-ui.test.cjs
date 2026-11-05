@@ -131,3 +131,26 @@ test('recalculation and the selected week offer remain available in XL with an e
  const detail=find(tree,n=>typeof n.type==='function' && !!n.props.onMove),detailTree=h.render(detail.type,detail.props,tree.props.value);assert(text(detailTree).includes('Recept gewijzigd'));
  button(detailTree,'Met actueel recept bijwerken').props.onClick();tree=h.render(h.Component,{live});const form=find(tree,n=>typeof n.type==='function' && !!n.props.onPlan),formTree=h.render(form.type,form.props,tree.props.value);assert.equal(formTree.props.title,'Planning bijwerken');assert(button(formTree,'Planning bijwerken'));assert(find(formTree,n=>typeof n.type==='function' && !!n.props.changes));
 });
+
+test('working recipe multiplier accepts decimal commas, scales all ingredients and stays synced with quantity',()=>{
+ const h=harness(),state=sample.initialPreviewState();
+ const base=sample.demoRecipes[0];
+ const recipe={...base,yield:4.804,unit:'kg',ingredients:[{name:'Melk',quantity:1000,unit:'gram'}]};
+ const item={...state.items[0],recipeId:recipe.id,unit:'kg'};
+ const live={state:{...state,items:[item],tasks:[]},today:sample.DEMO_TODAY,recipes:[recipe],ingredients:[],canManage:false,departments:['dessert'],revision:1};
+ let tree=h.render(h.Component,{live,initialView:'recipes'});
+ find(tree,n=>n.props?.className==='workRecipeRow').props.onClick();tree=h.render(h.Component,{live,initialView:'recipes'});
+ const detail=find(tree,n=>typeof n.type==='function' && n.props.item?.id===item.id && !!n.props.onLink);
+ const render=()=>h.render(detail.type,detail.props,tree.props.value);
+ const input=(t,label)=>find(t,n=>n.type==='input' && n.props['aria-label']===label);
+ const content=t=>find(t,n=>typeof n.type==='function' && n.props.recipeId===recipe.id && 'amount' in n.props);
+ let view=render();input(view,'Aantal keer basisrecept').props.onChange({target:{value:'1,5'}});view=render();
+ assert.equal(content(view).props.amount,7.206);
+ assert.equal(input(view,'Hoeveelheid werkrecept').props.value,'7.206');
+ const ingredients=h.render(content(view).type,content(view).props,tree.props.value);assert(text(ingredients).includes('1.500 gram'));
+ input(view,'Aantal keer basisrecept').props.onChange({target:{value:'6'}});view=render();assert.equal(content(view).props.amount,28.824);
+ input(view,'Hoeveelheid werkrecept').props.onChange({target:{value:'9.608'}});view=render();assert.equal(input(view,'Aantal keer basisrecept').props.value,'2');
+ input(view,'Aantal keer basisrecept').props.onChange({target:{value:'0'}});view=render();assert(nodes(view).some(n=>n.props?.role==='status'));assert(!nodes(view).some(n=>n.props?.recipeId===recipe.id && 'amount' in n.props));
+ button(view,'1 basisrecept · 4,8 kg').props.onClick();view=render();assert.equal(content(view).props.amount,4.804);assert.equal(input(view,'Aantal keer basisrecept').props.value,'1');
+ assert.equal(recipe.yield,4.804);
+});
