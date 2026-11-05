@@ -1,4 +1,5 @@
 import Link from "next/link";
+import LokaalVerhaalAccess from "./LokaalVerhaalAccess";
 import CompactStaffOverview from "../CompactStaffOverview";
 import DepartmentHub from "../DepartmentHub";
 import { strikIcons } from "../StrikUI";
@@ -63,6 +64,7 @@ export default async function WinkelPage() {
           Sinterklaas- &amp; kerstfolder <span aria-hidden="true">→</span>
         </Link>
       </div>
+      <LokaalVerhaalAccess profile={profile}/>
       <section>
         <CompactStaffOverview />
       </section>
