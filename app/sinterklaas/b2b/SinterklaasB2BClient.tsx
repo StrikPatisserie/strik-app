@@ -497,6 +497,15 @@ function currentYear() {
   return String(new Date().getFullYear());
 }
 
+function currentBusinessWeek(now = new Date()) {
+  const localDate = new Intl.DateTimeFormat("sv-SE", {timeZone:"Europe/Amsterdam",year:"numeric",month:"2-digit",day:"2-digit"}).format(now);
+  return Number(isoWeekFromDate(localDate).split("-W")[1]);
+}
+
+function OverviewIcon({kind}:{kind:"upload"|"refresh"}) {
+  return <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{kind==="upload"?<><path d="M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5"/></>:<><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1"/></>}</svg>;
+}
+
 function yearFromDate(date: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date.slice(0, 4) : currentYear();
 }
@@ -525,7 +534,7 @@ function isoWeekBounds(value: string) {
 
 function isoWeekFromDate(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return "";
-  const date = new Date(`${value}T12:00:00Z`);
+  const date = new Date(`${value}T00:00:00Z`);
   const thursday = new Date(date);
   const day = thursday.getUTCDay() || 7;
   thursday.setUTCDate(thursday.getUTCDate() + 4 - day);
@@ -1756,6 +1765,7 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
 }
 
 export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ season?: BusinessSeason }>) {
+  const excelInput=useRef<HTMLInputElement>(null);
   const [year, setYear] = useState(() => currentYear());
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -2049,33 +2059,38 @@ export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ sea
 
   return (
     <><div className={styles.page} style={{ "--b2b-accent": colors.accent, "--b2b-pale": colors.pale, "--b2b-season-border": colors.border } as CSSProperties}>
-      <nav className={styles.topbar} aria-label="B2B seizoen">
-        <span className={styles.breadcrumb}>Zakelijk / Bestellingen</span>
+      <nav className={`${styles.topbar} ${styles.overviewTopbar}`} aria-label="B2B seizoen">
+        <h1 className={styles.overviewTitle}>B2B-bestellingen</h1>
         <div className={styles.seasons}>{(["sint", "kerst"] as const).map(key => <Link key={key} href={businessSeasons[key].orders} aria-current={key === season ? "page" : undefined}>{businessSeasons[key].shortName}</Link>)}</div>
+        <span className={styles.currentWeek} title="Huidige week in Nederland">Nu · week {currentBusinessWeek()}</span>
         <Link className={styles.newsletter} href={businessSeasons[season].mailing}>Nieuwsbrief →</Link>
+        {!formOpen&&<button type="button" className={styles.primary} onClick={openNewOrderDialog}>+ Nieuwe bestelling</button>}
       </nav>
       {saveNotice && <p role="status" className={styles.notice}>{saveNotice}<button type="button" aria-label="Melding sluiten" onClick={() => setSaveNotice("")} style={{ marginLeft: "auto" }}>×</button></p>}
       {(error || syncError) && <p role="alert" className={styles.error}>{error || syncError}</p>}
       {formOpen ? <B2BOrderEditor order={editingOrder} season={season} onClose={closeOrderDialog} onSaved={handleSavedOrder} /> : <>
-        <header className={styles.header}>
-          <div><p className={styles.eyebrow}>{seasonLabel(season)} · {year}</p><h1>B2B-bestellingen</h1><p className={styles.subtitle}>Klant, levering en status in één oogopslag.</p></div>
-          <button type="button" className={styles.primary} onClick={openNewOrderDialog}>+ Nieuwe bestelling</button>
-        </header>
-        <div className={styles.meta}>
-          <span>Verwachte omzet <b>{money(expectedRevenue)}</b></span>{requestCount > 0 && <span><b>{requestCount}</b> {requestCount === 1 ? "aanvraag" : "aanvragen"}</span>}<span><b>{finalCount}</b> definitief</span><span><b>{quoteCount}</b> {quoteCount === 1 ? "offerte" : "offertes"}</span>
-          {pendingEntryCount > 0 && <button type="button" className={styles.attentionLink} onClick={() => setStatusFilter("nog-invoeren")}>! {pendingEntryCount} nog invoeren</button>}
-        </div>
-        <div className={styles.tools}>
-          <input aria-label="Zoek klant of product" placeholder="Zoek klant, datum of product" value={search} onChange={event => setSearch(event.target.value)} className={styles.search} />
-          <select aria-label="Filter status" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>
-            <option value="">Alle statussen</option><option value="aanvraag">Aanvraag</option><option value="offerte">Offerte</option><option value="akkoord">Definitief</option><option value="nog-invoeren">Nog invoeren</option><option value="afgewezen">Niet doorgegaan</option>
-          </select>
-          <select aria-label="Besteljaar" value={year} onChange={event => setYear(event.target.value)}>
-            {Array.from({ length: Number(currentYear()) - 2018 }, (_, index) => String(Number(currentYear()) - index)).map(optionYear => <option key={optionYear} value={optionYear}>{optionYear}</option>)}
-          </select>
-          <span className={styles.spacer} />
-          <button type="button" className={styles.quiet} disabled={loading} onClick={() => void loadOrders(year)}>↻ Ververs</button>
-          <label className={styles.quiet}>Excel import<input type="file" accept=".xlsx,.xls" onChange={event => void handleExcelFile(event.target.files?.[0])} className="sr-only" /></label>
+        <div className={styles.overviewToolbar}>
+          <div className={styles.overviewControls}>
+            <input aria-label="Zoek klant of product" placeholder="Zoek klant, datum of product" value={search} onChange={event => setSearch(event.target.value)} className={styles.search} />
+            <select aria-label="Filter status" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>
+              <option value="">Alle statussen</option><option value="aanvraag">Aanvraag</option><option value="offerte">Offerte</option><option value="akkoord">Definitief</option><option value="nog-invoeren">Nog invoeren</option><option value="afgewezen">Niet doorgegaan</option>
+            </select>
+            <select aria-label="Besteljaar" value={year} onChange={event => setYear(event.target.value)}>
+              {Array.from({ length: Number(currentYear()) - 2018 }, (_, index) => String(Number(currentYear()) - index)).map(optionYear => <option key={optionYear} value={optionYear}>{optionYear}</option>)}
+            </select>
+            <button type="button" className={styles.overviewIconButton} aria-label="Bestellingen verversen" title="Verversen" data-loading={loading||undefined} disabled={loading} onClick={() => void loadOrders(year)}><OverviewIcon kind="refresh"/></button>
+            <button type="button" className={styles.overviewIconButton} aria-label="Excel importeren" title="Excel importeren" disabled={importing} onClick={()=>excelInput.current?.click()}><OverviewIcon kind="upload"/></button>
+            <input ref={excelInput} type="file" accept=".xlsx,.xls" hidden aria-label="Excelbestand kiezen" onChange={event => {void handleExcelFile(event.target.files?.[0]);event.target.value="";}} />
+          </div>
+          <div className={styles.overviewStats} aria-label="Besteloverzicht">
+            <span title="Verwachte omzet excl. btw">Verwacht <b>{money(expectedRevenue)}</b></span>
+            {requestCount>0&&<span><b>{requestCount}</b> {requestCount===1?"aanvraag":"aanvragen"}</span>}
+            {quoteCount>0&&<span><b>{quoteCount}</b> {quoteCount===1?"offerte":"offertes"}</span>}
+            <div className={styles.finalOverview} aria-label="Definitief en nog invoeren">
+              <button type="button" aria-pressed={statusFilter==="akkoord"} title="Toon definitieve bestellingen" onClick={()=>setStatusFilter(current=>current==="akkoord"?"":"akkoord")}><b>{finalCount}</b> definitief</button>
+              <button type="button" className={styles.pendingEntry} data-pending={pendingEntryCount>0||undefined} aria-pressed={statusFilter==="nog-invoeren"} disabled={!pendingEntryCount} title="Toon bestellingen die nog ingevoerd moeten worden" onClick={()=>setStatusFilter(current=>current==="nog-invoeren"?"":"nog-invoeren")}><b>{pendingEntryCount}</b> nog invoeren</button>
+            </div>
+          </div>
         </div>
         {importPreview.length > 0 && <section className={styles.import}>
           <div className={styles.header}><h2>Import klaar: {importPreview.length} regels</h2><button type="button" disabled={importing} onClick={() => void saveImportPreview()} className={styles.primary}>{importing ? "Opslaan…" : "Import opslaan"}</button><button type="button" disabled={importing} onClick={() => setImportPreview([])} className={styles.quiet}>Annuleren</button></div>

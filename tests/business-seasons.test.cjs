@@ -18,7 +18,7 @@ const b2b = load('app/sinterklaas/b2b/SinterklaasB2BClient.tsx', {
   '../../kerst-voor-bedrijven/christmasProducts': catalog,
   '../../lib/business-folder-pricing': pricing,
   '../../lib/businessDeliveryPricing': load('app/lib/businessDeliveryPricing.ts'),
-}, 'exports.formStateFromOrder = formStateFromOrder; exports.christmasCatalog = CHRISTMAS_CATALOG; exports.reprice = repriceProductLines; exports.serialize = serializeOrderText; exports.parse = parseOrderText;');
+}, 'exports.formStateFromOrder = formStateFromOrder; exports.christmasCatalog = CHRISTMAS_CATALOG; exports.reprice = repriceProductLines; exports.serialize = serializeOrderText; exports.parse = parseOrderText; exports.currentWeek = currentBusinessWeek;');
 const mailing = load('app/sinterklaas/mailing/SinterklaasMailingClient.tsx', { '../../lib/businessSeasons': seasons }, 'exports.defaultsFor = defaultsFor; exports.migrate = migrateCampaign; exports.preview = EmailPreview;');
 function collect(node, predicate) {
   if (!node || typeof node !== 'object') return [];
@@ -75,4 +75,9 @@ test('Christmas navigation is on for existing settings while access still requir
   assert.equal(access.canAccessPath({ active: true, role: 'manager' }, '/kerst/b2b'), true);
   assert.equal(access.canAccessPath({ active: true, role: 'winkel', permissions: {} }, '/kerst/mailing'), false);
   assert.equal(access.canAccessPath({ active: true, role: 'bakkerij', permissions: { 'kerst.view': true } }, '/kerst/b2b'), true);
+});
+
+
+test('B2B current week follows Amsterdam midnight and ISO year boundaries',()=>{
+ for(const [time,week] of [['2026-11-05T10:00:00Z',45],['2026-11-01T22:59:00Z',44],['2026-11-01T23:01:00Z',45],['2026-07-05T21:59:00Z',27],['2026-07-05T22:01:00Z',28],['2027-01-03T12:00:00Z',53],['2027-01-04T12:00:00Z',1]])assert.equal(b2b.currentWeek(new Date(time)),week,time);
 });

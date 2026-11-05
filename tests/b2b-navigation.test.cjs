@@ -21,6 +21,7 @@ function app(season) {
   let stateIndex = 0, effectIndex = 0;
   const hooks = { ...React,
     useState(initial) { const i = stateIndex++; if (!(i in state)) state[i] = typeof initial === 'function' ? initial() : initial; return [state[i], next => { state[i] = typeof next === 'function' ? next(state[i]) : next; }]; },
+    useRef(initial) { const i = stateIndex++; return state[i] ||= { current: initial }; },
     useMemo(fn) { return fn(); },
     useEffect(fn, deps) { const i = effectIndex++, previous = effects[i]; if (!previous || deps.some((dep, j) => dep !== previous.deps[j])) pending.push(() => { previous?.cleanup?.(); effects[i] = { deps, cleanup: fn() }; }); },
   };
@@ -88,6 +89,6 @@ test('saving a changed definitive folder order opens the explicit update-mail ch
   form.props.onSaved(saved);tree=ui.render();
   const popup=nodes(tree,n=>n.props?.order===saved&&n.props?.onUpdated)[0];assert.ok(popup);assert.equal(popup.props.updatedOrder,true);assert.equal(ui.writes.length,0);
   popup.props.onClose();tree=ui.render();assert.equal(nodes(tree,n=>n.props?.order===saved&&n.props?.onUpdated).length,0);
-  const row=nodes(tree,n=>n.props?.order===saved&&n.props?.onCustomerConfirmation)[0];assert.ok(row);row.props.onCustomerConfirmation(saved);
+  const row=nodes(tree,n=>n.props?.order?.id===saved.id&&n.props?.onCustomerConfirmation)[0];assert.ok(row);row.props.onCustomerConfirmation(saved);
   assert.ok(nodes(ui.render(),n=>n.props?.order===saved&&n.props?.onUpdated)[0]);assert.equal(ui.writes.length,0);
 });
