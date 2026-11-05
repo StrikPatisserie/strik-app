@@ -11,7 +11,7 @@ function load(file, imports = {}, expose = '') {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
   new Function('require', 'exports', code + '\n' + expose)(name =>
-    name === 'server-only' ? {} : imports[name] || require(name), exports);
+    name === 'server-only' ? {} : name === '@/app/bakkerij/logistiek/roadRouting' ? load('app/bakkerij/logistiek/roadRouting.ts') : imports[name] || require(name), exports);
   return exports;
 }
 
@@ -130,7 +130,7 @@ test('already stored receipts can recover an explicit delivery address without u
 });
 
 const dashboard = load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx', {
-  "../../productie/ProductionRequests":{}, react: React, 'react/jsx-runtime': require('react/jsx-runtime'),
+  'next/dynamic':{default:()=>()=>null}, './roadRouting':load('app/bakkerij/logistiek/roadRouting.ts'), "../../productie/ProductionRequests":{}, react: React, 'react/jsx-runtime': require('react/jsx-runtime'),
   './routeSaveQueue': load('app/bakkerij/logistiek/routeSaveQueue.ts'),
   './sinterklaasAcquisitionCampaign': load('app/bakkerij/logistiek/sinterklaasAcquisitionCampaign.ts'),
   '../../StrikUI': {}, './routePrintWindow': {}, './routePrintPagination': {}, './arendPrintSession': {},

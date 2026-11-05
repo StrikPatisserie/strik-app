@@ -1,3 +1,4 @@
+import type {AddressLocation,RoadRoute} from "./roadRouting";
 export type LogisticsBatchStatus =
   | "wacht"
   | "prognose"
@@ -126,6 +127,8 @@ export type LogisticsDayFeedback = {
 };
 
 export type LogisticsRouteDraftStop = {
+  location?:AddressLocation;
+  serviceMinutes?:number;
   id: string;
   sourceId: string;
   learningKey?: string;
@@ -138,6 +141,7 @@ export type LogisticsRouteDraftStop = {
 };
 
 export type LogisticsRouteDraftRound = {
+  road?:RoadRoute;
   id: string;
   title: string;
   vehicle: string;

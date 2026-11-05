@@ -1,3 +1,4 @@
+import {cleanLocation,cleanRoad} from "@/app/bakkerij/logistiek/roadRouting";
 import "server-only";
 import { webshopPhotoDuplicateKey } from "@/app/bakkerij/logistiek/webshopPhotoIdentity";
 
@@ -903,8 +904,11 @@ function normalizeLogisticsRouteDraftsState(
           : [],
         routes: draft.routes.filter(isLogisticsRouteDraftRound).map((route) => ({
           ...route,
+          road:cleanRoad(route.road),
           stops: route.stops.filter(isLogisticsRouteDraftStop).map((stop) => ({
             ...stop,
+            location:cleanLocation(stop.location),
+            serviceMinutes:typeof stop.serviceMinutes==="number"&&Number.isFinite(stop.serviceMinutes)&&stop.serviceMinutes>=0&&stop.serviceMinutes<=90?stop.serviceMinutes:undefined,
             learningKey:
               typeof stop.learningKey === "string" ? stop.learningKey : undefined,
             learningLabel:

@@ -1,3 +1,4 @@
+import {cleanLocation,cleanRoad} from "@/app/bakkerij/logistiek/roadRouting";
 import { NextResponse } from "next/server";
 import type {
   LogisticsRouteDraft,
@@ -93,6 +94,8 @@ function cleanRouteStop(value: unknown): LogisticsRouteDraftStop | null {
     learningKey: cleanText(candidate.learningKey, 220),
     learningLabel: cleanText(candidate.learningLabel, 180),
     learningTarget: cleanText(candidate.learningTarget, 500),
+    location:cleanLocation(candidate.location),
+    serviceMinutes:typeof candidate.serviceMinutes==="number"&&Number.isFinite(candidate.serviceMinutes)&&candidate.serviceMinutes>=0&&candidate.serviceMinutes<=90?candidate.serviceMinutes:undefined,
     learningKind: cleanLearningKind(candidate.learningKind) || undefined,
     label,
     detail,
@@ -115,6 +118,7 @@ function cleanRouteRound(value: unknown): LogisticsRouteDraftRound | null {
   return {
     id,
     title: cleanText(candidate.title, 80) || "Ronde",
+    road:cleanRoad(candidate.road),
     vehicle,
     departure: cleanText(candidate.departure, 80),
     badge: cleanText(candidate.badge, 80),

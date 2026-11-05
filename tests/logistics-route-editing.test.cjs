@@ -6,11 +6,11 @@ const ts = require('typescript');
 function load(file, imports = {}, expose = '') {
  const exports = {};
  const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
- vm.runInNewContext(code+'\n'+expose,{exports,require:name=>imports[name]||{},Date,Map,Set,URL,Intl});
+ vm.runInNewContext(code+'\n'+expose,{exports,require:name=>name==='next/dynamic'?{default:()=>()=>null}:imports[name]||{},Date,Map,Set,URL,Intl});
  return exports;
 }
 const {createRouteSaveQueue}=load('app/bakkerij/logistiek/routeSaveQueue.ts');
-const dashboard=load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx',{},'exports.plan=buildRouteRounds;exports.move=moveRouteStopInRounds;exports.reconcile=reconcileRouteDraftRounds;exports.serialize=serializeRouteRounds;exports.shops=shopRouteMeta;exports.group=groupShopStops;exports.packaging=shopEmballageStop;');
+const dashboard=load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx',{'./roadRouting':load('app/bakkerij/logistiek/roadRouting.ts')},'exports.plan=buildRouteRounds;exports.move=moveRouteStopInRounds;exports.reconcile=reconcileRouteDraftRounds;exports.serialize=serializeRouteRounds;exports.shops=shopRouteMeta;exports.group=groupShopStops;exports.packaging=shopEmballageStop;');
 const plain=value=>JSON.parse(JSON.stringify(value));
 const profile={pressure:'normaal'};
 const round=(id,stops)=>({id,title:'Ronde 1',vehicle:'Bus B',departure:'08:05',stops,badge:'',tone:'',load:'',reason:''});
@@ -118,6 +118,7 @@ test('a response for yesterday cannot overwrite the currently selected day',asyn
 function apiHarness(allowed=true) {
  const writes=[],observations=[];let learningReads=0;
  const api=load('app/api/bakkerij-logistiek/route-draft/route.ts',{
+ '@/app/bakkerij/logistiek/roadRouting':load('app/bakkerij/logistiek/roadRouting.ts'),
  'next/server':{NextResponse:{json:(data,init)=>Response.json(data,init)}},
  '@/app/lib/bakeryLogisticsAuth':{canAccessLogisticsRequest:async()=>allowed},
  '@/app/lib/bakeryLogisticsStorage':{
@@ -139,4 +140,16 @@ test('only an explicit final save updates route learning; unauthorized writes ar
  const h=apiHarness(),body={date:'2026-11-04',routes:automatic,baselineRoutes:automatic,learn:true};
  assert.equal((await h.post(body)).status,200);assert.equal(h.learningReads(),1);assert.equal(h.observations.length,1);assert.equal(h.writes[0].isFinal,true);
  const denied=apiHarness(false);assert.equal((await denied.post(body)).status,403);assert.equal(denied.writes.length,0);
+});
+test('verified road times survive route API save, reconciliation and a manual reorder',async()=>{
+ const road=load('app/bakkerij/logistiek/roadRouting.ts');
+ const location={id:'pdok-a',label:'Teststraat 1, Nijmegen',lat:51.8,lon:5.8};
+ const manual={id:'manual-a',sourceId:'manual:manual-a',label:'Teststop',detail:location.label,badges:['handmatig'],location,serviceMinutes:8};
+ const matrix={provider:'OSRM',calculatedAt:new Date().toISOString(),locations:{__depot:location,'manual-a':location},seconds:{[road.roadPair('__depot','manual-a')]:120,[road.roadPair('manual-a','__depot')]:180}};
+ const route={...round('bus-B-1',[manual]),road:matrix};const h=apiHarness();
+ const response=await h.post({date:'2026-11-05',routes:dashboard.serialize([route]),excludedSourceIds:[],learn:false});
+ assert.equal(response.status,200);const saved=(await response.json()).routeDraft;
+ const restored=dashboard.reconcile(saved,[round('bus-B-1',[])],profile);
+ assert.equal(restored[0].stops[0].location.id,'pdok-a');assert.equal(restored[0].stops[0].serviceMinutes,8);
+ assert.equal(road.roadLegMinutes(restored[0].road,'__depot','manual-a',undefined,restored[0].stops[0].location),2);
 });

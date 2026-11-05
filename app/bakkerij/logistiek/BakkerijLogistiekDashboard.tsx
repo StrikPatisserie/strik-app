@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import {roadLegMinutes,renameRoadPoint,routeFingerprint,DEPOT_ID,NEW_STOP_ID,type AddressLocation,type RoadRoute,type SmartStopInsertion} from "./roadRouting";
+const AddRouteStopDialog=dynamic(()=>import("./AddRouteStopDialog"));
 import { createRouteSaveQueue } from "./routeSaveQueue";
 import { sinterklaasAcquisitionEndDate } from "./sinterklaasAcquisitionCampaign";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
@@ -126,6 +129,7 @@ type BakeryProductionTotals = {
 };
 
 type RouteRound = {
+  road?:RoadRoute;
   id: string;
   title: string;
   vehicle: string;
@@ -143,6 +147,8 @@ type RouteGroup = {
 };
 
 type RouteStop = {
+  location?:AddressLocation;
+  serviceMinutes?:number;
   id: string;
   sourceId: string;
   learningKey?: string;
@@ -155,6 +161,7 @@ type RouteStop = {
 };
 
 type RouteStopTiming = {
+  roadBased?:boolean;
   arrivalMinute: number;
   travelMinutes: number;
   serviceMinutes: number;
@@ -4910,7 +4917,7 @@ function createBusRoutePrintHtml(input: {
                     missesDeadline ? "! TIJDCONFLICT · " : ""
                   }RICHTTIJD ±${formatClockMinute(
                     stopTiming.arrivalMinute
-                  )}</b> · ${stopTiming.travelMinutes} min rijden · ${
+                  )}</b> · ${stopTiming.travelMinutes} min rijden${stopTiming.roadBased ? "" : " · schatting"} · ${
                     stopTiming.combinedWithPrevious
                       ? "zelfde winkelbezoek, tijd inbegrepen"
                       : `${stopTiming.serviceMinutes} min stop`
@@ -7010,6 +7017,7 @@ function splitReceiptsByEstimatedRouteReturn(input: {
 }
 
 function estimatedServiceMinutes(stop: RouteStop) {
+  if(Number.isFinite(stop.serviceMinutes)&&stop.serviceMinutes!>=0&&stop.serviceMinutes!<=90)return stop.serviceMinutes!;
   if (isLentEmballageStop(stop)) return 7;
   if (stop.learningKind === "shop") return 15;
   if (stop.learningKind === "ice") return 5;
@@ -7034,9 +7042,12 @@ function buildRouteTiming(route: RouteRound, departureMinute: number): RouteTimi
   let currentMinute = departureMinute;
   let currentPoint = depotRoutePoint;
   let previousShopVisitKey = "";
+  let previousStop:RouteStop|undefined;
   const stops = route.stops.map((stop) => {
     const nextPoint = routePointForStop(stop);
-    const travelMinutes = estimatedTravelMinutes(currentPoint, nextPoint);
+    const roadMinutes=roadLegMinutes(route.road,previousStop?.id||DEPOT_ID,stop.id,previousStop?.location,stop.location);
+    const estimate=estimatedTravelMinutes(currentPoint,nextPoint);
+    const travelMinutes = roadMinutes ?? (stop.location&&stop.location.id!==previousStop?.location?.id?Math.max(4,estimate):estimate);
     const arrivalMinute = currentMinute + travelMinutes;
     const currentShopVisitKey = shopVisitKey(stop);
     const combinedWithPrevious = Boolean(
@@ -7051,18 +7062,17 @@ function buildRouteTiming(route: RouteRound, departureMinute: number): RouteTimi
     currentMinute = arrivalMinute + serviceMinutes;
     currentPoint = nextPoint;
     previousShopVisitKey = currentShopVisitKey;
+    previousStop=stop;
 
     return {
+      roadBased:roadMinutes!==null,
       arrivalMinute,
       travelMinutes,
       serviceMinutes,
       combinedWithPrevious,
     };
   });
-  const returnMinute = currentMinute + estimatedTravelMinutes(
-    currentPoint,
-    depotRoutePoint
-  );
+  const returnMinute = currentMinute + (roadLegMinutes(route.road,previousStop?.id||DEPOT_ID,DEPOT_ID,previousStop?.location) ?? estimatedTravelMinutes(currentPoint,depotRoutePoint));
 
   return {
     departureMinute,
@@ -9026,6 +9036,7 @@ function serializeRouteRounds(routeRounds: RouteRound[]) {
     badge: route.badge,
     tone: route.tone,
     reason: route.reason,
+    road:route.road,
     load: route.load,
     stops: route.stops.map((stop) => ({
       id: stop.id,
@@ -9033,6 +9044,8 @@ function serializeRouteRounds(routeRounds: RouteRound[]) {
       learningKey: stop.learningKey,
       learningLabel: stop.learningLabel,
       learningTarget: stop.learningTarget,
+      location:stop.location,
+      serviceMinutes:stop.serviceMinutes,
       learningKind: stop.learningKind,
       label: stop.label,
       detail: stop.detail,
@@ -9090,13 +9103,14 @@ function reconcileRouteDraftRounds(
         if (!stop) return null;
 
         usedSourceKeys.add(sourceKey);
-        return stop;
+        return {...stop,location:draftStop.learningTarget===stop.learningTarget?draftStop.location:undefined,serviceMinutes:draftStop.serviceMinutes};
       })
       .filter((stop): stop is RouteStop => Boolean(stop));
 
     return refreshRouteRoundAfterManualMove(
       {
         ...(automaticRoute || draftRoute),
+        road:draftRoute.road,
         departure: /^vertrek\s+\d{1,2}:\d{2}$/i.test(draftRoute.departure)
           ? draftRoute.departure
           : (automaticRoute || draftRoute).departure,
@@ -10374,12 +10388,16 @@ export default function BakkerijLogistiekDashboard() {
     void saveRouteDraft(nextRoutes, false);
   }
 
-  function addManualRouteStop(routeId: string, label: string, detail: string) {
+  function addManualRouteStop(routeId: string, label: string, detail: string, smart?:SmartStopInsertion) {
     const cleanLabel = label.replace(/\s+/g, " ").trim();
     const cleanDetail = detail.replace(/\s+/g, " ").trim();
     if (!cleanLabel) return;
 
     const currentRoutes = manualRouteRounds || automaticRouteRounds;
+    const target=currentRoutes.find(route=>route.id===routeId);
+    if(!target)return false;
+    if(smart&&smart.snapshot!==routeFingerprint(target.stops)){setRouteSaveMessage("Route gewijzigd; bereken de nieuwe stop opnieuw.");return false;}
+
     const stopId = `manual-${Date.now()}-${Math.random()
       .toString(36)
       .slice(2, 8)}`;
@@ -10391,6 +10409,8 @@ export default function BakkerijLogistiekDashboard() {
       learningTarget: cleanDetail,
       learningKind: "check",
       label: cleanLabel,
+      location:smart?.location,
+      serviceMinutes:smart?.serviceMinutes,
       detail: cleanDetail || "Handmatige stop",
       badges: cleanLabel.startsWith("Brievenbuspakketje · ") ? ["handmatig", "acquisitie", "sinterklaasfolder"] : ["handmatig"],
     };
@@ -10399,7 +10419,8 @@ export default function BakkerijLogistiekDashboard() {
         ? refreshRouteRoundAfterManualMove(
             {
               ...route,
-              stops: [...route.stops, manualStop],
+              road:smart?.road?renameRoadPoint(smart.road,NEW_STOP_ID,stopId):route.road,
+              stops: smart?[...route.stops.slice(0,smart.index),manualStop,...route.stops.slice(smart.index)].map(stop=>({...stop,location:stop.id===stopId?smart.location:smart.road?.locations[stop.id]||stop.location})):[...route.stops,manualStop],
             },
             loadProfile
           )
@@ -10415,6 +10436,7 @@ export default function BakkerijLogistiekDashboard() {
       "handmatige stop toegevoegd · nog niet definitief opgeslagen"
     );
     void saveRouteDraft(nextRoutes, false);
+    return true;
   }
 
   async function addAcquisitionSuggestion(
@@ -12674,7 +12696,7 @@ function RoutesPanel({
   onPlannedDepartureChange: (bus: BusId, value: string) => void;
   onRouteAdd: (vehicle: string) => void;
   onRouteDelete: (routeId: string) => void;
-  onRouteStopAdd: (routeId: string, label: string, detail: string) => void;
+  onRouteStopAdd: (routeId: string, label: string, detail: string, smart?:SmartStopInsertion) => boolean|void;
   onRouteStopDelete: (routeId: string, stopId: string) => void;
   onRouteStopMove: (move: RouteStopMove) => void;
   onRouteStopUndo: () => void;
@@ -12688,6 +12710,7 @@ function RoutesPanel({
   routesEdited: boolean;
   selectedPlan: DayPlan;
 }>) {
+  const [addingRouteId,setAddingRouteId]=useState("");
   const [dragging, setDragging] = useState<RouteDragState | null>(null);
   const [dropIndicator, setDropIndicator] =
     useState<RouteDropIndicator | null>(null);
@@ -12797,16 +12820,14 @@ function RoutesPanel({
     setDropIndicator(null);
   }
 
-  function addManualStop(routeId: string) {
-    const label = window.prompt("Stopnaam", "");
-    if (!label) return;
-
-    const detail = window.prompt("Adres/opmerking", "") || "";
-    onRouteStopAdd(routeId, label, detail);
-  }
+  function addManualStop(routeId: string) {setAddingRouteId(routeId);}
+  const addingRoute=routeRounds.find(route=>route.id===addingRouteId);
+  const addingDeparture=addingRoute?routeTimingsByVehicle.get(addingRoute.vehicle)?.get(addingRoute.id)?.departureMinute||defaultRouteDepartureMinute:defaultRouteDepartureMinute;
 
   return (
     <section className="grid gap-3">
+      {addingRoute&&<AddRouteStopDialog route={addingRoute} departureMinute={addingDeparture} stops={addingRoute.stops.map(stop=>({id:stop.id,label:stop.label,address:stop.learningTarget||routeStopAddressLabel(stop),location:stop.location,serviceMinutes:estimatedServiceMinutes(stop),deadlineMinute:routeStopDeliveryTime(stop)?routePrintTimeMinutes(routeStopDeliveryTime(stop)):undefined})).map(stop=>({...stop,deadlineMinute:stop.deadlineMinute!==undefined&&stop.deadlineMinute<2880?stop.deadlineMinute:undefined}))} onAdd={(label,detail,smart)=>onRouteStopAdd(addingRoute.id,label,detail,smart)} onClose={()=>setAddingRouteId("")}/>}
+
       <div className="flex min-h-8 flex-wrap items-center justify-between gap-2 px-1">
         <h2 className="text-[0.68rem] font-bold uppercase tracking-[0.14em] text-[#52654f]">
           Routeplanning
@@ -13145,7 +13166,7 @@ function RoutesPanel({
                                 ±{formatClockMinute(stopTiming.arrivalMinute)} aankomst
                                 <span className="text-[#7b8277]">
                                   · {stopTiming.travelMinutes
-                                    ? `${stopTiming.travelMinutes} min rijden`
+                                    ? `${stopTiming.travelMinutes} min rijden${stopTiming.roadBased?"":" · schatting"}`
                                     : "zelfde locatie"}
                                   {stopTiming.combinedWithPrevious
                                     ? " · zelfde winkelbezoek, tijd inbegrepen"
