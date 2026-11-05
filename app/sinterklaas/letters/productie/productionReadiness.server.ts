@@ -6,6 +6,7 @@ import { loadCentralProduction } from "./productionData.server";
 import { combineProductionOrders } from "./productionChecklist";
 import { readyProductionRecipients } from "./productionReadiness";
 import type { ProductionSeedRow } from "./productionSources";
+import { b2bProductionLetters } from "../../b2bCombinationLetters";
 
 export async function loadReadyProductionRecipients(season:string) {
   if(!/^20\d{2}$/.test(season))return new Set<string>();
@@ -14,7 +15,9 @@ export async function loadReadyProductionRecipients(season:string) {
   if(!batches.length)return new Set<string>();
   const result=await (createAdminClient() as unknown as SupabaseClient).from("letter_production_checklists").select("batch_id,rows").in("batch_id",batches.map(batch=>batch.id));
   if(result.error)throw Error("Productievoortgang kon niet worden gecontroleerd.");
-  return readyProductionRecipients(batches,result.data as {batch_id:string;rows:ProductionSeedRow[]}[],central.orderQuantities);
+  const expected={...central.orderQuantities};
+  for(const order of wordpress.b2b)expected[`b2b:${order.id}`]=b2bProductionLetters(order).requiredQuantity;
+  return readyProductionRecipients(batches,result.data as {batch_id:string;rows:ProductionSeedRow[]}[],expected);
 }
 
 // Only enrich an already authorized, shop-scoped response. No source orders or

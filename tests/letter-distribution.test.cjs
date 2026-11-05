@@ -56,11 +56,11 @@ test('incomplete or conflicting customer metadata is held for checking and never
  assert.match(text(sheet),/EERST CONTROLEREN.*3 letters/s);
 });
 
-test('Sidcon combination items and pending quotes never become unplanned standalone chocolate letters',()=>{
+test('unknown legacy bakery data and pending quotes never create guessed chocolate letters',()=>{
  const result=helper.combineProductionOrders([batch()],[],[b2b({id:'sidcon',customerName:'Sidcon',letterLines:[],bakeryLines:[{product:'Speculaasbrok met letter',quantity:60}]}),b2b({id:'quote',status:'aanvraag'})]);
  assert.equal(result.unplanned.length,0);assert.equal(result.batches[0].rows.length,0);assert.equal(result.b2bPlanning.length,0);
  const mixed=helper.combineProductionOrders([batch()],[],[b2b({bakeryLines:[{product:'Speculaasbrok met letter',quantity:60}]})]);
- assert.equal(mixed.batches[0].rows[0].orders,20,'only explicit standalone letterLines count, never the 60 combination items');
+ assert.equal(mixed.batches[0].rows[0].orders,20,'unstructured legacy data cannot invent the flavor and size of the 60 package letters');
 });
 
 test('explicit B2B assignments move standalone letters to one selected batch or deliberately leave them unplanned',()=>{

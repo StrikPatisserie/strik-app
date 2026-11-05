@@ -17,8 +17,9 @@ export async function POST(request:Request){
   try{
     const [central,wordpress]=await Promise.all([loadCentralProduction(input.season),loadProductionWordPressOrders(input.season)]);
     const order=wordpress.b2b.find(item=>item.id===input.orderId);
-    if(!order||!eligibleB2BLetterOrder(order))return error("Alleen definitieve bestellingen met losse chocoladeletters kunnen worden ingepland. Combinatieartikelen horen hier niet bij.",409);
+    if(!order||!eligibleB2BLetterOrder(order))return error("Alleen definitieve bestellingen met nog te maken chocoladeletters kunnen worden ingepland.",409);
     const plan=b2bProductionPlan(order,central.batches,central.assignments);
+    if(plan.issues?.length)return error("Vul eerst de ontbrekende lettergegevens bij de combinatieproducten in.",409);
     if(input.version!==plan.version||input.revision!==plan.revision)return error("De bestelling of planning is intussen gewijzigd. Ververs de lijst.",409);
     const target=central.batches.find(batch=>batch.id===input.batchId);
     if(input.batchId&&!target)return error("Productieronde niet gevonden.",404);

@@ -299,6 +299,7 @@ function ProductionTable({
                       </td>
                       <td className={styles.sourceCell}>
                         <div className={styles.sourceBadges}>
+                          {row.recipients?.some(item=>item.combinationProduct)&&<span className={styles.combinationBadge} title={row.recipients.filter(item=>item.combinationProduct).map(item=>`${item.quantity}× ${item.customerName}: ${item.combinationProduct}`).join("\n")}>Combinatieproduct <b>{row.recipients.filter(item=>item.combinationProduct).reduce((sum,item)=>sum+item.quantity,0)}</b></span>}
                           {productionSourceBreakdown(row).filter(({ id }) => id !== "voorraad").map(({ id, label, quantity }) => <span key={id} className={styles.sourceBadge} data-source={id} title={`${label}: ${quantity} ${quantity === 1 ? "letter" : "letters"}\n${productionRecipientsFor(row,id).map(item=>`${item.quantity}× ${item.customerName}`).join("\n")}`}>
                             <span>{label}</span><b>{quantity}</b>
                           </span>)}

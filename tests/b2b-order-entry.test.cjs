@@ -24,6 +24,7 @@ const sint = load('app/sint-voor-bedrijven/sintProducts.ts', { '@/app/lib/busine
 const kerst = load('app/kerst-voor-bedrijven/christmasProducts.ts', { '@/app/lib/business-folder-pricing': pricing });
 const letters = load('app/sinterklaas/b2bLetterLines.ts');
 const folderOrderText = load('app/lib/businessFolderOrderText.ts');
+const combinations = load('app/sinterklaas/b2bCombinationLetters.ts', { '../lib/businessFolderOrderText': folderOrderText, './b2bLetterLines': letters });
 const quoteBuilder = load('app/lib/businessFolderQuote.ts', {
   './businessPickupLocations': load('app/lib/businessPickupLocations.ts', { '../lettershop/shops': load('app/lettershop/shops.ts') }),
   'node:crypto': require('node:crypto'),
@@ -42,9 +43,10 @@ function entry(season = 'sint', initialOrder = null) {
       useRef(initial) { return refs[refCursor++] ||= { current: initial }; } },
     '../../sint-voor-bedrijven/sintProducts': sint, '../../kerst-voor-bedrijven/christmasProducts': kerst, '../../lib/business-folder-pricing': pricing,
     '../../lib/businessFolderOrderText': folderOrderText,
+    '../../lib/businessPickupLocations': load('app/lib/businessPickupLocations.ts', { '../lettershop/shops': load('app/lettershop/shops.ts') }),
     '../../lib/businessDeliveryMoment': load('app/lib/businessDeliveryMoment.ts'),
     '../../lib/businessDeliveryPricing': load('app/lib/businessDeliveryPricing.ts'),
-    '../b2bLetterLines': letters,
+    '../b2bLetterLines': letters, '../b2bCombinationLetters': combinations,
     '../sinterklaasApi': { saveB2BOrder: async data => { calls.push(data); return { ...data, id: 'saved' }; } },
     './B2BOrders.module.css': { default: new Proxy({}, { get: (_, key) => key }) },
   }, { crypto: require('node:crypto').webcrypto, sessionStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) }, HTMLInputElement: class {}, HTMLSelectElement: class {}, HTMLTextAreaElement: class {} }, '\nexports.Form = B2BOrderForm; exports.blank = createFormState; exports.parse = parseOrderText; exports.prices = lines => { const priced = repriceProductLines(lines); return {ex: productLinesTotal(priced), incl: productLinesTotalIncl(priced), lines: priced}; };');
@@ -100,7 +102,7 @@ test('speculaas packages retain a chosen letter through entry, review and reopen
   const ui = entry(); ui.field('Bedrijfsnaam / klantnaam *', 'Voorbeeld pakket'); ui.button('Verder naar producten →');
   const product = sint.products.find(item => item.id === 'speculaasbrok-met-letter');
   ui.field('Product', product.id); ui.field('Variant', product.variants[1].label);
-  ui.field('Letter bij speculaasbrok', 'M'); ui.field('Aantal producten', '60'); ui.button('+ Product toevoegen');
+  ui.field('Letter bij speculaasbrok', 'M'); ui.field('Chocolade in pakket', 'wit'); ui.field('Aantal producten', '60'); ui.button('+ Product toevoegen');
   ui.button('Bestelling controleren →'); await ui.submit();
   assert.equal(ui.calls.length, 1); assert.match(ui.calls[0].orderText, /letter M/);
   const saved = { ...ui.calls[0], id: 'existing', folderQuote: null };
@@ -135,12 +137,71 @@ test('an existing folder request opens as editable products and preserves its or
 });
 
 function addLetters(ui, quantity, withLogo, character='S', chocolate='melk', vegan=false) {
+  ui.field('Product', 'letters');
   ui.field('Letter', character); ui.field('Chocolade', chocolate); ui.field('Soort', 'spuit'); ui.field('Formaat', 'groot'); ui.field('Aantal letters', String(quantity));
   if(vegan) ui.check('Vegan',true);
   ui.check('Eigen logo op deze letters', withLogo); ui.button('+ Letter toevoegen');
 }
+
+test('one product picker replaces department and separate add tabs; optional notes have one home',()=>{
+ const ui=entry();ui.field('Bedrijfsnaam / klantnaam *','Eenvoudige invoer');ui.button('Verder naar producten →');
+ const tree=ui.render();assert.equal(nodes(tree,n=>n.type==='select'&&n.props['aria-label']==='Product').length,1);
+ assert(!nodes(tree,n=>n.type==='label'&&label(n).startsWith('Afdeling')).length);
+ assert(!nodes(tree,n=>n.type==='button'&&/Overige producten toevoegen|Chocoladeletters toevoegen/.test(label(n))).length);
+ assert.equal(nodes(tree,n=>n.type==='summary'&&label(n).startsWith('Afspraken & notities')).length,1);
+});
+
+test('legacy packaging and logo instructions share one editable note without losing selections or agreed prices',async()=>{
+ const original={...legacyLogoRequest(),packaging:'Per bedrijf verpakken',logo:'Logo midden op de letter',priceAgreement:'Afgesproken met klant'};
+ const ui=entry('sint',original);ui.button('Verder naar producten →');
+ const field=nodes(ui.render(),n=>n.type==='label'&&label(n).startsWith('Notities verpakking/logo'))[0];
+ assert.equal(nodes(field,n=>n.type==='textarea')[0].props.value,'Per bedrijf verpakken\nLogo midden op de letter');
+ ui.button('Bestelling controleren →');await ui.submit();
+ assert.equal(ui.calls[0].packaging,original.packaging);assert.equal(ui.calls[0].logo,original.logo);
+ const edited=entry('sint',{...original,...ui.calls[0]});edited.button('Verder naar producten →');
+ const note='Per bedrijf verpakken\nLogo rechtsboven\nExtra lint ';
+ edited.field('Notities verpakking/logo',note);edited.field('Toelichting prijsafspraak','Totaal telefonisch afgesproken');
+ edited.button('Bestelling controleren →');await edited.submit();
+ const saved=edited.calls[0];assert.equal(saved.packaging,note);assert.equal(saved.logo,'Eigen logo volgens orderregels');
+ assert.equal(saved.priceAgreement,'Totaal telefonisch afgesproken');assert.equal(saved.totalExVat,ui.calls[0].totalExVat);
+ assert(saved.letterLines.every(line=>line.withLogo));
+ const reopened=entry('sint',{...original,...saved});reopened.button('Verder naar producten →');
+ const next=nodes(reopened.render(),n=>n.type==='label'&&label(n).startsWith('Notities verpakking/logo'))[0];
+ assert.equal(nodes(next,n=>n.type==='textarea')[0].props.value,note,'do not duplicate old instructions or trim typing spaces');
+});
+
+test('packaging notes never turn on logos, and price explanations live with the agreed total',async()=>{
+ const ui=entry();ui.field('Bedrijfsnaam / klantnaam *','Notitievoorbeeld');ui.button('Verder naar producten →');addLetters(ui,2,false);
+ ui.field('Notities verpakking/logo','In een doos met mintgroen lint');ui.field('Afgesproken totaal excl. btw','25');ui.field('Toelichting prijsafspraak','Prijs inclusief verpakking');
+ const tree=ui.render(),notes=nodes(tree,n=>n.type==='details'&&n.props.className?.split(' ').includes('orderNotes'))[0];
+ assert(notes);assert.equal(nodes(notes,n=>n.type==='label'&&label(n).startsWith('Toelichting prijsafspraak')).length,0);
+ const total=nodes(tree,n=>n.type==='details'&&n.props.className==='totalAgreement')[0];
+ assert.equal(nodes(total,n=>n.type==='textarea'&&n.props.value==='Prijs inclusief verpakking').length,1);
+ ui.button('Bestelling controleren →');await ui.submit();
+ assert.equal(ui.calls[0].logo,'');assert.equal(ui.calls[0].letterLines[0].withLogo,false);assert.equal(ui.calls[0].totalExVat.replace(/\s/g,''),'€25,00');
+});
+
+test('a package flavor is mandatory, is preserved on reopening and creates no separately priced letter sale',async()=>{
+ const ui=entry();ui.field('Bedrijfsnaam / klantnaam *','Pakketbedrijf');ui.field('Vaste leverdatum','2026-11-24');ui.button('Verder naar producten →');
+ ui.field('Product','speculaasbrok-met-letter');ui.field('Variant','Speculaasbrok zonder amandel · kleine spuitletter');ui.field('Aantal producten','30');ui.button('+ Product toevoegen');
+ assert.match(label(ui.render()),/Kies de letter en chocoladesmaak/);
+ ui.field('Chocolade in pakket','wit');ui.field('Letter bij speculaasbrok','M');ui.button('+ Product toevoegen');
+ ui.button('Bestelling controleren →');await ui.submit();assert.equal(ui.calls.length,1);
+ const payload=ui.calls[0];assert.equal(payload.department,'beide');assert.equal(payload.letterLines.length,0);assert.match(payload.orderText,/letter M · chocolade wit/);
+ const production=combinations.b2bProductionLetters({...payload,id:'a'});assert.equal(production.lines[0].quantity,30);assert.equal(production.lines[0].chocolate,'wit');
+ assert.equal((payload.orderText.match(/ × /g)||[]).length,1);
+ const reopened=entry('sint',{...ui.blank(),...payload,id:'saved',year:'2026',season:'sint',updatedAt:'now'});reopened.button('Verder naar producten →');reopened.button('Bestelling controleren →');await reopened.submit();
+ assert.equal(reopened.calls[0].totalExVat,payload.totalExVat);assert.match(reopened.calls[0].orderText,/chocolade wit/);
+});
+
+test('a definitive legacy package without flavor remains editable but cannot be saved as if its letter were specified',async()=>{
+ const initial={...entry().blank(),id:'legacy-package',year:'2026',season:'sint',status:'akkoord',department:'bakkerij',customerName:'Bestaand pakket',deliveryDate:'2026-11-24',updatedAt:'now',totalExVat:'250,00',orderText:'PRODUCTEN EN PRIJS\n20 × Speculaasbrok met letter · Speculaasbrok zonder amandel · kleine spuitletter · letter S · € 12,50 p.s. ex btw · € 250,00'};
+ const ui=entry('sint',initial);ui.button('Verder naar producten →');ui.button('Bestelling controleren →');assert.match(ui.step(),/Producten/);assert.equal(ui.calls.length,0);
+ ui.field('Chocolade in Speculaasbrok met letter · Speculaasbrok zonder amandel · kleine spuitletter · letter S','puur');ui.button('Bestelling controleren →');await ui.submit();
+ assert.equal(ui.calls.length,1);assert.match(ui.calls[0].orderText,/chocolade puur/);assert.equal(ui.calls[0].totalExVat,'€ 250,00');assert.equal(ui.calls[0].letterLines.length,0);
+});
 function addPackage(ui, quantity, withLogo=false) {
-  ui.button('Overige producten toevoegen');
+  ui.button('+ Artikel toevoegen');
   const product=sint.products.find(item=>item.id==='stafwerk');
   ui.field('Product',product.id);ui.field('Variant',sint.productChoiceCandidates(product)[0]);ui.field('Aantal producten',String(quantity));
   ui.check('Eigen logo op dit product',withLogo);ui.button('+ Product toevoegen');
@@ -203,7 +264,7 @@ test('removing all logos clears only the generated logo agreement',async()=>{
 
 test('bulk logos skip catalogue articles that do not support a logo',async()=>{
   const ui=entry();ui.field('Bedrijfsnaam / klantnaam *','Ondersteunde producten');ui.button('Verder naar producten →');addLetters(ui,10,false);
-  ui.button('Overige producten toevoegen');const product=sint.products.find(item=>item.id==='marsepein-letter');
+  ui.button('+ Artikel toevoegen');const product=sint.products.find(item=>item.id==='marsepein-letter');
   ui.field('Product',product.id);ui.field('Variant',product.variants[0].label);ui.field('Aantal producten','3');ui.button('+ Product toevoegen');
   ui.button('Logo bij alle geschikte artikelen');ui.button('Bestelling controleren →');await ui.submit();
   assert.equal(ui.calls[0].letterLines[0].withLogo,true);

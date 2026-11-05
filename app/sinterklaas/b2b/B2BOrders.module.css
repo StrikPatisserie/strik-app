@@ -448,3 +448,18 @@
 .bakeItForm button[type="submit"] { min-height:32px; padding:5px 9px; border-radius:4px; background:#2d503b; color:#fff; text-decoration:none; }.bakeItForm>div>button { min-height:32px; }
 .bakeItForm .bakeItRemove { color:#a53c2f; margin-top:7px; }.page .bakeItError { color:#a53c2f; font-size:11px; margin-top:8px; }.bakeItError button { font:inherit; text-decoration:underline; }
 @media(pointer:coarse) { .bakeItRecords button { min-height:40px; }.page .bakeItForm input { min-height:40px; } }
+.addProductBar { margin:12px 0; }.addProductBar button { font-size:12px; min-height:38px; }
+.letterExtras { align-self:center; font-size:11px; color:var(--b2b-muted); }.letterExtras>summary { padding:7px 0; }.letterExtras>label { margin-top:8px; }
+.letterExtras:has(fieldset) { grid-column:1/-1; }.letterExtras .exceptions { padding-top:3px; }
+.combinationHint { grid-column:1/-1; margin:0!important; font-size:11px; color:#7c5d2b; }
+.packageFields { display:flex; flex-wrap:wrap; gap:8px; }.packageFields .packageLetterField { margin-top:7px; }.packageLetterField select[data-incomplete] { border-color:#bd6a42; }
+.orderNotes { border-top:1px solid var(--b2b-border); padding-top:14px; }.orderNotes summary { font-size:12px; font-weight:600; color:var(--b2b-ink); }.orderNotes .cartBulk { margin:8px 0; }
+.priceDetails { font-size:11px; color:var(--b2b-muted); }.priceDetails summary { padding-bottom:8px; }
+.formPanel,.summary { padding:18px; }.formPanel h2 { margin-bottom:16px; }.formGrid { gap:14px; }.fieldGrid { gap:12px; }.productBuilder { gap:10px; }.builderPanel { padding:14px; }.builderHeading { margin-bottom:10px; }.rule { margin:16px 0; }
+.agreedTotalEditor { position:relative; margin-top:12px; }
+.agreedTotalEditor > .field > span { padding-right:28px; }
+.priceNote > summary { position:absolute; top:-5px; right:-4px; display:grid; place-items:center; width:28px; min-height:28px; border-radius:5px; color:var(--b2b-muted); list-style:none; }
+.priceNote > summary::-webkit-details-marker { display:none; }
+.priceNote > summary:hover,.priceNote > summary[data-has-note] { background:var(--b2b-pale); color:var(--b2b-accent); }
+.priceNote > summary:focus-visible { outline:2px solid var(--b2b-accent); outline-offset:2px; }
+.priceNote > .field { margin-top:10px; }

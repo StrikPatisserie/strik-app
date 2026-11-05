@@ -44,14 +44,15 @@ export function ProductionDistributionSheet({batch}:Readonly<{batch:ProductionBa
       {Array.from(crate.groups.reduce((customers,group)=>{
         group.recipients.forEach(item=>{
           const identity=JSON.stringify([item.id,"shop" in item?item.shop:"","date" in item?item.date:""]);
-          const customer=customers.get(identity)||{item,lines:[] as {group:typeof group;quantity:number}[]};
-          customer.lines.push({group,quantity:item.quantity});customers.set(identity,customer);
+          const customer=customers.get(identity)||{item,lines:[] as {group:typeof group;quantity:number;combinationProduct?:string}[]};
+          customer.lines.push({group,quantity:item.quantity,combinationProduct:item.combinationProduct});customers.set(identity,customer);
         });return customers;
-      },new Map<string,{item:(typeof crate.groups)[number]["recipients"][number];lines:{group:(typeof crate.groups)[number];quantity:number}[]}>())).map(([identity,{item,lines}])=><div key={identity} className={styles.customerCutout}>
+      },new Map<string,{item:(typeof crate.groups)[number]["recipients"][number];lines:{group:(typeof crate.groups)[number];quantity:number;combinationProduct?:string}[]}>())).map(([identity,{item,lines}])=><div key={identity} className={styles.customerCutout}>
         <header className={styles.cutoutHeader}><strong>{item.customerName}</strong>{lines.every(({group})=>group.variant.extras.some(extra=>extra.toLowerCase()==="logo"))&&logoMark()}{"code" in item&&item.code&&!item.code.startsWith("b2b-")&&<small>{item.code}</small>}{"shop" in item&&item.shop&&<span>{shops[item.shop]||item.shop}</span>}{"date" in item&&item.date&&<span>{date(item.date)}</span>}</header>
-        <div className={styles.cutoutLines}>{lines.map(({group,quantity},index)=><div key={`${group.row.key}-${index}`} className={styles.cutoutLine} data-unresolved={item.unresolved||undefined}>
+        <div className={styles.cutoutLines}>{lines.map(({group,quantity,combinationProduct},index)=><div key={`${group.row.key}-${index}`} className={styles.cutoutLine} data-unresolved={item.unresolved||undefined}>
           <span className={styles.checkBox} aria-label="Verdeling afvinken"/><strong data-distribution-quantity={quantity}>{quantity}×</strong><span><b>{group.variant.letter}</b> · {group.group} · {group.style}</span>
           {!lines.every(({group})=>group.variant.extras.some(extra=>extra.toLowerCase()==="logo"))&&group.variant.extras.some(extra=>extra.toLowerCase()==="logo")&&logoMark()}
+          {combinationProduct&&<strong className={styles.combinationMark}>COMBINATIE: {combinationProduct}</strong>}
           {group.variant.extras.filter(extra=>extra.toLowerCase()!=="logo").map(extra=><strong key={extra}>{extra}</strong>)}
         </div>)}</div>
         {item.notes&&<p className={styles.cutoutNotes}>{item.unresolved?"CONTROLE: ":""}{item.notes}</p>}

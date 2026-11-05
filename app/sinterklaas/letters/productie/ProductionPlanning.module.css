@@ -199,3 +199,4 @@
 .b2bPlanningRow button { margin:10px 0; }
 .b2bPlanningRow button:disabled { opacity:.45; }
 @media(max-width:700px){.b2bPlanningRow{grid-template-columns:1fr;gap:12px;}.b2bPlanningRow select{font-size:16px;}.b2bPlanning summary span{display:block;margin:6px 0 0;}}
+.combinationBadge { display:inline-flex; align-items:center; gap:6px; margin:3px 6px 3px 0; border:1px solid #d4b077; background:#fff3db; color:#805b22; border-radius:4px; padding:3px 6px; font-size:11px; font-weight:600; }

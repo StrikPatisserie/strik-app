@@ -1,4 +1,5 @@
 import { b2bLetterHasLogo } from "../../b2bLetterLines";
+import { b2bProductionLetters } from "../../b2bCombinationLetters";
 import { b2bProductionPlan, eligibleB2BLetterOrder, type B2BProductionAssignment } from "./b2bProductionPlanning";
 import type { ChocolateLetterLine, ChocolateLetterOrder, SinterklaasB2BOrder } from "../../types";
 import type { ProductionBatchSeed } from "./ProductionPlanningClient";
@@ -86,16 +87,17 @@ export function combineProductionOrders(batches: ProductionBatchSeed[], legacyOr
     .filter(eligibleB2BLetterOrder)
     .forEach((order) => {
       const plan = b2bProductionPlan(order,batches,assignments);
+      if(plan.issues?.length) unplanned.push(`B2B · ${order.customerName} · combinatieletters controleren`);
       const date = batches.find(batch=>batch.id===plan.batchId)?.date || "";
       if (!date) {
-        unplanned.push(`B2B · ${order.customerName}`);
+        if(!plan.issues?.length)unplanned.push(`B2B · ${order.customerName}`);
         return;
       }
-      order.letterLines.forEach((line) => {
+      b2bProductionLetters(order).lines.forEach((line) => {
         const extras = [b2bLetterHasLogo(order, line) ? "logo" : "", ...line.exceptions].filter(Boolean);
         const label = [line.letter, line.chocolate, line.size, line.style, ...extras].join(" · ");
         const key = [line.letter, line.chocolate, line.size, line.style, ...extras].join("|").toLocaleLowerCase("nl-NL");
-        addOrderLine(date, key, label, line.quantity, "b2b", {id:`b2b:${order.id}`,customerName:order.customerName,code:order.folderQuote?.reference || order.id,date:order.deliveryDate,notes:[order.packaging,order.importantNotes].filter(Boolean).join(" · ")});
+        addOrderLine(date, key, label, line.quantity, "b2b", {id:`b2b:${order.id}`,customerName:order.customerName,code:order.folderQuote?.reference || order.id,date:order.deliveryDate,notes:[order.packaging,order.importantNotes].filter(Boolean).join(" · "),...(line.combinationProduct?{combinationProduct:line.combinationProduct}:{})});
       });
     });
 

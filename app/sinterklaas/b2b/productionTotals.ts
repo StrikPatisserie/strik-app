@@ -2,6 +2,7 @@ import { editableFolderOrderText } from "../../lib/businessFolderOrderText";
 import { businessDeliveryWindow } from "../../lib/businessOrderDeliveries";
 import { orderBelongsToSeason, type BusinessSeason } from "../../lib/businessSeasons";
 import type { SinterklaasB2BOrder } from "../types";
+import { stripCombinationChocolate } from "../b2bCombinationLetters";
 
 export type ProductionAllocation = { orderId: string; customer: string; quantity: number; date: string; end: string };
 export type ProductionTotal = { key: string; product: string; quantity: number; unit: "stuks" | "zakjes"; allocations: ProductionAllocation[] };
@@ -10,7 +11,7 @@ type Component = { product: string; quantity: number; unit: ProductionTotal["uni
 const clean = (value: string) => value.replace(/\s+/g, " ").trim();
 
 function components(description: string, quantity: number): Component[] {
-  const name = clean(description.replace(/ · eigen logo$/i, ""));
+  const name = clean(stripCombinationChocolate(description).replace(/ · eigen logo$/i, ""));
   // Letter size/print does not change the brok. Keep almond variants apart.
   const brok = name.match(/^Speculaasbrok met letter · Speculaasbrok (zonder|met) amandel · (?:kleine|grote) spuitletter(?: · letter [A-Z])?$/i);
   if (brok) return [{ product: `Speculaasbrok · ${brok[1].toLowerCase()} amandel`, quantity, unit: "stuks" }];

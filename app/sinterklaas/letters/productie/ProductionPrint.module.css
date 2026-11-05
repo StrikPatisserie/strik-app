@@ -155,3 +155,4 @@
 .inlineLogo { display:inline-flex; align-items:center; gap:1mm; white-space:nowrap; }
 .cutoutNotes { margin-top:1mm !important; font-size:7.5pt; white-space:pre-wrap; }
 @media print { .distributionSheet { width:100%; min-width:0; padding:0; } }
+.combinationMark { font-size:8pt; border:1px solid #555; padding:1mm 1.5mm; }
