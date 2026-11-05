@@ -11,6 +11,8 @@ import { parseLetterGroup, groupLetterTotals, letterGroupMatchesOrder, letterGro
 import B2BProductText from "./B2BProductText";
 import B2BConfirmationDialog, { canMailQuotation, customerConfirmationSent, customerConfirmationNeedsUpdate, customerQuotationSent, shouldOfferCustomerConfirmation } from "./B2BConfirmationDialog";
 import B2BApprovalDialog from "./B2BApprovalDialog";
+import B2BProductionTotals from "./B2BProductionTotals";
+import { buildProductionTotals } from "./productionTotals";
 import { editableFolderOrderText } from "../../lib/businessFolderOrderText";
 import { parseBusinessDate } from "../../lib/businessDeliveryMoment";
 import {
@@ -1764,7 +1766,7 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
   </article>;
 }
 
-export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ season?: BusinessSeason }>) {
+export default function SinterklaasB2BClient({ season = "sint", canViewProduction = false }: Readonly<{ season?: BusinessSeason; canViewProduction?: boolean }>) {
   const excelInput=useRef<HTMLInputElement>(null);
   const [year, setYear] = useState(() => currentYear());
   const [search, setSearch] = useState("");
@@ -1788,6 +1790,7 @@ export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ sea
   const [deleteTarget, setDeleteTarget] = useState<SinterklaasB2BOrder | null>(null);
   const [deleteReason, setDeleteReason] = useState("");
   const [deleteReasonNote, setDeleteReasonNote] = useState("");
+  const [productionTotalsOpen, setProductionTotalsOpen] = useState(false);
 
   useEffect(() => {
     if (!formOpen) return;
@@ -2056,6 +2059,7 @@ export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ sea
   const requestCount = forecastOrders.filter(order => order.status === "aanvraag").length;
   const quoteCount = forecastOrders.filter(order => order.status === "offerte").length;
   const pendingEntryCount = forecastOrders.filter(order => order.status === "akkoord" && !order.entered).length;
+  const productionTotals = useMemo(() => buildProductionTotals(orders, season, year), [orders, season, year]);
 
   return (
     <><div className={styles.page} style={{ "--b2b-accent": colors.accent, "--b2b-pale": colors.pale, "--b2b-season-border": colors.border } as CSSProperties}>
@@ -2080,6 +2084,7 @@ export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ sea
             </select>
             <button type="button" className={styles.overviewIconButton} aria-label="Bestellingen verversen" title="Verversen" data-loading={loading||undefined} disabled={loading} onClick={() => void loadOrders(year)}><OverviewIcon kind="refresh"/></button>
             <button type="button" className={styles.overviewIconButton} aria-label="Excel importeren" title="Excel importeren" disabled={importing} onClick={()=>excelInput.current?.click()}><OverviewIcon kind="upload"/></button>
+            {canViewProduction && <button type="button" className={styles.productionTotalsButton} disabled={loading} onClick={() => setProductionTotalsOpen(true)}>Productie opteller</button>}
             <input ref={excelInput} type="file" accept=".xlsx,.xls" hidden aria-label="Excelbestand kiezen" onChange={event => {void handleExcelFile(event.target.files?.[0]);event.target.value="";}} />
           </div>
           <div className={styles.overviewStats} aria-label="Besteloverzicht">
@@ -2109,6 +2114,7 @@ export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ sea
         <div className={styles.listFooter}><span>{visibleOrders.length} {visibleOrders.length === 1 ? "bestelling" : "bestellingen"} · bedragen excl. btw</span><span>Open een rij voor letterregels, contact en afhandeling.</span></div>
       </>}
       </div>
+      {canViewProduction && productionTotalsOpen && <B2BProductionTotals key={`${season}:${year}`} onRefresh={() => void loadOrders(year)} totals={productionTotals} season={season} year={year} loading={loading} onClose={() => setProductionTotalsOpen(false)} />}
       {confirmationTarget && <B2BConfirmationDialog key={confirmationTarget.id} order={confirmationTarget} updatedOrder={confirmationIsUpdate} onClose={() => setConfirmationTarget(null)} onEdit={nextOrder => { setConfirmationTarget(null); openEditOrderDialog(nextOrder); }} onUpdated={nextOrder => { setOrders(current => updateOrderList(current, nextOrder)); setSaveNotice(customerConfirmationSent(nextOrder) ? `Klantbevestiging voor ${nextOrder.customerName} verstuurd.` : `Mailstatus voor ${nextOrder.customerName} bijgewerkt.`); }}/>}
       {quotationTarget && <B2BConfirmationDialog key={`quotation-${quotationTarget.id}`} mode="quotation" order={quotationTarget} onClose={() => setQuotationTarget(null)} onEdit={nextOrder => { setQuotationTarget(null); openEditOrderDialog(nextOrder); }} onUpdated={nextOrder => { setOrders(current => updateOrderList(current, nextOrder)); setSaveNotice(customerQuotationSent(nextOrder) ? `${nextOrder.status === "offerte" ? "Offerte" : "Aanvraag"} voor ${nextOrder.customerName} verstuurd.` : `Mailstatus voor ${nextOrder.customerName} bijgewerkt.`); }}/>}
       {approvalTarget && <B2BApprovalDialog key={approvalTarget.id} order={approvalTarget} productText={nextOrder => compactOrderText(nextOrder.orderText)} totalLabel={nextOrder => money(effectiveOrderTotal(nextOrder))} onClose={() => setApprovalTarget(null)} onEdit={nextOrder => { setApprovalTarget(null); openEditOrderDialog(nextOrder); }} onApprove={approveOrder} />}

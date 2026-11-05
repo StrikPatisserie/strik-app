@@ -25,6 +25,7 @@ const kerst = load('app/kerst-voor-bedrijven/christmasProducts.ts', { '@/app/lib
 const letters = load('app/sinterklaas/b2bLetterLines.ts');
 const folderOrderText = load('app/lib/businessFolderOrderText.ts');
 const quoteBuilder = load('app/lib/businessFolderQuote.ts', {
+  './businessPickupLocations': load('app/lib/businessPickupLocations.ts', { '../lettershop/shops': load('app/lettershop/shops.ts') }),
   'node:crypto': require('node:crypto'),
   '@/app/sint-voor-bedrijven/sintProducts': sint,
   '@/app/kerst-voor-bedrijven/christmasProducts': kerst,

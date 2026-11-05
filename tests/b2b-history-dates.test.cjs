@@ -17,6 +17,8 @@ function load(file) {
   const expose=file.endsWith('SinterklaasB2BClient.tsx')?'\nexports.testDates={formatDate,formatDateTime,compactDeliveryWindow,monthKey,monthLabel,groupByMonth,Row:B2BOrderRow};':'';
   vm.runInNewContext(code+expose,{exports,console,Request,Response,URL,crypto:require('node:crypto').webcrypto,require(name){
     if(name==='server-only')return {};
+    if(name.endsWith('productionReadiness.server'))return {withProductionReadiness:async response=>response};
+    if(name.endsWith('logos/counts.server'))return {withLogoCounts:async orders=>orders};
     if(name==='next/server')return {NextResponse:{json:body=>Response.json(body)}};
     if(name.endsWith('sinterklaasServerApi'))return {proxySinterklaasGet:async()=>Response.json({orders:existing})};
     if(name==='next/image'||name==='next/link')return {default:'a'};
