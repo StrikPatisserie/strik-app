@@ -1,5 +1,5 @@
 import { getCurrentProfile } from "@/app/lib/auth/session";
-import { canAccessBakkerijPatisserie, hasFullAccess } from "@/app/lib/auth/access";
+import { canAccessBakkerijPatisserie, canManageProduction } from "@/app/lib/auth/access";
 import { ProductionStoreError, readDocument, saveDocument } from "@/app/productie/documents.server";
 import { getWeddingCakeStudioUrl, normalizeDraftList } from "@/app/bruidstaart-studio/studioApi";
 import { weddingOrders, scheduleWedding } from "@/app/productie/weddingPlanning";
@@ -37,7 +37,7 @@ export async function POST(request:Request){
   const order=weddingOrders(await readCakes(incoming.code)).find(o=>o.code.toLowerCase()===incoming.code.toLowerCase());
   if(!order)throw new ProductionStoreError("Deze definitieve bruidstaart is niet meer beschikbaar. Ververs de planning.",409);
   const current=planner.data.tasks.find(t=>t.weddingCode?.toLowerCase()===order.code.toLowerCase());
-  if(!hasFullAccess(profile) && (incoming.date!==(current?.date || order.date) || (current && current.departmentId!=="bruidstaarten")))throw new ProductionStoreError("Alleen managers kunnen de productiedatum wijzigen.",403);
+  if(!canManageProduction(profile) && (incoming.date!==(current?.date || order.date) || (current && current.departmentId!=="bruidstaarten")))throw new ProductionStoreError("Alleen managers kunnen de productiedatum wijzigen.",403);
   const next=scheduleWedding(planner.data,order,incoming.date,incoming.status);
   const revision=await saveDocument("planner",planner.revision,next,profile.id,`Bruidstaart ${order.code}: productieplanning bijgewerkt`);
   return Response.json({state:next,revision,updatedAt:new Date().toISOString()},{headers});

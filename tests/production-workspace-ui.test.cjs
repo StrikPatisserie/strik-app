@@ -38,6 +38,16 @@ test('the compact action bar keeps the selected offer beside XL controls and ope
  assert(button(tree,'Aanbieding beheren'));assert(button(tree,'Sluit schermmodus'));assert(button(tree,'Taak toevoegen'));
 });
 
+test('delegated plan management retains XL add/delete and work-recipe editing without management data links',()=>{
+ const h=harness(),live={state:sample.initialPreviewState(),today:sample.DEMO_TODAY,recipes:sample.demoRecipes,ingredients:[],canManage:true,canManageData:false,departments:planning.DEPARTMENTS.map(d=>d.id),revision:1,recipeRevision:1};
+ let tree=xl(h,{live});assert(button(tree,'Taak toevoegen'));assert(!nodes(tree).some(n=>n.props?.['aria-label']==='Aanbieding beheren'));
+ assert(nodes(tree).some(n=>n.type==='button'&&n.props['aria-label']?.startsWith('Taak toevoegen ·')));
+ button(tree,'Open 48 stuks Fruitdesserttaart · Afwerken').props.onClick();tree=h.render(h.Component,{live});
+ const detail=find(tree,n=>typeof n.type==='function'&&n.props?.task&&n.props?.onRemove);
+ const detailTree=h.render(detail.type,detail.props,tree.props.value);assert(button(detailTree,'Geplande taak verwijderen'));assert(button(detailTree,'Werkrecept aanpassen'));
+ const list=harness(),recipeTree=list.render(list.Component,{live,initialView:'recipes'});assert(button(recipeTree,'Los onderdeel toevoegen'));assert(!nodes(recipeTree).some(n=>n.props?.href?.startsWith('/bakkerij/productie/beheer/')));
+});
+
 test('XL keeps planning controls, drag/drop and task editing while hiding the navigation',async()=>{
  const h=harness();let tree=xl(h);
  assert(!nodes(tree).some(n=>n.type===h.navigation.default));

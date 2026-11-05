@@ -76,6 +76,7 @@ export const PERMISSION_OPTIONS = [
   { id: "vierdaagse.productie", label: "Vierdaagse keuken / bediening" },
   { id: "sinterklaas.view", label: "Sinterklaas" },
   { id: "bakkerij.view", label: "Productie bekijken" },
+  { id: "productie.manage", label: "Strak gepland: planning en werkrecepten beheren" },
   { id: "bakkerij.patisserie", label: "Bakkerij Patisserie" },
   { id: "bakkerij.ijs_chocolade", label: "Bakkerij IJs & chocolade" },
   { id: "bakkerij.logistiek", label: "Logistiek bekijken" },

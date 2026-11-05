@@ -31,6 +31,18 @@ test('a baker can finish own department tasks, while changing other fields, othe
  for(const change of [s=>{s.items[0].name='Changed';},s=>{s.tasks[0].quantity=999;},s=>{s.tasks=[];}]){r=route(bakery);state=structuredClone(r.store.planner.data);change(state);assert.equal((await r.api.PUT(put(state))).status,403);assert.equal(r.counts().writes,0);}
  r=route(bakery);r.store.planner.data.tasks[0].departmentId='ijs';state=structuredClone(r.store.planner.data);state.tasks[0].status='done';assert.equal((await r.api.PUT(put(state))).status,403);
 });
+test('delegated production management can add, edit and remove planned work without gaining general management access',async()=>{
+ const delegated={...bakery,permissions:{...bakery.permissions,'productie.manage':true}};
+ assert.equal(access.hasFullAccess(delegated),false);assert.equal(access.canManageProduction(delegated),true);
+ assert.equal(access.canAccessPath(delegated,'/management/dashboard'),false);
+ assert.equal(access.canAccessPath(delegated,'/bakkerij/productie/beheer/marge'),false);
+ for(const denied of [null,{...delegated,active:false},{...delegated,role:'winkel'},{...delegated,permissions:{}}])assert.equal(access.canManageProduction(denied),false);
+ const r=route(delegated),data=await(await r.api.GET()).json();assert.equal(data.canManage,true);assert.equal(data.canManageData,false);assert.equal(data.departments.length,planning.DEPARTMENTS.length);
+ const next=structuredClone(data.state);next.tasks[0].quantity=15;next.items.push({id:'new-part',name:'Nieuw onderdeel',kind:'component',unit:'kg',departmentId:'bak',stock:0,note:''});next.tasks.push({...next.tasks[0],id:'new-task',itemId:'new-part',quantity:2,batchId:'new-batch',departmentId:'bak'});
+ let response=await r.api.PUT(put(next));assert.equal(response.status,200);let saved=await response.json();assert.equal(saved.state.tasks[0].quantity,15);
+ response=await r.api.PUT(put({...saved.state,tasks:saved.state.tasks.filter(t=>t.id!=='new-task')},saved.revision));assert.equal(response.status,200);saved=await response.json();assert.equal(saved.state.removedTasks[0].removedBy,delegated.id);
+ assert.equal((await r.api.PUT(put(next,2))).status,409,'revision protection still applies');
+});
 test('stale revisions, storage outages and duplicate output cannot overwrite the last shared state',async()=>{
  let r=route(manager);assert.equal((await r.api.PUT(put(r.store.planner.data,1))).status,409);assert.equal(r.counts().writes,0);
  r=route(manager,{failRead:true});assert.equal((await r.api.GET()).status,503);

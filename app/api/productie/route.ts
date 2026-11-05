@@ -1,5 +1,5 @@
 import { getCurrentProfile } from "@/app/lib/auth/session";
-import { hasFullAccess } from "@/app/lib/auth/access";
+import { hasFullAccess, canManageProduction } from "@/app/lib/auth/access";
 import { productionDepartments, mergeWorkspaceForEmployee, visibleWorkspace } from "@/app/productie/access";
 import { ProductionStoreError, readDocument, saveDocument } from "@/app/productie/documents.server";
 import { ingredientViews, recipeViews, syncRecipeCatalog, todayAmsterdam, validWorkspace } from "@/app/productie/workspaceData";
@@ -16,7 +16,7 @@ export async function GET() {
     const [recipes,planner]=await Promise.all([readDocument<RecepturenData>("recipes"),readDocument<PreviewState>("planner")]);
     if (!recipes || !planner) return Response.json({message:"De receptenoverdracht moet eerst worden afgerond.",setupRequired:true,canManage:hasFullAccess(profile)},{status:503,headers});
     const state=syncRecipeCatalog(planner.data,recipes.data);
-    return Response.json({state:visibleWorkspace(state),revision:planner.revision,recipeRevision:recipes.revision,updatedAt:planner.updated_at,today:todayAmsterdam(),recipes:recipeViews(recipes.data),ingredients:ingredientViews(recipes.data),canManage:hasFullAccess(profile),departments:allowed,weeklyOffers:(recipes.data.bakeryHome?.offers || []).map(o=>({id:o.id,weekStart:o.weekStart,weekEnd:o.weekEnd,label:o.label,imageUrl:o.imageUrl}))},{headers});
+    return Response.json({state:visibleWorkspace(state),revision:planner.revision,recipeRevision:recipes.revision,updatedAt:planner.updated_at,today:todayAmsterdam(),recipes:recipeViews(recipes.data),ingredients:ingredientViews(recipes.data),canManage:canManageProduction(profile),canManageData:hasFullAccess(profile),departments:allowed,weeklyOffers:(recipes.data.bakeryHome?.offers || []).map(o=>({id:o.id,weekStart:o.weekStart,weekEnd:o.weekEnd,label:o.label,imageUrl:o.imageUrl}))},{headers});
   } catch (error) { return Response.json({message:error instanceof ProductionStoreError?error.message:"Strik Productie is tijdelijk niet bereikbaar."},{status:503,headers}); }
 }
 export async function PUT(request:Request) {
@@ -35,7 +35,7 @@ export async function PUT(request:Request) {
     if(JSON.stringify(incoming.state.cleaning)!==JSON.stringify(current.cleaning))throw new ProductionStoreError("De schoonmaaklijst is intussen gewijzigd. Ververs de planning om met de actuele versie te werken.",409);
     if(JSON.stringify(incoming.state.productionRequests || [])!==JSON.stringify(current.productionRequests || []))throw new ProductionStoreError("Productieverzoeken worden apart beheerd. Ververs de planning.",409);
     let next:PreviewState;
-    try { next=hasFullAccess(profile)?incoming.state:mergeWorkspaceForEmployee(current,incoming.state,allowed); }
+    try { next=canManageProduction(profile)?incoming.state:mergeWorkspaceForEmployee(current,incoming.state,allowed); }
     catch(error) { throw new ProductionStoreError((error as Error).message,403); }
     // Recipe review flags come from canonical source data, never the browser.
     next=syncRecipeCatalog(next,recipes.data);

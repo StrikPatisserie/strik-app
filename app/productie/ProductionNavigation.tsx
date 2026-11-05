@@ -20,20 +20,20 @@ const sections: { id: string; label: string; icon: IconName; href: string; manag
   { id: "weddings", label: "Bruidstaartproductie", icon: "book", href: `${PRODUCTION_HOME}?board=patisserie&department=bruidstaarten` },
   { id: "orders", label: "IJsgrondstoffen bestellen", icon: "box", href: `${PRODUCTION_HOME}/bestellen`, manager: true },
 ];
-type Props = { active: string; canManage: boolean; canBakery?: boolean; demo?: boolean; onNavigate?: (view: ProductionView) => void };
+type Props = { active: string; canManage: boolean; canManageData?: boolean; canBakery?: boolean; demo?: boolean; onNavigate?: (view: ProductionView) => void };
 
 function availableSections(canManage: boolean, demo: boolean, canBakery: boolean) {
   return sections.filter(section => (!section.manager || canManage) && (section.id !== "weddings" || canBakery) && (!demo || !["packaging", "haccp", "data", "weddings", "orders"].includes(section.id)));
 }
 
-export default function ProductionNavigation({ active, canManage, canBakery = true, demo = false, boards, activeBoard, onNavigate, onBoard }: Props & {
+export default function ProductionNavigation({ active, canManage, canManageData = canManage, canBakery = true, demo = false, boards, activeBoard, onNavigate, onBoard }: Props & {
   boards: { id: BoardId; name: string }[]; activeBoard?: BoardId; onBoard?: (board: BoardId) => void;
 }) {
   return <aside className={s.sidebar}>
     <Link href="/" className={s.returnToTeam}><Icon name="back" size={17}/><span>Strik-app · hoofdmenu</span></Link>
     <Link href={demo ? "/preview/productie" : PRODUCTION_HOME} className={s.brand} aria-label="STRAK gepland"><ProductionWordmark className={s.wordmark}/></Link>
     <span className={s.sidebarCaption}>WERKPLEK</span>
-    <nav aria-label="Productiemenu">{availableSections(canManage, demo, canBakery).map(section => {
+    <nav aria-label="Productiemenu">{availableSections(canManageData, demo, canBakery).map(section => {
       const content = <><Icon name={section.icon} /><span>{section.label}</span></>;
       return onNavigate && ["planning", "catalog", "recipes", "ingredients", "stock"].includes(section.id)
         ? <button key={section.id} onClick={() => onNavigate(section.id as ProductionView)} aria-current={active === section.id ? "page" : undefined}>{content}</button>
@@ -47,9 +47,9 @@ export default function ProductionNavigation({ active, canManage, canBakery = tr
   </aside>;
 }
 
-export function ProductionMobileNavigation({ active, canManage, canBakery = true, demo = false, onNavigate }: Props) {
+export function ProductionMobileNavigation({ active, canManage, canManageData = canManage, canBakery = true, demo = false, onNavigate }: Props) {
   const router = useRouter();
-  const options = [...availableSections(canManage, demo, canBakery), { id: "settings", label: "Instellingen", href: `${PRODUCTION_HOME}?view=settings` }];
+  const options = [...availableSections(canManageData, demo, canBakery), { id: "settings", label: "Instellingen", href: `${PRODUCTION_HOME}?view=settings` }];
   return <div className={s.mobileNav}><label><span className={s.srOnly}>Onderdeel van Productie</span><select value={active} onChange={event => {
     const selected = options.find(option => option.id === event.target.value)!;
     if (onNavigate && ["planning", "catalog", "recipes", "ingredients", "stock", "settings"].includes(selected.id)) onNavigate(selected.id as ProductionView);

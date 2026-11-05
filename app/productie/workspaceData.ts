@@ -5,6 +5,7 @@ export type IngredientView = { id: string; name: string; supplier: string; unit:
 export type LiveWorkspace = {
   state: PreviewState; revision: number; recipeRevision: number; updatedAt: string; today: string;
   recipes: DemoRecipe[]; ingredients: IngredientView[]; canManage: boolean;
+  canManageData?: boolean;
   departments: DepartmentId[];
   weeklyOffers?: { id:string; weekStart:string; weekEnd:string; label:string; imageUrl:string }[];
 };

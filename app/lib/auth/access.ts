@@ -143,6 +143,11 @@ export function canAccessPersonalNotes(profile: UserProfile | null | undefined) 
   return hasFullAccess(profile) && profile?.personal_workspace===true;
 }
 
+// Delegated operational access stays separate from global management access.
+export function canManageProduction(profile: UserProfile | null | undefined) {
+  return hasFullAccess(profile) || Boolean(profile?.active && hasPermission(profile, "productie.manage") && (canAccessBakkerijPatisserie(profile) || canAccessBakkerijIjsChocolade(profile)));
+}
+
 export function isWinkelIpadAccount(
   profile: UserProfile | null | undefined
 ) {

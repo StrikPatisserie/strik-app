@@ -1,10 +1,10 @@
-import { canAccessBakkerijIjsChocolade, canAccessBakkerijPatisserie, hasFullAccess } from "../lib/auth/access";
+import { canAccessBakkerijIjsChocolade, canAccessBakkerijPatisserie, canManageProduction } from "../lib/auth/access";
 import type { UserProfile } from "../lib/supabase/types";
 import { DEPARTMENTS, type DepartmentId, type PreviewState, transitionTask } from "./planning";
 
 export function productionDepartments(profile: UserProfile | null): DepartmentId[] {
   if (!profile?.active) return [];
-  return DEPARTMENTS.filter(d => hasFullAccess(profile) || (d.board === "ijs" || d.board === "chocolade" ? canAccessBakkerijIjsChocolade(profile) : canAccessBakkerijPatisserie(profile))).map(d => d.id);
+  return DEPARTMENTS.filter(d => canManageProduction(profile) || (d.board === "ijs" || d.board === "chocolade" ? canAccessBakkerijIjsChocolade(profile) : canAccessBakkerijPatisserie(profile))).map(d => d.id);
 }
 export function visibleWorkspace(state: PreviewState): PreviewState {
   // Existing production users can coordinate work and dependencies across the

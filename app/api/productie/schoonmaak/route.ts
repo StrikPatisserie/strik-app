@@ -1,5 +1,5 @@
 import { getCurrentProfile } from "@/app/lib/auth/session";
-import { hasFullAccess,canAccessBakkerijPatisserie } from "@/app/lib/auth/access";
+import { canManageProduction,canAccessBakkerijPatisserie } from "@/app/lib/auth/access";
 import { ProductionStoreError,readDocument,saveDocument } from "@/app/productie/documents.server";
 import { applyCleaningCommand,type CleaningCommand,type PreviewState } from "@/app/productie/planning";
 import { syncRecipeCatalog } from "@/app/productie/workspaceData";
@@ -14,7 +14,7 @@ export async function POST(request:Request){
     const text=await request.text();if(text.length>64000)return Response.json({message:"De schoonmaaklijst is te groot."},{status:413,headers});
     const input=JSON.parse(text),command=input?.command as CleaningCommand;
     if(!command || !["check","plan","remove","move"].includes(command.kind))throw new ProductionStoreError("Kies een geldige schoonmaakactie.",400);
-    if(command.kind!=="check" && !hasFullAccess(profile))throw new ProductionStoreError("Alleen management kan de schoonmaakplanning aanpassen.",403);
+    if(command.kind!=="check" && !canManageProduction(profile))throw new ProductionStoreError("Alleen management kan de schoonmaakplanning aanpassen.",403);
     const [planner,recipes]=await Promise.all([readDocument<PreviewState>("planner"),readDocument<RecepturenData>("recipes")]);
     if(!planner || !recipes)throw new ProductionStoreError("De productieopslag is nog niet ingericht.");
     if(input.revision!==planner.revision)throw new ProductionStoreError("De planning is intussen gewijzigd. Ververs eerst; er is niets opgeslagen.",409);

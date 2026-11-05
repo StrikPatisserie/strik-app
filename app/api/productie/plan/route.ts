@@ -1,5 +1,5 @@
 import { getCurrentProfile } from "@/app/lib/auth/session";
-import { hasFullAccess } from "@/app/lib/auth/access";
+import { canManageProduction } from "@/app/lib/auth/access";
 import { ProductionStoreError, readDocument, saveRecipePlanDocument } from "@/app/productie/documents.server";
 import { recipeViews, syncRecipeCatalog, validWorkspace } from "@/app/productie/workspaceData";
 import { buildRecipePlan, refreshRecipePlan } from "@/app/productie/recipePlanning";
@@ -9,7 +9,7 @@ export const dynamic="force-dynamic";
 const headers={"Cache-Control":"private, no-store"};
 export async function POST(request:Request) {
   const profile=await getCurrentProfile();
-  if(!profile?.active || !hasFullAccess(profile))return Response.json({message:"Alleen managers kunnen productieopdrachten plannen."},{status:403,headers});
+  if(!profile?.active || !canManageProduction(profile))return Response.json({message:"Alleen managers kunnen productieopdrachten plannen."},{status:403,headers});
   try {
     const text=await request.text();if(text.length>100000)throw new ProductionStoreError("De productieopdracht is te groot.",413);
     const incoming=JSON.parse(text);
