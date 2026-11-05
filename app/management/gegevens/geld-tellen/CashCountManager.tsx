@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import styles from "./CashCountManager.module.css";
+import { cashCountViewHref, readCashCountView, type CashCountView } from "./cashCountView";
 import {
   cashDenominationTotal,
   cashDenominations,
@@ -624,11 +625,11 @@ function cashWarning(record: RevenueCashRecord | undefined) {
   return "";
 }
 
-export default function CashCountManager() {
-  const [selectedDate, setSelectedDate] = useState(localIsoDate());
-  const [selectedShop, setSelectedShop] = useState<RevenueShop>(revenueShops[0]);
+export default function CashCountManager({ initialView }: { initialView?: CashCountView } = {}) {
+  const [selectedDate, setSelectedDate] = useState(() => initialView?.date || localIsoDate());
+  const [selectedShop, setSelectedShop] = useState<RevenueShop>(initialView?.shop || revenueShops[0]);
   const [selectedCashLocationKind, setSelectedCashLocationKind] =
-    useState<CashLocationKind>("patisserie");
+    useState<CashLocationKind>(initialView?.kind || "patisserie");
   const [records, setRecords] = useState<RevenueRecord[]>([]);
   const [dailyRecords, setDailyRecords] = useState<RevenueDayRecord[]>([]);
   const [cashRecords, setCashRecords] = useState<RevenueCashRecord[]>([]);
@@ -648,12 +649,37 @@ export default function CashCountManager() {
   const [depositReportSelection, setDepositReportSelection] = useState<string[]>([]);
   const [status, setStatus] = useState("");
   const [storage, setStorage] = useState<RevenueResponse["storage"]>();
+  const [viewReady, setViewReady] = useState(false);
+  const [reloadVersion, setReloadVersion] = useState(0);
+
+  useEffect(() => {
+    function restoreView() {
+      const view = readCashCountView(new URL(window.location.href).searchParams, localIsoDate());
+      setSelectedDate(view.date);
+      setSelectedShop(view.shop);
+      setSelectedCashLocationKind(view.kind);
+      setViewReady(true);
+    }
+    restoreView();
+    window.addEventListener("popstate", restoreView);
+    return () => window.removeEventListener("popstate", restoreView);
+  }, []);
+
+  useEffect(() => {
+    if (!viewReady) return;
+    const href = cashCountViewHref(window.location.href, {
+      date: selectedDate, shop: selectedShop, kind: selectedCashLocationKind,
+    });
+    const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (href !== current) window.history.replaceState(window.history.state, "", href);
+  }, [viewReady, selectedDate, selectedShop, selectedCashLocationKind]);
 
   useEffect(() => {
     let ignoreResult = false;
 
     async function loadRevenue() {
       setState("loading");
+      setStatus("");
 
       try {
         const response = await fetch("/api/management-revenue", {
@@ -695,7 +721,7 @@ export default function CashCountManager() {
     return () => {
       ignoreResult = true;
     };
-  }, []);
+  }, [reloadVersion]);
 
   const selectedWeek = useMemo(() => weekPartsForDate(selectedDate), [selectedDate]);
   const depositWeekKey = weekKey(selectedWeek.year, selectedWeek.week);
@@ -2304,7 +2330,7 @@ export default function CashCountManager() {
         className={`${styles.tabs} grid w-full max-w-lg grid-cols-3 gap-1 rounded-full border border-white/70 bg-white/82 p-1 shadow-sm backdrop-blur-sm`}
       >
         <Link
-          href="/management/gegevens/geld-tellen"
+          href={cashCountViewHref("/management/gegevens/geld-tellen", { date: selectedDate, shop: selectedShop, kind: selectedCashLocationKind })}
           aria-current="page"
           className="rounded-full bg-[#1f4f35] px-3 py-2 text-center text-[0.7rem] font-black text-white shadow-sm"
         >
@@ -2839,10 +2865,11 @@ export default function CashCountManager() {
                     {selectedShopDayIsPast && (
                       <button
                         type="button"
-                        onClick={() => window.location.reload()}
-                        className="h-9 rounded-full border border-[#a43b2f] bg-white px-4 text-xs font-black text-[#a43b2f]"
+                        onClick={() => setReloadVersion(version => version + 1)}
+                        disabled={state === "loading" || state === "saving"}
+                        className="h-9 rounded-full border border-[#a43b2f] bg-white px-4 text-xs font-black text-[#a43b2f] disabled:opacity-50"
                       >
-                        Opnieuw ophalen
+                        {state === "loading" ? "Bezig met ophalen…" : "Opnieuw ophalen"}
                       </button>
                     )}
                     {selectedShopDayIsPast &&
