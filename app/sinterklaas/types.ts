@@ -60,6 +60,7 @@ export type ChocolateLetterOrder = {
 
 export type SinterklaasB2BOrder = {
   logoAttachmentCount?: number | null;
+  logoPrintComplete?: boolean | null;
   quotationMail?: {
     version: string;
     customer?: B2BConfirmationReceipt;

@@ -85,12 +85,14 @@ test('print endpoint rejects foreign IDs and validates quantity limits before re
  response=await api.POST(request('POST',{logos:[choice({quantity:2})]}));assert.equal(response.status,200);assert.equal(response.headers.get('content-type'),'application/pdf');assert.equal(generated,1);
 });
 test('overview attachment counts are scoped, paginated, and unknown on storage failure rather than a false missing warning',async()=>{
- async function read(rows,fail=false){const requests=[];const db={from:()=>({select:columns=>{assert.equal(columns,'order_id');return{eq:(key,year)=>{assert.equal(year,2026);return{in:(key,ids)=>{assert.deepEqual(Array.from(ids),['one','two','three']);return{order:()=>({range:async(start,end)=>{requests.push([start,end]);return{data:rows.slice(start,end+1),error:fail?{}:null};}})};}};}};}})};
- const server=load(base+'counts.server.ts',{'server-only':{},'@/app/lib/supabase/admin':{createAdminClient:()=>db}});
+ async function read(rows,fail=false){const requests=[];const db={from:()=>({select:columns=>{assert.equal(columns,'order_id,quantity,width_cm,height_cm,printed_at,printed_quantity,printed_width_cm,printed_height_cm');return{eq:(key,year)=>{assert.equal(year,2026);return{in:(key,ids)=>{assert.deepEqual(Array.from(ids),['one','two','three']);return{order:()=>({range:async(start,end)=>{requests.push([start,end]);return{data:rows.slice(start,end+1),error:fail?{}:null};}})};}};}};}})};
+ const server=load(base+'counts.server.ts',{'./model':model,'server-only':{},'@/app/lib/supabase/admin':{createAdminClient:()=>db}});
  return{data:await server.withLogoCounts([{id:'one'},{id:'two'},{id:'three'}],'2026'),requests};}
  let result=await read([{order_id:'one'},{order_id:'one'},{order_id:'two'}]);assert.deepEqual(Array.from(result.data,order=>order.logoAttachmentCount),[2,1,0]);
  result=await read(Array.from({length:501},()=>({order_id:'one'})));assert.equal(result.data[0].logoAttachmentCount,501);assert.equal(result.requests.length,2);
- result=await read([],true);assert(result.data.every(order=>order.logoAttachmentCount===null));
+ result=await read([],true);assert(result.data.every(order=>order.logoAttachmentCount===null&&order.logoPrintComplete===null));
+ const printed={...choice(),printed_at:'2026-11-05T10:00:00Z',printed_quantity:60,printed_width_cm:3,printed_height_cm:3};
+ result=await read([{...printed,order_id:'one'},{...printed,order_id:'two'},{...printed,order_id:'two',quantity:61}]);assert.deepEqual(Array.from(result.data,order=>order.logoPrintComplete),[true,false,false]);
 });
 test('missing-logo icons use red state, while uploaded logos use normal styling and dialog mutations notify the overview',()=>{
  const React=require('react'),jsx=require('react/jsx-runtime');
@@ -98,7 +100,7 @@ test('missing-logo icons use red state, while uploaded logos use normal styling 
  const html=missing=>require('react-dom/server').renderToStaticMarkup(React.createElement(component.default,{orderId:'one',year:'2026',customer:'Test',missing}));
  assert.match(html(true),/data-missing="true"/);assert.doesNotMatch(html(false),/data-missing/);
  const row=fs.readFileSync('app/sinterklaas/b2b/SinterklaasB2BClient.tsx','utf8');assert.doesNotMatch(row,/Logo nog niet gecontroleerd/);assert.match(row,/Nog geen logo geüpload — controleer/);assert.match(row,/logoAttachmentCount===0/);
- const dialog=fs.readFileSync(base+'OrderLogosDialog.tsx','utf8');assert.match(dialog,/onCountChange\?\.\(replace\?logos.length:logos.length\+uploaded\)/);assert.match(dialog,/onCountChange\?\.\(logos.length-1\)/);
+ const dialog=fs.readFileSync(base+'OrderLogosDialog.tsx','utf8');assert.match(dialog,/onCountChange\?\.\(nextLogos.length,logosPrintComplete\(nextLogos\)\)/);
 });
 test('print checkmark is manual, records the actor and exact settings, and resets on changed print settings',async()=>{
  const db=repository([row()]),api=route(db,{profile:{id:'actor',full_name:'Feline',email:'feline@example.invalid'}});
@@ -126,4 +128,35 @@ test('printer safety reserves 50 mm below every logo, uses 5 mm side margins and
  for(const cell of cells){assert(29.7-cell.y-cell.height>=5-.000001);assert.equal(cell.width,3);assert.equal(cell.height,3);}
  assert.throws(()=>model.logoPrintLayout([choice({height_cm:24.2,quantity:1})]),/5 cm vrij/);
  const large=model.logoPrintLayout([choice({height_cm:24.1,quantity:1})]);assert.equal(large.length,1);assert(Math.abs(29.7-large[0].y-large[0].height-5)<.000001);
+});
+
+
+test('overview printer check appears only when every current selected logo is confirmed printed',()=>{
+ const printed={...choice(),printed_at:'2026-11-05T10:00:00Z',printed_quantity:60,printed_width_cm:3,printed_height_cm:3};
+ assert.equal(model.logosPrintComplete([]),false);
+ assert.equal(model.logosPrintComplete([printed]),true);
+ assert.equal(model.logosPrintComplete([printed,{...printed,id:id2,printed_at:null}]),false);
+ assert.equal(model.logosPrintComplete([printed,{...printed,id:id2,quantity:0}]),true);
+ assert.equal(model.logosPrintComplete([{...printed,quantity:61}]),false);
+ assert.equal(model.logosPrintComplete([{...printed,width_cm:4}]),false);
+ const React=require('react'),jsx=require('react/jsx-runtime');
+ const component=load(base+'OrderLogos.tsx',{'react':React,'react/jsx-runtime':jsx,'next/dynamic':{default:()=>()=>null},'./Logos.module.css':{default:new Proxy({},{get:(_,name)=>String(name)})}});
+ const html=(complete,missing=false)=>require('react-dom/server').renderToStaticMarkup(React.createElement(component.default,{orderId:'one',year:'2026',customer:'Test',printComplete:complete,missing}));
+ assert.match(html(true),/data-printed="true"/);assert.match(html(true),/printCheck/);assert.match(html(true),/geprint · printvel bekijken/);
+ assert.doesNotMatch(html(false),/data-printed|printCheck/);assert.doesNotMatch(html(null),/data-printed|printCheck/);assert.doesNotMatch(html(true,true),/data-printed|printCheck/);
+});
+
+test('confirming or changing a logo print updates the overview callback immediately, while failed saves keep its state',async()=>{
+ const jsx=require('react/jsx-runtime'),states=[],reports=[];let cursor=0,fail=false;
+ const original={...row(),quantity:2};
+ const hooks={useEffect(){},useRef:()=>({current:null}),useState(initial){const i=cursor++;if(!(i in states))states[i]=i===0?[original]:i===1?false:initial;return[states[i],value=>{states[i]=typeof value==='function'?value(states[i]):value;}];}};
+ const loaded=load(base+'OrderLogosDialog.tsx',{'react':hooks,'react/jsx-runtime':jsx,'react-dom':{createPortal:node=>node},'./model':model,'./Logos.module.css':{default:new Proxy({},{get:(_,key)=>key})}},{document:{body:{}},fetch:async(url,request)=>{
+  const input=JSON.parse(request.body);return Response.json(fail?{message:'Niet opgeslagen'}:{logo:{...input,printed_at:input.printed?'2026-11-05T10:00:00Z':null,printed_quantity:input.quantity,printed_width_cm:input.width_cm,printed_height_cm:input.height_cm}},{status:fail?503:200});
+ }});
+ const render=()=>{cursor=0;return loaded.default({orderId:'one',year:'2026',customer:'Test',startPrint:false,onCountChange:(...args)=>reports.push(args),onClose(){}});};
+ const nodes=tree=>Array.isArray(tree)?tree.flatMap(nodes):tree&&typeof tree==='object'?[tree,...nodes(tree.props?.children)]:[];
+ let tree=render();nodes(tree).find(n=>n.type==='input'&&n.props.type==='checkbox').props.onChange({target:{checked:true}});await new Promise(setImmediate);
+ assert.deepEqual(reports.at(-1),[1,true]);tree=render();assert.equal(nodes(tree).find(n=>n.type==='input'&&n.props.type==='checkbox').props.checked,true);
+ fail=true;nodes(tree).find(n=>n.type==='input'&&n.props.type==='checkbox').props.onChange({target:{checked:false}});await new Promise(setImmediate);assert.deepEqual(reports.at(-1),[1,true]);
+ fail=false;tree=render();nodes(tree).find(n=>n.type==='input'&&n.props.type==='checkbox').props.onChange({target:{checked:false}});await new Promise(setImmediate);assert.deepEqual(reports.at(-1),[1,false]);
 });

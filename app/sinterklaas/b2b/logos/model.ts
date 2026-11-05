@@ -31,6 +31,12 @@ export function logoPrintLayout(items:PrintLogo[]) {
   return cells;
 }
 
-export function logoPrintedFor(logo:OrderLogo) {
+export type LogoPrintState=Pick<OrderLogo,"quantity"|"width_cm"|"height_cm"|"printed_at"|"printed_quantity"|"printed_width_cm"|"printed_height_cm">;
+export function logoPrintedFor(logo:LogoPrintState) {
  return Boolean(logo.printed_at&&logo.printed_quantity===logo.quantity&&Number(logo.printed_width_cm)===Number(logo.width_cm)&&Number(logo.printed_height_cm)===Number(logo.height_cm));
+}
+
+export function logosPrintComplete(logos:LogoPrintState[]) {
+ const selected=logos.filter(logo=>logo.quantity>0);
+ return selected.length>0&&selected.every(logoPrintedFor);
 }

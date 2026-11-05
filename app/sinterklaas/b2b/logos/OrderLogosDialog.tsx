@@ -2,12 +2,12 @@
 /* eslint-disable @next/next/no-img-element */
 import {useEffect,useRef,useState} from "react";
 import {createPortal} from "react-dom";
-import {type OrderLogo,logoPrintLayout,logoPrintedFor,LOGO_MAX_PRINT_HEIGHT} from "./model";
+import {type OrderLogo,logoPrintLayout,logoPrintedFor,logosPrintComplete,LOGO_MAX_PRINT_HEIGHT} from "./model";
 import s from "./Logos.module.css";
 function BlobPreview({logo,url}:{logo:OrderLogo;url:string}) {
  return logo.content_type==="application/pdf"?<a href={url} target="_blank" rel="noreferrer" className={s.preview} style={{display:"grid",placeItems:"center"}}>PDF bekijken</a>:<a href={url} target="_blank" rel="noreferrer"><img src={url} loading="lazy" decoding="async" alt={logo.name} className={s.preview}/></a>;
 }
-export default function OrderLogosDialog({orderId,year,customer,startPrint,onCountChange,onClose}:{orderId:string;year:string;customer:string;startPrint:boolean;onCountChange?:(count:number)=>void;onClose:()=>void}) {
+export default function OrderLogosDialog({orderId,year,customer,startPrint,onCountChange,onClose}:{orderId:string;year:string;customer:string;startPrint:boolean;onCountChange?:(count:number,printComplete?:boolean)=>void;onClose:()=>void}) {
  const countChange=useRef(onCountChange);
  useEffect(()=>{countChange.current=onCountChange;},[onCountChange]);
  const dialog=useRef<HTMLDialogElement>(null),upload=useRef<HTMLInputElement>(null),replaceInput=useRef<HTMLInputElement>(null),replaceTarget=useRef<OrderLogo|null>(null);
@@ -15,7 +15,7 @@ export default function OrderLogosDialog({orderId,year,customer,startPrint,onCou
  const [pdf,setPdf]=useState<string|null>(null);
  const base=`/api/b2b-logos?orderId=${encodeURIComponent(orderId)}&year=${encodeURIComponent(year)}`;
  useEffect(()=>{dialog.current?.showModal();},[]);
- useEffect(()=>{const controller=new AbortController();fetch(base,{cache:"no-store",signal:controller.signal}).then(async response=>{const data=await response.json();if(!response.ok)throw Error(data.message);setLogos(data.logos);countChange.current?.(data.logos.length);setLoading(false);}).catch(error=>{if(!controller.signal.aborted){setLoading(false);setStatus(error instanceof Error?error.message:"Laden mislukt.");}});return()=>controller.abort();},[base]);
+ useEffect(()=>{const controller=new AbortController();fetch(base,{cache:"no-store",signal:controller.signal}).then(async response=>{const data=await response.json();if(!response.ok)throw Error(data.message);setLogos(data.logos);countChange.current?.(data.logos.length,logosPrintComplete(data.logos));setLoading(false);}).catch(error=>{if(!controller.signal.aborted){setLoading(false);setStatus(error instanceof Error?error.message:"Laden mislukt.");}});return()=>controller.abort();},[base]);
  useEffect(()=>()=>{if(pdf)URL.revokeObjectURL(pdf);},[pdf]);
  const fileUrl=(logo:OrderLogo,download=false)=>`${base}&id=${encodeURIComponent(logo.id)}${download?"&download=1":""}&v=${encodeURIComponent(logo.updated_at)}`;
  function update(id:string,patch:Partial<OrderLogo>){setLogos(current=>current.map(item=>item.id===id?{...item,...patch}:item));setPdf(null);}
@@ -24,25 +24,25 @@ export default function OrderLogosDialog({orderId,year,customer,startPrint,onCou
   if(!replace&&logos.length+files.length>30){setStatus("Bewaar maximaal 30 logo’s per bestelling.");return;}
   setBusy(true);setStatus("Uploaden…");setPdf(null);
   try {
-   let uploaded=0;
+   let nextLogos=logos;
    for(const file of files) {
     if(file.size>4*1024*1024)throw Error(`${file.name}: maximaal 4 MB per bestand.`);
     const body=new FormData();body.set("file",file);if(replace){body.set("id",replace.id);body.set("updatedAt",replace.updated_at);}
     const response=await fetch(base,{method:"POST",body}),data=await response.json();if(!response.ok)throw Error(data.message);
-    setLogos(current=>replace?current.map(item=>item.id===replace.id?data.logo:item):[...current,data.logo]);
-    uploaded++;onCountChange?.(replace?logos.length:logos.length+uploaded);
+    nextLogos=replace?nextLogos.map(item=>item.id===replace.id?data.logo:item):[...nextLogos,data.logo];
+    setLogos(nextLogos);onCountChange?.(nextLogos.length,logosPrintComplete(nextLogos));
    }
    setStatus(replace?"Logo vervangen.":"Logo’s opgeslagen.");
   } catch(error){setStatus(error instanceof Error?error.message:"Uploaden is mislukt.");}finally{setBusy(false);}
  }
  async function save(logo:OrderLogo,printed?:boolean) {
   setBusy(true);setStatus("Opslaan…");
-  try{const response=await fetch(base,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({...logo,...(printed!==undefined?{printed}:{})})}),data=await response.json();if(!response.ok)throw Error(data.message);setLogos(current=>current.map(item=>item.id===logo.id?data.logo:item));setStatus(printed===true?"Afgevinkt als geprint.":printed===false?"Printvinkje verwijderd.":"Naam en printinstellingen opgeslagen.");}catch(error){setStatus(error instanceof Error?error.message:"Opslaan mislukt.");}finally{setBusy(false);}
+  try{const response=await fetch(base,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({...logo,...(printed!==undefined?{printed}:{})})}),data=await response.json();if(!response.ok)throw Error(data.message);const nextLogos=logos.map(item=>item.id===logo.id?data.logo:item);setLogos(nextLogos);onCountChange?.(nextLogos.length,logosPrintComplete(nextLogos));setStatus(printed===true?"Afgevinkt als geprint.":printed===false?"Printvinkje verwijderd.":"Naam en printinstellingen opgeslagen.");}catch(error){setStatus(error instanceof Error?error.message:"Opslaan mislukt.");}finally{setBusy(false);}
  }
  async function remove(logo:OrderLogo) {
   if(!window.confirm(`Logo “${logo.name}” definitief verwijderen?`))return;
   setBusy(true);setStatus("Verwijderen…");
-  try{const response=await fetch(base,{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:logo.id,updated_at:logo.updated_at})}),data=await response.json();if(!response.ok)throw Error(data.message);setLogos(current=>current.filter(item=>item.id!==logo.id));onCountChange?.(logos.length-1);setPdf(null);setStatus("Logo verwijderd.");}catch(error){setStatus(error instanceof Error?error.message:"Verwijderen mislukt.");}finally{setBusy(false);}
+  try{const response=await fetch(base,{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:logo.id,updated_at:logo.updated_at})}),data=await response.json();if(!response.ok)throw Error(data.message);const nextLogos=logos.filter(item=>item.id!==logo.id);setLogos(nextLogos);onCountChange?.(nextLogos.length,logosPrintComplete(nextLogos));setPdf(null);setStatus("Logo verwijderd.");}catch(error){setStatus(error instanceof Error?error.message:"Verwijderen mislukt.");}finally{setBusy(false);}
  }
  async function makePrint() {
   try {

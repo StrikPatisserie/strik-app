@@ -790,7 +790,10 @@ function updateOrderList(
   nextOrder: SinterklaasB2BOrder
 ) {
   const previous=orders.find(order=>order.id===nextOrder.id);
-  const updated=nextOrder.logoAttachmentCount==null&&previous?.logoAttachmentCount!=null?{...nextOrder,logoAttachmentCount:previous.logoAttachmentCount}:nextOrder;
+  const updated={...nextOrder,
+    logoAttachmentCount:nextOrder.logoAttachmentCount??previous?.logoAttachmentCount,
+    logoPrintComplete:nextOrder.logoPrintComplete??previous?.logoPrintComplete,
+  };
   return [updated, ...orders.filter((order) => order.id !== nextOrder.id)].sort(
     compareOrdersByDeliveryDate
   );
@@ -1648,7 +1651,7 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
   onCustomerConfirmation: (order: SinterklaasB2BOrder) => void;
   onQuotation: (order: SinterklaasB2BOrder) => void;
   onApprove: (order: SinterklaasB2BOrder) => void;
-  onLogoCount: (id:string,count:number) => void;
+  onLogoCount: (id:string,count:number,printComplete?:boolean) => void;
 }>) {
   const [expanded, setExpanded] = useState(false);
   const group = parseLetterGroup(order.letterOrderText);
@@ -1676,23 +1679,23 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
   ].filter(Boolean);
 
   return <article className={`${styles.order} ${order.cancelled ? styles.archived : ""}`}>
-    <div className={styles.orderMain}>
+    <div className={styles.orderMain} data-expanded={expanded||undefined}>
       <div className={styles.date}>{compactDeliveryWindow(order)}<small>{deliveryDateHint}</small>{dueSoon(order) && <small className={styles.warning}>Binnen 2 dagen</small>}</div>
       <div className={styles.customer}>
-        <h3>{order.customerName}{!archived&&(logoOrderRequested(order)||expanded)&&<OrderLogos orderId={order.id} year={order.year} customer={order.customerName} missing={logoOrderRequested(order)&&order.logoAttachmentCount===0} onCountChange={count=>onLogoCount(order.id,count)}/>}</h3>
+        <h3 className={styles.customerHeading}><span>{order.customerName}</span>{!archived&&(logoOrderRequested(order)||expanded)&&<OrderLogos orderId={order.id} year={order.year} customer={order.customerName} printComplete={order.logoPrintComplete} missing={logoOrderRequested(order)&&order.logoAttachmentCount===0} onCountChange={(count,printed)=>onLogoCount(order.id,count,printed)}/>}</h3>
         <p className={styles.orderProduct}><B2BProductText text={orderSummary || "Bestelling nog invullen"} /></p>
         <p className={styles.delivery}>{order.deliveryMethod || "Levering nog afspreken"}{order.season === "sint-kerst" ? " · Sint & Kerst" : ""}</p>
         {!archived&&!order.cancelled&&logoOrderRequested(order)&&order.logoAttachmentCount===0&&<p className={styles.warning} style={{color:"#b23827"}}>! Nog geen logo geüpload — controleer</p>}
         {order.reminderEmailError && <p className={styles.warning}>! Interne controlewaarschuwing niet bevestigd</p>}
         {(warnings.length > 0 || confirmationNeedsAttention) && <p className={styles.warning}>! {confirmationNeedsAttention ? "Controleer interne back-up" : warnings[0]}{warnings.length > 1 ? ` · +${warnings.length - 1}` : ""}</p>}
       </div>
-      <div>
+      <div className={styles.rowStatus}>
         {order.productionChecklistReady && !order.cancelled && <span className={styles.status} style={{background:"#dcebd8",color:"#24551d"}}>✓ Letters klaar</span>}
         <span className={styles.status} data-status={order.cancelled ? "geannuleerd" : order.status}>{statusLabel}</span>
         {!archived && !order.cancelled && (order.status === "aanvraag" || order.status === "offerte") && <button type="button" className={styles.approveLink} aria-label={`Aanvraag goedkeuren van ${order.customerName}`} onClick={() => onApprove(order)}>Goedkeuren →</button>}
         {order.status === "akkoord" && !order.cancelled && <p className={styles.next} style={order.entered ? { color: "#52725c" } : undefined}>{order.entered ? "✓ Ingevoerd" : "! Nog invoeren"}</p>}
         {order.confirmationMail?.customer?.sentAt && <p className={`${styles.next} ${customerConfirmationSent(order) ? styles.sent : ""}`}>{customerConfirmationSent(order) ? "✓ Klant gemaild" : "Klant heeft vorige versie"}</p>}
-        {customerConfirmationNeedsUpdate(order) && <button type="button" className={styles.mailLink} onClick={() => onCustomerConfirmation(order)}>Wijziging aan klant mailen…</button>}
+        {customerConfirmationNeedsUpdate(order) && <button type="button" className={styles.mailLink} onClick={() => onCustomerConfirmation(order)}>Wijziging mailen…</button>}
         {canMailQuotation(order) && <button type="button" className={styles.mailLink} onClick={() => onQuotation(order)}>{customerQuotationSent(order) ? "✓ Klantmail bekijken" : `${order.status === "offerte" ? "Offerte" : "Aanvraag"} mailen…`}</button>}
       </div>
       <div className={styles.amount}>{order.totalExVat.trim() || priceBreakdowns.length > 0 ? <>{money(orderTotal)}<small>excl. btw</small></> : "—"}</div>
@@ -2082,7 +2085,7 @@ export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ sea
           <div className={styles.columns}><span>Levering</span><span>Klant & bestelling</span><span>Status</span><span>Totaal ex. btw</span><span /></div>
           {loading ? <p className={styles.empty} role="status">Bestellingen laden…</p> : groupedOrders.map(([key, group]) => <section key={key}>
             <div className={styles.month}><h2>{monthLabel(key)}</h2><span>{group.length} {group.length === 1 ? "bestelling" : "bestellingen"}</span></div>
-            {group.map(order => <B2BOrderRow key={order.id} onLogoCount={(id,count)=>setOrders(current=>current.map(item=>item.id===id?{...item,logoAttachmentCount:count}:item))} order={order} updatingId={updatingId} onToggle={toggleStatus} onEdit={openEditOrderDialog}
+            {group.map(order => <B2BOrderRow key={order.id} onLogoCount={(id,count,printed)=>setOrders(current=>current.map(item=>item.id===id?{...item,logoAttachmentCount:count,...(printed!==undefined?{logoPrintComplete:printed}:{})}:item))} order={order} updatingId={updatingId} onToggle={toggleStatus} onEdit={openEditOrderDialog}
               onDelete={nextOrder => { setError(""); setDeleteTarget(nextOrder); setDeleteReason(""); setDeleteReasonNote(""); }}
               onRetryConfirmation={nextOrder => void resendConfirmation(nextOrder)} onCustomerConfirmation={nextOrder => { setConfirmationIsUpdate(customerConfirmationNeedsUpdate(nextOrder)); setConfirmationTarget(nextOrder); }} onQuotation={setQuotationTarget} onApprove={setApprovalTarget} />)}
           </section>)}
