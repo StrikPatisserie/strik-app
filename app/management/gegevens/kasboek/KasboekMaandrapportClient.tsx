@@ -555,14 +555,20 @@ function buildWinkelLine(input: {
   const expectedDates = input.dates.filter(
     (date) => date <= input.today && isCashExpectedForShopDate(input.shop, date)
   );
+  const closedDates = new Set(expectedDates.filter((date) => {
+    const day = dailyByDate.get(date);
+    if (day?.shopClosed) return true;
+
+    // Older closures from Geld tellen retain only the standard note.
+    return day?.amount === 0 &&
+      /^winkel was gesloten\.?$/i.test(day.note?.trim() ?? "") &&
+      !hasPatisserieCashRecord(cashByDate.get(date));
+  }));
   const completeDates = expectedDates.filter(
     (date) =>
-      !dailyByDate.get(date)?.shopClosed &&
+      !closedDates.has(date) &&
       dailyByDate.has(date) &&
       hasPatisserieCashRecord(cashByDate.get(date))
-  );
-  const closedDates = expectedDates.filter(
-    (date) => dailyByDate.get(date)?.shopClosed
   );
 
   expectedDates.forEach((date) => {
@@ -572,7 +578,7 @@ function buildWinkelLine(input: {
     if (!dailyRecord) {
       input.warnings.push(`${dayLabel(date)}: omzet niet ingeladen.`);
     }
-    if (dailyRecord?.shopClosed) {
+    if (closedDates.has(date)) {
       input.comments.push(`${dayLabel(date)}: winkel gesloten.`);
       return;
     }
@@ -629,7 +635,7 @@ function buildWinkelLine(input: {
   const reportCashRecords = input.cashRecords.filter(
     (record) =>
       expectedDates.includes(record.date) &&
-      !dailyByDate.get(record.date)?.shopClosed
+      !closedDates.has(record.date)
   );
   const checkedRecords = reportCashRecords.filter(
     (record) => hasPatisserieCashRecord(record) && record.checkedAt
@@ -647,7 +653,7 @@ function buildWinkelLine(input: {
     label: "Winkel",
     daysWithData: input.dailyRecords.length,
     expectedDays: expectedDates.length,
-    checkedDays: checkedRecords.length + closedDates.length,
+    checkedDays: checkedRecords.length + closedDates.size,
     estimatedDepositDays: estimatedRecords.length,
     revenue: sumMoney(input.dailyRecords, (record) => record.amount),
     cashPaid,
