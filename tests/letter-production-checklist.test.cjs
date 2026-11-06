@@ -5,16 +5,29 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 function load(file, stubs={}) {
- const module={exports:{}};
+ const compiled={exports:{}};
  const code=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
- vm.runInNewContext(code,{module,exports:module.exports,require(name){if(name in stubs)return stubs[name];if(name.startsWith('.'))return load(path.resolve(path.dirname(file),name)+'.ts',stubs);return require(name)},Response,Request,URL,Buffer,process:stubs.__process||process,AbortSignal});
- return module.exports;
+ vm.runInNewContext(code,{module:compiled,exports:compiled.exports,require(name){if(name in stubs)return stubs[name];if(name.startsWith('.'))return load(path.resolve(path.dirname(file),name)+'.ts',stubs);return require(name)},Response,Request,URL,Buffer,process:stubs.__process||process,AbortSignal});
+ return compiled.exports;
 }
 const helper=load('app/sinterklaas/letters/productie/productionChecklist.ts');
+const presentation=load('app/sinterklaas/letters/productie/productionPresentation.ts');
 const row=(more={})=>({key:'s|melk|groot|spuit',label:'S · melk · groot · spuit',orders:20,stock:8,produced:0,orderSources:{online:10,winkel:4,b2b:6},...more});
 const id='d8c0af2e-a725-4ef0-a435-6b5f2838784a';
 const batch=(more={})=>({id,startDate:'2026-11-02',date:'2026-11-03',deadlineAt:'2026-11-01T20:00:00+01:00',status:'OPEN',minimumLeadDays:2,storeOrders:[],rows:[row()],...more});
 const plain=value=>JSON.parse(JSON.stringify(value));
+
+test('a round is complete only when every required letter is finished and no order changes await review',()=>{
+ const finished=row({produced:28});
+ assert.equal(presentation.productionRoundIsComplete([finished]),true);
+ assert.equal(presentation.productionRoundIsComplete([finished],true),false);
+ assert.equal(presentation.productionRoundIsComplete([finished,row({key:'a',orders:1,stock:0,produced:0})]),false);
+ assert.equal(presentation.productionRoundIsComplete([row({produced:50}),row({key:'a',orders:1,stock:0,produced:0})]),false);
+ assert.equal(presentation.productionRoundIsComplete([finished,row({key:'cancelled',orders:0,stock:0,produced:4})]),true);
+ assert.equal(presentation.productionRoundIsComplete([]),false);
+ assert.equal(presentation.productionRoundIsComplete([row({orders:0,stock:0,produced:4})]),false);
+ assert.equal(presentation.productionRoundIsComplete([row({orders:29,produced:28})]),false);
+});
 
 test('checkmarks become available exactly at the Amsterdam deadline, never through printing',()=>{
  const b=batch();

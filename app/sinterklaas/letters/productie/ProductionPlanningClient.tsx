@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { productionDeadlinePassed, productionRemaining, productionTotals as totalsFor, type ProductionChecklist } from "./productionChecklist";
 import styles from "./ProductionPlanning.module.css";
 import ProductionPrintPreviewDialog from "./ProductionPrintPreview";
@@ -8,7 +8,7 @@ import ProductionDistributionPrint from "./ProductionDistributionPrint";
 import B2BProductionPlanning from "./B2BProductionPlanner";
 import ProductionRecipientsDialog from "./ProductionRecipientsDialog";
 import type { B2BProductionPlan } from "./b2bProductionPlanning";
-import { compareProductionRows, productionRowIsComplete, productionSections, productionValueLabel, productionVariant } from "./productionPresentation";
+import { compareProductionRows, productionRoundIsComplete, productionRowIsComplete, productionSections, productionValueLabel, productionVariant } from "./productionPresentation";
 import { aggregateProductionRows, productionSourceBreakdown, type ProductionSeedRow, type ProductionSource } from "./productionSources";
 export type { ProductionSeedRow } from "./productionSources";
 
@@ -231,15 +231,59 @@ function batchIsPlanned(status: string) {
   return ["PLANNED", "IN_PRODUCTION", "COMPLETED", "CLOSED"].includes(status);
 }
 
+function ProductionRound({ batch, complete, keepOpen, actions, children }: Readonly<{
+  batch: ProductionBatchSeed;
+  complete: boolean;
+  keepOpen: boolean;
+  actions: ReactNode;
+  children: ReactNode;
+}>) {
+  const [expanded, setExpanded] = useState(!complete);
+  const [previousComplete, setPreviousComplete] = useState(complete);
+  const sectionRef = useRef<HTMLElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const visible = expanded || keepOpen;
+  const wasVisible = useRef(visible);
+  if (previousComplete !== complete) {
+    setPreviousComplete(complete);
+    setExpanded(!complete);
+  }
+
+  useEffect(() => {
+    if (!visible && wasVisible.current && (document.activeElement === document.body || sectionRef.current?.contains(document.activeElement))) {
+      toggleRef.current?.focus({ preventScroll: true });
+    }
+    wasVisible.current = visible;
+  }, [visible]);
+
+  const contentId = `production-round-${batch.id}`;
+  return <section ref={sectionRef} className={styles.round} data-complete={complete}>
+    <div className={styles.roundHead}>
+      <div className={styles.roundDate}>
+        <p className={styles.roundLabel}>Centrale productieronde</p>
+        <h2><button ref={toggleRef} type="button" className={styles.roundToggle} aria-expanded={visible} aria-controls={contentId} onClick={() => setExpanded(value => !value)}>
+          {formatCompactProductionDate(batch.startDate)}
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d={visible ? "m5 12 5-5 5 5" : "m5 8 5 5 5-5"}/></svg>
+        </button></h2>
+      </div>
+      <span className={styles.roundState} data-complete={complete} data-planned={Boolean(batch.checklist) || batchIsPlanned(batch.status)}>{complete ? "Alles afgerond" : batch.checklist ? "Vastgezet · afvinken mogelijk" : batchIsPlanned(batch.status) ? "Ingepland" : "Nog niet ingepland"}</span>
+      <div className={styles.roundActions}>{actions}</div>
+    </div>
+    <div id={contentId} hidden={!visible}>{children}</div>
+  </section>;
+}
+
 function ProductionTable({
   rows,
   onToggleComplete,
   onEditQuantity,
+  onSourceDialogChange,
   saving = false,
 }: Readonly<{
   rows: WorkingRow[];
   onToggleComplete?: (row: WorkingRow) => void;
   onEditQuantity?: (row: WorkingRow) => void;
+  onSourceDialogChange?: (open: boolean) => void;
   saving?: boolean;
 }>) {
   const [selectedSource, setSelectedSource] = useState<{ key: string; source: ProductionSource } | null>(null);
@@ -267,8 +311,11 @@ function ProductionTable({
                 <th scope="col" className={styles.sourceCol}>Herkomst</th>
               </tr>
             </thead>
-            {section.groups.map((group) => (
-              <tbody key={`${section.key}-${group.key}`}>
+            {section.groups.map((group, index) => (
+              <tbody key={`${section.key}-${group.key}`} data-new-flavour={index > 0 && section.groups[index - 1].flavour !== group.flavour}>
+                {index > 0 && section.groups[index - 1].flavour !== group.flavour && <tr className={styles.flavourSpacer} aria-hidden="true">
+                  <td /><td /><td /><td /><td /><td />
+                </tr>}
                 <tr className={styles.groupRow}>
                   <th colSpan={6} scope="rowgroup"><span className={styles.flavour} data-flavour={group.flavour}>{group.label}</span></th>
                 </tr>
@@ -282,15 +329,16 @@ function ProductionTable({
                         <div className={styles.letterLine}>
                           <strong>{variant.letter}</strong>
                           <span className={styles.variant}>{productionValueLabel(variant.chocolate)} · {productionValueLabel(variant.size)}</span>
+                          {variant.extras.length > 0 && <span className={styles.extras}>
+                            {variant.extras.map((extra, index) => <span key={`${extra}-${index}`} className={styles.extra}>{index === 0 && <span className={styles.extraMark} aria-label="Afwijking">!</span>}{extra}</span>)}
+                          </span>}
                         </div>
-                        {variant.extras.length > 0 && <div className={styles.extras}>
-                          {variant.extras.map((extra, index) => <span key={`${extra}-${index}`} className={styles.extra}>{index === 0 && <span className={styles.extraMark} aria-label="Afwijking">!</span>}{extra}</span>)}
-                        </div>}
                       </td>
                       <td className={styles.quantity}>{row.orders}</td>
                       <td className={styles.quantity}>{row.stock}</td>
                       <td className={styles.total}>{planned}</td>
                       <td className={styles.stateCell}>
+                        <div className={styles.statusControls}>
                         {onToggleComplete && planned > 0 ? (
                           <button type="button" role="checkbox" aria-checked={isComplete}
                             aria-label={`${row.label} ${isComplete ? "weer openzetten" : "als geproduceerd markeren"}`}
@@ -300,14 +348,15 @@ function ProductionTable({
                         ) : <span className={styles.status} data-complete={isComplete}>{planned === 0 ? "Vervallen" : isComplete ? "Gereed" : "Open"}</span>}
                         {onEditQuantity && <button type="button" disabled={saving} className={styles.amountButton} onClick={() => onEditQuantity(row)} aria-label={`Geproduceerd aantal voor ${row.label} aanpassen`}>{row.produced}/{planned}</button>}
                         {!onEditQuantity && row.produced > 0 && !isComplete && <small className={styles.partial}>{row.produced}/{planned} gereed</small>}
+                        </div>
                       </td>
                       <td className={styles.sourceCell}>
                         <div className={styles.sourceBadges}>
                           {row.recipients?.some(item=>item.combinationProduct)&&<span className={styles.combinationBadge} title={row.recipients.filter(item=>item.combinationProduct).map(item=>`${item.quantity}× ${item.customerName}: ${item.combinationProduct}`).join("\n")}>Combinatieproduct <b>{row.recipients.filter(item=>item.combinationProduct).reduce((sum,item)=>sum+item.quantity,0)}</b></span>}
                           {productionSourceBreakdown(row).filter(({ id }) => id !== "voorraad").map(({ id, label, quantity }) => <button key={id} type="button" className={styles.sourceBadge} data-source={id}
                             aria-haspopup="dialog" aria-label={`${label}: klanten voor ${row.label} bekijken (${quantity} ${quantity === 1 ? "letter" : "letters"})`}
-                            onClick={() => setSelectedSource({ key: row.key, source: id })}>
-                            <span>{label}</span><b>{quantity}</b>
+                            onClick={() => { setSelectedSource({ key: row.key, source: id }); onSourceDialogChange?.(true); }}>
+                            <span>{id === "winkel" ? "Winkel" : id === "online" ? "Online" : id === "b2b" ? "B2B" : label}</span><b>{quantity}</b>
                           </button>)}
                         </div>
                       </td>
@@ -320,7 +369,7 @@ function ProductionTable({
         </section>
       ))}
     </div>
-    {selectedRow && selectedSource && <ProductionRecipientsDialog row={selectedRow} source={selectedSource.source} onClose={() => setSelectedSource(null)} />}
+    {selectedRow && selectedSource && <ProductionRecipientsDialog row={selectedRow} source={selectedSource.source} onClose={() => { setSelectedSource(null); onSourceDialogChange?.(false); }} />}
     </>
   );
 }
@@ -1372,6 +1421,7 @@ export default function ProductionPlanningClient({
   const [productionNoticeBatch, setProductionNoticeBatch] = useState("");
   const [quantityDialog, setQuantityDialog] = useState<{batch: ProductionBatchSeed; row: WorkingRow} | null>(null);
   const [quantityDraft, setQuantityDraft] = useState("");
+  const [sourceDialogBatch, setSourceDialogBatch] = useState("");
   const [reviseBatch, setReviseBatch] = useState<ProductionBatchSeed | null>(null);
   const [loading, setLoading] = useState(!demoMode);
   const [warning, setWarning] = useState("");
@@ -1647,21 +1697,14 @@ export default function ProductionPlanningClient({
           const planned = totals.orders + totals.stock;
           const storeStockTotal = (batch.storeOrders || []).reduce((sum, order) => sum + storeOrderTotal(order), 0);
           const storeOrdersLocked = batchIsLocked(batch);
-          return <section key={batch.id} className={styles.round}>
-            <div className={styles.roundHead}>
-              <div className={styles.roundDate}>
-                <p className={styles.roundLabel}>Centrale productieronde</p>
-                <h2>{formatCompactProductionDate(batch.startDate)}</h2>
-              </div>
-              <span className={styles.roundState} data-planned={Boolean(batch.checklist) || batchIsPlanned(batch.status)}>{batch.checklist ? productionRemaining(batch.rows) === 0 ? "Productie gereed" : "Vastgezet · afvinken mogelijk" : batchIsPlanned(batch.status) ? "Ingepland" : "Nog niet ingepland"}</span>
-              <div className={styles.roundActions}>
+          const complete = !loading && !warning && productionRoundIsComplete(batch.rows, Boolean(batch.checklist?.changes.length));
+          return <ProductionRound key={batch.id} batch={batch} complete={complete} keepOpen={quantityDialog?.batch.id === batch.id || reviseBatch?.id === batch.id || sourceDialogBatch === batch.id} actions={<>
                 {demoMode && <button type="button" onClick={() => setPrintOptionsBatch(batch)} className={styles.button}>Printlijsten</button>}
                 {!demoMode && <button type="button" disabled={loading || Boolean(warning) || !liveBatches} onClick={() => setPrintOptionsBatch(batch)} className={styles.button}>Printlijsten</button>}
                 <button type="button" onClick={() => { setStoreOrderInitialShop(DISTRIBUTION_SHOPS[0]); setStoreOrderBatch(batch); }} className={styles.button}>
                   {storeOrdersLocked ? "Bekijk winkelvoorraad" : storeStockTotal > 0 ? "Winkelvoorraad wijzigen" : "+ Winkelvoorraad per winkel"}
                 </button>
-              </div>
-            </div>
+              </>}>
             <div className={styles.roundSummary}>
               <span>Totaal <b>{planned}</b></span>
               <span>Gereed <b>{totals.produced}</b></span>
@@ -1674,6 +1717,7 @@ export default function ProductionPlanningClient({
             {productionNotice && productionNoticeBatch === batch.id && <p role="status" className={styles.checklistNote}>{productionNotice}</p>}
             {!!batch.checklist?.changes.length && <div className={styles.changeNotice} role="status"><strong>Bestellingen gewijzigd na vastzetten</strong><p>{batch.checklist.changes.length} gewijzigde letterregel(s). De productielijst blijft staan totdat je deze wijzigingen controleert.</p><button type="button" className={styles.button} disabled={savingProduction || Boolean(warning)} onClick={() => {setProductionNotice(""); setReviseBatch(batch);}}>Wijzigingen bekijken</button></div>}
             <ProductionTable rows={batch.rows} saving={savingProduction}
+              onSourceDialogChange={open => setSourceDialogBatch(open ? batch.id : "")}
               onToggleComplete={demoMode ? row => toggleProductionRow(batch, row) : batch.checklist && !warning ? row => { void saveProduction(batch, "quantity", row, productionRowIsComplete(row) ? 0 : row.orders + row.stock); } : undefined}
               onEditQuantity={(demoMode || batch.checklist && !warning) ? row => {setProductionNotice(""); setQuantityDialog({batch, row}); setQuantityDraft(String(row.produced));} : undefined} />
             <div className={styles.storeFooter}>
@@ -1691,7 +1735,7 @@ export default function ProductionPlanningClient({
                 })}
               </div>
             </div>
-          </section>;
+          </ProductionRound>;
         })}
       </div>
       {printOptionsBatch && (

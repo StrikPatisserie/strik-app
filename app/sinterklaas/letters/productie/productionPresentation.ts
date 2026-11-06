@@ -5,6 +5,11 @@ export function productionRowIsComplete(row: WorkingRow) {
   return planned > 0 && row.produced >= planned;
 }
 
+export function productionRoundIsComplete(rows: WorkingRow[], pendingChanges = false) {
+  const requiredRows = rows.filter(row => row.orders + row.stock > 0);
+  return !pendingChanges && requiredRows.length > 0 && requiredRows.every(productionRowIsComplete);
+}
+
 export function productionVariant(label: string) {
   const [letter = "Onbekend", chocolate = "", size = "", style = "", ...extras] = label
     .split(" · ")
