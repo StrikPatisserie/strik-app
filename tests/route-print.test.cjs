@@ -7,7 +7,7 @@ const ts = require('typescript');
 function load(file, imports = {}, globals = {}, expose = '') {
   const exports = {};
   const source = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
-  vm.runInNewContext(source + '\n' + expose, { exports, require: name => imports[name] || (name === './routePrintPagination' ? load('app/bakkerij/logistiek/routePrintPagination.ts') : {}), URL, Intl, Date, ...globals });
+  vm.runInNewContext(source + '\n' + expose, { exports, require: name => name === 'next/dynamic' ? {default:()=>()=>null} : name === './roadRouting' ? load('app/bakkerij/logistiek/roadRouting.ts') : imports[name] || (name === './routePrintPagination' ? load('app/bakkerij/logistiek/routePrintPagination.ts') : {}), URL, Intl, Date, ...globals });
   return exports;
 }
 const dashboard = 'app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx';

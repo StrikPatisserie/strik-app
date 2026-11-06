@@ -26,8 +26,8 @@ test('bridal API rejects unauthorized callers before fetching and never creates 
  for(const profile of [null,{...manager,active:false},{...baker,permissions:{'bakkerij.ijs_chocolade':true}},{active:true,role:'winkel',permissions:{}}]){const a=api(profile);assert.equal((await a.route.GET(new Request('https://test.invalid?week=2026-10-26'))).status,403);assert.equal((await a.route.POST(request())).status,403);assert.equal(a.fetches(),0);assert.equal(a.writes(),0);}
  const a=api(baker),response=await a.route.GET(new Request('https://test.invalid?week=2026-10-26'));assert.equal(response.status,200);assert.equal((await response.json()).orders.length,1);assert.equal(a.writes(),0);
 });
-test('bridal API uses the canonical source, permits operational status changes and reserves date changes for managers',async()=>{
- const a=api(baker);assert.equal((await a.route.POST(request('TEST-1','2026-10-30'))).status,403);assert.equal(a.writes(),0);
+test('bridal API uses the canonical source, permits production accounts to change planned dates and status',async()=>{
+ const dateChange=api(baker);assert.equal((await dateChange.route.POST(request('TEST-1','2026-10-30'))).status,200);assert.equal(dateChange.writes(),1);const a=api(baker);
  assert.equal((await a.route.POST(request('TEST-1','2026-10-31','done'))).status,200);assert.equal(a.doc().data.tasks.length,1);
  assert.equal((await a.route.POST(request('TEST-1','2026-10-31','done',2))).status,200);assert.equal(a.doc().data.tasks.length,1);
  assert.equal((await a.route.POST(request('TEST-1','2026-10-31','planned',1))).status,409);assert.equal(a.writes(),2);

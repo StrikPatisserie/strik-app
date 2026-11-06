@@ -1,5 +1,6 @@
 import { getCurrentProfile } from "@/app/lib/auth/session";
 import { canManageProduction } from "@/app/lib/auth/access";
+import {productionDepartments,mergeWorkspaceForEmployee} from "@/app/productie/access";
 import { ProductionStoreError, readDocument, saveRecipePlanDocument } from "@/app/productie/documents.server";
 import { recipeViews, syncRecipeCatalog, validWorkspace } from "@/app/productie/workspaceData";
 import { buildRecipePlan, refreshRecipePlan } from "@/app/productie/recipePlanning";
@@ -10,6 +11,7 @@ const headers={"Cache-Control":"private, no-store"};
 export async function POST(request:Request) {
   const profile=await getCurrentProfile();
   if(!profile?.active || !canManageProduction(profile))return Response.json({message:"Alleen managers kunnen productieopdrachten plannen."},{status:403,headers});
+  const origin=request.headers.get("origin");if(origin&&origin!==new URL(request.url).origin)return Response.json({message:"Ongeldige herkomst."},{status:403,headers});
   try {
     const text=await request.text();if(text.length>100000)throw new ProductionStoreError("De productieopdracht is te groot.",413);
     const incoming=JSON.parse(text);
@@ -19,6 +21,7 @@ export async function POST(request:Request) {
     const views=recipeViews(recipes.data);
     const current=syncRecipeCatalog(planner.data,recipes.data);
     let next=incoming.replaceTaskId?refreshRecipePlan(current,views,incoming.replaceTaskId,incoming.command):buildRecipePlan(current,views,incoming.command);
+    try{mergeWorkspaceForEmployee(current,next,productionDepartments(profile));}catch(error){throw new ProductionStoreError((error as Error).message,403);}
     if(incoming.replaceTaskId)next={...next,removedTasks:[...(current.removedTasks || []),...current.tasks.filter(t=>!next.tasks.some(n=>n.id===t.id)).map(task=>({task,removedAt:new Date().toISOString(),removedBy:profile.id}))]};
     if(!validWorkspace(next,views))throw new ProductionStoreError("Het voorstel bevat een ongeldige hoeveelheid, koppeling of planning.",400);
     const revision=await saveRecipePlanDocument(planner.revision,recipes.revision,next,profile.id);

@@ -145,7 +145,19 @@ export function canAccessPersonalNotes(profile: UserProfile | null | undefined) 
 
 // Delegated operational access stays separate from global management access.
 export function canManageProduction(profile: UserProfile | null | undefined) {
-  return hasFullAccess(profile) || Boolean(profile?.active && hasPermission(profile, "productie.manage") && (canAccessBakkerijPatisserie(profile) || canAccessBakkerijIjsChocolade(profile)));
+  return hasFullAccess(profile) || Boolean(profile?.active && (canAccessBakkerijPatisserie(profile) || canAccessBakkerijIjsChocolade(profile)));
+}
+
+export function canAccessSuppliers(profile: UserProfile | null | undefined) {
+  return Boolean(profile?.active && (hasFullAccess(profile) || canAccessBakkerijPatisserie(profile) || canAccessBakkerijIjsChocolade(profile) || canAccessLogistiek(profile)));
+}
+
+export function canManageScreenMessages(profile: UserProfile | null | undefined) {
+  return hasFullAccess(profile) && profile?.email?.trim().toLowerCase()==="feline@strik-patisserie.nl";
+}
+
+export function isBakeryScreenAccount(profile: UserProfile | null | undefined) {
+  return Boolean(profile?.active && profile.email?.trim().toLowerCase()==="strikpatisserie1937@gmail.com" && (canAccessBakkerijPatisserie(profile)||canAccessBakkerijIjsChocolade(profile)));
 }
 
 export function isWinkelIpadAccount(
@@ -471,6 +483,7 @@ export function canAccessPath(
 ) {
   if (!profile?.active) return false;
   if (pathname==="/persoonlijk" || pathname.startsWith("/persoonlijk/")) return canAccessPersonalNotes(profile);
+  if (pathname === "/leveranciers" || pathname.startsWith("/leveranciers/")) return canAccessSuppliers(profile);
   if (pathname === "/" || pathname === "/sint-voor-bedrijven" || pathname === "/kerst-voor-bedrijven") return true;
   if (pathname === "/profiel" || pathname.startsWith("/profiel/")) return true;
   if (isUniversalTeamPath(pathname)) return true;
@@ -510,8 +523,6 @@ export function canAccessPath(
   if (isBakkerijPath(pathname)) {
     if (pathname === "/bakkerij/productie" || pathname.startsWith("/bakkerij/productie/")) {
       if (pathname.startsWith("/bakkerij/productie/beheer")) return false;
-      if (pathname.startsWith("/bakkerij/productie/haccp/bakkerij") || pathname.startsWith("/bakkerij/productie/bruidstaarten")) return canAccessBakkerijPatisserie(profile);
-      if (pathname.startsWith("/bakkerij/productie/haccp/ijs") || pathname.startsWith("/bakkerij/productie/bestellen")) return canAccessBakkerijIjsChocolade(profile);
       return canAccessBakkerijPatisserie(profile) || canAccessBakkerijIjsChocolade(profile);
     }
     if (isBakkerijDataPath(pathname)) {

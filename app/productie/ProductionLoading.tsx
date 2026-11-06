@@ -5,7 +5,7 @@ import { useProductionSession } from "./ProductionSession";
 import s from "../preview/productie/production.module.css";
 export default function ProductionLoading(){
  const {canManage,canManageData,departments}=useProductionSession(),path=usePathname();
- const active=path.includes("/rooster")?"roster":path.includes("/feestdagen")?"holidays":path.includes("/beheer/")?"data":path.includes("/haccp")?"haccp":path.endsWith("/bestellen")?"orders":"planning";
- const title=active==="roster"?"Personeelsrooster":active==="holidays"?"Feestdagen":active==="data"?"Receptuurbeheer":active==="haccp"?"HACCP & registraties":active==="orders"?"IJsgrondstoffen bestellen":"Weekplanning";
+ const active=path.includes("/schermberichten")?"screenMessages":path.includes("/rooster")?"roster":path.includes("/feestdagen")?"holidays":path.includes("/beheer/")?"data":path.includes("/haccp")?"haccp":path.endsWith("/bestellen")?"orders":"planning";
+ const title=active==="screenMessages"?"Schermberichten":active==="roster"?"Personeelsrooster":active==="holidays"?"Feestdagen":active==="data"?"Receptuurbeheer":active==="haccp"?"HACCP & registraties":active==="orders"?"Grondstoffen bestellen":"Weekplanning";
  return <ProductionResourceFrame title={title} active={active} canManage={canManage} canManageData={canManageData} departments={departments}><div className={s.loadingInline} role="status" aria-live="polite"><span className={s.spinner} aria-hidden="true"/>Gegevens laden…</div></ProductionResourceFrame>;
 }

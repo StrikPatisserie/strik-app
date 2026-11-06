@@ -10,7 +10,7 @@ export function applyWorkCommand(state:PreviewState,recipes:DemoRecipe[],command
  if(task?.weddingCode)throw Error('Pas deze bruidstaart via de bruidstaartplanning aan.');
  let view=workView(state,recipes);
  switch(command.kind){
-  case 'start':view=startWorkTimer(view,command.taskId,command.who,id,at);break;
+  case 'start':view=startWorkTimer(view,command.taskId,command.who,id,at,command.crewSize);break;
   case 'pause':view=pauseWorkTimer(view,command.taskId,at);break;
   case 'complete':view=confirmTaskCompletion(view,command,id,at);break;
   case 'preparation':view=setPreparation(view,command.recipeId,command.days,command.who,id,at);break;

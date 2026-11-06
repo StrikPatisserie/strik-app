@@ -1,5 +1,5 @@
 import { getCurrentProfile } from "@/app/lib/auth/session";
-import { hasFullAccess, canManageProduction } from "@/app/lib/auth/access";
+import { hasFullAccess, canManageProduction, canManageScreenMessages, isBakeryScreenAccount } from "@/app/lib/auth/access";
 import { productionDepartments, mergeWorkspaceForEmployee, visibleWorkspace } from "@/app/productie/access";
 import { ProductionStoreError, readDocument, saveDocument } from "@/app/productie/documents.server";
 import { ingredientViews, recipeViews, syncRecipeCatalog, todayAmsterdam, validWorkspace } from "@/app/productie/workspaceData";
@@ -7,6 +7,7 @@ import type { RecepturenData } from "@/app/bakkerij/recepturen/recepturenApi";
 import type { PreviewState } from "@/app/productie/planning";
 import { requiredTaskIds } from "@/app/productie/planning";
 import {assertWorkUnchanged} from '@/app/productie/workCommands';
+import {productionRelease} from '@/app/productie/release.server';
 export const dynamic="force-dynamic";
 const headers={"Cache-Control":"private, no-store"};
 
@@ -17,12 +18,13 @@ export async function GET() {
     const [recipes,planner]=await Promise.all([readDocument<RecepturenData>("recipes"),readDocument<PreviewState>("planner")]);
     if (!recipes || !planner) return Response.json({message:"De receptenoverdracht moet eerst worden afgerond.",setupRequired:true,canManage:hasFullAccess(profile)},{status:503,headers});
     const state=syncRecipeCatalog(planner.data,recipes.data);
-    return Response.json({state:visibleWorkspace(state),revision:planner.revision,recipeRevision:recipes.revision,updatedAt:planner.updated_at,today:todayAmsterdam(),recipes:recipeViews(recipes.data),ingredients:ingredientViews(recipes.data),canManage:canManageProduction(profile),canManageData:hasFullAccess(profile),departments:allowed,weeklyOffers:(recipes.data.bakeryHome?.offers || []).map(o=>({id:o.id,weekStart:o.weekStart,weekEnd:o.weekEnd,label:o.label,imageUrl:o.imageUrl}))},{headers});
+    return Response.json({appVersion:productionRelease(),state:visibleWorkspace(state),revision:planner.revision,recipeRevision:recipes.revision,updatedAt:planner.updated_at,today:todayAmsterdam(),recipes:recipeViews(recipes.data),ingredients:ingredientViews(recipes.data),canManage:canManageProduction(profile),canManageData:hasFullAccess(profile),screenAccount:isBakeryScreenAccount(profile),canManageScreenMessages:canManageScreenMessages(profile),departments:allowed,weeklyOffers:(recipes.data.bakeryHome?.offers || []).map(o=>({id:o.id,weekStart:o.weekStart,weekEnd:o.weekEnd,label:o.label,imageUrl:o.imageUrl}))},{headers});
   } catch (error) { return Response.json({message:error instanceof ProductionStoreError?error.message:"Strik Productie is tijdelijk niet bereikbaar."},{status:503,headers}); }
 }
 export async function PUT(request:Request) {
   const profile=await getCurrentProfile(), allowed=productionDepartments(profile);
   if (!profile || !allowed.length) return Response.json({message:"Geen toegang tot Strik Productie."},{status:403,headers});
+  const origin=request.headers.get("origin");if(origin&&origin!==new URL(request.url).origin)return Response.json({message:"Ongeldige herkomst."},{status:403,headers});
   try {
     if (Number(request.headers.get("content-length") || 0)>4000000) return Response.json({message:"De planning is te groot."},{status:413,headers});
     const incoming=await request.json();
@@ -37,11 +39,12 @@ export async function PUT(request:Request) {
     if(JSON.stringify(incoming.state.cleaning)!==JSON.stringify(current.cleaning))throw new ProductionStoreError("De schoonmaaklijst is intussen gewijzigd. Ververs de planning om met de actuele versie te werken.",409);
     if(JSON.stringify(incoming.state.productionRequests || [])!==JSON.stringify(current.productionRequests || []))throw new ProductionStoreError("Productieverzoeken worden apart beheerd. Ververs de planning.",409);
     let next:PreviewState;
-    try { next=canManageProduction(profile)?incoming.state:mergeWorkspaceForEmployee(current,incoming.state,allowed); }
+    try { next=mergeWorkspaceForEmployee(current,incoming.state,allowed); }
     catch(error) { throw new ProductionStoreError((error as Error).message,403); }
     // Recipe review flags come from canonical source data, never the browser.
     next=syncRecipeCatalog(next,recipes.data);
     if (current.items.some(i=>!next.items.some(n=>n.id===i.id))) throw new ProductionStoreError("Bestaande onderdelen kunnen niet via deze wijziging worden verwijderd.",400);
+    if (current.items.some(item => next.items.find(row => row.id === item.id)?.unit !== item.unit && current.tasks.some(task => task.itemId === item.id && task.recordsOutput && task.status === "done"))) throw new ProductionStoreError("De eenheid van een product met productiehistorie kan niet worden gewijzigd.",400);
     // Deleting a planned task removes it from the board, not from the history.
     // The server owns the recovery records; clients cannot erase or rewrite them.
     const removed=current.tasks.filter(t=>!next.tasks.some(n=>n.id===t.id));

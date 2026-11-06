@@ -4,12 +4,14 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const ts = require('typescript');
 
+const roadExports = {};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('app/bakkerij/logistiek/roadRouting.ts','utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports:roadExports,Date,URL});
 const exportsObject = {};
 const source = ts.transpileModule(fs.readFileSync('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx','utf8'), {
   compilerOptions: {module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX},
 }).outputText;
 vm.runInNewContext(source + '\nexports.build=buildPreparationItems; exports.render=createPreparationPrintHtml; exports.sources=preparationSourcesFor;', {
-  exports:exportsObject, require:()=>({}), Intl, Date, URL,
+  exports:exportsObject, require:name=>name==='next/dynamic'?{default:()=>()=>null}:name==='./roadRouting'?roadExports:{}, Intl, Date, URL,
 });
 const {build,render,sources} = exportsObject;
 const product = (category='logistiek',articleNumber='20100.686') => ({id:articleNumber,category,articleNumber,articleName:'Red velvet'});

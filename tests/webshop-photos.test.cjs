@@ -6,7 +6,7 @@ const ts = require('typescript');
 function load(file, imports = {}, globals = {}, expose = '') {
   const exports = {};
   const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
-  vm.runInNewContext(code + '\n' + expose, { exports, require: name => name in imports ? imports[name] : name === 'server-only' ? {} : require(name), URL, Request, Response, Buffer, Date, ...globals });
+  vm.runInNewContext(code + '\n' + expose, { exports, require: name => name === '@/app/bakkerij/logistiek/roadRouting' ? load('app/bakkerij/logistiek/roadRouting.ts') : name in imports ? imports[name] : name === 'server-only' ? {} : require(name), URL, Request, Response, Buffer, Date, ...globals });
   return exports;
 }
 const extraction = load('app/lib/webshopPhotoExtraction.ts');

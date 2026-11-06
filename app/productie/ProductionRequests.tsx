@@ -23,7 +23,7 @@ export default function ProductionRequests({board,week,onPlanned,logistics=false
  const items=(data?.items||[]).filter(i=>!board||DEPARTMENTS.find(d=>d.id===i.departmentId)?.board===board);
  const requests=(data?.requests||[]).filter(r=>!r.cancelledAt&&(!board||items.some(i=>i.id===r.itemId)));
  const open=requests.filter(r=>!r.plannedTask),planned=requests.filter(r=>r.plannedTask);
- return <aside className={`${s.panel} ${compact?s.compact:""}`} aria-label="Productieverzoeken">
+ return <aside className={`${s.panel} ${compact?s.compact:""}`} aria-label="Productieverzoeken" aria-busy={busy} data-production-update-block={adding||!!planning||busy||undefined}>
   <header><div>{!compact&&<small>Van logistiek naar bakkerij</small>}<h2>Productieverzoeken {!!open.length&&<span>{open.length}</span>}</h2></div>{data?.canCreate&&<button type="button" disabled={busy} onClick={()=>setAdding(!adding)} aria-label="Productieverzoek toevoegen" aria-expanded={adding}><Icon name="plus" size={18}/></button>}</header>
   {!compact&&<p className={s.intro}>{logistics?'Zet klaar wat de bakkers nog moeten inplannen.':'Nog in te plannen · kies met + een productiedag.'}</p>}
   {error&&<div role="alert" className={s.error}>{error} <button type="button" disabled={busy} onClick={()=>void load()}>Verversen</button></div>}

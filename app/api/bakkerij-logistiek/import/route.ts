@@ -7,6 +7,7 @@ import type {
   LogisticsBatchStatus,
 } from "@/app/bakkerij/logistiek/logisticsTypes";
 import { canAccessLogisticsRequest } from "@/app/lib/bakeryLogisticsAuth";
+import { archiveInventoryDispatch } from "@/app/productie/inventorySource.server";
 import {
   mergeLogisticsBatches,
   upsertLogisticsBatch,
@@ -270,7 +271,11 @@ export async function POST(request: Request) {
     const dryRun = new URL(request.url).searchParams.get("dryRun") === "1";
     const storedBatches = dryRun
       ? groupedBatches
-      : await Promise.all(groupedBatches.map(upsertLogisticsBatch));
+      : await Promise.all(groupedBatches.map(async batch=>{
+        const stored=await upsertLogisticsBatch(batch);
+        try{await archiveInventoryDispatch(stored);}catch{throw new Error("Bonnen zijn opgeslagen, maar het voorraadarchief is nog niet bijgewerkt. Lees dit rapport opnieuw in; de aantallen worden niet dubbel geteld.");}
+        return stored;
+      }));
 
     return NextResponse.json({
       ok: true,

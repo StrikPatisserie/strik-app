@@ -56,6 +56,9 @@ export default function AutoUpdateRefresh({
 
     async function checkForNewVersion() {
       if (checkingRef.current) return;
+      // The production planner owns its idle/form/save checks and view restore.
+      // Other production forms must also stay open until the user finishes.
+      if (document.querySelector("[data-production-workspace]")) return;
 
       checkingRef.current = true;
 

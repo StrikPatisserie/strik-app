@@ -2,6 +2,7 @@ import DepartmentHub from "../../DepartmentHub";
 import { strikIcons } from "../../StrikUI";
 
 const logistiekItems = [
+  {href:"/leveranciers",title:"Grondstoffen bestellen",description:"Leveranciers en gedeelde inloggegevens.",icon:strikIcons.logistiek,accent:"green" as const},
   {
     href: "/bakkerij/logistiek/dagstart",
     title: "Dagstart",

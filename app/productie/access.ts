@@ -1,10 +1,11 @@
-import { canAccessBakkerijIjsChocolade, canAccessBakkerijPatisserie, canManageProduction } from "../lib/auth/access";
+import { canAccessBakkerijIjsChocolade, canAccessBakkerijPatisserie, hasFullAccess } from "../lib/auth/access";
 import type { UserProfile } from "../lib/supabase/types";
-import { DEPARTMENTS, type DepartmentId, type PreviewState, transitionTask } from "./planning";
+import { DEPARTMENTS, type DepartmentId, type PreviewState } from "./planning";
 
 export function productionDepartments(profile: UserProfile | null): DepartmentId[] {
   if (!profile?.active) return [];
-  return DEPARTMENTS.filter(d => canManageProduction(profile) || (d.board === "ijs" || d.board === "chocolade" ? canAccessBakkerijIjsChocolade(profile) : canAccessBakkerijPatisserie(profile))).map(d => d.id);
+  const all = hasFullAccess(profile) || Boolean(profile.permissions?.["productie.manage"]);
+  return DEPARTMENTS.filter(d => all || (d.board === "ijs" || d.board === "chocolade" ? canAccessBakkerijIjsChocolade(profile) : canAccessBakkerijPatisserie(profile))).map(d => d.id);
 }
 export function visibleWorkspace(state: PreviewState): PreviewState {
   // Existing production users can coordinate work and dependencies across the
@@ -13,15 +14,16 @@ export function visibleWorkspace(state: PreviewState): PreviewState {
   return state;
 }
 export function mergeWorkspaceForEmployee(current: PreviewState, incoming: PreviewState, allowed: DepartmentId[]): PreviewState {
-  if (JSON.stringify(current.items) !== JSON.stringify(incoming.items)) throw Error("Alleen managers kunnen onderdelen aanpassen.");
-  const visible = current.tasks;
-  if (visible.length !== incoming.tasks.length || new Set(incoming.tasks.map(t => t.id)).size !== visible.length) throw Error("Alleen managers kunnen taken toevoegen of verwijderen.");
-  let tasks = current.tasks;
-  for (const change of incoming.tasks) {
-    const original = visible.find(t => t.id === change.id);
-    if (!original || JSON.stringify({ ...original, status: change.status }) !== JSON.stringify(change)) throw Error("Alleen de taakstatus van je eigen afdeling kan worden gewijzigd.");
-    if (original.status !== change.status && !allowed.includes(original.departmentId)) throw Error("Je kunt alleen taken in je eigen afdeling wijzigen.");
-    if (original.status !== change.status) tasks = transitionTask(tasks, original.id, change.status,current.items);
+  // Other departments stay visible for coordination; edits stay in scope.
+  for (const key of ["items", "tasks"] as const) {
+    for (const original of current[key]) {
+      const changed = incoming[key].find(row => row.id === original.id);
+      if (JSON.stringify(original) === JSON.stringify(changed)) continue;
+      if (!allowed.includes(original.departmentId) || (changed && !allowed.includes(changed.departmentId))) throw Error("Je kunt alleen je eigen productieafdelingen wijzigen.");
+    }
+    for (const added of incoming[key]) {
+      if (!current[key].some(row => row.id === added.id) && !allowed.includes(added.departmentId)) throw Error("Kies een eigen productieafdeling.");
+    }
   }
-  return { ...current, tasks };
+  return incoming;
 }

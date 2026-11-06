@@ -56,6 +56,7 @@ function isPublicPath(pathname: string) {
   return (
     (process.env.NODE_ENV === "development" && pathname === "/preview/winkelpresentatie") ||
     (process.env.NODE_ENV === "development" && pathname === "/preview/productie") ||
+    (process.env.NODE_ENV === "development" && (pathname === "/preview/b2b-productie" || pathname === "/preview/b2b-invoer")) ||
     (process.env.NODE_ENV === "development" && pathname === "/preview/persoonlijk") ||
     PUBLIC_PATHS.has(pathname) ||
     pathname.startsWith("/auth/callback/") ||

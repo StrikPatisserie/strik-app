@@ -42,6 +42,7 @@ export default function AppChrome({
     pathname === "/bruidstaarten/agenda/voorbeeld/bevestiging" ||
     pathname === "/bruidstaarten/voorbeeld";
   const isWelcomeArea = pathname === "/";
+  if (process.env.NODE_ENV === "development" && (pathname === "/preview/b2b-productie" || pathname === "/preview/b2b-invoer")) return <>{children}</>;
   if (pathname === "/persoonlijk/mini") return <>{children}</>;
 
   if (isAuthArea || isPrintArea || isPublicCampaign || isProductionPreview || isProductionWorkspace) {

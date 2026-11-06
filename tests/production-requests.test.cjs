@@ -25,10 +25,10 @@ function harness(profile,initial=state()){
  return {route,saves};
 }
 function post(command,revision=3,origin='https://app.invalid'){return new Request('https://app.invalid/api/productie/verzoeken',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({revision,command})});}
-test('only logistics/management create; bakers plan only in their allowed departments; shops and cross-origin calls are rejected',async()=>{
+test('logistics and production accounts create; bakers plan only in their allowed departments; shops and cross-origin calls are rejected',async()=>{
  for(const profile of [null,shop,{...logistics,active:false}])assert.equal((await harness(profile).route.GET()).status,403);
  for(const profile of [logistics,manager]){const h=harness(profile);assert.equal((await h.route.POST(post(create))).status,200);assert.equal(h.saves.length,1);}
- assert.equal((await harness(baker).route.POST(post(create))).status,403);
+ assert.equal((await harness(baker).route.POST(post(create))).status,200);
  const current=apply(state(),create),command={kind:'plan',id:'request-1',date:'2026-11-05',departmentId:'dessert'};
  assert.equal((await harness(logistics,current).route.POST(post(command))).status,403);
  assert.equal((await harness(baker,current).route.POST(post({...command,departmentId:'ijs'}))).status,403);

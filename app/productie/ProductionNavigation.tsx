@@ -15,10 +15,9 @@ const sections: { id: string; label: string; icon: IconName; href: string; manag
   { id: "recipes", label: "Recepten", icon: "book", href: `${PRODUCTION_HOME}?view=recipes` },
   { id: "ingredients", label: "Grondstoffen", icon: "leaf", href: `${PRODUCTION_HOME}?view=ingredients` },
   { id: "haccp", label: "HACCP & registraties", icon: "check", href: `${PRODUCTION_HOME}/haccp` },
-  { id: "stock", label: "Productieregistraties", icon: "stock", href: `${PRODUCTION_HOME}?view=stock` },
+  { id: "stock", label: "Voorraadbeheer", icon: "stock", href: `${PRODUCTION_HOME}?view=stock` },
   { id: "data", label: "Receptuurbeheer", icon: "settings", href: `${PRODUCTION_HOME}/beheer/recepten`, manager: true },
-  { id: "weddings", label: "Bruidstaartproductie", icon: "book", href: `${PRODUCTION_HOME}?board=patisserie&department=bruidstaarten` },
-  { id: "orders", label: "IJsgrondstoffen bestellen", icon: "box", href: `${PRODUCTION_HOME}/bestellen`, manager: true },
+  { id: "orders", label: "Grondstoffen bestellen", icon: "box", href: `${PRODUCTION_HOME}/bestellen` },
 ];
 type Props = { active: string; canManage: boolean; canManageData?: boolean; canBakery?: boolean; demo?: boolean; onNavigate?: (view: ProductionView) => void };
 

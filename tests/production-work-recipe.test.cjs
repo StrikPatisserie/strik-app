@@ -33,7 +33,8 @@ test('the editor reads no financial data and atomically saves both documents usi
  const e=endpoint(editor),response=await e.route.GET(read()),view=await response.json();assert.equal(response.status,200);assert.match(response.headers.get('Cache-Control'),/no-store/);
  for(const secret of ['costPrice','salesPrice','costContribution','invoice','private-photo','123'])assert(!JSON.stringify(view).includes(secret),secret);
  view.draft.ingredients[0].quantity=200;assert.equal((await e.route.POST(post(view.draft))).status,200);assert.equal(e.writes.length,1);assert.equal(e.writes[0][0],3);assert.equal(e.writes[0][1],5);assert.equal(e.writes[0][4],editor.id);assert.equal(e.writes[0][3].recipes[0].ingredients[0].quantity,200);assert.equal(e.writes[0][3].recipes[0].costPrice,77);
- for(const profile of [null,baker,{...editor,active:false},{...editor,role:'winkel'}]){const denied=endpoint(profile);assert.equal((await denied.route.GET(read())).status,403);assert.equal((await denied.route.POST(post(view.draft))).status,403);assert.equal(denied.writes.length,0);assert.equal(denied.reads(),0);}
+ for(const profile of [null,{...editor,active:false},{...editor,role:'winkel'}]){const denied=endpoint(profile);assert.equal((await denied.route.GET(read())).status,403);assert.equal((await denied.route.POST(post(view.draft))).status,403);assert.equal(denied.writes.length,0);assert.equal(denied.reads(),0);}
+ const ordinary=endpoint(baker);assert.equal((await ordinary.route.GET(read())).status,200);assert.equal((await ordinary.route.POST(post(view.draft))).status,200);assert.equal(ordinary.writes[0][3].recipes[0].costPrice,77);
  const stale=endpoint(editor);assert.equal((await stale.route.POST(post(view.draft,2))).status,409);assert.equal(stale.writes.length,0);
  assert.equal((await endpoint(editor).route.POST(post(view.draft,3,'https://foreign.invalid'))).status,403);
 });

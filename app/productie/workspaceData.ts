@@ -3,9 +3,12 @@ import { type DepartmentId, type DemoRecipe, type ItemUnit, type PreviewState, t
 
 export type IngredientView = { id: string; name: string; supplier: string; unit: string; linked: boolean; specification: string; allergens: string };
 export type LiveWorkspace = {
+  appVersion?:string;
   state: PreviewState; revision: number; recipeRevision: number; updatedAt: string; today: string;
   recipes: DemoRecipe[]; ingredients: IngredientView[]; canManage: boolean;
   canManageData?: boolean;
+  screenAccount?: boolean;
+  canManageScreenMessages?: boolean;
   departments: DepartmentId[];
   weeklyOffers?: { id:string; weekStart:string; weekEnd:string; label:string; imageUrl:string }[];
 };

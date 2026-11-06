@@ -11,7 +11,7 @@ function load(file, imports = {}, globals = {}, expose = '') {
   const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
-  vm.runInNewContext(code + '\n' + expose, { exports, require: name => imports[name] || (name === 'server-only' ? {} : require(name)), URL, Date, console, ...globals });
+  vm.runInNewContext(code + '\n' + expose, { exports, require: name => name === 'next/dynamic' ? {default:()=>()=>null} : ['./roadRouting','./routeSaveQueue','./sinterklaasAcquisitionCampaign'].includes(name) ? load('app/bakkerij/logistiek/'+name.slice(2)+'.ts') : imports[name] || (name === 'server-only' ? {} : require(name)), URL, Date, console, ...globals });
   return exports;
 }
 const tracking = load('app/bakkerij/logistiek/photoPrintTracking.ts');
