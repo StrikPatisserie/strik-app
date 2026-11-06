@@ -7,6 +7,7 @@ function load(file,imports={}) {
 const planning=load('app/productie/planning.ts');
 const sample=load('app/preview/productie/sampleData.ts',{'../../productie/planning':planning});
 const recipePlanning=load('app/productie/recipePlanning.ts',{'./planning':planning});
+const productionWork=load('app/productie/productionWork.ts',{'./planning':planning,'./recipePlanning':recipePlanning}),workCommands=load('app/productie/workCommands.ts',{'./productionWork':productionWork});
 function harness() {
  // Exercise the component's real handlers and render state without a browser,
  // network, effects or live data. Each component retains its own hook storage.
@@ -14,7 +15,7 @@ function harness() {
  const slot=initial=>{const i=index++;if(!(i in current))current[i]=typeof initial==='function'?initial():initial;return i;};
  const react={createContext:value=>({Provider:'workspace-provider',defaultValue:value}),useContext:c=>context || c.defaultValue,useEffect:()=>{},useMemo:fn=>fn(),useRef:value=>current[slot(()=>({current:value}))],useState:initial=>{const i=slot(initial),store=current;return[store[i],next=>{store[i]=typeof next==='function'?next(store[i]):next;}];}};
  const navigation={__esModule:true,default:function Navigation(){},ProductionMobileNavigation:function MobileNavigation(){}};
- const component=load('app/preview/productie/ProductionPreview.tsx',{'react':react,'react/jsx-runtime':jsx,'next/link':'a','../../productie/ProductionIcon':{__esModule:true,default:()=>null},'../../productie/ProductionNavigation':navigation,'../../productie/navigation':load('app/productie/navigation.ts',{'./planning':planning}),'../../productie/dayRhythm':load('app/productie/dayRhythm.ts',{'./planning':planning}),'next/dynamic':()=>()=>null,'../../productie/WeddingWeekLane':{__esModule:true,default:()=>null},'../../productie/usePlanningScreenFit':{__esModule:true,default:()=>({viewportRef:{current:null},canvasRef:{current:null}})},'../../productie/QuickRecipeForm':{__esModule:true,default:()=>null},'../../productie/ProductionRequests':{__esModule:true,default:()=>null},'../../productie/CleaningWeekLane':{__esModule:true,default:()=>null},'../../productie/weddingPlanning':{},'../../productie/planning':planning,'./sampleData':sample,'./production.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})},'../../productie/workspaceData':{},'../../productie/recipePlanning':recipePlanning});
+ const component=load('app/preview/productie/ProductionPreview.tsx',{'react':react,'react/jsx-runtime':jsx,'next/link':'a','../../productie/ProductionIcon':{__esModule:true,default:()=>null},'../../productie/ProductionNavigation':navigation,'../../productie/navigation':load('app/productie/navigation.ts',{'./planning':planning}),'../../productie/dayRhythm':load('app/productie/dayRhythm.ts',{'./planning':planning}),'next/dynamic':()=>()=>null,'../../productie/WeddingWeekLane':{__esModule:true,default:()=>null},'../../productie/useScreenLayout':{__esModule:true,default:()=>({frameRef:{current:null},workspaceRef:{current:null}})},'../../productie/TaskWorkPanel':{__esModule:true,default:function TaskWorkPanel(){},WorkClock:function WorkClock(){},PreparationControl:function PreparationControl(){}},'../../productie/workCommands':workCommands,'../../productie/QuickRecipeForm':{__esModule:true,default:()=>null},'../../productie/ProductionRequests':{__esModule:true,default:()=>null},'../../productie/CleaningWeekLane':{__esModule:true,default:()=>null},'../../productie/weddingPlanning':{},'../../productie/planning':planning,'./sampleData':sample,'./production.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})},'../../productie/workspaceData':{},'../../productie/recipePlanning':recipePlanning});
  const render=(fn,props={},value)=>{if(!records.has(fn))records.set(fn,[]);current=records.get(fn);index=0;context=value;return fn(props);};
  return{render,Component:component.default,navigation};
 }
@@ -22,25 +23,25 @@ function nodes(tree) {if(!tree || typeof tree!=='object')return[];if(Array.isArr
 function text(tree){if(typeof tree==='string' || typeof tree==='number')return String(tree);if(Array.isArray(tree))return tree.map(text).join('');return tree?.props?text(tree.props.children):'';}
 function find(tree,predicate){const node=nodes(tree).find(predicate);assert(node,'Expected rendered control');return node;}
 function button(tree,label){return find(tree,n=>n.type==='button' && (text(n)===label || n.props['aria-label']===label));}
-function xl(h,props={}) {let tree=h.render(h.Component,props);button(tree,'XL-scherm').props.onClick();return h.render(h.Component,props);}
+function xl(h,props={}) {let tree=h.render(h.Component,props);button(tree,'XL weergave').props.onClick();return h.render(h.Component,props);}
 
 test('the compact action bar keeps the selected offer beside XL controls and opens its full image',()=>{
  const h=harness(),live={state:sample.initialPreviewState(),today:sample.DEMO_TODAY,recipes:sample.demoRecipes,ingredients:[],canManage:true,departments:['dessert'],revision:1,weeklyOffers:[{weekStart:sample.DEMO_WEEK,label:'Voorbeeldtaart',imageUrl:'/voorbeeldtaart.png'}]};
  let tree=xl(h,{live});
  const actions=find(tree,n=>n.type==='header' && n.props['aria-label']==='Planningacties');
  const labels=nodes(actions).filter(n=>n.type==='button').map(n=>n.props['aria-label'] || text(n));
- assert.deepEqual(labels,['Vergroot weekaanbieding · Voorbeeldtaart','Aanbieding beheren','Sluit schermmodus','Taak toevoegen']);
- button(actions,'Vergroot weekaanbieding · Voorbeeldtaart').props.onClick();tree=h.render(h.Component,{live});
+ assert.deepEqual(labels,['XL weergave','Volledig scherm','Inplannen']);
+ button(tree,'Weekaanbieding vergroten').props.onClick();tree=h.render(h.Component,{live});
  const dialog=find(tree,n=>typeof n.type==='function' && n.props.title===`Weekaanbieding · week ${planning.weekNumber(sample.DEMO_WEEK)}`);
  assert.equal(find(dialog,n=>n.type==='img').props.src,'/voorbeeldtaart.png');dialog.props.onClose();
  tree=h.render(h.Component,{live});button(tree,'Volgende week').props.onClick();tree=h.render(h.Component,{live});
- assert(button(tree,'Geen weekaanbieding voor deze week').props.disabled);
- assert(button(tree,'Aanbieding beheren'));assert(button(tree,'Sluit schermmodus'));assert(button(tree,'Taak toevoegen'));
+ assert(button(tree,'Nog geen aanbieding').props.disabled);
+ assert(button(tree,'Aanbieding beheren'));assert(button(tree,'XL weergave'));assert(button(tree,'Inplannen'));
 });
 
 test('delegated plan management retains XL add/delete and work-recipe editing without management data links',()=>{
  const h=harness(),live={state:sample.initialPreviewState(),today:sample.DEMO_TODAY,recipes:sample.demoRecipes,ingredients:[],canManage:true,canManageData:false,departments:planning.DEPARTMENTS.map(d=>d.id),revision:1,recipeRevision:1};
- let tree=xl(h,{live});assert(button(tree,'Taak toevoegen'));assert(!nodes(tree).some(n=>n.props?.['aria-label']==='Aanbieding beheren'));
+ let tree=xl(h,{live});assert(button(tree,'Inplannen'));assert(!nodes(tree).some(n=>n.props?.['aria-label']==='Aanbieding beheren'));
  assert(nodes(tree).some(n=>n.type==='button'&&n.props['aria-label']?.startsWith('Taak toevoegen ·')));
  button(tree,'Open 48 stuks Fruitdesserttaart · Afwerken').props.onClick();tree=h.render(h.Component,{live});
  const detail=find(tree,n=>typeof n.type==='function'&&n.props?.task&&n.props?.onRemove);
@@ -51,7 +52,7 @@ test('delegated plan management retains XL add/delete and work-recipe editing wi
 test('XL keeps planning controls, drag/drop and task editing while hiding the navigation',async()=>{
  const h=harness();let tree=xl(h);
  assert(!nodes(tree).some(n=>n.type===h.navigation.default));
- assert(button(tree,'Taak toevoegen'));assert(find(tree,n=>n.type==='select' && text(n).includes('Nog te doen')));
+ assert(button(tree,'Inplannen'));assert(find(tree,n=>n.type==='select' && text(n).includes('Nog te doen')));
  const card=find(tree,n=>n.type==='article' && n.props.draggable && n.props.className.includes('task_planned') && nodes(n).some(c=>c.type==='button' && c.props['aria-label']?.startsWith('Open ')));
  const taskId=card.key,open=nodes(card).find(n=>n.props?.className==='taskOpen');
  const dt={setData:(format,value)=>{assert.equal(format,'text/plain');assert.equal(value,taskId);}};
@@ -62,25 +63,25 @@ test('XL keeps planning controls, drag/drop and task editing while hiding the na
  const moved=find(tree,n=>n.props?.onDrop && n.props['aria-label']==='Desserttaart & fruit · za 31 okt');assert(nodes(moved).some(n=>n.key===taskId));
  open.props.onClick();tree=h.render(h.Component);
  const detail=find(tree,n=>typeof n.type==='function' && !!n.props.onMove),detailTree=h.render(detail.type,detail.props,tree.props.value);
- for(const label of ['Gepland','Bezig','Klaar','Geblokkeerd','Verplaatsen','Geplande taak verwijderen'])assert(button(detailTree,label));
+ for(const label of ['Verplaatsen','Geplande taak verwijderen'])assert(button(detailTree,label));
  assert(find(detailTree,n=>n.type==='summary' && text(n).includes('volgende stap')));
- await button(detailTree,'Bezig').props.onClick();tree=h.render(h.Component);
+ await find(detailTree,n=>typeof n.type==='function' && n.props.onCommand && n.props.task).props.onCommand({kind:'start',taskId,who:'Proefbakker'});tree=h.render(h.Component);
  assert.equal(find(tree,n=>typeof n.type==='function' && !!n.props.onMove).props.task.status,'active');
 });
 
 test('XL does not grant planning or deletion permissions to a production employee',()=>{
  const h=harness(),live={state:sample.initialPreviewState(),today:sample.DEMO_TODAY,recipes:sample.demoRecipes,ingredients:[],canManage:false,departments:['dessert'],revision:1};
- let tree=xl(h,{live});assert(!nodes(tree).some(n=>n.type==='article' && n.props.draggable));assert(!nodes(tree).some(n=>n.type==='button' && text(n)==='Taak toevoegen'));
+ let tree=xl(h,{live});assert(!nodes(tree).some(n=>n.type==='article' && n.props.draggable));assert(!nodes(tree).some(n=>n.type==='button' && text(n)==='Inplannen'));
  find(tree,n=>n.props?.className==='taskOpen').props.onClick();tree=h.render(h.Component,{live});
  const detail=find(tree,n=>typeof n.type==='function' && !!n.props.onMove),detailTree=h.render(detail.type,detail.props,tree.props.value);
- assert(button(detailTree,'Bezig'));assert(!nodes(detailTree).some(n=>n.type==='form' || n.props?.className==='deleteButton'));
+ assert(nodes(detailTree).some(n=>typeof n.type==='function' && n.props.onCommand && n.props.task));assert(!nodes(detailTree).some(n=>n.type==='form' || n.props?.className==='deleteButton'));
 });
 test('cleaning is a blue integrated lane on the Patisserie board and remains editable in XL without a new department or stock task',async()=>{
  const h=harness();let tree=xl(h),lane=find(tree,n=>typeof n.type==='function' && Array.isArray(n.props.rows) && !!n.props.onCommand);
  assert(lane.props.canManage);assert(lane.props.canCheck);assert.equal(lane.props.rows.length,0);
  lane.props.onOpen({date:sample.DEMO_TODAY,edit:true});tree=h.render(h.Component);lane=find(tree,n=>typeof n.type==='function' && !!n.props.onCommand);assert.equal(lane.props.selected.date,sample.DEMO_TODAY);
  await lane.props.onCommand({kind:'plan',date:sample.DEMO_TODAY,main:'Voorbeeld hoofdtaak',daily:['Voorbeeld dagelijks'],repeatDates:[]});tree=h.render(h.Component);lane=find(tree,n=>typeof n.type==='function' && !!n.props.onCommand);assert.equal(lane.props.rows.length,1);assert.equal(lane.props.rows[0].main.label,'Voorbeeld hoofdtaak');
- const nav=h.render(h.Component).props.children.props.children[0];assert.equal(nav,false);
+ assert(!nodes(h.render(h.Component)).some(n=>n.type===h.navigation.default));
  assert(!planning.DEPARTMENTS.some(d=>d.id==='cleaning'));
  const select=find(tree,n=>n.type==='select' && nodes(n).some(c=>c.type==='option' && c.props.value==='bak'));select.props.onChange({target:{value:'bak'}});tree=h.render(h.Component);assert(!nodes(tree).some(n=>typeof n.type==='function' && !!n.props.onCommand));
 });
@@ -111,7 +112,7 @@ test('a blocked preparation links directly to its consumer and can remove the ex
 });
 
 test('a late preparation can be repaired or cancelled in XL and its input never disappears',async()=>{
- const h=harness();let tree=xl(h);button(tree,'Taak toevoegen').props.onClick();tree=h.render(h.Component);
+ const h=harness();let tree=xl(h);button(tree,'Inplannen').props.onClick();tree=h.render(h.Component);
  const form=find(tree,n=>typeof n.type==='function' && !!n.props.onPlan),render=()=>h.render(form.type,form.props,tree.props.value);
  let formTree=render();const select=find(formTree,n=>n.type==='select' && nodes(n).some(c=>c.type==='optgroup'));
  select.props.onChange({target:{value:'fruit'}});formTree=render();
@@ -136,7 +137,7 @@ test('recalculation and the selected week offer remain available in XL with an e
  const h=harness(),source=sample.initialPreviewState(),command={task:{id:'auto',itemId:'fruit',date:sample.DEMO_TODAY,departmentId:'dessert',operation:'Afmaken',status:'planned',note:'',source:'manual',batchId:'batch-auto',recordsOutput:true},amount:12,amountMode:'quantity',preparation:{daysBefore:1,choices:{}}};
  const state=recipePlanning.buildRecipePlan(source,sample.demoRecipes,command),recipes=structuredClone(sample.demoRecipes);recipes.find(r=>r.id==='demo-fruit').semiFinishedItems[0].quantity=24;
  const live={state,today:sample.DEMO_TODAY,recipes,ingredients:[],canManage:true,departments:['dessert'],revision:1,weeklyOffers:[{weekStart:sample.DEMO_WEEK,label:'Testaanbieding',imageUrl:'/test-aanbieding.png'}]};
- let tree=xl(h,{live});assert(text(tree).includes('Testaanbieding'));
+ let tree=xl(h,{live});assert(button(tree,'Weekaanbieding vergroten'));
  find(tree,n=>n.props?.['aria-label']==='Open 12 stuks Fruitdesserttaart · Afmaken').props.onClick();tree=h.render(h.Component,{live});
  const detail=find(tree,n=>typeof n.type==='function' && !!n.props.onMove),detailTree=h.render(detail.type,detail.props,tree.props.value);assert(text(detailTree).includes('Recept gewijzigd'));
  button(detailTree,'Met actueel recept bijwerken').props.onClick();tree=h.render(h.Component,{live});const form=find(tree,n=>typeof n.type==='function' && !!n.props.onPlan),formTree=h.render(form.type,form.props,tree.props.value);assert.equal(formTree.props.title,'Planning bijwerken');assert(button(formTree,'Planning bijwerken'));assert(find(formTree,n=>typeof n.type==='function' && !!n.props.changes));

@@ -4,6 +4,7 @@ function load(file,imports={},extra=''){
  const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText+extra,{exports,require:name=>{if(!(name in imports))throw Error(`Unmocked ${name}`);return imports[name];},Response,Request,URL,Buffer,Date,Intl,structuredClone,AbortSignal});return exports;
 }
 const access=load('app/lib/auth/access.ts'),planning=load('app/productie/planning.ts');
+const recipePlanning=load('app/productie/recipePlanning.ts',{'./planning':planning}),productionWork=load('app/productie/productionWork.ts',{'./planning':planning,'./recipePlanning':recipePlanning}),commands=load('app/productie/workCommands.ts',{'./productionWork':productionWork});
 const workspace=load('app/productie/workspaceData.ts',{'./planning':planning});
 const rights=load('app/productie/access.ts',{'../lib/auth/access':access,'./planning':planning});
 const migration=load('app/productie/recipeMigration.ts');
@@ -14,7 +15,7 @@ function plannerFixture(){const state=workspace.seedWorkspace(fixture());state.t
 function route(profile,options={}){
  const store={recipes:{data:fixture(),revision:4,updated_at:'2026-10-28T09:00:00Z'},planner:{data:plannerFixture(),revision:2,updated_at:'2026-10-28T09:00:00Z'}};let writes=0,reads=0;
  const docs={ProductionStoreError:StoreError,readDocument:async key=>{reads++;if(options.failRead)throw new StoreError('storage-down');return store[key];},saveDocument:async(key,revision,data)=>{if(options.conflict)throw new StoreError('conflict',409);assert.equal(revision,store[key].revision);writes++;store[key]={...store[key],data,revision:revision+1};return revision+1;}};
- const api=load('app/api/productie/route.ts',{'@/app/lib/auth/session':{getCurrentProfile:async()=>profile},'@/app/lib/auth/access':access,'@/app/productie/access':rights,'@/app/productie/documents.server':docs,'@/app/productie/workspaceData':workspace,'@/app/productie/planning':planning});
+ const api=load('app/api/productie/route.ts',{'@/app/lib/auth/session':{getCurrentProfile:async()=>profile},'@/app/lib/auth/access':access,'@/app/productie/access':rights,'@/app/productie/documents.server':docs,'@/app/productie/workspaceData':workspace,'@/app/productie/planning':planning,'@/app/productie/workCommands':commands});
  return {api,store,counts:()=>({writes,reads})};
 }
 function put(state,revision=2){return new Request('https://app.example.invalid/api/productie',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({state,revision})});}

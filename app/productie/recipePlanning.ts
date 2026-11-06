@@ -64,7 +64,8 @@ export function preparationProposal(state:PreviewState,recipes:DemoRecipe[],comm
         if(included && (!(child.yield>0) || child.reviewRequired || item.productionBlocked))throw Error(`Controleer de basisopbrengst en grondstofkoppelingen van ${child.name}.`);
         const needed=convert(line.quantity*amount/recipe.yield,line.unit,child.unit);
         if(!Number.isFinite(needed) || needed<=0 || needed>1000000)throw Error(`Ongeldige benodigde hoeveelheid bij ${child.name}.`);
-        const plannedDate=choice.date || addDays(date,-daysBefore);addDays(plannedDate,0);
+        const savedDays=state.productionWork?.preparation?.[child.id];
+        const plannedDate=choice.date || addDays(date,-(savedDays ?? daysBefore));addDays(plannedDate,0);
         const departmentId=choice.departmentId || item.departmentId;
         if(!DEPARTMENTS.some(d=>d.id===departmentId))throw Error("Kies een geldige afdeling voor ieder halffabricaat.");
         let row=nodes.get(child.id);

@@ -6,6 +6,7 @@ import { ingredientViews, recipeViews, syncRecipeCatalog, todayAmsterdam, validW
 import type { RecepturenData } from "@/app/bakkerij/recepturen/recepturenApi";
 import type { PreviewState } from "@/app/productie/planning";
 import { requiredTaskIds } from "@/app/productie/planning";
+import {assertWorkUnchanged} from '@/app/productie/workCommands';
 export const dynamic="force-dynamic";
 const headers={"Cache-Control":"private, no-store"};
 
@@ -31,6 +32,7 @@ export async function PUT(request:Request) {
     const views=recipeViews(recipes.data);
     if (!validWorkspace(incoming.state,views)) throw new ProductionStoreError("De wijziging bevat een ongeldige taak, receptkoppeling of dubbele batchregistratie.",400);
     const current=syncRecipeCatalog(planner.data,recipes.data);
+    assertWorkUnchanged(current,incoming.state);
     if(JSON.stringify(incoming.state.staffing)!==JSON.stringify(current.staffing))throw new ProductionStoreError("Roosterinstellingen worden apart beheerd. Ververs de planning om met de actuele versie te werken.",409);
     if(JSON.stringify(incoming.state.cleaning)!==JSON.stringify(current.cleaning))throw new ProductionStoreError("De schoonmaaklijst is intussen gewijzigd. Ververs de planning om met de actuele versie te werken.",409);
     if(JSON.stringify(incoming.state.productionRequests || [])!==JSON.stringify(current.productionRequests || []))throw new ProductionStoreError("Productieverzoeken worden apart beheerd. Ververs de planning.",409);

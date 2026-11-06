@@ -32,7 +32,7 @@ export type Task = {
   dueDate?: string; dependsOn?: string; batchId: string; recordsOutput: boolean;
   requires?: string[]; generatedFor?: string;
   recipePlan?: RecipePlanSettings;
-  weddingCode?: string; weddingDeliveryDate?: string;
+  weddingCode?: string; weddingDeliveryDate?: string; completedQuantity?:number;
 };
 export type PreparationChoice = { include?: boolean; date?: string; departmentId?: DepartmentId };
 export type RecipePlanSettings = {
@@ -53,7 +53,7 @@ export type ProductionStaffingSettings = { departmentIds:string[]; people:Produc
 export type CleaningCheck = { id:string; label:string; done:boolean; completedAt?:string; completedBy?:string };
 export type CleaningDay = { id:string; date:string; main:CleaningCheck|null; daily:CleaningCheck[] };
 export type CleaningCommand = { kind:"plan"; date:string; main:string; daily:string[]; repeatDates:string[] } | {kind:"check";date:string;checkId:string;done:boolean} | {kind:"remove";date:string} | {kind:"move";date:string;to:string};
-export type PreviewState = { version: 1; items: Item[]; tasks: Task[]; productionRequests?:ProductionRequest[]; removedTasks?: RemovedTask[]; staffing?:ProductionStaffingSettings; cleaning?:CleaningDay[] };
+export type PreviewState = { version: 1; items: Item[]; tasks: Task[]; productionRequests?:ProductionRequest[]; removedTasks?: RemovedTask[]; staffing?:ProductionStaffingSettings; cleaning?:CleaningDay[]; productionWork?:import("./productionWork").ProductionWorkState };
 export function cleaningProgress(day:CleaningDay) {
   const checks=[...(day.main?[day.main]:[]),...day.daily],done=checks.filter(c=>c.done).length;
   return {done,total:checks.length,complete:checks.length>0 && done===checks.length};
@@ -315,7 +315,7 @@ export function completedOutput(items: Item[], tasks: Task[]): Map<string, numbe
     if (batches.has(task.batchId)) throw Error("Dubbele voorraadregistratie in dezelfde batch.");
     if (!items.some(i => i.id === task.itemId && i.kind !== "activity")) throw Error("Onbekend voorraadonderdeel.");
     batches.add(task.batchId);
-    result.set(task.itemId, (result.get(task.itemId) || 0) + task.quantity);
+    result.set(task.itemId, (result.get(task.itemId) || 0) + (task.completedQuantity??task.quantity));
   }
   return result;
 }

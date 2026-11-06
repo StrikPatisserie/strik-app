@@ -108,9 +108,9 @@ test('restoring browser preview data rejects duplicate output, missing links, im
     state => { state.tasks.find(t => t.id === 'k5').status = 'done'; },
   ]) { const state = sample.initialPreviewState(); change(state); assert.equal(component.validState(state), false); }
 });
-test('production preview is noindex and unavailable outside development at both route and middleware', () => {
+test('production preview is noindex and unavailable outside development at both route and middleware', async () => {
   const page = load('app/preview/productie/page.tsx', { 'next/navigation': { notFound: () => { throw Error('not-found'); } } }, '', 'production');
-  assert.throws(() => page.default(), /not-found/);
+  await assert.rejects(() => page.default({searchParams:Promise.resolve({})}), /not-found/);
   assert.equal(page.metadata.robots.index, false);
   for (const environment of ['development', 'production', 'test']) {
     const middleware = load('app/lib/supabase/middleware.ts', {}, '\nexports.isPublicPath=isPublicPath;', environment);

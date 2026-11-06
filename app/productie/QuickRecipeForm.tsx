@@ -4,29 +4,31 @@ import type {Item} from './planning';
 import type {IngredientView} from './workspaceData';
 import type {WorkRecipeInput} from './workRecipe';
 import s from './requests.module.css';
-export default function QuickRecipeForm({item,ingredients,getRevision,recipeRevision,onSaved,onClose}:{item:Item;ingredients:IngredientView[];getRevision:()=>number;recipeRevision:number;onSaved:()=>Promise<void>;onClose:()=>void}){
+export default function QuickRecipeForm({item,ingredients,getRevision,recipeRevision,onSaved,onClose,taskId}:{taskId?:string;item:Item;ingredients:IngredientView[];getRevision:()=>number;recipeRevision:number;onSaved:()=>Promise<void>;onClose:()=>void}){
  const editing=Boolean(item.recipeId);
  const nextRow=useRef(1),nextSemi=useRef(0);
- const [rows,setRows]=useState([0]),[semiRows,setSemiRows]=useState<number[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+ const [rows,setRows]=useState([0]),[semiRows,setSemiRows]=useState<number[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(false),[scope,setScope]=useState<'once'|'permanent'>(taskId&&editing?'once':'permanent');
  const [loaded,setLoaded]=useState<{draft:WorkRecipeInput;recipeRevision:number;semiFinished:{id:string;name:string}[]}|null>(null);
  useEffect(()=>{
   if(!item.recipeId)return;
   let cancelled=false;
   async function load(){try{
-   const response=await fetch(`/api/productie/snel-recept?itemId=${encodeURIComponent(item.id)}`,{cache:'no-store'}),data=await response.json();
+   const response=await fetch(`/api/productie/snel-recept?itemId=${encodeURIComponent(item.id)}${taskId?`&taskId=${encodeURIComponent(taskId)}`:''}`,{cache:'no-store'}),data=await response.json();
    if(!response.ok)throw Error(data.message||'Werkrecept laden mislukt.');
    if(!cancelled){setLoaded(data);nextRow.current=data.draft.ingredients.length;nextSemi.current=data.draft.semiFinishedItems.length;setRows(data.draft.ingredients.map((_:unknown,index:number)=>index));setSemiRows(data.draft.semiFinishedItems.map((_:unknown,index:number)=>index));}
   }catch(e){if(!cancelled)setError((e as Error).message);}}
   void load();return()=>{cancelled=true;};
- },[item.id,item.recipeId]);
+ },[item.id,item.recipeId,taskId]);
  async function submit(event:FormEvent<HTMLFormElement>){
   event.preventDefault();if(busy||editing&&!loaded)return;const form=new FormData(event.currentTarget);setBusy(true);setError('');
-  try{const response=await fetch('/api/productie/snel-recept',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision:getRevision(),recipeRevision:editing?loaded!.recipeRevision:recipeRevision,command:{itemId:item.id,yield:Number(form.get('yield')),instructions:String(form.get('instructions')),ingredients:rows.map(row=>({ingredientId:String(form.get(`ingredient-${row}`)),quantity:Number(form.get(`quantity-${row}`)),unit:String(form.get(`unit-${row}`))})),...(editing?{recipeId:loaded!.draft.recipeId,workInstructions:String(form.get('workInstructions')),finishingInstructions:String(form.get('finishingInstructions')),semiFinishedItems:semiRows.map(row=>({recipeId:String(form.get(`semi-${row}`)),quantity:Number(form.get(`semi-quantity-${row}`)),unit:String(form.get(`semi-unit-${row}`))}))}:{})}})}),data=await response.json();if(!response.ok)throw Error(data.message||'Recept opslaan mislukt.');await onSaved();onClose();}
+  try{const response=await fetch('/api/productie/snel-recept',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({who:String(form.get("who")),scope,taskId,revision:getRevision(),recipeRevision:editing?loaded!.recipeRevision:recipeRevision,command:{itemId:item.id,yield:Number(form.get('yield')),instructions:String(form.get('instructions')),ingredients:rows.map(row=>({ingredientId:String(form.get(`ingredient-${row}`)),quantity:Number(form.get(`quantity-${row}`)),unit:String(form.get(`unit-${row}`))})),...(editing?{recipeId:loaded!.draft.recipeId,workInstructions:String(form.get('workInstructions')),finishingInstructions:String(form.get('finishingInstructions')),semiFinishedItems:semiRows.map(row=>({recipeId:String(form.get(`semi-${row}`)),quantity:Number(form.get(`semi-quantity-${row}`)),unit:String(form.get(`semi-unit-${row}`))}))}:{})}})}),data=await response.json();if(!response.ok)throw Error(data.message||'Recept opslaan mislukt.');await onSaved();onClose();}
   catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
  if(editing&&!loaded)return <div className={s.panel}>{error?<p role="alert" className={s.error}>{error} Sluit dit venster en open het opnieuw.</p>:<p role="status">Werkrecept laden…</p>}<button type="button" onClick={onClose}>Sluiten</button></div>;
  const draft=loaded?.draft;
- return <form className={`${s.panel} ${s.form}`} onSubmit={submit}><p>{editing?'Pas het werkrecept aan. De wijziging wordt als concept bewaard; controleer daarna de geplande producties.':'Leg het werkrecept vast. Het wordt als concept bij dit bestaande onderdeel opgeslagen; controle van allergenen en kostprijs volgt in receptenbeheer.'}</p>
+ return <form className={`${s.panel} ${s.form}`} onSubmit={submit}><p>{scope==='once'?'Alleen voor deze productie. Het vaste recept blijft bewaard.':editing?'Vast werkrecept aanpassen. Controleer daarna de geplande producties.':'Werkrecept vastleggen. Controleer daarna de allergenen in receptenbeheer.'}</p>
+  <label>Jouw naam<input name="who" required minLength={2} maxLength={80} disabled={busy}/></label>
+  {taskId&&editing&&<label>Toepassen<select value={scope} onChange={event=>setScope(event.target.value as 'once'|'permanent')} disabled={busy}><option value="once">Alleen deze productie</option><option value="permanent">Vast recept aanpassen</option></select></label>}
   <label>Basisopbrengst ({item.unit})<input name="yield" type="number" min="0.000001" max="1000000" step="any" required disabled={busy} defaultValue={draft?.yield}/></label>
   {rows.map(row=><fieldset key={row} className={s.form}><legend>Grondstof {rows.indexOf(row)+1}</legend><label>Grondstof<select name={`ingredient-${row}`} required disabled={busy} defaultValue={draft?.ingredients[row]?.ingredientId||''}><option value="">Kies grondstof</option>{ingredients.map(i=><option key={i.id} value={i.id}>{i.name}</option>)}</select></label><label>Hoeveelheid<input name={`quantity-${row}`} type="number" min="0.000001" max="1000000" step="any" required disabled={busy} defaultValue={draft?.ingredients[row]?.quantity}/></label><label>Eenheid<select name={`unit-${row}`} disabled={busy} defaultValue={draft?.ingredients[row]?.unit||'gram'}>{['gram','kg','ml','liter','stuk'].map(unit=><option key={unit}>{unit}</option>)}</select></label>{(editing||rows.length>1)&&<button type="button" disabled={busy} onClick={()=>setRows(current=>current.filter(id=>id!==row))}>Regel verwijderen</button>}</fieldset>)}
   <button type="button" disabled={busy||rows.length>=50} onClick={()=>{const id=nextRow.current++;setRows(current=>[...current,id]);}}>+ Grondstof</button>
