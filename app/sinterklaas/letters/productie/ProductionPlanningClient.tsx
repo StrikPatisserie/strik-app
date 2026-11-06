@@ -6,9 +6,10 @@ import styles from "./ProductionPlanning.module.css";
 import ProductionPrintPreviewDialog from "./ProductionPrintPreview";
 import ProductionDistributionPrint from "./ProductionDistributionPrint";
 import B2BProductionPlanning from "./B2BProductionPlanner";
+import ProductionRecipientsDialog from "./ProductionRecipientsDialog";
 import type { B2BProductionPlan } from "./b2bProductionPlanning";
 import { compareProductionRows, productionRowIsComplete, productionSections, productionValueLabel, productionVariant } from "./productionPresentation";
-import { aggregateProductionRows, productionRecipientsFor, productionSourceBreakdown, type ProductionSeedRow } from "./productionSources";
+import { aggregateProductionRows, productionSourceBreakdown, type ProductionSeedRow, type ProductionSource } from "./productionSources";
 export type { ProductionSeedRow } from "./productionSources";
 
 export type StoreOrderRow = {
@@ -241,9 +242,12 @@ function ProductionTable({
   onEditQuantity?: (row: WorkingRow) => void;
   saving?: boolean;
 }>) {
+  const [selectedSource, setSelectedSource] = useState<{ key: string; source: ProductionSource } | null>(null);
+  const selectedRow = selectedSource ? rows.find(row => row.key === selectedSource.key) : undefined;
   if (rows.length === 0) return <p className={styles.empty}>Nog geen letters ingepland.</p>;
 
   return (
+    <>
     <div className={styles.tables}>
       {productionSections(rows).map((section) => (
         <section key={section.key} className={styles.tableSection}>
@@ -300,9 +304,11 @@ function ProductionTable({
                       <td className={styles.sourceCell}>
                         <div className={styles.sourceBadges}>
                           {row.recipients?.some(item=>item.combinationProduct)&&<span className={styles.combinationBadge} title={row.recipients.filter(item=>item.combinationProduct).map(item=>`${item.quantity}× ${item.customerName}: ${item.combinationProduct}`).join("\n")}>Combinatieproduct <b>{row.recipients.filter(item=>item.combinationProduct).reduce((sum,item)=>sum+item.quantity,0)}</b></span>}
-                          {productionSourceBreakdown(row).filter(({ id }) => id !== "voorraad").map(({ id, label, quantity }) => <span key={id} className={styles.sourceBadge} data-source={id} title={`${label}: ${quantity} ${quantity === 1 ? "letter" : "letters"}\n${productionRecipientsFor(row,id).map(item=>`${item.quantity}× ${item.customerName}`).join("\n")}`}>
+                          {productionSourceBreakdown(row).filter(({ id }) => id !== "voorraad").map(({ id, label, quantity }) => <button key={id} type="button" className={styles.sourceBadge} data-source={id}
+                            aria-haspopup="dialog" aria-label={`${label}: klanten voor ${row.label} bekijken (${quantity} ${quantity === 1 ? "letter" : "letters"})`}
+                            onClick={() => setSelectedSource({ key: row.key, source: id })}>
                             <span>{label}</span><b>{quantity}</b>
-                          </span>)}
+                          </button>)}
                         </div>
                       </td>
                     </tr>
@@ -314,6 +320,8 @@ function ProductionTable({
         </section>
       ))}
     </div>
+    {selectedRow && selectedSource && <ProductionRecipientsDialog row={selectedRow} source={selectedSource.source} onClose={() => setSelectedSource(null)} />}
+    </>
   );
 }
 

@@ -86,6 +86,29 @@
 .sourceBadge[data-source="winkel"] { color: #745522; border-color: #e4d1b5; background: #faf2e5; }
 .sourceBadge[data-source="online"] { color: #2f5769; border-color: #ccdce4; background: #edf4f7; }
 .sourceBadge[data-source="b2b"] { color: #644a73; border-color: #ddd3e6; background: #f4eff7; }
+button.sourceBadge { cursor: pointer; text-align: left; transition: box-shadow .15s, border-color .15s; }
+button.sourceBadge:hover { border-color: currentColor; box-shadow: 0 1px 3px #283c301a; }
+button.sourceBadge:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+.recipientDialog { box-sizing: border-box; width: min(460px, calc(100vw - 28px)); max-height: min(80dvh, 640px); margin: auto; padding: 0; overflow-y: auto; overscroll-behavior: contain; border: 1px solid #dce3d9; border-radius: 14px; background: #fff; color: #283c30; box-shadow: 0 18px 70px #18291d33; }
+.recipientDialog::backdrop { background: #263b2b70; backdrop-filter: blur(2px); }
+.recipientHeader { position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 18px 20px 15px; background: #f7f8f4; border-bottom: 1px solid #dce3d9; }
+.recipientHeader > div { min-width: 0; }
+.recipientHeader h2, .page .recipientHeader h2 { margin: 10px 0 3px; font-size: 19px; font-weight: 600; line-height: 1.4; }
+.recipientHeader p { margin: 0; color: #69736b; font-size: 12px; overflow-wrap: break-word; }
+.recipientClose { flex: 0 0 auto; display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid #dce3d9; border-radius: 8px; background: #fff; color: #283c30; cursor: pointer; }
+.recipientClose:hover { background: #edf1ea; }
+.recipientClose:focus-visible { outline: 2px solid #a6322d; outline-offset: 3px; }
+.recipientList { list-style: none; margin: 0; padding: 0 20px; }
+.recipientList li { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 14px 0; font-size: 14px; line-height: 1.5; }
+.recipientList li + li { border-top: 1px solid #edf0e9; }
+.recipientList li > div { min-width: 0; overflow-wrap: break-word; }
+.recipientList strong { font-weight: 600; }
+.recipientList small { display: block; margin-top: 3px; color: #69736b; font-size: 11px; }
+.recipientList p { margin: 5px 0 0; color: #69736b; font-size: 12px; white-space: pre-line; }
+.recipientList li[data-unresolved="true"] strong, .recipientList li[data-unresolved="true"] p { color: #a6322d; }
+.recipientList .recipientCombination { color: #745522; }
+.recipientQuantity { flex: 0 0 auto; font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.recipientFooter { display: flex; justify-content: space-between; gap: 16px; padding: 12px 20px; border-top: 1px solid #dce3d9; background: #f7f8f4; font-size: 12px; }
 .status { display: inline-flex; align-items: center; justify-content: center; gap: 4px; font-size: 10px; color: #8a642b; white-space: nowrap; }
 .status::before { content: ""; width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
 .status[data-complete="true"] { color: #42684b; }
@@ -178,7 +201,7 @@
   .dialogPanel { padding: 13px; }
 }
 @media(pointer: coarse) {
-  .button, .primary, .quiet, .stockDate button, .completeButton { min-height: 44px; }
+  .button, .primary, .quiet, .stockDate button, .completeButton, button.sourceBadge, .recipientClose { min-height: 44px; }
   .dialog input, .dialog select { font-size: 16px; }
 }
 

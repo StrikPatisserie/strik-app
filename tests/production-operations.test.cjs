@@ -49,6 +49,13 @@ test('supplier links allow HTTPS SPA login pages while refusing embedded credent
  for(const url of ['javascript:alert(1)','http://supplier.invalid/','https://user:password@supplier.invalid/','https://supplier.invalid/?Password=secret'])assert.throws(()=>suppliers.supplierUrl(url));
  assert(suppliers.defaultSuppliers.every(s=>!s.username&&!s.password));
 });
+test('Hefe always opens the existing local mail-order page, including older saved webshop links',()=>{
+ const old={revision:1,suppliers:[{...suppliers.defaultSuppliers.find(s=>s.id==='hefe'),url:'https://restaurant.chefslist.de/'}]};
+ assert.equal(suppliers.supplierViews(old)[0].url,suppliers.HEFE_ORDER_PATH);
+ assert.equal(old.suppliers[0].url,'https://restaurant.chefslist.de/');
+ const next=suppliers.changeSupplier(old,{...old.suppliers[0],url:'https://other.invalid/'},'baker','now');
+ assert.equal(next.suppliers[0].url,suppliers.HEFE_ORDER_PATH);
+});
 test('inventory import accepts final snapshots only, deduplicates receipts, preserves exact article variants and stores no customer or price data',()=>{
  assert.equal(inventory.dispatchDay(batch(undefined,undefined,{status:'prognose'})),null);
  const source=batch();source.receipts.push(structuredClone(source.receipts[0]));source.receipts[0].lines.push({articleNumber:'101.02',quantity:'1,5',description:'Variant'});

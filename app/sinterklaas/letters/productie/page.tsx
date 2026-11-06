@@ -2,6 +2,7 @@ import { StrikShell } from "@/app/StrikUI";
 import ProductionPlanningHeader from "./ProductionPlanningHeader";
 import styles from "./ProductionPlanning.module.css";
 import { loadCentralProduction } from "./productionData.server";
+import type { ProductionOrderSource, ProductionRecipient } from "./productionSources";
 import ProductionPlanningClient, {
   type ProductionBatchSeed,
   type StoreOrderRow,
@@ -97,7 +98,20 @@ function demoProductionBatches(): ProductionBatchSeed[] {
     rows: batch.rows.map((row) => {
       const winkel = Math.floor(row.orders / 3);
       const b2b = Math.floor(row.orders / 3);
-      return { ...row, orderSources: { winkel, b2b, online: row.orders - winkel - b2b } };
+      const orderSources = { winkel, b2b, online: row.orders - winkel - b2b };
+      const recipients = (Object.entries(orderSources) as [ProductionOrderSource, number][]).flatMap(([source, quantity]) => {
+        const first = Math.ceil(quantity / 2);
+        return [first, quantity - first].filter(count => count > 0).map((count, index): ProductionRecipient => ({
+          id: `demo:${batch.id}:${source}:${index}`,
+          source,
+          quantity: count,
+          customerName: source === "b2b" ? `Voorbeeldbedrijf ${index + 1}` : `Voorbeeldklant ${index + 1}`,
+          code: `DEMO-${source.toUpperCase()}-${index + 1}`,
+          ...(source === "winkel" ? { shop: index === 0 ? "lent" : "heyendaal" } : {}),
+          date: batch.pickupFrom,
+        }));
+      });
+      return { ...row, orderSources, recipients };
     }),
   }));
 }

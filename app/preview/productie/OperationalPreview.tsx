@@ -2,7 +2,7 @@
 import {useCallback,useRef} from "react";
 import Link from "next/link";
 import Suppliers from "../../leveranciers/Suppliers";
-import {changeSupplier,defaultSuppliers,supplierViews,type SupplierDocument} from "../../leveranciers/model";
+import {changeSupplier,defaultSuppliers,supplierViews,HEFE_ORDER_PATH,type SupplierDocument} from "../../leveranciers/model";
 import ProductionInventory from "../../productie/ProductionInventory";
 import {applyInventory,inventoryOverview,type InventoryState,type InventoryCommand} from "../../productie/inventory";
 import {addDays,type PreviewState} from "../../productie/planning";
@@ -31,6 +31,6 @@ export default function OperationalPreview({view}:{view:"leveranciers"|"voorraad
  return <main style={{padding:"clamp(18px,3vw,45px)",maxWidth:1500,margin:"auto",fontFamily:"var(--font-sans),sans-serif",color:"#1b3343"}}>
   <nav style={{display:"flex",gap:20,alignItems:"center",marginBottom:24,flexWrap:"wrap"}}><Link href="/preview/productie">← Weekplanning</Link><Link href="?view=leveranciers">Leveranciers</Link><Link href="?view=voorraad">Voorraadbeheer</Link><small>Lokale preview · voorbeeldgegevens · niet opgeslagen</small></nav>
   <h1>{view==="leveranciers"?"Grondstoffen bestellen":"Voorraadbeheer"}</h1>
-  {view==="leveranciers"?<Suppliers request={supplierRequest}/>:<ProductionInventory request={stockRequest}/>}
+  {view==="leveranciers"?<Suppliers request={supplierRequest} hefePath={HEFE_ORDER_PATH}/>:<ProductionInventory request={stockRequest}/>}
  </main>;
 }
