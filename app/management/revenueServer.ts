@@ -167,6 +167,7 @@ export async function saveRevenueData(data: RevenueData) {
     const stale = rows.find(row => row.id === corrected.id);
     if (!stale) rows.push(corrected);
     else Object.assign(stale, {
+      cashRevenue: corrected.cashRevenue, cashOut: corrected.cashOut,
       startCash: corrected.startCash, countedCash: corrected.countedCash, expectedCash: corrected.expectedCash,
       difference: corrected.difference, safeCash: corrected.safeCash, safeDifference: corrected.safeDifference,
       note: corrected.note, checkedAt: corrected.checkedAt, checkedBy: corrected.checkedBy,

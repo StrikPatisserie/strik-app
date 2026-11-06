@@ -63,8 +63,15 @@ for (const legacy of [true, false]) test('one correction, frozen deposits, retri
   assert.deepEqual(h.raw().dailyRecords.find(d=>d.date!==fixture.date),h.original.dailyRecords.find(d=>d.date!==fixture.date));
   assert.equal((await h.server.savePatisserieDayCorrection(draft)).ok,false);
   assert.equal(h.writes(),1);
-  await h.server.saveRevenueData(rev.normalizeRevenueData(h.original));
+  const stale = rev.normalizeRevenueData(h.original);
+  const staleDay = stale.cashRecords.find(c => c.id === r.id);
+  staleDay.cashRevenue = 99;
+  staleDay.cashOut = 7;
+  await h.server.saveRevenueData(stale);
   const fresh = await h.server.getMergedRevenueData();
   assert.equal(fresh.openDayCorrectionId,undefined);
-  assert.equal(fresh.cashRecords.find(c=>c.id===r.id).safeCash,10.5);
+  const finalDay = fresh.cashRecords.find(c => c.id === r.id);
+  assert.equal(finalDay.safeCash, 10.5);
+  assert.equal(finalDay.cashRevenue, r.cashRevenue);
+  assert.equal(finalDay.cashOut, r.cashOut);
 });
