@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import DayCountCorrection from "./DayCountCorrection";
 import styles from "./CashCountManager.module.css";
 import { cashCountViewHref, readCashCountView, type CashCountView } from "./cashCountView";
 import {
@@ -23,6 +24,7 @@ import {
 type LoadState = "loading" | "ready" | "error" | "saving";
 
 type RevenueResponse = RevenueData & {
+  openDayCorrectionId?: string;
   storage?: {
     status: "wordpress" | "seed";
     message?: string;
@@ -630,6 +632,7 @@ export default function CashCountManager({ initialView }: { initialView?: CashCo
   const [selectedShop, setSelectedShop] = useState<RevenueShop>(initialView?.shop || revenueShops[0]);
   const [selectedCashLocationKind, setSelectedCashLocationKind] =
     useState<CashLocationKind>(initialView?.kind || "patisserie");
+  const [openDayCorrectionId, setOpenDayCorrectionId] = useState<string>();
   const [records, setRecords] = useState<RevenueRecord[]>([]);
   const [dailyRecords, setDailyRecords] = useState<RevenueDayRecord[]>([]);
   const [cashRecords, setCashRecords] = useState<RevenueCashRecord[]>([]);
@@ -698,6 +701,7 @@ export default function CashCountManager({ initialView }: { initialView?: CashCo
 
         setRecords(Array.isArray(data.records) ? data.records : []);
         setDailyRecords(Array.isArray(data.dailyRecords) ? data.dailyRecords : []);
+        setOpenDayCorrectionId(data.openDayCorrectionId);
         setCashRecords(nextCashRecords);
         setCashDeposits(
           Array.isArray(data.cashDeposits) ? data.cashDeposits : []
@@ -2916,7 +2920,7 @@ export default function CashCountManager({ initialView }: { initialView?: CashCo
                     <span aria-hidden="true">
                       {selectedCashRecord.checkedAt ? "✓" : "•"}
                     </span>
-                    {selectedCashRecord.checkedAt
+                    {openDayCorrectionId === selectedCashRecord.id && isSelectedCashLocationReported ? "dagcorrectie open" : selectedCashRecord.checkedAt
                       ? "management akkoord"
                       : "nog controleren"}
                   </span>
@@ -2992,6 +2996,13 @@ export default function CashCountManager({ initialView }: { initialView?: CashCo
                     </div>
                   </section>
 
+                  {openDayCorrectionId === selectedCashRecord.id && isSelectedCashLocationReported ? (
+                    <DayCountCorrection key={selectedCashRecord.id} record={selectedCashRecord} onSaved={corrected => {
+                      setCashRecords(rows => buildUpdatedCashRecords(rows, corrected.date, corrected.shop, () => corrected));
+                      setOpenDayCorrectionId(undefined);
+                      setStatus("Dag opgeslagen en weer gesloten.");
+                    }} />
+                  ) : (
                   <section
                     className={`rounded-[1.25rem] border px-3 py-2.5 ${
                       selectedCashRecord.checkedAt
@@ -3140,6 +3151,7 @@ export default function CashCountManager({ initialView }: { initialView?: CashCo
                         : "Controle afvinken"}
                     </button>
                   </section>
+                  )}
                 </div>
 
                 {selectedCashWarning && (

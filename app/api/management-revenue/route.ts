@@ -3,6 +3,7 @@ import {
   getStoredRevenueData,
   getMergedRevenueData,
   saveRevenueData,
+  savePatisserieDayCorrection,
 } from "../../management/revenueServer";
 import { normalizeRevenueData } from "../../management/revenueData";
 
@@ -69,4 +70,14 @@ export async function PUT(request: Request) {
 
 export async function POST(request: Request) {
   return PUT(request);
+}
+
+export async function PATCH(request: Request) {
+  const body = await request.json().catch(() => null);
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return NextResponse.json({ message: "De dagtelling ontbreekt." }, { status: 400 });
+  }
+  const result = await savePatisserieDayCorrection(body);
+  if (!result.ok) return NextResponse.json({ message: result.message }, { status: result.status });
+  return NextResponse.json({ record: result.record }, { headers: { "Cache-Control": "no-store" } });
 }

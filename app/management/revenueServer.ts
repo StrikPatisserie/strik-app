@@ -1,4 +1,5 @@
 import "server-only";
+import { canCorrectDay, correctDay, type DayCountInput } from "./patisserieDayCorrection";
 
 import { excelRevenueSeed } from "./revenueSeed";
 import {
@@ -143,6 +144,7 @@ export async function getMergedRevenueData() {
     updatedAt: stored.data.updatedAt,
     storage: stored.storage,
     seedCount: excelRevenueSeed.length,
+    openDayCorrectionId: stored.data.cashRecords?.find(canCorrectDay)?.id,
   };
 }
 
@@ -157,14 +159,35 @@ export async function saveRevenueData(data: RevenueData) {
   }
   const incoming = normalizeRevenueData(data);
   incoming.cashDeposits = preserveArchivedCashDeposits(incoming.cashDeposits || [], stored.data.cashDeposits || []);
-  const normalized = embedRevenueCashDataInNotes(incoming);
+  // An older open month or week view must not undo the completed day correction.
+  const corrected = stored.data.cashRecords?.find(record =>
+    record.checkedBy === "Management · dagcorrectie");
+  if (corrected) {
+    const rows = incoming.cashRecords ?? [];
+    const stale = rows.find(row => row.id === corrected.id);
+    if (!stale) rows.push(corrected);
+    else Object.assign(stale, {
+      startCash: corrected.startCash, countedCash: corrected.countedCash, expectedCash: corrected.expectedCash,
+      difference: corrected.difference, safeCash: corrected.safeCash, safeDifference: corrected.safeDifference,
+      note: corrected.note, checkedAt: corrected.checkedAt, checkedBy: corrected.checkedBy,
+    });
+    incoming.cashRecords = rows;
+  }
+  return writeRevenueData(incoming);
+}
+
+async function writeRevenueData(data: RevenueData) {
+  return writeRevenuePayload(embedRevenueCashDataInNotes(data));
+}
+
+async function writeRevenuePayload(payload: unknown) {
   const response = await fetch(getWordPressRevenueUrl(), {
     method: "PUT",
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(normalized),
+    body: JSON.stringify(payload),
     cache: "no-store",
   });
   const body = await readJson(response);
@@ -181,6 +204,85 @@ export async function saveRevenueData(data: RevenueData) {
     ok: true as const,
     data: normalizeRevenueData(body),
   };
+}
+
+let dayCorrectionInProgress = false;
+
+export async function savePatisserieDayCorrection(input: Partial<DayCountInput> & {
+  shop?: unknown; date?: unknown; checkedAt?: unknown;
+}) {
+  if (typeof input.shop !== "string" || typeof input.date !== "string" || typeof input.checkedAt !== "string") {
+    return { ok: false as const, status: 409, message: "Er staat geen dagcorrectie open voor deze telling." };
+  }
+  if (dayCorrectionInProgress) {
+    return { ok: false as const, status: 409, message: "Deze dag wordt al opgeslagen." };
+  }
+  dayCorrectionInProgress = true;
+  try {
+    const response = await fetchWordPressRevenueResponse();
+    const raw = await readJson(response) as {
+      dailyRecords?: Record<string, unknown>[]; cashRecords?: Record<string, unknown>[];
+      updatedAt?: string; records?: unknown[];
+    } | null;
+    if (!response.ok || !raw || !Array.isArray(raw.dailyRecords) || !Array.isArray(raw.records)) {
+      return { ok: false as const, status: 502, message: "De actuele telling kon niet worden opgehaald." };
+    }
+    const data = normalizeRevenueData(raw);
+    const rows = data.cashRecords || [];
+    const record = rows.find(row => row.date === input.date && row.shop === input.shop);
+    const deposit = record && findRevenueDeposit(data, record.year, record.week, record.shop);
+    if (!record || !canCorrectDay(record) || input.checkedAt !== record.checkedAt ||
+        !(deposit?.patisserieReportedAt || deposit?.patisserieCashbookBookedAt || deposit?.cashbookBookedAt)) {
+      return { ok: false as const, status: 409, message: "De dag is al gesloten of gewijzigd. Vernieuw het overzicht." };
+    }
+    let corrected: RevenueCashRecord;
+    try {
+      corrected = correctDay(record, input, new Date().toISOString());
+    } catch (error) {
+      return { ok: false as const, status: 400, message: error instanceof Error ? error.message : "Controleer de bedragen." };
+    }
+    // Older WordPress versions store the count in the day's revenue note. Edit
+    // just that carrier and (if present) the matching direct row, keeping every
+    // other raw entry intact, including all weekly deposits.
+    const isTarget = (row: Record<string, unknown>) => row.date === record.date && row.shop === record.shop;
+    const days = raw.dailyRecords.filter(isTarget);
+    const direct = raw.cashRecords?.filter(isTarget) ?? [];
+    if (days.length !== 1 || direct.length > 1) {
+      return { ok: false as const, status: 409, message: "De dag kon niet eenduidig worden teruggevonden." };
+    }
+    const day = normalizeRevenueDayRecord(days[0]);
+    if (!day) return { ok: false as const, status: 409, message: "Het omzetrecord van deze dag ontbreekt." };
+    const carrier = embedRevenueCashDataInNotes({
+      records: [], dailyRecords: [day], cashRecords: [corrected],
+    }).dailyRecords![0];
+    const next = {
+      ...raw,
+      dailyRecords: raw.dailyRecords.map(row => isTarget(row) ? { ...row, note: carrier.note } : row),
+      ...(direct.length ? { cashRecords: raw.cashRecords!.map(row => isTarget(row) ? { ...row,
+        countedCash: corrected.countedCash, startCash: corrected.startCash, expectedCash: corrected.expectedCash,
+        difference: corrected.difference, safeCash: corrected.safeCash, safeDifference: corrected.safeDifference,
+        checkedAt: corrected.checkedAt, checkedBy: corrected.checkedBy, updatedAt: corrected.updatedAt, note: corrected.note,
+      } : row) } : {}),
+    };
+    const latest = await fetchWordPressRevenueResponse();
+    if (!latest.ok || JSON.stringify(await readJson(latest)) !== JSON.stringify(raw)) {
+      return { ok: false as const, status: 409, message: "De kasgegevens zijn intussen veranderd. Vernieuw de dag en probeer opnieuw." };
+    }
+    const result = await writeRevenuePayload(next);
+    if (!result.ok) return result;
+    const stored = await getStoredRevenueData();
+    const saved = stored.data.cashRecords?.find(row => row.id === record.id);
+    const savedDeposit = stored.data.cashDeposits?.find(item => item.id === deposit.id);
+    if (!saved || saved.checkedAt !== corrected.checkedAt || saved.safeCash !== corrected.safeCash ||
+        saved.countedCash !== corrected.countedCash || saved.startCash !== corrected.startCash ||
+        saved.cashRevenue !== record.cashRevenue || saved.cashOut !== record.cashOut || saved.note !== corrected.note ||
+        JSON.stringify(savedDeposit) !== JSON.stringify(deposit)) {
+      return { ok: false as const, status: 502, message: "De dag kon na opslaan niet worden bevestigd. Vernieuw het overzicht." };
+    }
+    return { ok: true as const, record: saved };
+  } finally {
+    dayCorrectionInProgress = false;
+  }
 }
 
 export async function upsertRevenueDayRecords(dayRecords: RevenueDayRecord[]) {

@@ -59,6 +59,7 @@ function harness(href) {
   const component = load('app/management/gegevens/geld-tellen/CashCountManager.tsx', {
     react, 'react/jsx-runtime': require('react/jsx-runtime'), 'next/link': { default: 'a' }, './CashCountManager.module.css': { default: {} },
     './cashCountView': view, '@/app/management/revenueData': revenue,
+    './DayCountCorrection': { default: 'day-correction' },
   }, { window: browser, fetch: (url, options) => new Promise(resolve => requests.push({ url, options, resolve })) }).default;
   function settle() { let count = 0; do { dirty = false; cursor = effectCursor = 0; tree = component(); queued.splice(0).forEach(fn => fn()); assert(++count < 20, 'render loop'); } while (dirty); return tree; }
   function nodes(value) { if (!value || typeof value !== 'object') return []; if (Array.isArray(value)) return value.flatMap(nodes); return [value, ...nodes(value.props?.children)]; }
