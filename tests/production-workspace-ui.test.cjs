@@ -15,9 +15,10 @@ function harness() {
  const slot=initial=>{const i=index++;if(!(i in current))current[i]=typeof initial==='function'?initial():initial;return i;};
  const react={createContext:value=>({Provider:'workspace-provider',defaultValue:value}),useContext:c=>context || c.defaultValue,useEffect:()=>{},useMemo:fn=>fn(),useRef:value=>current[slot(()=>({current:value}))],useState:initial=>{const i=slot(initial),store=current;return[store[i],next=>{store[i]=typeof next==='function'?next(store[i]):next;}];}};
  const navigation={__esModule:true,default:function Navigation(){},ProductionMobileNavigation:function MobileNavigation(){}};
- const component=load('app/preview/productie/ProductionPreview.tsx',{'react':react,'react/jsx-runtime':jsx,'next/link':'a','../../productie/ProductionIcon':{__esModule:true,default:()=>null},'../../productie/ProductionNavigation':navigation,'../../productie/navigation':load('app/productie/navigation.ts',{'./planning':planning}),'../../productie/dayRhythm':load('app/productie/dayRhythm.ts',{'./planning':planning}),'next/dynamic':()=>()=>null,'../../productie/WeddingWeekLane':{__esModule:true,default:()=>null},'../../productie/useProductionUpdates':{__esModule:true,default:()=>false},'../../productie/productionUpdates':{},'../../productie/useScreenLayout':{__esModule:true,default:()=>({frameRef:{current:null},workspaceRef:{current:null}})},'../../productie/TaskWorkPanel':{__esModule:true,default:function TaskWorkPanel(){},WorkClock:function WorkClock(){},PreparationControl:function PreparationControl(){},RecipeWorkHistory:function RecipeWorkHistory(){}},'../../productie/workCommands':workCommands,'../../productie/QuickRecipeForm':{__esModule:true,default:()=>null},'../../productie/ProductionRequests':{__esModule:true,default:()=>null},'../../productie/CleaningWeekLane':{__esModule:true,default:()=>null},'../../productie/weddingPlanning':{},'../../productie/planning':planning,'./sampleData':sample,'./production.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})},'../../productie/workspaceData':{},'../../productie/recipePlanning':recipePlanning});
+ const offerWidget={__esModule:true,default:function ProductionWeekOffer(){}};
+ const component=load('app/preview/productie/ProductionPreview.tsx',{'react':react,'react/jsx-runtime':jsx,'next/link':'a','../../productie/ProductionIcon':{__esModule:true,default:()=>null},'../../productie/ProductionNavigation':navigation,'../../productie/navigation':load('app/productie/navigation.ts',{'./planning':planning}),'../../productie/dayRhythm':load('app/productie/dayRhythm.ts',{'./planning':planning}),'next/dynamic':()=>()=>null,'../../productie/WeddingWeekLane':{__esModule:true,default:()=>null},'../../productie/useProductionUpdates':{__esModule:true,default:()=>false},'../../productie/productionUpdates':{},'../../productie/useScreenLayout':{__esModule:true,default:()=>({frameRef:{current:null},workspaceRef:{current:null}})},'../../productie/TaskWorkPanel':{__esModule:true,default:function TaskWorkPanel(){},WorkClock:function WorkClock(){},PreparationControl:function PreparationControl(){},RecipeWorkHistory:function RecipeWorkHistory(){}},'../../productie/workCommands':workCommands,'../../productie/QuickRecipeForm':{__esModule:true,default:()=>null},'../../productie/ProductionRequests':{__esModule:true,default:()=>null},'../../productie/ProductionWeekOffer':offerWidget,'../../productie/CleaningWeekLane':{__esModule:true,default:()=>null},'../../productie/weddingPlanning':{},'../../productie/planning':planning,'./sampleData':sample,'./production.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})},'../../productie/workspaceData':{},'../../productie/recipePlanning':recipePlanning});
  const render=(fn,props={},value)=>{if(!records.has(fn))records.set(fn,[]);current=records.get(fn);index=0;context=value;return fn(props);};
- return{render,Component:component.default,navigation};
+ return{render,Component:component.default,navigation,offerWidget:offerWidget.default};
 }
 function nodes(tree) {if(!tree || typeof tree!=='object')return[];if(Array.isArray(tree))return tree.flatMap(nodes);return[tree,...nodes(tree.props?.children)];}
 function text(tree){if(typeof tree==='string' || typeof tree==='number')return String(tree);if(Array.isArray(tree))return tree.map(text).join('');return tree?.props?text(tree.props.children):'';}
@@ -25,23 +26,36 @@ function find(tree,predicate){const node=nodes(tree).find(predicate);assert(node
 function button(tree,label){return find(tree,n=>n.type==='button' && (text(n)===label || n.props['aria-label']===label));}
 function xl(h,props={}) {let tree=h.render(h.Component,props);button(tree,'XL weergave').props.onClick();return h.render(h.Component,props);}
 
-test('the compact action bar keeps the selected offer beside XL controls and opens its full image',()=>{
- const h=harness(),live={state:sample.initialPreviewState(),today:sample.DEMO_TODAY,recipes:sample.demoRecipes,ingredients:[],canManage:true,departments:['dessert'],revision:1,weeklyOffers:[{weekStart:sample.DEMO_WEEK,label:'Voorbeeldtaart',imageUrl:'/voorbeeldtaart.png'}]};
- let tree=xl(h,{live});
+test('the current calendar offer stays independent of the selected board week and opens a fixed image',()=>{
+ const h=harness(),calendarWeek=planning.mondayOf(sample.DEMO_TODAY),boardWeek=planning.addDays(calendarWeek,14);
+ const currentOffer={weekStart:calendarWeek,label:'Voorbeeldtaart',imageUrl:'/voorbeeldtaart.png'};
+ const live={state:sample.initialPreviewState(),today:sample.DEMO_TODAY,recipes:sample.demoRecipes,ingredients:[],canManage:true,departments:['dessert'],revision:1,weeklyOffers:[currentOffer]};
+ const props={live,initialWeek:boardWeek};
+ let tree=xl(h,props);
  const actions=find(tree,n=>n.type==='header' && n.props['aria-label']==='Planningacties');
  const labels=nodes(actions).filter(n=>n.type==='button').map(n=>n.props['aria-label'] || text(n));
  assert.deepEqual(labels,['XL weergave','Volledig scherm','Inplannen']);
- button(tree,'Weekaanbieding vergroten').props.onClick();tree=h.render(h.Component,{live});
- const dialog=find(tree,n=>typeof n.type==='function' && n.props.title===`Weekaanbieding · week ${planning.weekNumber(sample.DEMO_WEEK)}`);
- assert.equal(find(dialog,n=>n.type==='img').props.src,'/voorbeeldtaart.png');dialog.props.onClose();
- tree=h.render(h.Component,{live});button(tree,'Volgende week').props.onClick();tree=h.render(h.Component,{live});
- assert(button(tree,'Nog geen aanbieding').props.disabled);
- assert(button(tree,'Aanbieding beheren'));assert(button(tree,'XL weergave'));assert(button(tree,'Inplannen'));
+ let offer=find(tree,n=>n.type===h.offerWidget);
+ assert.equal(offer.props.week,calendarWeek);
+ assert.equal(offer.props.paused,false);
+ offer.props.onOpen(calendarWeek,currentOffer);
+ tree=h.render(h.Component,{...props,live:{...live,weeklyOffers:[{...currentOffer,imageUrl:'/nieuw.png'}]}});
+ const dialog=find(tree,n=>typeof n.type==='function' && n.props.title===`Weekaanbieding · week ${planning.weekNumber(calendarWeek)}`);
+ assert.equal(find(dialog,n=>n.type==='img').props.src,'/voorbeeldtaart.png');
+ assert.equal(find(tree,n=>n.type===h.offerWidget).props.paused,true);
+ dialog.props.onClose();
+ tree=h.render(h.Component,props);button(tree,'Volgende week').props.onClick();tree=h.render(h.Component,props);
+ offer=find(tree,n=>n.type===h.offerWidget);
+ assert.equal(offer.props.week,calendarWeek);
+ const nextWeek=planning.addDays(calendarWeek,7);
+ offer.props.onManage(nextWeek);tree=h.render(h.Component,props);
+ assert(find(tree,n=>typeof n.type==='function' && n.props.initialOfferWeek===nextWeek));
+ assert(button(tree,'XL weergave'));assert(button(tree,'Inplannen'));
 });
 
 test('delegated plan management retains XL add/delete and work-recipe editing without management data links',()=>{
  const h=harness(),live={state:sample.initialPreviewState(),today:sample.DEMO_TODAY,recipes:sample.demoRecipes,ingredients:[],canManage:true,canManageData:false,departments:planning.DEPARTMENTS.map(d=>d.id),revision:1,recipeRevision:1};
- let tree=xl(h,{live});assert(button(tree,'Inplannen'));assert(!nodes(tree).some(n=>n.props?.['aria-label']==='Aanbieding beheren'));
+ let tree=xl(h,{live});assert(button(tree,'Inplannen'));assert(!nodes(tree).some(n=>n.props?.['aria-label']==='Aanbieding beheren'));assert.equal(find(tree,n=>n.type===h.offerWidget).props.onManage,undefined);
  assert(nodes(tree).some(n=>n.type==='button'&&n.props['aria-label']?.startsWith('Taak toevoegen ·')));
  button(tree,'Open 48 stuks Fruitdesserttaart · Afwerken').props.onClick();tree=h.render(h.Component,{live});
  const detail=find(tree,n=>typeof n.type==='function'&&n.props?.task&&n.props?.onRemove);
@@ -137,7 +151,7 @@ test('recalculation and the selected week offer remain available in XL with an e
  const h=harness(),source=sample.initialPreviewState(),command={task:{id:'auto',itemId:'fruit',date:sample.DEMO_TODAY,departmentId:'dessert',operation:'Afmaken',status:'planned',note:'',source:'manual',batchId:'batch-auto',recordsOutput:true},amount:12,amountMode:'quantity',preparation:{daysBefore:1,choices:{}}};
  const state=recipePlanning.buildRecipePlan(source,sample.demoRecipes,command),recipes=structuredClone(sample.demoRecipes);recipes.find(r=>r.id==='demo-fruit').semiFinishedItems[0].quantity=24;
  const live={state,today:sample.DEMO_TODAY,recipes,ingredients:[],canManage:true,departments:['dessert'],revision:1,weeklyOffers:[{weekStart:sample.DEMO_WEEK,label:'Testaanbieding',imageUrl:'/test-aanbieding.png'}]};
- let tree=xl(h,{live});assert(button(tree,'Weekaanbieding vergroten'));
+ let tree=xl(h,{live});assert(find(tree,n=>n.type===h.offerWidget));
  find(tree,n=>n.props?.['aria-label']==='Open 12 stuks Fruitdesserttaart · Afmaken').props.onClick();tree=h.render(h.Component,{live});
  const detail=find(tree,n=>typeof n.type==='function' && !!n.props.onMove),detailTree=h.render(detail.type,detail.props,tree.props.value);assert(text(detailTree).includes('Recept gewijzigd'));
  button(detailTree,'Met actueel recept bijwerken').props.onClick();tree=h.render(h.Component,{live});const form=find(tree,n=>typeof n.type==='function' && !!n.props.onPlan),formTree=h.render(form.type,form.props,tree.props.value);assert.equal(formTree.props.title,'Planning bijwerken');assert(button(formTree,'Planning bijwerken'));assert(find(formTree,n=>typeof n.type==='function' && !!n.props.changes));

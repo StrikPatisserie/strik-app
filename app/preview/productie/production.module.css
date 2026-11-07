@@ -634,6 +634,12 @@
 .planningRail{display:flex;flex-direction:column;gap:12px;min-width:0}
 .demoRequests{display:flex;align-items:center;justify-content:space-between;background:#1b3344;color:#fff;padding:9px;border-radius:6px;font-weight:700;font-size:13px}.demoRequests button{display:grid;place-items:center;background:white;color:#1b3344;width:28px;height:28px;border-radius:4px}
 .offerWrap{position:relative;margin-top:auto}.offerTile{width:100%;aspect-ratio:1/1.1;display:flex;align-items:center;justify-content:center;border:1px solid #9bb28e!important;background:#c3d3bc;color:#1b3344;border-radius:6px;padding:15px;font-size:13px!important;font-weight:650!important;overflow:hidden;opacity:1!important}.offerTile:has(img){aspect-ratio:auto;padding:0;border:0!important;background:#fff}.offerTile img{width:100%;height:auto;display:block}.offerWrap .offerEdit{position:absolute;top:4px;right:4px;background:white;border:1px solid #aabbaa;border-radius:4px;color:#1b3344;padding:5px}
+.offerHeading{display:flex;align-items:center;justify-content:space-between;min-height:30px;margin-bottom:4px;color:#1b3344;font-size:13px;font-weight:700}
+.offerHeading .offerEdit{position:static;width:28px;min-height:26px}
+.offerTile{position:relative;min-height:100px}
+.offerSpinner{position:absolute;width:24px;height:24px;border:3px solid #c3d3bc;border-top-color:#1b3344;border-radius:50%;animation:offerSpin .8s linear infinite}
+@keyframes offerSpin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.offerSpinner{animation:none}}
 @media(min-width:801px){
  .screenFrame{height:100dvh;overflow:hidden}
  .worksheetRoot[data-screen-density=compact] .planningActions{min-height:40px;padding-bottom:5px}
