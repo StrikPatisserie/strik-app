@@ -306,6 +306,66 @@ test('scheduled requests link to their exact task without an edit form, and logi
  const readonly=requestUi({...data,canCreate:false,requests:[{...row,canEdit:true,plannedTask:undefined}]});
  assert(!readonly.nodes(readonly.render()).some(node=>node.props?.['aria-label']==='Productieverzoek toevoegen'||node.props?.['aria-label']?.startsWith('Bewerk verzoek')));
 });
+function requestText(node){
+ if(typeof node==='string'||typeof node==='number')return String(node);
+ if(!node||typeof node!=='object')return '';
+ return Array.isArray(node)?node.map(requestText).join(''):requestText(node.props?.children);
+}
+test('compact requests keep quantities beside the product name, omit stuks and retain meaningful kg/platen units',()=>{
+ const source=apply(state(),create);
+ const items=[source.items[0],{...source.items[0],id:'ganache',name:'Chocoladeganache',unit:'kg'},{...source.items[0],id:'kapsel',name:'Vanillekapsel',unit:'platen'}];
+ const rows=items.map((item,index)=>({...source.productionRequests[0],id:`request-${index}`,itemId:item.id,quantity:[20,2.5,3][index],departmentId:'dessert',neededBy:undefined,note:''}));
+ const ui=requestUi({revision:3,canCreate:true,departments:['dessert'],items,requests:rows});
+ const tree=ui.render({compact:true,board:'patisserie'}),articles=ui.nodes(tree).filter(node=>node.type==='article');
+ assert.equal(articles.length,3);
+ for(const [index,article] of articles.entries()){
+  const title=ui.find(article,node=>node.type==='strong'),amount=ui.find(title,node=>node.type==='small');
+  assert(requestText(title).startsWith(items[index].name));
+  assert.equal(requestText(amount),['20','2,5 kg','3 platen'][index]);
+  assert(!/\bstuks\b/i.test(requestText(article)));
+  const row=ui.find(article,node=>node.props?.className==='row');
+  const buttons=ui.nodes(row).filter(node=>node.type==='button');
+  assert.equal(buttons.length,3,'edit, cancel and plan stay together on the request row');
+  assert.deepEqual(buttons.map(button=>button.props['aria-label']),[`Bewerk verzoek: ${items[index].name}`,`Verzoek intrekken: ${items[index].name}`,`Inplannen: ${items[index].name}`]);
+  for(const button of buttons){assert.equal(requestText(button),'','row actions stay icon-only');assert(button.props.title);assert.equal(button.props.type,'button');}
+ }
+});
+test('compact edit/cancel/plan icons still execute their actions and planning retains the complete requested quantity',async()=>{
+ const source=apply(state(),create),data={revision:3,canCreate:true,departments:['dessert'],items:source.items,requests:source.productionRequests};
+ const props={compact:true,board:'patisserie'};
+ const editUi=requestUi(data);let tree=editUi.render(props);
+ editUi.find(tree,node=>node.props?.['aria-label']==='Bewerk verzoek: Testtaart').props.onClick();tree=editUi.render(props);
+ assert.equal(editUi.find(tree,node=>node.props?.name==='quantity').props.defaultValue,20);
+ const editForm=editUi.find(tree,node=>node.type==='form'&&editUi.nodes(node).some(child=>child.props?.name==='itemId'));
+ editForm.props.onSubmit({preventDefault:()=>{},currentTarget:{itemId:'cake',quantity:'25',departmentId:'dessert',neededBy:'2026-11-06',note:'Aangepast'}});
+ await new Promise(setImmediate);
+ assert.equal(editUi.posted[0].command.kind,'edit');assert.equal(editUi.posted[0].command.id,'request-1');assert.equal(editUi.posted[0].command.quantity,25);
+ const cancelUi=requestUi(data);tree=cancelUi.render(props);
+ cancelUi.find(tree,node=>node.props?.['aria-label']==='Verzoek intrekken: Testtaart').props.onClick();await new Promise(setImmediate);
+ assert.equal(cancelUi.posted[0].command.kind,'cancel');assert.equal(cancelUi.posted[0].command.id,'request-1');
+ let refreshed=0;
+ const planProps={...props,onPlanned:async()=>{refreshed++;}},planUi=requestUi(data);tree=planUi.render(planProps);
+ planUi.find(tree,node=>node.props?.['aria-label']==='Inplannen: Testtaart').props.onClick();tree=planUi.render(planProps);
+ const article=planUi.find(tree,node=>node.type==='article');
+ assert.equal(requestText(planUi.find(article,node=>node.props?.className==='requestQuantity')),'20');
+ const planForm=planUi.find(tree,node=>node.type==='form'&&planUi.nodes(node).some(child=>child.props?.name==='date'));
+ assert(!planUi.nodes(planForm).some(node=>node.props?.name==='quantity'),'planning uses the full request amount through its ID');
+ planForm.props.onSubmit({preventDefault:()=>{},currentTarget:{date:'2026-11-05',departmentId:'dessert',minutes:'45',pour:'on'}});
+ await new Promise(setImmediate);
+ assert.equal(planUi.posted[0].command.kind,'plan');assert.equal(planUi.posted[0].command.id,'request-1');assert.equal(refreshed,1);
+ const planned=apply(source,planUi.posted[0].command,'compact-task');
+ assert.equal(planned.tasks[0].quantity,20);assert.equal(planned.tasks[0].minutes,45);assert.equal(planned.tasks[0].operation,'Produceren + storten');
+});
+test('compact action icons preserve logistics and read-only permissions',()=>{
+ const source=apply(state(),create),data={revision:3,canCreate:true,departments:[],items:source.items,requests:source.productionRequests};
+ const logisticsUi=requestUi(data),tree=logisticsUi.render({compact:true,logistics:true});
+ const article=logisticsUi.find(tree,node=>node.type==='article');
+ assert(logisticsUi.nodes(article).some(node=>node.props?.['aria-label']==='Bewerk verzoek: Testtaart'));
+ assert(logisticsUi.nodes(article).some(node=>node.props?.['aria-label']==='Verzoek intrekken: Testtaart'));
+ assert(!logisticsUi.nodes(article).some(node=>node.props?.['aria-label']==='Inplannen: Testtaart'));
+ const readonlyUi=requestUi({...data,canCreate:false}),readonly=readonlyUi.render({compact:true,logistics:true});
+ assert(!readonlyUi.nodes(readonlyUi.find(readonly,node=>node.type==='article')).some(node=>node.type==='button'));
+});
 const quick=load('app/productie/quickRecipe.ts');
 const workspace=load('app/productie/workspaceData.ts',{'./planning':planning});
 const recipeData=()=>({ingredients:[{id:'flour',name:'Bloem',recipeUnit:'gram',allergens:['gluten'],lastPrice:123}],recipes:[],invoiceImports:[],manualProductionPlanningItems:[],allergenLists:[]});

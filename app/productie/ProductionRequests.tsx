@@ -50,7 +50,13 @@ export default function ProductionRequests({board,week,onPlanned,logistics=false
   </form>}
   <div className={s.list}>{open.sort((a,b)=>(a.neededBy||'9999').localeCompare(b.neededBy||'9999')||a.createdAt.localeCompare(b.createdAt)).map(r=>{
    const item=data?.items.find(i=>i.id===r.itemId),departmentId=requestDepartmentId(r,item),allowed=(data?.departments||[]).filter(id=>!board||DEPARTMENTS.find(d=>d.id===id)?.board===board);
-   return <article key={r.id}><div className={s.row}><div><strong>{item?.name||'Product niet meer beschikbaar'}</strong><span>{r.quantity.toLocaleString('nl-NL')} {item?.unit}{r.neededBy?` · uiterlijk ${r.neededBy.split('-').reverse().join('-')}`:''}{departmentId===null?' · Nog geen afdeling':''}</span></div>{!logistics&&allowed.length>0&&<button type="button" disabled={busy||!item||item.productionBlocked} onClick={()=>openPlanning(r.id)} aria-label={`Inplannen: ${item?.name}`} aria-expanded={planning===r.id}><Icon name="plus" size={17}/></button>}</div>{r.note&&<p>{r.note}</p>}
+   return <article key={r.id}><div className={s.row}>
+    <div className={s.requestName}><strong>{item?.name||'Product niet meer beschikbaar'} <small className={s.requestQuantity}>{r.quantity.toLocaleString('nl-NL')}{item?.unit&&item.unit!=='stuks'?` ${item.unit}`:''}</small></strong>{(r.neededBy||departmentId===null)&&<span>{r.neededBy?`Uiterlijk ${r.neededBy.split('-').reverse().join('-')}`:''}{departmentId===null?`${r.neededBy?' · ':''}Nog geen afdeling`:''}</span>}</div>
+    <div className={s.rowActions}>
+     {data?.canCreate&&<><button disabled={busy} type="button" onClick={()=>openEditor(r)} aria-label={`Bewerk verzoek: ${item?.name}`} title="Verzoek bewerken"><Icon name="edit" size={14}/></button><button className={s.withdraw} disabled={busy} type="button" onClick={()=>void act({kind:'cancel',id:r.id})} aria-label={`Verzoek intrekken: ${item?.name}`} title="Verzoek intrekken"><Icon name="trash" size={14}/></button></>}
+     {!logistics&&allowed.length>0&&<button className={s.plan} type="button" disabled={busy||!item||item.productionBlocked} onClick={()=>openPlanning(r.id)} aria-label={`Inplannen: ${item?.name}`} title="Inplannen" aria-expanded={planning===r.id}><Icon name="plus" size={17}/></button>}
+    </div>
+   </div>{r.note&&<p>{r.note}</p>}
    {planning===r.id&&<form className={s.form} onSubmit={event=>{event.preventDefault();const form=new FormData(event.currentTarget),minutes=String(form.get('minutes')??'').trim();void act({kind:'plan',id:r.id,date:String(form.get('date')),departmentId:String(form.get('departmentId')) as DepartmentId,...(minutes!==''?{minutes:Number(minutes)}:{}),...(form.get('pour')==='on'?{pour:true}:{})},formRevision.current??undefined);}}>
     <label>Productiedag<input name="date" type="date" defaultValue={week||r.neededBy} max={r.neededBy} required disabled={busy}/></label>
     <label>Afdeling<select name="departmentId" required defaultValue={departmentId&&allowed.includes(departmentId)?departmentId:''} disabled={busy}><option value="">Kies afdeling</option>{DEPARTMENTS.filter(d=>allowed.includes(d.id)).map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
@@ -58,7 +64,6 @@ export default function ProductionRequests({board,week,onPlanned,logistics=false
     <label className={s.checkbox}><input name="pour" type="checkbox" disabled={busy}/>Storten</label>
     <small>De volledige hoeveelheid wordt één keer ingepland. Halffabricaten kun je daarna bij de productietaak meeplannen.</small><button disabled={busy} type="submit">{busy?'Inplannen…':'In weekplanning zetten'}</button>
    </form>}
-   {data?.canCreate&&<div className={s.actions}><button className={s.edit} disabled={busy} type="button" onClick={()=>openEditor(r)} aria-label={`Bewerk verzoek: ${item?.name}`}>Bewerken</button><button className={s.withdraw} disabled={busy} type="button" onClick={()=>void act({kind:'cancel',id:r.id})}>Intrekken</button></div>}
    </article>;
   })}</div>
   {!compact&&data&&!open.length&&<p className={s.empty}>Geen open productieverzoeken.</p>}
