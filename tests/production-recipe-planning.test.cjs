@@ -25,6 +25,70 @@ test('one base recipe selects its actual yield, while unchecked automatic prepar
  const {state,recipes,command}=fixture();command.amount=1;command.amountMode='batches';delete command.preparation;
  const next=rules.buildRecipePlan(state,recipes,command);assert.equal(next.tasks.length,1);assert.equal(next.tasks[0].quantity,50);
 });
+test('preparation operations and estimated minutes persist through build, reload and recipe refresh',()=>{
+ const {state,recipes,command}=fixture();
+ command.task.minutes=45;
+ command.preparation.choices={
+  base:{operation:'Bereiden + storten',minutes:30},
+  caramel:{operation:'Bereiden + portioneren',minutes:12.5},
+ };
+ const proposal=rules.preparationProposal(state,recipes,command);
+ assert.equal(proposal.errors.length,0);
+ assert.equal(proposal.rows.find(row=>row.recipeId==='base').operation,'Bereiden + storten');
+ assert.equal(proposal.rows.find(row=>row.recipeId==='base').minutes,30);
+ const original=rules.buildRecipePlan(state,recipes,command);
+ const root=original.tasks.find(task=>task.id==='order-1');
+ const base=original.tasks.find(task=>task.itemId==='recipe:base');
+ assert.equal(root.minutes,45);
+ assert.equal(base.operation,'Bereiden + storten');
+ assert.equal(base.minutes,30);
+ assert.equal(root.recipePlan.preparation.choices.base.operation,'Bereiden + storten');
+ assert.equal(root.recipePlan.preparation.choices.caramel.minutes,12.5);
+ const current=rules.currentPlanCommand(original,root);
+ assert.equal(current.preparation.choices.base.operation,'Bereiden + storten');
+ assert.equal(current.preparation.choices.base.minutes,30);
+ recipes[0].semiFinishedItems[0].quantity=10000;
+ const refreshed=rules.refreshRecipePlan(original,recipes,root.id,current);
+ const updated=refreshed.tasks.find(task=>task.id===base.id);
+ assert.equal(updated.quantity,20);
+ assert.equal(updated.operation,'Bereiden + storten');
+ assert.equal(updated.minutes,30);
+ assert.equal(refreshed.tasks.find(task=>task.itemId==='recipe:caramel').minutes,12.5);
+ assert(workspace.validWorkspace(refreshed,recipes));
+ const clear=rules.currentPlanCommand(refreshed,refreshed.tasks.find(task=>task.id===root.id));
+ clear.preparation.choices.base={...clear.preparation.choices.base,operation:'Bereiden',minutes:null};
+ const cleared=rules.refreshRecipePlan(refreshed,recipes,root.id,clear);
+ assert.equal(cleared.tasks.find(task=>task.id===base.id).operation,'Bereiden');
+ assert.equal(cleared.tasks.find(task=>task.id===base.id).minutes,undefined);
+ assert.equal(cleared.tasks.find(task=>task.id===root.id).recipePlan.preparation.choices.base.minutes,null);
+ assert.equal(rules.currentPlanCommand(cleared,cleared.tasks.find(task=>task.id===root.id)).preparation.choices.base.minutes,null);
+ assert(workspace.validWorkspace(cleared,recipes));
+});
+test('legacy preparations keep their defaults and existing work details when choices omit the new fields',()=>{
+ const {state,recipes,command}=fixture();
+ const proposal=rules.preparationProposal(state,recipes,command);
+ assert(proposal.rows.every(row=>row.operation==='Bereiden'&&row.minutes===undefined));
+ const original=rules.buildRecipePlan(state,recipes,command);
+ const base=original.tasks.find(task=>task.itemId==='recipe:base');
+ base.operation='Bereiden + storten';base.minutes=25;
+ recipes[0].semiFinishedItems[0].quantity=10000;
+ const refreshed=rules.refreshRecipePlan(original,recipes,'order-1',command);
+ const updated=refreshed.tasks.find(task=>task.id===base.id);
+ assert.equal(updated.quantity,20);
+ assert.equal(updated.operation,'Bereiden + storten');
+ assert.equal(updated.minutes,25);
+ assert(refreshed.tasks.filter(task=>task.generatedFor==='order-1'&&task.id!==base.id).every(task=>task.operation==='Bereiden'&&task.minutes===undefined));
+ assert.equal(refreshed.tasks.find(task=>task.id==='order-1').minutes,undefined);
+});
+test('invalid preparation work details reject the whole plan without partial tasks',()=>{
+ for(const choice of [{operation:''},{operation:'x'.repeat(101)},{operation:12},{minutes:-1},{minutes:1441},{minutes:Infinity},{minutes:'30'}]){
+  const {state,recipes,command}=fixture();
+  command.preparation.choices={base:choice};
+  assert(rules.preparationProposal(state,recipes,command).errors.length>0);
+  assert.throws(()=>rules.buildRecipePlan(state,recipes,command));
+  assert.equal(state.tasks.length,0);
+ }
+});
 test('dates and departments are reviewable and excluding an available mousse omits its nested caramel',()=>{
  const {state,recipes,command}=fixture();command.preparation.choices={mousse:{include:false},base:{date:'2026-10-30',departmentId:'brood'}};
  const proposal=rules.preparationProposal(state,recipes,command);assert.equal(proposal.errors.length,0);assert(!proposal.rows.some(r=>r.recipeId==='caramel'));

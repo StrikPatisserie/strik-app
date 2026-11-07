@@ -43,7 +43,7 @@ function field(tree, label) {
   return find(find(tree, node => node.type === 'label' && text(node).startsWith(label)), node => node.type === 'input');
 }
 
-function harness(result) {
+function harness(result, learnedEstimate = null) {
   const states = [];
   let index;
   const commands = [];
@@ -60,7 +60,7 @@ function harness(result) {
       useEffect() {},
     },
     'react/jsx-runtime': jsx,
-    './productionWork': { learnedWorkEstimate: () => null, workView: state => state },
+    './productionWork': { learnedWorkEstimate: () => learnedEstimate, workView: state => state },
     './ProductionIcon': { __esModule: true, default: () => null },
     './work.module.css': { __esModule: true, default: new Proxy({}, { get: (_, key) => key }) },
   }).default;
@@ -109,4 +109,15 @@ test('stock-completed tasks show their audit without production time or an ordin
   assert(text(tree).includes('uit voorraad'));assert(text(tree).includes('2,5 geteld − 1,25 gebruikt = 1,25 over'));
   assert(!nodes(tree).some(node => node.type === 'button' && text(node) === 'Heropen'));
   assert(!text(tree).includes('arbeidsmin'));assert(!text(tree).includes(' min'));
+});
+
+test('a manual task duration is shown for the full operation until a learned estimate is available', () => {
+  const h = harness();
+  let tree = h.render({ task: { ...h.task, operation: 'Bereiden + storten', minutes: 45 } });
+  assert(text(tree).includes('Geschatte tijd 45 min'));assert(text(tree).includes('Bereiden + storten · voor 1,25 kg'));
+  field(tree, 'Medewerkers').props.onChange({ target: { value: '3' } });tree = h.render();
+  assert(text(tree).includes('Geschatte tijd 45 min'));assert(!text(tree).includes('arbeidsmin'));
+  tree = h.render({ task: { ...h.task, minutes: 0 } });assert(!text(tree).includes('Geschatte tijd'));
+  const learned = harness(undefined, { minutes: 12, laborMinutes: 24, measurements: 2 });
+  tree = learned.render({ task: { ...learned.task, minutes: 45 } });assert(text(tree).includes('12 min'));assert(!text(tree).includes('Geschatte tijd'));
 });

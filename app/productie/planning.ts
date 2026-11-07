@@ -35,7 +35,7 @@ export type Task = {
   weddingCode?: string; weddingDeliveryDate?: string; completedQuantity?:number;
   stockFulfillmentId?:string;
 };
-export type PreparationChoice = { include?: boolean; date?: string; departmentId?: DepartmentId };
+export type PreparationChoice = { include?: boolean; date?: string; departmentId?: DepartmentId; operation?: string; minutes?: number | null };
 export type RecipePlanSettings = {
   amount: number; amountMode: "quantity" | "batches";
   preparation?: { daysBefore: number; choices: Record<string, PreparationChoice> };
@@ -327,7 +327,7 @@ export function validRecipePlan(value:RecipePlanSettings):boolean {
   if(!value || !Number.isFinite(value.amount) || value.amount<=0 || value.amount>1000000 || !["quantity","batches"].includes(value.amountMode))return false;
   const prep=value.preparation;if(!prep)return true;
   if(!Number.isInteger(prep.daysBefore) || prep.daysBefore<0 || prep.daysBefore>30 || !prep.choices || typeof prep.choices!=="object" || Array.isArray(prep.choices) || Object.keys(prep.choices).length>250)return false;
-  return Object.values(prep.choices).every(c=>{if(!c || typeof c!=="object" || (c.include!==undefined && typeof c.include!=="boolean") || (c.departmentId!==undefined && !DEPARTMENTS.some(d=>d.id===c.departmentId)))return false;try{if(c.date)addDays(c.date,0);return true;}catch{return false;}});
+  return Object.values(prep.choices).every(c=>{if(!c || typeof c!=="object" || (c.include!==undefined && typeof c.include!=="boolean") || (c.departmentId!==undefined && !DEPARTMENTS.some(d=>d.id===c.departmentId)) || (c.operation!==undefined && (typeof c.operation!=="string" || !c.operation.trim() || c.operation.length>100)) || (c.minutes!==undefined && c.minutes!==null && (!Number.isFinite(c.minutes) || c.minutes<0 || c.minutes>1440)))return false;try{if(c.date)addDays(c.date,0);return true;}catch{return false;}});
 }
 
 export function matchesProductionSearch(query:string,values:(string|undefined)[]):boolean {
@@ -339,5 +339,5 @@ export function matchesProductionSearch(query:string,values:(string|undefined)[]
 export function validProductionRequests(value:unknown):value is ProductionRequest[]{
  if(!Array.isArray(value)||value.length>5000)return false;
  const ids=new Set<string>();
- try{return value.every((r:ProductionRequest)=>{if(!r||typeof r.id!=='string'||!r.id||r.id.length>200||ids.has(r.id)||typeof r.itemId!=='string'||!r.itemId||!Number.isFinite(r.quantity)||r.quantity<=0||r.quantity>1000000||typeof r.note!=='string'||r.note.length>2000||typeof r.createdBy!=='string'||!r.createdBy||!Number.isFinite(Date.parse(r.createdAt)))return false;ids.add(r.id);if(r.neededBy)addDays(r.neededBy,0);return (!r.cancelledAt||Number.isFinite(Date.parse(r.cancelledAt)))&&(!r.plannedTaskId||typeof r.plannedTaskId==='string');});}catch{return false;}
+ try{return value.every((r:ProductionRequest)=>{if(!r||typeof r.id!=='string'||!r.id||r.id.length>200||ids.has(r.id)||typeof r.itemId!=='string'||!r.itemId||!Number.isFinite(r.quantity)||r.quantity<=0||r.quantity>1000000||typeof r.note!=='string'||r.note.length>2000||typeof r.createdBy!=='string'||!r.createdBy||!Number.isFinite(Date.parse(r.createdAt)))return false;if(r.departmentId!==undefined&&r.departmentId!==null&&!DEPARTMENTS.some(d=>d.id===r.departmentId))return false;ids.add(r.id);if(r.neededBy)addDays(r.neededBy,0);return (!r.cancelledAt||Number.isFinite(Date.parse(r.cancelledAt)))&&(!r.plannedTaskId||typeof r.plannedTaskId==='string');});}catch{return false;}
 }

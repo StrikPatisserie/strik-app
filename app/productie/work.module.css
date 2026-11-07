@@ -4,3 +4,4 @@
 .stockBalance{padding:10px 12px;background:#fff;border:1px solid #aabbaa;border-radius:6px;margin:0!important;font-variant-numeric:tabular-nums}
 .panel .stockCheck{display:flex;align-items:flex-start;gap:8px;font-size:12px;line-height:1.5}
 .panel .stockCheck input{width:18px;height:18px;flex:0 0 18px;margin:0;padding:0;accent-color:#1b3344}
+.plannedEstimate{padding:10px 12px;background:#fff;border:1px solid #d3decf;border-radius:6px}.plannedEstimate small{margin-top:3px;color:#607154}

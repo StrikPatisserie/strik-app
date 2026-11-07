@@ -3,7 +3,7 @@ import { buildRecipePlan, type PlanCommand } from "./recipePlanning";
 
 export type Change = { id:string; itemId:string; taskId?:string; who:string; at:string; actorId?:string; kind:"recipe"|"time"|"preparation"|"stock"; scope:"once"|"permanent"; summary:string; before?:DemoRecipe; after?:DemoRecipe };
 export type WorkTime = { id:string; taskId:string; itemId:string; operation:string; quantity:number; minutes:number; who:string; at:string; actorId?:string; timerId?:string; measuredMs?:number; plannedQuantity?:number;crewSize?:number;laborMinutes?:number;recipeKey?:string;estimateEligible?:boolean };
-export type WorkTimer = {id:string;who:string;startedAt:string;runningSince?:string;elapsedMs:number;actorId?:string;crewSize?:number;recipeKey?:string};
+export type WorkTimer = {id:string;who:string;startedAt:string;runningSince?:string;elapsedMs:number;actorId?:string;crewSize?:number;recipeKey?:string;operation?:string};
 export type Completion = {id:string;who:string;at:string;minutes:number;quantity:number;plannedQuantity:number;measuredMs?:number;timerId?:string;actorId?:string;crewSize?:number;laborMinutes?:number;measuredCrewSize?:number};
 export type StockFulfillment = { id:string; taskId:string; itemId:string; unit:ItemUnit; countedQuantity:number; quantity:number; remainingQuantity:number; who:string; at:string; actorId?:string };
 export type ScreenState = { version:1; planner:PreviewState; recipes:DemoRecipe[]; overrides:Record<string,DemoRecipe>; preparation:Record<string,number>; history:Change[]; work:WorkTime[];timers?:Record<string,WorkTimer>;completions?:Record<string,Completion>;stockFulfillments?:Record<string,StockFulfillment> };
@@ -20,7 +20,7 @@ export function startWorkTimer(state:ScreenState,taskId:string,name:string,id:st
   if(!task||task.status==="done")throw Error("Heropen de taak voordat je opnieuw begint.");
   const current=state.timers?.[taskId];if(current?.runningSince)return state;
   const tasks=transitionTask(state.planner.tasks,taskId,"active",state.planner.items);
-  const timer:WorkTimer=current?{...current,runningSince:at}:{id,who,startedAt:at,runningSince:at,elapsedMs:0,crewSize,recipeKey:productionRecipeKey(state,task.itemId)};
+  const timer:WorkTimer=current?{...current,runningSince:at}:{id,who,startedAt:at,runningSince:at,elapsedMs:0,crewSize,recipeKey:productionRecipeKey(state,task.itemId),operation:task.operation};
   return {...state,planner:{...state.planner,tasks},timers:{...state.timers,[taskId]:timer}};
 }
 export function pauseWorkTimer(state:ScreenState,taskId:string,at:string):ScreenState{
@@ -40,7 +40,7 @@ export function confirmTaskCompletion(state:ScreenState,input:{taskId:string;who
   const tasks=transitionTask(state.planner.tasks,task.id,"done",state.planner.items).map(t=>t.id===task.id?{...t,completedQuantity:input.quantity}:t);
   const completion:Completion={id,who,at,minutes:input.minutes,quantity:input.quantity,plannedQuantity:task.quantity,crewSize,laborMinutes,...(timer?{timerId:timer.id,measuredMs:timer.elapsedMs,measuredCrewSize:timer.crewSize}:{})};
   const recipeKey=productionRecipeKey(state,task.itemId);
-  const log:WorkTime={...completion,taskId:task.id,itemId:task.itemId,operation:task.operation,recipeKey,estimateEligible:crewSize!==undefined&&!state.overrides[task.id]&&(!timer||timer.recipeKey===recipeKey)};
+  const log:WorkTime={...completion,taskId:task.id,itemId:task.itemId,operation:task.operation,recipeKey,estimateEligible:crewSize!==undefined&&!state.overrides[task.id]&&(!timer||timer.recipeKey===recipeKey&&timer.operation?.trim().toLowerCase()===task.operation.trim().toLowerCase())};
   return {...state,planner:{...state.planner,tasks},completions:{...state.completions,[task.id]:completion},work:[...state.work,log],history:[...state.history,{id,itemId:task.itemId,taskId:task.id,who,at,kind:"time",scope:"once",summary:`Afgerond: ${input.minutes.toLocaleString("nl-NL")} min${crewSize?` × ${crewSize} medewerkers = ${laborMinutes!.toLocaleString("nl-NL")} arbeidsmin`:""} · ${input.quantity.toLocaleString("nl-NL")} ${state.planner.items.find(i=>i.id===task.itemId)?.unit} gemaakt (gepland ${task.quantity.toLocaleString("nl-NL")}).`}]};
 }
 export function reopenTimedTask(state:ScreenState,taskId:string):ScreenState{

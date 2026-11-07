@@ -121,7 +121,7 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
   const isApi = pathname.startsWith("/api/");
-  const productionCron = pathname === "/api/sinterklaas-letter-production" && request.method === "GET" && hasCronAuthorization(request);
+  const productionCron = (pathname === "/api/sinterklaas-letter-production" || pathname === "/api/productie/weekarchief/cron") && request.method === "GET" && hasCronAuthorization(request);
   const isPublic = isPublicPath(pathname) || PUBLIC_API_PATHS.has(pathname) || productionCron;
   function withSessionCookies(result: NextResponse) {
     // A redirect/403 must carry refreshed cookies too. Otherwise the browser

@@ -664,3 +664,11 @@
 @media print{.screenFrame{height:auto;overflow:visible}.worksheetRoot{transform:none!important;width:100%!important}.planningRail,.screenActions{display:none}}
 
 .updatePending{font-size:10px;color:#1b3344;background:#c3d3bc;border-radius:5px;padding:5px 7px;white-space:nowrap}
+
+.taskWorkChoices {display:grid;gap:10px;padding:14px;border:1px solid var(--line);border-radius:10px;background:#fff;}
+.operationOptions {display:flex;flex-wrap:wrap;gap:7px 14px;margin:0;padding:0;border:0;min-width:0;}
+.operationOptions legend {margin-bottom:7px;font-size:12px;font-weight:700;color:var(--muted);}
+.operationOptions label {display:inline-flex;align-items:center;gap:6px;font-size:13px;white-space:nowrap;}
+.operationOptions input {width:16px;height:16px;margin:0;accent-color:var(--brand-navy);}
+.preparationWork {grid-column:1/-1;display:flex;align-items:flex-end;flex-wrap:wrap;gap:12px 22px;padding-top:9px;border-top:1px solid var(--line);}
+.preparationWork > label {max-width:150px;}

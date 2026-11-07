@@ -28,6 +28,10 @@
     {
       "path": "/api/wedding-appointments/mail-retry",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/productie/weekarchief/cron",
+      "schedule": "0 5,6 * * *"
     }
   ]
 }

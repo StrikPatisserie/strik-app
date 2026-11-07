@@ -24,6 +24,7 @@ export default function TaskWorkPanel({state,task,item,recipes,busy,onCommand}:{
  const crewSize=Number(crew),validCrew=Number.isInteger(crewSize)&&crewSize>=1&&crewSize<=20;
  const history=(state.productionWork?.history||[]).filter(row=>row.taskId===task.id||row.itemId===item.id&&!row.taskId).slice(-8).reverse();
  const estimate=state.productionWork?.overrides?.[task.id]?null:learnedWorkEstimate(workView(state,recipes),item.id,task.operation,task.quantity,crewSize);
+ const plannedMinutes=Number.isFinite(task.minutes)&&task.minutes!>0?task.minutes:undefined;
  const confirmedLabor=Number(minutes.replace(',','.'))*crewSize;
  async function act(command:WorkCommand){
   const result=await onCommand(command);
@@ -39,6 +40,7 @@ export default function TaskWorkPanel({state,task,item,recipes,busy,onCommand}:{
  const crewField=<label className={s.crew}>Medewerkers<input type="number" min="1" max="20" step="1" required disabled={busy} value={crew} onChange={event=>setCrew(event.target.value)}/></label>;
  return <section className={s.panel} aria-label="Productietijd">
   {task.status!=='done'&&!checking&&estimate&&<p className={s.estimate}>Richttijd: ca. <strong>{number(estimate.minutes)} min met {crewSize} {crewSize===1?'persoon':'personen'}</strong> · {number(estimate.laborMinutes)} arbeidsmin · {estimate.measurements} {estimate.measurements===1?'meting':'metingen'}</p>}
+  {task.status!=='done'&&!checking&&!estimate&&plannedMinutes!==undefined&&<p className={`${s.estimate} ${s.plannedEstimate}`}>Geschatte tijd <strong>{number(plannedMinutes)} min</strong><small>{task.operation} · voor {stockNumber(task.quantity)} {item.unit}</small></p>}
   {task.status==='done'?<div className={s.done}>
    <Icon name="check"/>Klaar{stock?<span> · uit voorraad · {stockNumber(stock.quantity)} {stock.unit} · {stock.who}<small>{stockNumber(stock.countedQuantity)} geteld − {stockNumber(stock.quantity)} gebruikt = {stockNumber(stock.remainingQuantity)} over</small></span>:completion&&<span> · {number(completion.quantity)} {item.unit} · {number(completion.minutes)} min{completion.crewSize!==undefined&&<> × {completion.crewSize} pers. = {number(completion.laborMinutes!)} arbeidsmin</>} · {completion.who}</span>}
    {!stock&&<button disabled={busy} onClick={()=>void act({kind:'reopen',taskId:task.id})}>Heropen</button>}

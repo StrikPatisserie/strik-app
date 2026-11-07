@@ -12,6 +12,14 @@ test('shared start/pause/completion preserves planned output and stores confirme
  assert.equal(state.tasks[0].quantity,1000);assert.equal(state.tasks[0].completedQuantity,980);assert.equal(planning.completedOutput(state.items,state.tasks).get("cake"),980);assert.equal(state.productionWork.work[0].actorId,baker.id);assert.equal(state.productionWork.work[0].measuredMs,720000);assert.equal(state.productionWork.completions.task.plannedQuantity,1000);assert.equal(state.productionWork.history[0].who,'Bakker A');
  const reopened=apply(state,{kind:'reopen',taskId:'task'},'reopen-100');assert.equal(reopened.tasks[0].completedQuantity,undefined);assert.equal(reopened.productionWork.work.length,1);assert(!reopened.productionWork.timers.task);
 });
+test('the command flow records combined work separately from its planned duration and the base-operation norm',()=>{
+ let state=fixture();state.tasks[0].operation='Maken + storten';state.tasks[0].minutes=45;
+ state=apply(state,{kind:'start',taskId:'task',who:'Bakker A',crewSize:2});assert.equal(state.productionWork.timers.task.operation,'Maken + storten');
+ state=apply(state,{kind:'pause',taskId:'task'},'pause-combined','2026-11-06T08:12:00Z');
+ state=apply(state,{kind:'complete',taskId:'task',who:'Bakker A',crewSize:2,minutes:15,quantity:1000,timerId:'action-100'},'complete-combined','2026-11-06T08:15:00Z');
+ assert.equal(state.tasks[0].minutes,45);assert.equal(state.productionWork.work[0].operation,'Maken + storten');assert.equal(state.productionWork.work[0].minutes,15);assert.equal(state.productionWork.work[0].laborMinutes,30);
+ const view=work.workView(state,recipes);assert.equal(work.learnedWorkEstimate(view,'cake','Maken',1000),null);assert.equal(work.learnedWorkEstimate(view,'cake','Maken + storten',1000).laborMinutes,30);
+});
 test('cross-department writes, missing names, running or replaced timers and forged generic work are rejected',()=>{
  const state=fixture();assert.throws(()=>commands.applyWorkCommand(state,[],{kind:'start',taskId:'task',who:'Bakker'},['ijs'],'actor','abc',at),/toegang/);assert.throws(()=>apply(state,{kind:'start',taskId:'task',who:' '}),/naam/);
  const running=apply(state,{kind:'start',taskId:'task',who:'Bakker'});assert.throws(()=>apply(running,{kind:'complete',taskId:'task',who:'Bakker',minutes:12,quantity:1000,timerId:'action-100'}),/Stop/);

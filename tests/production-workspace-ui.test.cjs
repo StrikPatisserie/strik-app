@@ -2,12 +2,13 @@ const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
 const jsx=require('react/jsx-runtime');
 function load(file,imports={}) {
- const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{exports,require:name=>{assert(name in imports,`Unmocked ${name}`);return imports[name];},Date,Intl,Error,Map,Set,structuredClone,crypto:require('node:crypto').webcrypto});return exports;
+ const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{exports,require:name=>{assert(name in imports,`Unmocked ${name}`);return imports[name];},Date,Intl,Error,Map,Set,structuredClone,FormData:class{constructor(fields){const data=new FormData();for(const [name,value]of Object.entries(fields))data.set(name,value);return data;}},crypto:require('node:crypto').webcrypto});return exports;
 }
 const planning=load('app/productie/planning.ts');
 const sample=load('app/preview/productie/sampleData.ts',{'../../productie/planning':planning});
 const recipePlanning=load('app/productie/recipePlanning.ts',{'./planning':planning});
 const recipeGrouping=load('app/productie/recipeGroups.ts');
+const taskOperations=load('app/productie/taskOperations.ts');
 const productionWork=load('app/productie/productionWork.ts',{'./planning':planning,'./recipePlanning':recipePlanning}),workCommands=load('app/productie/workCommands.ts',{'./productionWork':productionWork});
 function harness() {
  // Exercise the component's real handlers and render state without a browser,
@@ -18,7 +19,7 @@ function harness() {
  const navigation={__esModule:true,default:function Navigation(){},ProductionMobileNavigation:function MobileNavigation(){}};
  const offerWidget={__esModule:true,default:function ProductionWeekOffer(){}};
  const pickerWidget={__esModule:true,default:function ProductionItemPicker(){}};
- const component=load('app/preview/productie/ProductionPreview.tsx',{'react':react,'react/jsx-runtime':jsx,'next/link':'a','../../productie/ProductionIcon':{__esModule:true,default:()=>null},'../../productie/ProductionNavigation':navigation,'../../productie/navigation':load('app/productie/navigation.ts',{'./planning':planning}),'../../productie/dayRhythm':load('app/productie/dayRhythm.ts',{'./planning':planning}),'next/dynamic':()=>()=>null,'../../productie/WeddingWeekLane':{__esModule:true,default:()=>null},'../../productie/useProductionUpdates':{__esModule:true,default:()=>false},'../../productie/productionUpdates':{},'../../productie/useScreenLayout':{__esModule:true,default:()=>({frameRef:{current:null},workspaceRef:{current:null}})},'../../productie/TaskWorkPanel':{__esModule:true,default:function TaskWorkPanel(){},WorkClock:function WorkClock(){},PreparationControl:function PreparationControl(){},RecipeWorkHistory:function RecipeWorkHistory(){}},'../../productie/workCommands':workCommands,'../../productie/QuickRecipeForm':{__esModule:true,default:()=>null},'../../productie/ProductionRequests':{__esModule:true,default:()=>null},'../../productie/ProductionWeekOffer':offerWidget,'../../productie/ProductionItemPicker':pickerWidget,'../../productie/recipeGroups':recipeGrouping,'../../productie/CleaningWeekLane':{__esModule:true,default:()=>null},'../../productie/weddingPlanning':{},'../../productie/planning':planning,'./sampleData':sample,'./production.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})},'../../productie/workspaceData':{},'../../productie/recipePlanning':recipePlanning});
+ const component=load('app/preview/productie/ProductionPreview.tsx',{'react':react,'react/jsx-runtime':jsx,'next/link':'a','../../productie/ProductionIcon':{__esModule:true,default:()=>null},'../../productie/ProductionNavigation':navigation,'../../productie/navigation':load('app/productie/navigation.ts',{'./planning':planning}),'../../productie/dayRhythm':load('app/productie/dayRhythm.ts',{'./planning':planning}),'next/dynamic':()=>()=>null,'../../productie/WeddingWeekLane':{__esModule:true,default:()=>null},'../../productie/useProductionUpdates':{__esModule:true,default:()=>false},'../../productie/productionUpdates':{},'../../productie/useScreenLayout':{__esModule:true,default:()=>({frameRef:{current:null},workspaceRef:{current:null}})},'../../productie/TaskWorkPanel':{__esModule:true,default:function TaskWorkPanel(){},WorkClock:function WorkClock(){},PreparationControl:function PreparationControl(){},RecipeWorkHistory:function RecipeWorkHistory(){}},'../../productie/workCommands':workCommands,'../../productie/QuickRecipeForm':{__esModule:true,default:()=>null},'../../productie/ProductionRequests':{__esModule:true,default:()=>null},'../../productie/ProductionWeekOffer':offerWidget,'../../productie/ProductionItemPicker':pickerWidget,'../../productie/recipeGroups':recipeGrouping,'../../productie/taskOperations':taskOperations,'../../productie/CleaningWeekLane':{__esModule:true,default:()=>null},'../../productie/weddingPlanning':{},'../../productie/planning':planning,'./sampleData':sample,'./production.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})},'../../productie/workspaceData':{},'../../productie/recipePlanning':recipePlanning});
  const render=(fn,props={},value)=>{if(!records.has(fn))records.set(fn,[]);current=records.get(fn);index=0;context=value;return fn(props);};
  return{render,Component:component.default,navigation,offerWidget:offerWidget.default,pickerWidget:pickerWidget.default};
 }
@@ -160,6 +161,10 @@ test('adding through a department keeps that department and preserves the draft 
  assert.equal(field(view,'Afdeling','select').props.value,'luxe');
  field(view,'Aantal (','input').props.onChange({target:{value:'100'}});
  field(view,'Productiedatum','input').props.onChange({target:{value:'2026-11-05'}});
+ find(view,n=>n.type==='input'&&n.props.name==='minutes').props.onChange({target:{value:'45'}});
+ const extraOptions=find(view,n=>typeof n.type==='function'&&n.type.name==='TaskOperationOptions'&&!n.props.label);
+ const options=h.render(extraOptions.type,extraOptions.props,tree.props.value);
+ find(find(options,n=>n.type==='label'&&text(n)==='Storten'),n=>n.type==='input').props.onChange({target:{checked:true}});
  view=render();
  button(view,'Recept aanpassen').props.onClick();
  tree=h.render(h.Component,{live});
@@ -175,6 +180,35 @@ test('adding through a department keeps that department and preserves the draft 
  assert.equal(field(view,'Afdeling','select').props.value,'luxe');
  assert.equal(field(view,'Aantal (','input').props.value,'100');
  assert.equal(field(view,'Productiedatum','input').props.value,'2026-11-05');
+ assert.equal(find(view,n=>n.type==='input'&&n.props.name==='minutes').props.value,'45');
+ const restored=find(view,n=>typeof n.type==='function'&&n.type.name==='TaskOperationOptions'&&!n.props.label);
+ const restoredOptions=h.render(restored.type,restored.props,tree.props.value);
+ assert.equal(find(find(restoredOptions,n=>n.type==='label'&&text(n)==='Storten'),n=>n.type==='input').props.checked,true);
+});
+
+test('normal task creation submits checked extra operations and an optional total time',async()=>{
+ const h=harness();let tree=xl(h);
+ button(tree,'Inplannen').props.onClick();tree=h.render(h.Component);
+ const form=find(tree,n=>typeof n.type==='function'&&!!n.props.onPlan),submitted=[];
+ const props={...form.props,onPlan:async command=>{submitted.push(command);}};
+ const render=()=>h.render(form.type,props,tree.props.value);
+ let view=render();
+ find(view,n=>n.type===h.pickerWidget).props.onChange('creme');view=render();
+ const time=find(view,n=>n.type==='input'&&n.props.name==='minutes');
+ assert(!nodes(find(view,n=>n.type==='details')).includes(time),'Time belongs in the visible task form');
+ assert.equal(time.props.required,undefined);
+ const options=find(view,n=>typeof n.type==='function'&&n.type.name==='TaskOperationOptions'&&!n.props.label);
+ const optionsView=h.render(options.type,options.props,tree.props.value);
+ find(find(optionsView,n=>n.type==='label'&&text(n)==='Storten'),n=>n.type==='input').props.onChange({target:{checked:true}});
+ time.props.onChange({target:{value:'45'}});view=render();
+ const submit=()=>find(view,n=>n.type==='form').props.onSubmit({preventDefault:()=>{},currentTarget:{source:'manual',note:'',dueDate:'',output:'on'}});
+ await submit();
+ assert.equal(submitted[0].task.operation,'Bereiden + storten');
+ assert.equal(submitted[0].task.minutes,45);
+ find(view,n=>n.type==='input'&&n.props.name==='minutes').props.onChange({target:{value:''}});view=render();
+ await submit();
+ assert.equal(submitted[1].task.operation,'Bereiden + storten');
+ assert.equal(Object.hasOwn(submitted[1].task,'minutes'),false);
 });
 
 test('blocked recipes remain selectable and repair actions open the specific linked recipe',()=>{
