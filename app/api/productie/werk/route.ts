@@ -17,7 +17,8 @@ export async function POST(request:Request){
   if(typeof input.id!=='string'||!/^[a-zA-Z0-9-]{8,100}$/.test(input.id))throw Error('Ververs deze productieactie.');
   const [planner,recipes]=await Promise.all([readDocument<PreviewState>('planner'),readDocument<RecepturenData>('recipes')]);
   if(!planner||!recipes)throw new ProductionStoreError('De productieopslag is niet bereikbaar.');
-  if(planner.data.productionWork?.receipts?.some(row=>row.id===input.id&&row.actorId===profile.id))return Response.json({state:visibleWorkspace(syncRecipeCatalog(planner.data,recipes.data)),revision:planner.revision,updatedAt:planner.updated_at},{headers});
+  const alreadyApplied=planner.data.productionWork?.receipts?.some(row=>row.id===input.id&&row.actorId===profile.id)||Object.values(planner.data.productionWork?.stockFulfillments||{}).some(row=>row.id===input.id&&row.actorId===profile.id);
+  if(alreadyApplied)return Response.json({state:visibleWorkspace(syncRecipeCatalog(planner.data,recipes.data)),revision:planner.revision,updatedAt:planner.updated_at},{headers});
   if(input.revision!==planner.revision)throw new ProductionStoreError('De planning is intussen gewijzigd. Ververs eerst; er is niets opgeslagen.',409);
   const views=recipeViews(recipes.data),current=syncRecipeCatalog(planner.data,recipes.data),now=new Date().toISOString();
   const next=applyWorkCommand(current,views,input.command,allowed,profile.id,input.id,now);

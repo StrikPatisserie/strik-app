@@ -1,7 +1,7 @@
 import {addDays,mondayOf,weekNumber,type Item,type PreviewState} from "./planning";
 import type {LogisticsBatch} from "../bakkerij/logistiek/logisticsTypes";
 export type DispatchDay={date:string;importedAt:string;lines:{article:string;description:string;quantity:number}[];unknownLines:number};
-export type InventoryCount={id:string;itemId:string;unit:string;date:string;quantity:number;who:string;actorId:string;at:string};
+export type InventoryCount={id:string;itemId:string;unit:string;date:string;quantity:number;who:string;actorId:string;at:string;stockUse?:{taskId:string;countedQuantity:number;quantity:number}};
 export type InventoryLink={itemId:string;article:string;factor:number;leadDays:number;unit:string};
 export type InventoryState={revision:number;counts:InventoryCount[];links:InventoryLink[];actions:string[]};
 export const INVENTORY_KEY="production_inventory_v1";
@@ -58,30 +58,50 @@ export function applyInventory(state:InventoryState,command:InventoryCommand,ite
 }
 function productionRows(planner:PreviewState,item:Item){
  const seen=new Set<string>();return planner.tasks.filter(task=>{
-  if(task.itemId!==item.id||!task.recordsOutput||task.status!=="done"||seen.has(task.batchId))return false;seen.add(task.batchId);return true;
- }).map(task=>({date:planner.productionWork?.completions?.[task.id]?.at?new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Amsterdam",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(planner.productionWork.completions[task.id].at)):task.date,quantity:task.completedQuantity??task.quantity}));
+  if(task.itemId!==item.id||!task.recordsOutput||task.status!=="done"||task.stockFulfillmentId||seen.has(task.batchId))return false;seen.add(task.batchId);return true;
+ }).map(task=>{
+  const at=planner.productionWork?.completions?.[task.id]?.at;
+  return{date:at?amsterdamDate(at):task.date,quantity:task.completedQuantity??task.quantity,at};
+ });
+}
+function amsterdamDate(at:string){return new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Amsterdam",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(at));}
+/** A stock use stores its physical count and resulting balance in the same
+ * audited planner transaction as the completed task. No second write is needed. */
+export function inventoryCounts(planner:PreviewState,state:InventoryState):InventoryCount[]{
+ const checkpoints=Object.values(planner.productionWork?.stockFulfillments||{}).map(row=>({
+  id:row.id,itemId:row.itemId,unit:row.unit,date:amsterdamDate(row.at),quantity:row.remainingQuantity,who:row.who,actorId:row.actorId!,at:row.at,
+  stockUse:{taskId:row.taskId,countedQuantity:row.countedQuantity,quantity:row.quantity},
+ }));
+ return [...state.counts,...checkpoints];
 }
 export function inventoryOverview(planner:PreviewState,state:InventoryState,days:DispatchDay[],asOf:string){
  validDate(asOf);
  const closedThrough=days.filter(day=>day.date<=asOf).at(-1)?.date||asOf;
  const recentFrom=addDays(closedThrough,-27),observed=days.filter(day=>day.date>=recentFrom&&day.date<=closedThrough&&day.unknownLines===0),coverage=new Set(days.filter(day=>day.unknownLines===0).map(day=>day.date));
+ const counts=inventoryCounts(planner,state);
+ const checkpointOrder=new Map((planner.productionWork?.history||[]).map((row,index)=>[row.id,index]));
  const rows=planner.items.filter(item=>item.kind!=="activity"&&!item.id.startsWith("wedding:")).map(item=>{
-  const count=state.counts.filter(row=>row.itemId===item.id&&row.unit===item.unit&&row.date<=asOf).reverse().sort((a,b)=>b.date.localeCompare(a.date)||b.at.localeCompare(a.at)).at(0);
+  // An ordinary count describes the end of its selected day, even if entered
+  // later. A physical stock-use checkpoint describes its exact time that day.
+  const count=counts.filter(row=>row.itemId===item.id&&row.unit===item.unit&&row.date<=asOf).reverse().sort((a,b)=>b.date.localeCompare(a.date)||Number(!!a.stockUse)-Number(!!b.stockUse)||b.at.localeCompare(a.at)||(checkpointOrder.get(b.id)??-1)-(checkpointOrder.get(a.id)??-1)).at(0);
   const link=state.links.find(row=>row.itemId===item.id&&row.unit===item.unit),production=productionRows(planner,item);
   const through=count&&count.date>closedThrough?count.date:closedThrough;
   const latest=production.filter(row=>row.date<=asOf).sort((a,b)=>b.date.localeCompare(a.date)).at(0);
-  const made=round(production.filter(row=>count&&row.date>count.date&&row.date<=through).reduce((total,row)=>total+row.quantity,0));
+  const made=round(production.filter(row=>count&&row.date<=through&&(count.stockUse&&row.at?row.at>count.at:row.date>count.date)).reduce((total,row)=>total+row.quantity,0));
   const issued=count&&link?.article?round(days.filter(day=>day.date>count.date&&day.date<=through).reduce((total,day)=>total+(day.lines.find(line=>line.article===link.article)?.quantity||0)*link.factor,0)):null;
   const missing:string[]=[];
   if(count)for(let date=addDays(count.date,1);date<=through;date=addDays(date,1)){if(!coverage.has(date))missing.push(date);}
   const balance=count?round(count.quantity+made-(issued||0)):null;
-  const known=!!count&&(count.date===through||!!link?.article&&missing.length===0);
+  // Day totals cannot split dispatches before/after an intraday physical count.
+  // Keep that snapshot visible; a later end-of-day count restores a forecast.
+  const checkpoint=!!count?.stockUse;
+  const known=!!count&&!checkpoint&&(count.date===through||!!link?.article&&missing.length===0);
   const recentQuantity=link?.article?observed.reduce((total,day)=>total+(day.lines.find(line=>line.article===link.article)?.quantity||0)*link.factor,0):0;
   // A full 28-day window is needed. Missing days are never invented as zero.
   const rate=observed.length===28&&recentQuantity>0?recentQuantity/28:null;
   const runOut=known&&balance!==null&&rate?addDays(through,Math.min(3650,Math.max(0,Math.floor(balance/rate)))):null;
   const productionDate=runOut&&link?addDays(runOut,-link.leadDays):null;
-  return{itemId:item.id,name:item.name,unit:item.unit,kind:item.kind,departmentId:item.departmentId,through,count:count||null,latest:latest||null,made,issued,balance,known,missingDays:missing.length,link:link||null,productionWeek:productionDate?{date:productionDate,monday:mondayOf(productionDate),week:weekNumber(productionDate)}:null};
+  return{itemId:item.id,name:item.name,unit:item.unit,kind:item.kind,departmentId:item.departmentId,through,count:count||null,latest:latest||null,made,issued,balance,known,checkpoint,missingDays:missing.length,link:link||null,productionWeek:productionDate?{date:productionDate,monday:mondayOf(productionDate),week:weekNumber(productionDate)}:null};
  });
  const articles=new Map<string,string>();for(const day of days)for(const line of day.lines)articles.set(line.article,line.description);
  return{asOf,rows,articles:[...articles].map(([article,description])=>({article,description})),sourceFrom:days[0]?.date||null,sourceUntil:days.filter(day=>day.date<=asOf).at(-1)?.date||null,forecastDays:observed.length,unknownLines:observed.reduce((n,day)=>n+day.unknownLines,0)};

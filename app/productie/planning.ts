@@ -33,6 +33,7 @@ export type Task = {
   requires?: string[]; generatedFor?: string;
   recipePlan?: RecipePlanSettings;
   weddingCode?: string; weddingDeliveryDate?: string; completedQuantity?:number;
+  stockFulfillmentId?:string;
 };
 export type PreparationChoice = { include?: boolean; date?: string; departmentId?: DepartmentId };
 export type RecipePlanSettings = {
@@ -174,8 +175,9 @@ export function durationLabel(minutes: number) {
   return hours ? `${hours}u${remainder ? ` ${remainder}m` : ""}` : `${remainder}m`;
 }
 export function departmentsFor(board: BoardId) { return DEPARTMENTS.filter(d => d.board === board); }
-export function requiredTaskIds(task: Task): string[] { return [...new Set([...(task.dependsOn ? [task.dependsOn] : []), ...(task.requires || [])])]; }
+export function requiredTaskIds(task: Task): string[] { return task.stockFulfillmentId && task.status === "done" ? [] : [...new Set([...(task.dependsOn ? [task.dependsOn] : []), ...(task.requires || [])])]; }
 export function taskIssues(task: Task, tasks: Task[], items: Item[] = []): string[] {
+  if(task.stockFulfillmentId&&task.status==="done")return [];
   const issues: string[] = [];
   if (items.find(i=>i.id===task.itemId)?.productionBlocked) issues.push("Het bronrecept heeft ontbrekende verwijzingen. Controleer dit recept eerst.");
   if (task.dependsOn) {
@@ -201,6 +203,7 @@ export function transitionTask(tasks: Task[], id: string, status: TaskStatus, it
   if (!Object.hasOwn(STATUS_LABELS, status)) throw Error("Onbekende status.");
   const task = tasks.find(t => t.id === id);
   if (!task) throw Error("Taak niet gevonden.");
+  if (task.stockFulfillmentId && status !== "done") throw Error("Deze taak is uit voorraad afgehandeld. Corrigeer de voorraad via Voorraadbeheer.");
   if (task.status === "blocked" && (status === "active" || status === "done")) throw Error("Hef de blokkade eerst op door de taak weer op Gepland te zetten.");
   if (status === "done" || status === "active") {
     const issues = taskIssues({ ...task, status }, tasks,items);
@@ -311,7 +314,7 @@ export function linkRecipe(state: PreviewState, itemId: string, recipeId: string
 export function completedOutput(items: Item[], tasks: Task[]): Map<string, number> {
   const result = new Map<string, number>(), batches = new Set<string>();
   for (const task of tasks) {
-    if (task.status !== "done" || !task.recordsOutput) continue;
+    if (task.status !== "done" || !task.recordsOutput || task.stockFulfillmentId) continue;
     if (batches.has(task.batchId)) throw Error("Dubbele voorraadregistratie in dezelfde batch.");
     if (!items.some(i => i.id === task.itemId && i.kind !== "activity")) throw Error("Onbekend voorraadonderdeel.");
     batches.add(task.batchId);

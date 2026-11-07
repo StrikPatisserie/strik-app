@@ -14,6 +14,8 @@ import WeddingWeekLane from "../../productie/WeddingWeekLane";
 import QuickRecipeForm from "../../productie/QuickRecipeForm";
 import ProductionRequests from "../../productie/ProductionRequests";
 import ProductionWeekOffer from "../../productie/ProductionWeekOffer";
+import ProductionItemPicker from "../../productie/ProductionItemPicker";
+import { recipeGroups } from "../../productie/recipeGroups";
 import CleaningWeekLane from "../../productie/CleaningWeekLane";
 import { scheduleWedding, type WeddingProductionOrder } from "../../productie/weddingPlanning";
 const OfferManager=dynamic(()=>import("../../bakkerij/recepturen/RecepturenApp"),{loading:()=> <p role="status">Aanbiedingbeheer laden…</p>});
@@ -136,7 +138,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
     catch { setStorageError(true); }
   }, [state, hydrated, demo]);
   useEffect(()=>{
-    if (live && !saving && !modal && !quickRecipeItem && live.revision>=revisionRef.current) {
+    if (live && !saving && (!modal || modal.type === "task") && !quickRecipeItem && live.revision>=revisionRef.current) {
       setState(live.state); revisionRef.current=live.revision; setSyncedAt(live.updatedAt);
     }
   },[live,saving,modal,quickRecipeItem]);
@@ -150,6 +152,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
   const boardDepartments = departmentsFor(board);
   const visibleDepartments = boardDepartments.filter(d => department === "all" || d.id === department);
   const weekTasks = state.tasks.filter(t => t.date >= week && t.date <= addDays(week, 6) && boardDepartments.some(d => d.id === t.departmentId));
+  const taskGroups = useMemo(() => recipeGroups(state.tasks, state.items), [state.tasks, state.items]);
   const end = addDays(week, 6);
   const recipeUpdates=useMemo(()=>new Map(state.tasks.filter(t=>!t.generatedFor && !t.dependsOn && (t.recipePlan || state.tasks.some(c=>c.generatedFor===t.id))).map(t=>[t.id,recipePlanChanges(state,recipeList,t)]).filter(([,review])=>typeof review!=="string" && review.changed) as [string,ReturnType<typeof recipePlanChanges>][]),[state,recipeList]);
   const filtered = state.tasks.filter(t => t.date >= week && t.date <= end && (weekend || t.date !== end) && visibleDepartments.some(d => d.id === t.departmentId))
@@ -250,6 +253,11 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
   const selectedTask=modal?.type==="detail" ? state.tasks.find(t=>t.id===modal.id) : undefined;
   const selectedTaskItem=selectedTask ? state.items.find(i=>i.id===selectedTask.itemId) : undefined;
   const selectedItem=modal?.type==="item-detail" ? state.items.find(i=>i.id===modal.id) : undefined;
+  const quickRecipeSource = state.items.find(item => item.id === quickRecipeItem);
+  const canonicalRecipe = quickRecipeSource && recipeList.find(recipe => quickRecipeSource.id === `recipe:${recipe.id}`);
+  const quickRecipeView = quickRecipeSource && !quickRecipeSource.recipeId && canonicalRecipe
+    ? { ...quickRecipeSource, recipeId: canonicalRecipe.id }
+    : quickRecipeSource;
   async function connectRecipe(id:string,recipeId:string) {
     try { return await persist(linkRecipe(state,id,recipeId,recipeList),"Recept gekoppeld; eerdere taken blijven behouden."); }
     catch(e) { return (e as Error).message; }
@@ -261,15 +269,17 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
 
   function taskCard(task: Task) {
     const item = state.items.find(i => i.id === task.itemId)!;
+    const group = taskGroups.get(task.id);
     const issues = taskIssues(task, state.tasks,state.items);
     if(recipeUpdates.has(task.id))issues.push("Recept gewijzigd · controleer de planning.");
     return <article key={task.id} className={`${s.taskCard} ${s[`task_${task.status}`]}`} draggable={canManage && !saving && task.status !== "done"} onDragStart={e => { e.dataTransfer.setData("text/plain", task.id); e.dataTransfer.effectAllowed = "move"; setDragged(task.id); }} onDragEnd={() => setDragged(null)}>
-      <button disabled={saving} className={s.taskCheck} aria-label={`${task.status === "done" ? "Heropen" : "Afronden"}: ${item.name} · ${task.operation}`} aria-pressed={task.status === "done"} onClick={() => changeStatus(task.id, task.status === "done" ? "planned" : "done")}>{task.status === "done" ? <Icon name="check" size={12} /> : task.status === "active" ? <Icon name="play" size={12} /> : null}</button>
+      <button disabled={saving || !!task.stockFulfillmentId} className={s.taskCheck} aria-label={`${task.stockFulfillmentId ? "Uit voorraad" : task.status === "done" ? "Heropen" : "Afronden"}: ${item.name} · ${task.operation}`} aria-pressed={task.status === "done"} onClick={() => changeStatus(task.id, task.status === "done" ? "planned" : "done")}>{task.status === "done" ? <Icon name="check" size={12} /> : task.status === "active" ? <Icon name="play" size={12} /> : null}</button>
       <button className={s.taskOpen} onClick={() => setModal({ type: "detail", id: task.id })} aria-label={`Open ${quantity(task.quantity)} ${item.unit} ${item.name} · ${task.operation}`}>
         <strong data-fit-text><span data-fit-word>{quantity(task.quantity)}{item.unit === "stuks" ? "×" : ` ${item.unit}`}</span> {item.name.split(/\s+/).map((word,i)=><span data-fit-word key={i}>{word}{" "}</span>)}</strong>
         <span>{task.operation}</span>
-        <small>{task.status==="active"&&<><WorkClock state={state} taskId={task.id}/>{!state.productionWork?.timers?.[task.id]&&"Bezig"}</>}{task.status==="blocked"&&"Controleren"}{issues.length>0&&<span className={s.taskWarning} title={issues.join(" ")}><Icon name="warning" size={12}/></span>}</small>
+        <small>{task.stockFulfillmentId && "Uit voorraad"}{task.status==="active"&&<><WorkClock state={state} taskId={task.id}/>{!state.productionWork?.timers?.[task.id]&&"Bezig"}</>}{task.status==="blocked"&&"Controleren"}{issues.length>0&&<span className={s.taskWarning} title={issues.join(" ")}><Icon name="warning" size={12}/></span>}</small>
       </button>
+      {group && <button type="button" className={`${s.recipeGroup} ${s[`recipeGroupTone${group.tone}`]}`} title={`Hoort bij ${group.name}`} aria-label={`${group.label} · Hoort bij ${group.name}`} onClick={() => setModal({type:"detail",id:group.rootId})}><Icon name="link" size={10}/>{group.label}</button>}
       {item.kind!=="activity"&&!item.recipeId&&<div className={s.recipeNudge}><button title="Recept aanvullen" aria-label={`Recept aanvullen: ${item.name}`} type="button" disabled={saving||!!live&&!live.departments.includes(item.departmentId)} onClick={()=>{setQuickRecipeTask(task.id);setQuickRecipeItem(item.id);}}><Icon name="warning" size={16}/></button></div>}
     </article>;
   }
@@ -345,10 +355,10 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
     </div></main>
     {message && <div className={`${s.toast} ${notificationError ? s.errorToast : ""}`} role="status"><Icon name={notificationError ? "warning" : "check"} /><span>{message}</span><button onClick={() => setMessage("")} aria-label="Melding sluiten"><Icon name="close" size={16} /></button></div>}
     {view==="planning"&&live?.screenAccount&&<BakeryScreenMessages blocked={saving||!!modal||!!quickRecipeItem||!!dragged||!connectionHealthy}/> }
-    {quickRecipeItem&&<ModalFrame title={state.items.find(i=>i.id===quickRecipeItem)?.recipeId?"Werkrecept aanpassen":"Recept snel invoeren"} subtitle={state.items.find(i=>i.id===quickRecipeItem)?.name} onClose={()=>setQuickRecipeItem(null)}><div className={s.dialogBody}>{live?<QuickRecipeForm key={`${quickRecipeItem}:${quickRecipeTask}`} taskId={quickRecipeTask} item={state.items.find(i=>i.id===quickRecipeItem)!} ingredients={ingredientList} getRevision={()=>revisionRef.current} recipeRevision={live.recipeRevision} onSaved={onRefresh||(()=>Promise.resolve())} onClose={()=>setQuickRecipeItem(null)}/>:<p>In de live omgeving kun je hier de basisopbrengst, grondstoffen en werkwijze vastleggen.</p>}</div></ModalFrame>}
+    {quickRecipeView&&<ModalFrame title={quickRecipeView.recipeId?"Werkrecept aanpassen":"Recept snel invoeren"} subtitle={quickRecipeView.name} onClose={()=>setQuickRecipeItem(null)}><div className={s.dialogBody}>{live?<QuickRecipeForm key={`${quickRecipeItem}:${quickRecipeTask}`} taskId={quickRecipeTask} item={quickRecipeView} ingredients={ingredientList} getRevision={()=>revisionRef.current} recipeRevision={live.recipeRevision} onSaved={onRefresh||(()=>Promise.resolve())} onClose={()=>setQuickRecipeItem(null)}/>:<p>In de live omgeving kun je hier de basisopbrengst, grondstoffen en werkwijze vastleggen.</p>}</div></ModalFrame>}
     {modal?.type==="offer" && <ModalFrame wide title={`Weekaanbieding · week ${weekNumber(modal.week)}`} subtitle={modal.label} onClose={()=>setModal(null)}><div className={s.dialogBody}><img className={s.offerFull} src={modal.imageUrl} alt={`Weekaanbieding week ${weekNumber(modal.week)}`}/></div><footer className={s.dialogFooter}><button className={s.primaryButton} onClick={()=>setModal(null)}>Terug naar het bord</button></footer></ModalFrame>}
     {modal?.type==="offer-manage" && canManageData && <ModalFrame wide title="Weekaanbieding beheren" onClose={()=>{setModal(null);void onRefresh?.();}}><div className={`${s.dialogBody} ${s.resourceSurface}`}><OfferManager embedded hideTopNav initialTab="beheer" lockedTab="beheer" initialBeheerView="voorpagina" initialOfferWeek={modal.week}/></div><footer className={s.dialogFooter}><button className={s.primaryButton} onClick={()=>{setModal(null);void onRefresh?.();}}>Terug naar het bord</button></footer></ModalFrame>}
-    {modal?.type === "task" && <TaskForm onNewItem={()=>setModal({type:"item",returnTo:{date:modal.date,departmentId:modal.departmentId}})} state={state} initial={modal} today={today} onClose={() => setModal(null)} onPlan={command=>plan(command,modal.refreshId)} />}
+    {modal?.type === "task" && <TaskForm onRecipe={itemId=>{setQuickRecipeTask(undefined);setQuickRecipeItem(itemId);}} onNewItem={()=>setModal({type:"item",returnTo:{date:modal.date,departmentId:modal.departmentId}})} state={state} initial={modal} today={today} onClose={() => setModal(null)} onPlan={command=>plan(command,modal.refreshId)} />}
     {modal?.type === "item" && <ItemForm state={state} onClose={() => setModal(null)} onSave={async next => { const error=await persist(next,"Onderdeel toegevoegd. Je kunt het direct inplannen."); if (!error) setModal(modal.returnTo?{type:"task",...modal.returnTo,itemId:next.items.at(-1)?.id}:null); return error; }} />}
     {selectedTask && selectedTaskItem && <TaskDetail onRecipe={()=>{setModal(null);setQuickRecipeTask(selectedTask.id);setQuickRecipeItem(selectedTaskItem.id);}} onWork={work} key={selectedTask.id} task={selectedTask} item={selectedTaskItem} state={state} onClose={() => setModal(null)} onStatus={status => changeStatus(selectedTask.id, status)} onMove={move} onRemove={whole=>remove(selectedTask.id,whole)} onRefreshPlan={()=>setModal({type:"task",refreshId:selectedTask.id,itemId:selectedTask.itemId,date:selectedTask.date,departmentId:selectedTask.departmentId})} onOpenTask={id=>setModal({type:"detail",id})} onNext={() => setModal({ type: "task", date: selectedTask.date, departmentId: selectedTask.departmentId, itemId: selectedTask.itemId, priorId: selectedTask.id })} />}
     {selectedItem && <ItemDetail onRecipe={()=>{setModal(null);setQuickRecipeTask(undefined);setQuickRecipeItem(selectedItem.id);}} key={selectedItem.id} item={selectedItem} state={state} onClose={()=>setModal(null)} onPlan={()=>setModal({type:"task",itemId:selectedItem.id,departmentId:selectedItem.departmentId,date:day})} onLink={recipeId=>connectRecipe(selectedItem.id,recipeId)} onUpdate={changes=>updateItem(selectedItem.id,changes)}/>}
@@ -361,7 +371,7 @@ function Search({ value, onChange, placeholder }: { value: string; onChange: (v:
 function DepartmentSelect({ value, onChange }: { value: string; onChange: (v: DepartmentId | "all") => void }) { return <select aria-label="Afdeling" value={value} onChange={e => onChange(e.target.value as DepartmentId | "all")}><option value="all">Alle afdelingen</option>{DEPARTMENTS.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select>; }
 function Empty({ title, text }: { title: string; text: string }) { return <div className={s.empty}><Icon name="box" size={28} /><h2>{title}</h2><p>{text}</p></div>; }
 
-function TaskForm({ state, initial, today, onClose, onPlan, onNewItem }: { onNewItem:()=>void; state: PreviewState; initial: NonNullable<Extract<Modal, { type: "task" }>>; today:string; onClose: () => void; onPlan:(command:PlanCommand)=>Promise<string|undefined> }) {
+function TaskForm({ state, initial, today, onClose, onPlan, onNewItem, onRecipe }: { onRecipe:(itemId:string)=>void; onNewItem:()=>void; state: PreviewState; initial: NonNullable<Extract<Modal, { type: "task" }>>; today:string; onClose: () => void; onPlan:(command:PlanCommand)=>Promise<string|undefined> }) {
   const {recipes:recipeList,saving}=useContext(WorkspaceContext);
   const refreshing=state.tasks.find(t=>t.id===initial.refreshId);
   const settings=refreshing?currentPlanCommand(state,refreshing):undefined;
@@ -380,6 +390,29 @@ function TaskForm({ state, initial, today, onClose, onPlan, onNewItem }: { onNew
   const [daysBefore,setDaysBefore]=useState(settings?.preparation?.daysBefore ?? 1);
   const [choices,setChoices]=useState<Record<string,PreparationChoice>>(settings?.preparation?.choices || {});
   const item=state.items.find(i=>i.id===itemId),recipe=recipeList.find(r=>r.id===item?.recipeId);
+  const pickerItems = useMemo(() => {
+    const recipes = new Map(recipeList.map(candidate => [candidate.id, candidate]));
+    return state.items.filter(candidate => !candidate.id.startsWith("wedding:") && (filter === "all" || candidate.kind === filter || !!initial.priorId || !!initial.refreshId)).map(candidate => ({
+      ...candidate,
+      searchValues: recipes.get(candidate.recipeId || "")?.ingredients.map(ingredient => ingredient.name),
+    }));
+  }, [state.items, recipeList, filter, initial]);
+  const repairTargets = useMemo(() => {
+    const seen = new Set<string>();
+    const canonical = item && recipeList.find(recipe => item.id === `recipe:${recipe.id}`);
+    const firstRecipe = item?.recipeId || canonical?.id;
+    const queue = firstRecipe ? [firstRecipe] : [];
+    for (let index = 0; index < queue.length && seen.size < 250; index++) {
+      const id = queue[index];
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const linked = recipeList.find(candidate => candidate.id === id);
+      for (const child of linked?.semiFinishedItems || []) queue.push(child.recipeId);
+    }
+    return state.items.filter(candidate => candidate.recipeId
+      ? seen.has(candidate.recipeId)
+      : candidate.id.startsWith("recipe:") && seen.has(candidate.id.slice(7)) && recipeList.some(recipe => recipe.id === candidate.id.slice(7)));
+  }, [item, recipeList, state.items]);
   const prior=state.tasks.find(t=>t.id===initial.priorId);
   const hasPreparation=!!recipe?.semiFinishedItems?.length && !prior;
   const operation=customOperation ?? plannedOperation(item?.kind,hasPreparation,!!prior);
@@ -391,8 +424,12 @@ function TaskForm({ state, initial, today, onClose, onPlan, onNewItem }: { onNew
   const updateChoice=(id:string,change:PreparationChoice)=>{setError("");setChoices(current=>({...current,[id]:{...current[id],...change}}));};
   function chooseItem(id:string) {
     setItemId(id);setAmount("1");setAmountMode("quantity");setCustomOperation(null);setChoices({});setError("");
-    const selected=state.items.find(i=>i.id===id),recipe=recipeList.find(r=>r.id===selected?.recipeId);if(selected)setDepartmentId(selected.departmentId);
+    const selected=state.items.find(i=>i.id===id),recipe=recipeList.find(r=>r.id===selected?.recipeId);
     setIncludePreparation(!initial.priorId && !!recipe?.semiFinishedItems?.length && !!recipe && recipe.yield>0);
+  }
+  function editRecipe(id: string) {
+    setError("");
+    onRecipe(id);
   }
   async function submit(event:FormEvent<HTMLFormElement>) {
     event.preventDefault();if(proposal.errors.length){setError(proposal.errors[0]);return;}
@@ -404,7 +441,8 @@ function TaskForm({ state, initial, today, onClose, onPlan, onNewItem }: { onNew
   return <ModalFrame title={refreshing?"Planning bijwerken":prior?"Volgende productiestap":"Taak toevoegen"} subtitle={prior?`Aansluitend op: ${prior.operation} · ${dateLabel(prior.date,true)}`:"Kies een product, aantal en gewenste productiedatum."} onClose={onClose}>
     <form onSubmit={submit} onChangeCapture={()=>setError("")}><div className={s.dialogBody}>
       {!prior && !refreshing && <label className={s.field}>Toon in keuzelijst<select value={filter} onChange={e=>{setFilter(e.target.value);if(e.target.value!=="all" && item?.kind!==e.target.value)chooseItem("");}}><option value="all">Eindproducten, halffabricaten & werkzaamheden</option><option value="product">Alleen eindproducten</option><option value="component">Alleen halffabricaten</option><option value="activity">Alleen werkzaamheden</option></select></label>}
-      <label className={s.field}>Product of halffabricaat<select required value={itemId} onChange={e=>chooseItem(e.target.value)} disabled={!!prior || !!refreshing}><option value="">Kies een product of halffabricaat…</option>{(["product","component","activity"] as ItemKind[]).filter(kind=>filter==="all" || filter===kind || !!prior).map(kind=><optgroup key={kind} label={kind==="product"?"Eindproducten":kind==="component"?"Halffabricaten":"Werkzaamheden"}>{state.items.filter(i=>i.kind===kind && !i.id.startsWith("wedding:")).map(i=><option key={i.id} disabled={i.productionBlocked} value={i.id}>{i.name}{i.productionBlocked?" · Recept controleren":""}</option>)}</optgroup>)}</select></label>
+      <ProductionItemPicker required value={itemId} onChange={chooseItem} disabled={!!prior || !!refreshing} items={pickerItems}/>
+      {item && item.kind!=="activity" && <button type="button" className={s.textLink} disabled={saving} onClick={()=>editRecipe(item.id)}><Icon name="book" size={14}/>{item.recipeId?"Recept aanpassen":"Recept snel invoeren"}</button>}
       {!prior&&!refreshing&&<button type="button" className={s.textLink} onClick={onNewItem}><Icon name="plus" size={14}/>Nieuw onderdeel zonder recept</button>}
       {recipe && <div className={s.amountChoice}><label className={s.field}>Invoer<select value={amountMode} onChange={e=>{setAmountMode(e.target.value as "quantity"|"batches");setAmount("1");}}><option value="quantity">Aantal {item?.unit}</option><option value="batches" disabled={!(recipe.yield>0)}>Aantal basisrecepten</option></select></label>{recipe.yield>0 && <button type="button" className={s.textLink} onClick={()=>{setError("");setAmountMode("batches");setAmount("1");}}>1 basisrecept = {quantity(recipe.yield)} {recipe.unit}</button>}</div>}
       <div className={s.formGrid}><label className={s.field}>{amountMode==="batches"?"Aantal basisrecepten":`Aantal (${item?.unit || "eenheid"})`}<input type="number" min="0.000001" max="1000000" step="any" required value={amount} onChange={e=>setAmount(e.target.value)} /></label><label className={s.field}>Afdeling<select value={departmentId} onChange={e=>setDepartmentId(e.target.value as DepartmentId)}>{DEPARTMENTS.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label><label className={s.field}>Productiedatum<input type="date" required value={date} min={prior?.date} onChange={e=>setDate(e.target.value)} /></label><label className={s.field}>Benodigd op (optioneel)<input name="dueDate" type="date" defaultValue={refreshing?.dueDate || prior?.dueDate} /></label></div>
@@ -417,7 +455,7 @@ function TaskForm({ state, initial, today, onClose, onPlan, onNewItem }: { onNew
         <label className={s.checkboxRow}><input type="checkbox" checked={includePreparation} disabled={!(recipe!.yield>0)} onChange={e=>setIncludePreparation(e.target.checked)} /><span>Halffabricaten meeplannen<small>Automatisch berekend uit het recept. Zet uit als de onderdelen al klaarstaan, of pas de planning hieronder aan.</small></span></label>
         {includePreparation && <><label className={s.field}>Standaard dagen vooraf<input type="number" min="0" max="30" step="1" value={daysBefore} onChange={e=>setDaysBefore(Number(e.target.value))} /></label><p className={s.fieldHint}>De laatste stap van het eindproduct is decoreren / afmaken. Een genest halffabricaat komt nog een stap eerder. Je kunt iedere datum aanpassen. Uitgevinkt betekent al beschikbaar; voorraad wordt hier niet gecontroleerd.</p>
           <div className={s.preparationList}>{proposal.rows.map(row=>{const dateInvalid=row.included && row.date>row.latestDate;return <div className={`${s.preparationRow} ${!row.included?s.preparationExcluded:""} ${dateInvalid?s.preparationInvalid:""}`} key={row.recipeId}>
-            <label className={s.preparationName}><input type="checkbox" aria-label={`Meemaken: ${row.name}`} checked={row.included} onChange={e=>updateChoice(row.recipeId,{include:e.target.checked})}/><span><strong>{row.name}</strong><small>{quantity(row.quantity)} {row.unit}{row.recipeCount>0?` · ${quantity(row.recipeCount)} × recept`:""}</small>{!row.included && <small>Al beschikbaar · geen nieuwe taak</small>}{row.departmentUnconfirmed && row.included && <small>Afdeling controleren</small>}</span></label>
+            <div><label className={s.preparationName}><input type="checkbox" aria-label={`Meemaken: ${row.name}`} checked={row.included} onChange={e=>updateChoice(row.recipeId,{include:e.target.checked})}/><span><strong>{row.name}</strong><small>{quantity(row.quantity)} {row.unit}{row.recipeCount>0?` · ${quantity(row.recipeCount)} × recept`:""}</small>{!row.included && <small>Al beschikbaar · geen nieuwe taak</small>}{row.departmentUnconfirmed && row.included && <small>Afdeling controleren</small>}</span></label><button type="button" className={s.textLink} disabled={saving} aria-label={`Recept aanpassen ${row.name}`} onClick={()=>editRecipe(row.itemId)}><Icon name="book" size={13}/>Recept aanpassen</button></div>
             <div className={s.preparationDate}><label className={s.field}>Datum<input type="date" aria-label={`Productiedatum ${row.name}`} aria-invalid={dateInvalid || undefined} aria-describedby={`preparation-date-${row.recipeId}`} disabled={!row.included} max={row.latestDate} value={row.date} onChange={e=>updateChoice(row.recipeId,{date:e.target.value})}/></label><small id={`preparation-date-${row.recipeId}`}>Uiterlijk {dateLabel(row.latestDate,true)}</small>{dateInvalid && <button type="button" className={s.dateRepair} onClick={()=>updateChoice(row.recipeId,{date:row.latestDate})}>Zet op {dateLabel(row.latestDate,true)}</button>}</div>
             <label className={s.field}>Afdeling<select aria-label={`Afdeling ${row.name}`} disabled={!row.included} value={row.departmentId} onChange={e=>updateChoice(row.recipeId,{departmentId:e.target.value as DepartmentId})}>{DEPARTMENTS.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
           </div>;})}</div>
@@ -428,7 +466,7 @@ function TaskForm({ state, initial, today, onClose, onPlan, onNewItem }: { onNew
       {review && <PlanChanges changes={review.changes}/>}
       <details className={s.planDetails}><summary>Werkzaamheid en aanvullende afspraken</summary><div className={s.formGrid}><label className={s.field}>Werkzaamheid<input name="operation" maxLength={100} required value={operation} onChange={e=>setCustomOperation(e.target.value)}/></label><label className={s.field}>Werktijd in minuten (optioneel)<input name="minutes" type="number" defaultValue={refreshing?.minutes} min="0" max="1440"/></label></div><label className={s.field}>Herkomst<select name="source" defaultValue={refreshing?.source || prior?.source || "manual"}>{Object.entries(SOURCE_LABELS).map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></label><label className={s.field}>Korte opmerking<textarea name="note" rows={2} maxLength={1000} defaultValue={refreshing?.note || ""}/></label></details>
       {item && item.kind!=="activity" && <label className={s.checkboxRow}><input name="output" type="checkbox" defaultChecked={refreshing?refreshing.recordsOutput:!existingOutput} disabled={!!existingOutput || !!refreshing}/><span>Deze stap registreert de geproduceerde hoeveelheid<small>{existingOutput?"Een andere stap van deze batch registreert de hoeveelheid al.":"Registreert het eindproduct of halffabricaat wanneer deze taak klaar is."}</small></span></label>}
-      {(error || (!!item && proposal.errors.length>0)) && <p className={s.formError} role="alert">{error || proposal.errors[0]}</p>}
+      {(error || (!!item && proposal.errors.length>0)) && <div className={s.formError} role="alert"><p>{error || proposal.errors[0]}</p>{repairTargets.length>0 && <div className={s.recipeRepairLinks}>{repairTargets.map(target=><button type="button" key={target.id} disabled={saving} onClick={()=>editRecipe(target.id)}><Icon name="book" size={14}/>{target.name}</button>)}</div>}</div>}
     </div><footer className={s.dialogFooter}><button type="button" className={s.secondaryButton} onClick={onClose}>Annuleren</button><button type="submit" className={s.primaryButton} disabled={saving || !item || proposal.errors.length>0}>{saving?"Opslaan…":refreshing?"Planning bijwerken":includePreparation?"Productie met halffabricaten inplannen":"Inplannen"}</button></footer></form>
   </ModalFrame>;
 }

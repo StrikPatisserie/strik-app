@@ -1,11 +1,12 @@
-import { addDays, addItem, transitionTask, type DemoRecipe, type DepartmentId, type PreviewState, type Task } from "./planning";
+import { addDays, addItem, transitionTask, type DemoRecipe, type DepartmentId, type ItemUnit, type PreviewState, type Task } from "./planning";
 import { buildRecipePlan, type PlanCommand } from "./recipePlanning";
 
-export type Change = { id:string; itemId:string; taskId?:string; who:string; at:string; actorId?:string; kind:"recipe"|"time"|"preparation"; scope:"once"|"permanent"; summary:string; before?:DemoRecipe; after?:DemoRecipe };
+export type Change = { id:string; itemId:string; taskId?:string; who:string; at:string; actorId?:string; kind:"recipe"|"time"|"preparation"|"stock"; scope:"once"|"permanent"; summary:string; before?:DemoRecipe; after?:DemoRecipe };
 export type WorkTime = { id:string; taskId:string; itemId:string; operation:string; quantity:number; minutes:number; who:string; at:string; actorId?:string; timerId?:string; measuredMs?:number; plannedQuantity?:number;crewSize?:number;laborMinutes?:number;recipeKey?:string;estimateEligible?:boolean };
 export type WorkTimer = {id:string;who:string;startedAt:string;runningSince?:string;elapsedMs:number;actorId?:string;crewSize?:number;recipeKey?:string};
 export type Completion = {id:string;who:string;at:string;minutes:number;quantity:number;plannedQuantity:number;measuredMs?:number;timerId?:string;actorId?:string;crewSize?:number;laborMinutes?:number;measuredCrewSize?:number};
-export type ScreenState = { version:1; planner:PreviewState; recipes:DemoRecipe[]; overrides:Record<string,DemoRecipe>; preparation:Record<string,number>; history:Change[]; work:WorkTime[];timers?:Record<string,WorkTimer>;completions?:Record<string,Completion> };
+export type StockFulfillment = { id:string; taskId:string; itemId:string; unit:ItemUnit; countedQuantity:number; quantity:number; remainingQuantity:number; who:string; at:string; actorId?:string };
+export type ScreenState = { version:1; planner:PreviewState; recipes:DemoRecipe[]; overrides:Record<string,DemoRecipe>; preparation:Record<string,number>; history:Change[]; work:WorkTime[];timers?:Record<string,WorkTimer>;completions?:Record<string,Completion>;stockFulfillments?:Record<string,StockFulfillment> };
 function validCrew(value:number|undefined){if(value!==undefined&&(!Number.isInteger(value)||value<1||value>20))throw Error("Kies 1 tot 20 medewerkers.");return value;}
 function actor(value:string) { const name=value.trim();if(name.length<2||name.length>80)throw Error("Vul je naam in (2–80 tekens).");return name; }
 function timestamp(at:string){const value=Date.parse(at);if(!Number.isFinite(value))throw Error("Ongeldig tijdstip.");return value;}
@@ -43,11 +44,30 @@ export function confirmTaskCompletion(state:ScreenState,input:{taskId:string;who
   return {...state,planner:{...state.planner,tasks},completions:{...state.completions,[task.id]:completion},work:[...state.work,log],history:[...state.history,{id,itemId:task.itemId,taskId:task.id,who,at,kind:"time",scope:"once",summary:`Afgerond: ${input.minutes.toLocaleString("nl-NL")} min${crewSize?` × ${crewSize} medewerkers = ${laborMinutes!.toLocaleString("nl-NL")} arbeidsmin`:""} · ${input.quantity.toLocaleString("nl-NL")} ${state.planner.items.find(i=>i.id===task.itemId)?.unit} gemaakt (gepland ${task.quantity.toLocaleString("nl-NL")}).`}]};
 }
 export function reopenTimedTask(state:ScreenState,taskId:string):ScreenState{
+  if (state.planner.tasks.find(task => task.id === taskId)?.stockFulfillmentId) throw Error("Deze taak is uit voorraad afgehandeld. Corrigeer een verkeerde telling via Voorraadbeheer.");
   const tasks=transitionTask(state.planner.tasks,taskId,"planned",state.planner.items).map(t=>{if(t.id!==taskId)return t;const copy={...t};delete copy.completedQuantity;return copy;}),timers={...state.timers},completions={...state.completions};delete timers[taskId];delete completions[taskId];
   return {...state,planner:{...state.planner,tasks},timers,completions};
 }
+export function fulfillTaskFromStock(state:ScreenState,input:{taskId:string;who:string;countedQuantity:number;confirmed:true},id:string,at:string):ScreenState {
+  const who = actor(input.who);
+  timestamp(at);
+  const task = state.planner.tasks.find(row => row.id === input.taskId);
+  const item = state.planner.items.find(row => row.id === task?.itemId);
+  if (!task || !item || item.kind === "activity" || !task.recordsOutput) throw Error("Kies een geplande product- of halffabricaattaak die voorraad oplevert.");
+  if (task.status !== "planned" || state.timers?.[task.id] || state.completions?.[task.id] || task.stockFulfillmentId) throw Error("Gebruik voorraad voordat de productie is gestart of afgerond.");
+  if (input.confirmed !== true) throw Error("Bevestig de getelde totaalvoorraad en de uitname.");
+  if (!Number.isFinite(input.countedQuantity) || input.countedQuantity < task.quantity || input.countedQuantity > 1000000) throw Error("De getelde totaalvoorraad moet minstens de benodigde hoeveelheid zijn en maximaal 1.000.000.");
+  const remainingQuantity = Math.round((input.countedQuantity - task.quantity) * 1000000) / 1000000;
+  const fulfillment:StockFulfillment = { id, taskId:task.id, itemId:item.id, unit:item.unit, countedQuantity:input.countedQuantity, quantity:task.quantity, remainingQuantity, who, at };
+  return {
+    ...state,
+    planner:{...state.planner,tasks:state.planner.tasks.map(row => row.id === task.id ? {...row,status:"done",stockFulfillmentId:id} : row)},
+    stockFulfillments:{...state.stockFulfillments,[task.id]:fulfillment},
+    history:[...state.history,{id,itemId:item.id,taskId:task.id,who,at,kind:"stock",scope:"once",summary:`Uit voorraad: ${input.countedQuantity.toLocaleString("nl-NL")} ${item.unit} geteld − ${task.quantity.toLocaleString("nl-NL")} gebruikt = ${remainingQuantity.toLocaleString("nl-NL")} over.`}],
+  };
+}
 export function taskRecipe(state:ScreenState,task:Task) {return state.overrides[task.id] || state.recipes.find(r=>r.id===state.planner.items.find(i=>i.id===task.itemId)?.recipeId);}
-export function saveRecipeChange(state:ScreenState,input:{itemId:string;taskId?:string;scope:"once"|"permanent";who:string;recipe:DemoRecipe},id:string,at:string):ScreenState {
+export function saveRecipeChange(state:ScreenState,input:{itemId:string;taskId?:string;scope:"once"|"permanent";who:string;recipe:DemoRecipe;referencesChanged?:boolean},id:string,at:string):ScreenState {
   const who=actor(input.who),item=state.planner.items.find(i=>i.id===input.itemId),task=state.planner.tasks.find(t=>t.id===input.taskId);
   if(!item||item.kind==="activity"||!["once","permanent"].includes(input.scope))throw Error("Kies een bestaand product of halffabricaat.");
   if(input.scope==="once"&&(!task||task.itemId!==item.id))throw Error("Een eenmalige wijziging hoort bij één productie.");
@@ -59,6 +79,7 @@ export function saveRecipeChange(state:ScreenState,input:{itemId:string;taskId?:
   const differences:string[]=[];
   if(before){
     if(before.yield!==recipe.yield)differences.push(`Basisopbrengst: ${before.yield} → ${recipe.yield} ${item.unit}`);
+    if(input.referencesChanged)differences.push("Grondstof- of halffabricaatkoppeling aangepast");
     for(const line of recipe.ingredients){const old=before.ingredients.find(l=>l.name===line.name);if(!old)differences.push(`${line.name} toegevoegd`);else if(old.quantity!==line.quantity||old.unit!==line.unit)differences.push(`${line.name}: ${old.quantity} ${old.unit} → ${line.quantity} ${line.unit}`);}
     for(const old of before.ingredients)if(!recipe.ingredients.some(l=>l.name===old.name))differences.push(`${old.name} verwijderd`);
     if(JSON.stringify(before.steps)!==JSON.stringify(recipe.steps))differences.push("Werkwijze aangepast");
@@ -121,12 +142,13 @@ export function learnedWorkEstimate(state:ScreenState,itemId:string,operation:st
  return {minutes:Math.max(.01,Math.round(laborMinutes/crewSize*100)/100),laborMinutes:Math.max(.01,Math.round(laborMinutes*100)/100),crewSize,measurements:records.length};
 }
 
-export type ProductionWorkState = Pick<ScreenState,"overrides"|"preparation"|"history"|"work"|"timers"|"completions"> & {receipts?:{id:string;actorId:string;at:string}[];recipeDrafts?:Record<string,import('./workRecipe').WorkRecipeInput>};
+export type ProductionWorkState = Pick<ScreenState,"overrides"|"preparation"|"history"|"work"|"timers"|"completions"|"stockFulfillments"> & {receipts?:{id:string;actorId:string;at:string}[];recipeDrafts?:Record<string,import('./workRecipe').WorkRecipeInput>};
 export type WorkCommand =
  | {kind:"start";taskId:string;who:string;crewSize?:number}
  | {kind:"pause";taskId:string}
  | {kind:"complete";taskId:string;who:string;minutes:number;quantity:number;timerId?:string;crewSize?:number}
  | {kind:"reopen";taskId:string}
+ | {kind:"stock";taskId:string;who:string;countedQuantity:number;confirmed:true}
  | {kind:"preparation";recipeId:string;days:number;who:string};
-export function workView(state:PreviewState,recipes:DemoRecipe[]):ScreenState{return{version:1,planner:state,recipes,overrides:state.productionWork?.overrides||{},preparation:state.productionWork?.preparation||{},history:state.productionWork?.history||[],work:state.productionWork?.work||[],timers:state.productionWork?.timers||{},completions:state.productionWork?.completions||{}};}
-export function storeWork(view:ScreenState,previous:PreviewState["productionWork"]):PreviewState{return{...view.planner,productionWork:{...previous,overrides:view.overrides,preparation:view.preparation,history:view.history,work:view.work,timers:view.timers,completions:view.completions}};}
+export function workView(state:PreviewState,recipes:DemoRecipe[]):ScreenState{return{version:1,planner:state,recipes,overrides:state.productionWork?.overrides||{},preparation:state.productionWork?.preparation||{},history:state.productionWork?.history||[],work:state.productionWork?.work||[],timers:state.productionWork?.timers||{},completions:state.productionWork?.completions||{},stockFulfillments:state.productionWork?.stockFulfillments||{}};}
+export function storeWork(view:ScreenState,previous:PreviewState["productionWork"]):PreviewState{return{...view.planner,productionWork:{...previous,overrides:view.overrides,preparation:view.preparation,history:view.history,work:view.work,timers:view.timers,completions:view.completions,stockFulfillments:view.stockFulfillments}};}

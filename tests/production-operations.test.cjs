@@ -93,6 +93,29 @@ test('forecast requires a count, exact mapping and 28 complete days; it still wo
  for(const missing of [days28().slice(1),days28().map((d,i)=>i===10?{...d,unknownLines:1}:d)]){const r=inventory.inventoryOverview(planner(),counted(),missing,'2026-11-06').rows[0];assert.equal(r.known,false);assert.equal(r.productionWeek,null);assert(r.missingDays>0);}
  for(const state of [{...counted(),counts:[]},{...counted(),links:[]},{...counted(),counts:counted().counts.map(c=>({...c,unit:'kg'}))}])assert.equal(inventory.inventoryOverview(planner(),state,days28(),'2026-11-06').rows[0].productionWeek,null);
 });
+test('stock-use checkpoints expose the remaining physical stock and never count as manufactured output or a day-total forecast',()=>{
+ const p=planner(),stockAt='2026-11-06T08:00:00Z';
+ p.tasks=[{id:'stock-task',itemId:item.id,departmentId:'dessert',batchId:'stock-batch',quantity:10,recordsOutput:true,status:'done',date:'2026-11-06',stockFulfillmentId:'stock-action'}];
+ p.productionWork={stockFulfillments:{'stock-task':{id:'stock-action',taskId:'stock-task',itemId:item.id,unit:item.unit,countedQuantity:25,quantity:10,remainingQuantity:15,who:'Bakker A',actorId:baker.id,at:stockAt}}};
+ let row=inventory.inventoryOverview(p,counted(),[...days28(),day('2026-11-06',20)],'2026-11-06').rows[0];
+ assert.equal(row.count.quantity,15);assert.equal(row.balance,15);assert.equal(row.issued,0,'the checkpoint day report includes goods already counted and is not subtracted in full');assert.equal(row.made,0);assert.equal(row.latest,null);assert.equal(row.checkpoint,true);assert.equal(row.known,false);assert.equal(row.productionWeek,null);
+ assert.equal(inventory.inventoryCounts(p,counted()).at(-1).stockUse.countedQuantity,25);
+ p.tasks.push({...p.tasks[0],id:'made-before',batchId:'before',stockFulfillmentId:undefined,quantity:100},{...p.tasks[0],id:'made-after',batchId:'after',stockFulfillmentId:undefined,quantity:3});
+ p.productionWork.completions={'made-before':{at:'2026-11-06T07:00:00Z'},'made-after':{at:'2026-11-06T09:00:00Z'}};
+ row=inventory.inventoryOverview(p,counted(),[],'2026-11-06').rows[0];assert.equal(row.made,3);assert.equal(row.balance,18);
+ const backfilled=counted(999);backfilled.counts[0].at='2026-11-07T20:00:00Z';
+ assert.equal(inventory.inventoryOverview(p,backfilled,[],'2026-11-06').rows[0].count.quantity,15,'an older end-of-day count entered later must not overwrite a newer physical checkpoint');
+ const closing=counted(18);closing.counts[0].date='2026-11-06';closing.counts[0].at='2026-11-07T20:00:00Z';
+ row=inventory.inventoryOverview(p,closing,[],'2026-11-06').rows[0];assert.equal(row.count.quantity,18);assert.equal(row.balance,18);assert.equal(row.checkpoint,false);assert.equal(row.known,true,'a later end-of-day baseline resolves the intraday reporting gap');
+});
+test('equal-time stock checkpoints use durable history order even after JSONB reorders map keys',()=>{
+ const p=planner(),at='2026-11-06T08:00:00.000Z';
+ const older={id:'stock-old',taskId:'zz',itemId:item.id,unit:item.unit,countedQuantity:100,quantity:10,remainingQuantity:90,who:'Bakker A',actorId:baker.id,at};
+ const newer={...older,id:'stock-new',taskId:'aa',countedQuantity:90,remainingQuantity:80};
+ p.productionWork={stockFulfillments:{aa:newer,zz:older},history:[{id:older.id},{id:newer.id}]};
+ const row=inventory.inventoryOverview(p,inventory.emptyInventory(),[],'2026-11-06').rows[0];
+ assert.equal(row.count.id,newer.id);assert.equal(row.count.quantity,80);
+});
 function inventoryApi(who,options={}){
  const p=planner();let doc=inventory.emptyInventory(),writes=0,archives=0,reads=0;
  const api=load('app/api/productie/voorraad/route.ts',{'@/app/lib/auth/session':{getCurrentProfile:async()=>who},'@/app/productie/access':rights,'@/app/productie/documents.server':{ProductionStoreError:StoreError,readDocument:async key=>{reads++;return{data:key==='planner'?p:{ingredients:[],recipes:[]}};}},'@/app/productie/operationalStore.server':{readOperational:async()=>doc,saveOperational:async(key,revision,next,actor)=>{assert.equal(key,inventory.INVENTORY_KEY);assert.equal(actor,who.id);if(options.conflict)throw new StoreError('conflict',409);assert.equal(revision,doc.revision);doc=next;writes++;}},'@/app/productie/inventory':inventory,'@/app/productie/inventorySource.server':{inventoryDispatchDays:async()=>days28(),archiveInventoryDays:async days=>{archives++;assert.equal(days.length,28);}},'@/app/productie/workspaceData':{...workspace,todayAmsterdam:()=>'2026-11-06'}});
@@ -106,6 +129,12 @@ test('stock API guards roles/origin and saves only its own document with history
  assert.equal((await h.api.POST(post('/api/productie/voorraad',countBody))).status,200);assert.equal(h.writes(),1);assert.equal(h.archives(),1);
  assert.equal((await h.api.POST(post('/api/productie/voorraad',{...countBody,id:'new-action-2'}))).status,409);assert.equal((await h.api.POST(post('/api/productie/voorraad',countBody,'https://foreign.invalid'))).status,403);
  const conflict=inventoryApi(baker,{conflict:true});assert.equal((await conflict.api.POST(post('/api/productie/voorraad',countBody))).status,409);assert.equal(conflict.writes(),0);
+});
+test('the inventory API reads task stock-use checkpoints directly from the atomic planner ledger',async()=>{
+ const h=inventoryApi(baker);
+ h.planner.productionWork={stockFulfillments:{task:{id:'stock-100',taskId:'task',itemId:item.id,unit:item.unit,countedQuantity:25,quantity:10,remainingQuantity:15,who:'Bakker A',actorId:baker.id,at:'2026-11-06T08:00:00Z'}}};
+ const response=await h.api.GET(),data=await response.json();
+ assert.equal(response.status,200);assert.equal(data.rows[0].count.quantity,15);assert.equal(data.rows[0].checkpoint,true);assert.equal(data.history[0].stockUse.quantity,10);assert.equal(data.history[0].actorId,baker.id);assert.equal(h.writes(),0);assert.equal(h.archives(),0);
 });
 test('monthly dispatch archive preserves corrected days, retries CAS conflicts and backfills once without storing raw receipts',async()=>{
  const docs=new Map();let conflicts=1,writes=0;

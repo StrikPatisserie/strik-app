@@ -2,7 +2,7 @@ import {getCurrentProfile} from "@/app/lib/auth/session";
 import {productionDepartments} from "@/app/productie/access";
 import {readDocument,ProductionStoreError} from "@/app/productie/documents.server";
 import {readOperational,saveOperational} from "@/app/productie/operationalStore.server";
-import {INVENTORY_KEY,emptyInventory,inventoryOverview,applyInventory,type InventoryState} from "@/app/productie/inventory";
+import {INVENTORY_KEY,emptyInventory,inventoryCounts,inventoryOverview,applyInventory,type InventoryState} from "@/app/productie/inventory";
 import {inventoryDispatchDays,archiveInventoryDays} from "@/app/productie/inventorySource.server";
 import {syncRecipeCatalog,todayAmsterdam} from "@/app/productie/workspaceData";
 import type {PreviewState} from "@/app/productie/planning";
@@ -14,7 +14,7 @@ async function source(){
  if(!planner||!recipes)throw new ProductionStoreError("De productieopslag is nog niet ingericht.");
  return{planner:syncRecipeCatalog(planner.data,recipes.data),inventory,days};
 }
-function view(data:Awaited<ReturnType<typeof source>>){return{revision:data.inventory.revision,history:data.inventory.counts.slice(-1000).reverse(),...inventoryOverview(data.planner,data.inventory,data.days,todayAmsterdam())};}
+function view(data:Awaited<ReturnType<typeof source>>){return{revision:data.inventory.revision,history:inventoryCounts(data.planner,data.inventory).sort((a,b)=>b.at.localeCompare(a.at)).slice(0,1000),...inventoryOverview(data.planner,data.inventory,data.days,todayAmsterdam())};}
 export async function GET(){
  if(!productionDepartments(await getCurrentProfile()).length)return Response.json({message:"Geen toegang tot voorraadbeheer."},{status:403,headers});
  try{return Response.json(view(await source()),{headers});}catch(error){return Response.json({message:error instanceof Error?error.message:"Voorraad niet bereikbaar."},{status:503,headers});}

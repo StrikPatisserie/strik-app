@@ -192,3 +192,20 @@ test('newly introduced preparations use unique identities and stale recipe or pl
  const next=rules.refreshRecipePlan(old,f.recipes,root.id,rules.currentPlanCommand(old,root));assert(workspace.validWorkspace(next,f.recipes));assert.equal(next.tasks.length,7);assert.equal(new Set(next.tasks.map(t=>t.id)).size,7);
  for(const [revision,recipeRevision] of [[2,7],[3,6]]){const a=api({id:'manager',active:true,role:'manager'});a.state.tasks=rules.buildRecipePlan(a.state,a.recipes,a.command).tasks;const response=await a.route.POST(new Request('https://app.invalid/api/productie/plan',{method:'POST',body:JSON.stringify({replaceTaskId:'order-1',command:a.command,revision,recipeRevision})}));assert.equal(response.status,409);assert.equal(a.writes(),0);}
 });
+
+test('unconfirmed preparation departments inherit the clicked category while confirmed departments and explicit choices remain', () => {
+ const { state, recipes, command } = fixture();
+ command.task.departmentId = 'luxe';
+ state.items.find(item => item.recipeId === 'mousse').departmentUnconfirmed = true;
+ state.items.find(item => item.recipeId === 'caramel').departmentUnconfirmed = true;
+ command.preparation.choices = { caramel: { departmentId: 'slagroom' } };
+ const proposal = rules.preparationProposal(state, recipes, command);
+ assert.equal(proposal.errors.length, 0);
+ assert.equal(proposal.rows.find(row => row.recipeId === 'mousse').departmentId, 'luxe');
+ assert.equal(proposal.rows.find(row => row.recipeId === 'caramel').departmentId, 'slagroom');
+ assert.equal(proposal.rows.find(row => row.recipeId === 'base').departmentId, 'bak');
+ const next = rules.buildRecipePlan(state, recipes, command);
+ assert.equal(next.tasks.find(task => task.id === 'order-1').departmentId, 'luxe');
+ assert.equal(next.tasks.find(task => task.itemId === 'recipe:mousse').departmentId, 'luxe');
+ assert(workspace.validWorkspace(next, recipes));
+});

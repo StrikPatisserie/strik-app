@@ -1,5 +1,5 @@
 import type { RecepturenData } from "../bakkerij/recepturen/recepturenApi";
-import { type DepartmentId, type DemoRecipe, type ItemUnit, type PreviewState, type Task, validProductionRequests, DEPARTMENTS, addDays, validRecipePlan, validStaffingSettings, validCleaningDays } from "./planning";
+import { type DepartmentId, type DemoRecipe, type ItemUnit, type PreviewState, type Task, validProductionRequests, DEPARTMENTS, addDays, requiredTaskIds, validRecipePlan, validStaffingSettings, validCleaningDays } from "./planning";
 
 export type IngredientView = { id: string; name: string; supplier: string; unit: string; linked: boolean; specification: string; allergens: string };
 export type LiveWorkspace = {
@@ -90,6 +90,8 @@ export function validWorkspace(value: unknown, recipes: DemoRecipe[]): value is 
   if(state.productionRequests!==undefined && !validProductionRequests(state.productionRequests))return false;
   if(state.staffing!==undefined && !validStaffingSettings(state.staffing))return false;
   if(state.cleaning!==undefined && !validCleaningDays(state.cleaning))return false;
+  const stockFulfillments=state.productionWork?.stockFulfillments;
+  if(stockFulfillments!==undefined&&(!stockFulfillments||typeof stockFulfillments!=="object"||Array.isArray(stockFulfillments)))return false;
   const ids = new Set<string>(), tasks = new Map<string, Task>(), batches = new Set<string>();
   try {
     for (const i of state.items) {
@@ -101,6 +103,14 @@ export function validWorkspace(value: unknown, recipes: DemoRecipe[]): value is 
       if (!t || !ids.has(t.itemId) || typeof t.id !== "string" || !t.id || tasks.has(t.id) || !Number.isFinite(t.quantity) || t.quantity <= 0 || t.quantity > 1000000 || !["planned","active","done","blocked"].includes(t.status) || !["manual","shop","order","routine"].includes(t.source) || !DEPARTMENTS.some(d => d.id === t.departmentId) || typeof t.operation !== "string" || !t.operation.trim() || typeof t.note !== "string" || t.note.length > 10000 || typeof t.batchId !== "string" || !t.batchId || typeof t.recordsOutput !== "boolean") return false;
       if(t.recipePlan!==undefined && !validRecipePlan(t.recipePlan))return false;
       if(t.completedQuantity!==undefined && (t.status!=="done" || !Number.isFinite(t.completedQuantity) || t.completedQuantity<=0 || t.completedQuantity>1000000))return false;
+      if(t.stockFulfillmentId!==undefined){
+        const stock=stockFulfillments?.[t.id],item=state.items.find(row=>row.id===t.itemId);
+        if(typeof t.stockFulfillmentId!=="string"||!t.stockFulfillmentId||t.status!=="done"||!t.recordsOutput||t.completedQuantity!==undefined)return false;
+        if(!stock||stock.id!==t.stockFulfillmentId||stock.taskId!==t.id||stock.itemId!==t.itemId||stock.unit!==item?.unit||stock.quantity!==t.quantity)return false;
+        if(!Number.isFinite(stock.countedQuantity)||stock.countedQuantity<stock.quantity||stock.countedQuantity>1000000||!Number.isFinite(stock.remainingQuantity)||Math.abs(stock.remainingQuantity-(stock.countedQuantity-stock.quantity))>.000001)return false;
+        if(typeof stock.who!=="string"||stock.who.trim().length<2||stock.who.length>80||typeof stock.actorId!=="string"||!stock.actorId||typeof stock.at!=="string"||!Number.isFinite(Date.parse(stock.at)))return false;
+        if(state.productionWork?.timers?.[t.id]||state.productionWork?.completions?.[t.id])return false;
+      }
       if(t.weddingCode!==undefined && (typeof t.weddingCode!=="string" || !t.weddingCode || t.weddingCode.length>100))return false;
       if(t.weddingDeliveryDate!==undefined)addDays(t.weddingDeliveryDate,0);
       addDays(t.date, 0); if (t.dueDate) { addDays(t.dueDate, 0); if (t.date > t.dueDate) return false; }
@@ -110,12 +120,13 @@ export function validWorkspace(value: unknown, recipes: DemoRecipe[]): value is 
       if (t.recordsOutput) { if (batches.has(t.batchId) || state.items.find(i => i.id === t.itemId)?.kind === "activity") return false; batches.add(t.batchId); }
       tasks.set(t.id, t);
     }
+    for(const [taskId,stock] of Object.entries(stockFulfillments||{}))if(!stock||tasks.get(taskId)?.stockFulfillmentId!==stock.id)return false;
     const batchItems = new Map<string, string>();
     for (const t of state.tasks) {
       if (batchItems.has(t.batchId) && batchItems.get(t.batchId) !== t.itemId) return false;
       batchItems.set(t.batchId, t.itemId);
       const seen = new Set<string>([t.id]); let cursor: Task | undefined = t;
-      while (cursor.dependsOn) {
+      while (!cursor.stockFulfillmentId && cursor.dependsOn) {
         const prior = tasks.get(cursor.dependsOn);
         if (!prior || seen.has(prior.id) || prior.batchId !== t.batchId || prior.itemId !== t.itemId || prior.date > cursor.date || ((cursor.status === "done" || cursor.status === "active") && prior.status !== "done")) return false;
         seen.add(prior.id); cursor = prior;
@@ -126,7 +137,7 @@ export function validWorkspace(value: unknown, recipes: DemoRecipe[]): value is 
       if(depth>250 || visiting.has(id)) return false;
       if(visited.has(id)) return true;
       const t=tasks.get(id);if(!t)return false;visiting.add(id);
-      for(const required of [...(t.dependsOn?[t.dependsOn]:[]),...(t.requires || [])]) {
+      for(const required of requiredTaskIds(t)) {
         const prior=tasks.get(required);
         if(!prior || prior.date>t.date || (["done","active"].includes(t.status) && prior.status!=="done") || !visit(required,depth+1))return false;
       }

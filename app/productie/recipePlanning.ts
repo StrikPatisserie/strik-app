@@ -66,7 +66,7 @@ export function preparationProposal(state:PreviewState,recipes:DemoRecipe[],comm
         if(!Number.isFinite(needed) || needed<=0 || needed>1000000)throw Error(`Ongeldige benodigde hoeveelheid bij ${child.name}.`);
         const savedDays=state.productionWork?.preparation?.[child.id];
         const plannedDate=choice.date || addDays(date,-(savedDays ?? daysBefore));addDays(plannedDate,0);
-        const departmentId=choice.departmentId || item.departmentId;
+        const departmentId=choice.departmentId || (item.departmentUnconfirmed ? command.task.departmentId : item.departmentId);
         if(!DEPARTMENTS.some(d=>d.id===departmentId))throw Error("Kies een geldige afdeling voor ieder halffabricaat.");
         let row=nodes.get(child.id);
         if(!row) {row={recipeId:child.id,itemId:item.id,name:child.name,quantity:0,unit:item.unit,recipeCount:0,date:plannedDate,latestDate:date,departmentId,departmentUnconfirmed:!!item.departmentUnconfirmed&&!choice.departmentId,included,requires:[]};nodes.set(child.id,row);}
