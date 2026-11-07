@@ -380,14 +380,77 @@
 @media(max-width:1100px) { .workRecipeHeading,.workRecipeRow { grid-template-columns:minmax(150px,1fr) 125px 100px; }.workRecipeHeading > :last-child,.workRecipeContents { display:none; } }
 @media(max-width:800px) { .workRecipeHeading { display:none; }.workRecipeRow { grid-template-columns:minmax(0,1fr) auto; padding:10px; gap:8px; min-height:58px; }.workRecipeDepartment { display:none; }.workRecipeRow strong { font-size:12px; } }
 .recipeCalculator { display:flex; flex-wrap:wrap; align-items:end; gap:10px; padding-bottom:16px; border-bottom:1px solid #e0e5d7; }.recipeCalculator input { width:150px; }
-.holidayToolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; }.holidayToolbar nav { margin:0 auto 0 0; }.holidayToolbar .field { display:flex; align-items:center; gap:7px; }
-.holidayTabs { display:flex; align-items:center; gap:8px; flex-wrap:wrap; border-bottom:1px solid var(--line); padding-bottom:10px; margin-bottom:12px; }.holidayTabs button { padding:8px 11px; border:1px solid var(--line); border-radius:5px; background:white; }.holidayTabs button[aria-pressed=true] { background:var(--green); color:white; border-color:var(--green); }.holidayTabs small { margin-left:auto; font-size:10px; color:var(--muted); }
-.holidayOrders { border:1px solid var(--line); border-radius:6px; overflow:hidden; background:#fff; }.holidayOrders article { display:grid; grid-template-columns:minmax(150px,.65fr) minmax(230px,1.5fr) 150px; gap:16px; padding:12px; align-items:start; border-radius:0; }.holidayOrders article + article { border-top:1px solid var(--line); }.holidayDone { background:#edf3e8; }.holidayCustomer strong { font-size:13px; display:block; }.holidayCustomer small,.holidayProducts small { display:block; margin-top:5px; color:var(--muted); font-size:11px; white-space:pre-wrap; }.holidayProducts { font-size:12px; white-space:pre-wrap; overflow-wrap:anywhere; }.holidayProducts details { margin-top:7px; white-space:normal; }.holidayProducts details p { padding:4px 0; font-size:11px; }.holidayProducts summary { color:var(--green); cursor:pointer; font-weight:600; }.holidayProgress { display:grid; gap:12px; font-size:11px; }.holidayProgress label { display:flex; align-items:center; gap:8px; font-size:11px; }.holidayEmpty { padding:22px; color:var(--muted); }
-.holidayWall { position:fixed; inset:0; z-index:150; overflow:auto; padding:22px; background:#f4f6ef; color:#1b3344; }.holidayWall .holidayOrders article { grid-template-columns:220px 1fr 170px; }.holidayWall .holidayProducts { font-size:14px; }
+.holidayResource .previewBar { display:none; }
+.holidayResource .header { padding:12px 0; }
+.holidayResource .heading .eyebrow { display:none; }
+.holidayResource .heading h1 { margin:0; font-size:24px; }
+.holidayToolbar { display:flex; align-items:center; gap:8px 14px; flex-wrap:wrap; padding-bottom:10px; margin-bottom:10px; border-bottom:1px solid var(--line); }
+.holidayToolbar nav { margin:0; }
+.holidayToolbar .resourceTabs { margin:0; }
+.holidayToolbar .field { margin:0; }
+.holidayToolbar select { min-height:32px; padding:5px 24px 5px 8px; font-size:11px; }
+.holidayToolbar .secondaryButton { min-height:32px; padding:5px 8px; font-size:11px !important; }
+.holidayTabs { display:flex; align-items:center; gap:5px; flex-wrap:wrap; }
+.holidayTabs button { padding:6px 9px; min-height:32px; border:1px solid var(--line); border-radius:5px; background:white; font-size:11px; }
+.holidayTabs button[aria-pressed=true] { background:var(--green); color:white; border-color:var(--green); }
+.holidayTools { display:flex; align-items:center; gap:6px; margin-left:auto; }
+.holidayOrders { border:1px solid #c5d1bf; border-radius:6px; overflow:hidden; background:#fff; }
+.holidayOrderTable { width:100%; border-collapse:collapse; table-layout:fixed; text-align:left; }
+.holidayDateColumn { width:125px; }
+.holidayCustomerColumn { width:19%; }
+.holidayProgressColumn { width:90px; }
+.holidayOrderTable thead { background:#e5eddf; color:#4b6250; }
+.holidayOrderTable thead th { padding:7px 10px; font-size:10px; font-weight:600; border-bottom:1px solid #bdcbb7; }
+.holidayOrderTable tbody td,.holidayOrderTable tbody th { padding:8px 10px; vertical-align:top; border-bottom:1px solid #d6dfd0; }
+.holidayOrderTable tbody tr:last-child > * { border-bottom:0; }
+.holidayOrderTable tbody th { font-weight:700; }
+.holidayOrderTable tbody tr:nth-child(even) { background:#fafbf8; }
+.holidayOrderTable tbody tr.holidayDone { background:#edf3e8; color:#687563; }
+.holidayDate { font-size:11px; color:#5d715e; line-height:1.4; }
+.holidayCustomer { font-size:12px; line-height:1.4; overflow-wrap:break-word; }
+.holidayProducts { font-size:12px; line-height:1.45; white-space:pre-wrap; overflow-wrap:break-word; }
+.holidayProducts button { min-height:24px; padding:3px; }
+.holidayOrderExtras { display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 14px; margin-top:3px; white-space:normal; }
+.holidayOrderExtras:empty { display:none; }
+.holidayProducts details { font-size:10px; }
+.holidayProducts details[open] { flex-basis:100%; }
+.holidayProducts details p { padding:3px 0; margin:0; font-size:11px; white-space:pre-wrap; }
+.holidayProducts summary { color:var(--green); cursor:pointer; font-weight:600; }
+.holidayProducts small { display:block; margin-top:3px; color:var(--muted); font-size:10px; white-space:pre-wrap; }
+.holidayProducts .textLink { display:inline-flex; align-items:center; gap:4px; font-size:10px; }
+.holidayProgress { display:grid; gap:4px; font-size:10px; }
+.holidayProgress label { display:flex; align-items:center; gap:5px; font-size:10px; min-height:24px; cursor:pointer; }
+.holidayProgress input[type=checkbox] { width:19px; height:19px; min-height:19px; accent-color:#315a44; cursor:pointer; }
+.holidayProgress input:disabled { cursor:default; }
+.holidayProgress small { font-size:9px; color:var(--muted); }
+.holidayEmpty { padding:18px; color:var(--muted); font-size:12px; }
+.holidayWall { position:fixed; inset:0; z-index:150; overflow:auto; padding:14px; background:#f4f6ef; color:#1b3344; }
+.holidayWall .holidayProducts { font-size:14px; }
 .holidayTotals { display:flex; flex-wrap:wrap; gap:12px 25px; align-items:center; padding:12px; background:#edf2e6; border:1px solid var(--line); border-radius:6px; margin-bottom:12px; }.holidayTotals small { width:100%; color:#9a5b32; }
 .holidayBatch { margin:10px 0; border:1px solid var(--line); border-radius:6px; background:#fff; overflow:hidden; }.holidayBatch > summary { padding:12px; cursor:pointer; display:flex; justify-content:space-between; gap:12px; background:#f0f2e9; }.holidayBatch > p { padding:12px; }.letterProductionHeader,.letterProductionRow { display:grid; grid-template-columns:minmax(200px,1fr) 145px 80px 40px; gap:12px; align-items:center; padding:9px 12px; border-top:1px solid var(--line); }.letterProductionHeader { color:var(--muted); font-size:10px; }.letterProductionRow { font-size:12px; }.letterProductionRow input[type=number] { width:78px; }.letterProductionRow small { display:block; font-size:10px; color:var(--muted); }.letterProductionRow summary { color:var(--green); font-size:10px; cursor:pointer; }
 .holidayOverlay { width:min(680px,calc(100% - 36px)); max-height:90dvh; margin:auto; border:1px solid var(--line); border-radius:8px; padding:18px; background:#fffdf8; color:#1b3344; }.holidayOverlay::backdrop { background:#213b2b70; }.holidayOverlay img { display:block; width:100%; max-height:70dvh; object-fit:contain; margin-top:12px; }.holidayOverlay h2 { font-size:18px; }.holidayOverlay p { margin:12px 0; }
-@media(max-width:800px) { .holidayOrders article,.holidayWall .holidayOrders article { grid-template-columns:1fr; gap:9px; }.holidayProgress { display:flex; gap:16px; flex-wrap:wrap; border-top:1px solid var(--line); padding-top:8px; }.holidayTabs small { margin:0; width:100%; }.holidayWall { padding:14px; }.letterProductionHeader { display:none; }.letterProductionRow { grid-template-columns:minmax(0,1fr) 65px 32px; gap:8px; }.letterProductionRow > div { grid-column:1 / -1; }.letterProductionRow input[type=number] { width:65px; }.holidayToolbar .secondaryButton { font-size:10px !important; padding:7px 8px; }.holidayBatch > summary { font-size:11px; } }
+@media(max-width:800px) {
+ .holidayOrderTable,.holidayOrderTable tbody { display:block; }
+ .holidayOrderTable colgroup { display:none; }
+ .holidayOrderTable thead { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; }
+ .holidayOrderTable tbody tr { display:grid; grid-template-columns:100px minmax(0,1fr) 75px; grid-template-areas:"date customer progress" "products products products"; gap:5px 10px; padding:9px 10px; border-bottom:1px solid #d6dfd0; }
+ .holidayOrderTable tbody tr:last-child { border-bottom:0; }
+ .holidayOrderTable tbody td,.holidayOrderTable tbody th { padding:0; border:0; }
+ .holidayDate { grid-area:date; font-size:10px; }
+ .holidayCustomer { grid-area:customer; font-size:12px; }
+ .holidayProducts { grid-area:products; }
+ .holidayStatus { grid-area:progress; }
+ .holidayProgress label { min-height:28px; }
+ .holidayWall { padding:10px; }
+ .letterProductionHeader { display:none; }
+ .letterProductionRow { grid-template-columns:minmax(0,1fr) 65px 32px; gap:8px; }
+ .letterProductionRow > div { grid-column:1 / -1; }
+ .letterProductionRow input[type=number] { width:65px; }
+ .holidayToolbar .secondaryButton { font-size:10px !important; padding:6px 8px; }
+ .holidayBatch > summary { font-size:11px; }
+}
+@media(max-width:450px) { .holidayOrderTable tbody tr { grid-template-columns:85px minmax(0,1fr) 65px; gap:5px 8px; }.holidayTools { margin-left:0; }.holidayTabs { flex:1; } }
+
 
 .staffing { min-width:0; margin-bottom:12px; }.staffPeek { display:flex; align-items:center; flex-wrap:wrap; gap:10px; font-size:11px; margin-bottom:9px; }.staffPeek > span { color:#9c6533; font-size:10px; }.staffPeek .secondaryButton { min-height:32px; padding:6px 10px; font-size:11px !important; }
 .staffAlert { display:flex; align-items:flex-start; gap:9px; padding:10px 12px; margin:6px 0; border:1px solid #e0c493; border-left:3px solid #c98b3c; border-radius:4px; background:#fff6e5; font-size:11px; }.staffAlert strong { font-size:12px; }.staffAlert p { margin:3px 0 0; white-space:pre-wrap; }

@@ -23,6 +23,52 @@ test('holiday production projects customer, dates, letter instructions and per-l
  const folderText='BEDRIJF EN CONTACT\nPrivate Person\nprivate@invalid.example\n\nGEKOZEN SINTERKLAASPRODUCTEN\n25 × Speculaasbrok\n€ 2,00 p.s. excl. btw · € 50,00 totaal excl. btw · inclusief eigen logo\n\nPRIJSINDICATIE\n€ 50,00\n\nWENSEN\nGraag rood lint';
  const product=projection.productionOrderText(folderText);assert.match(product,/25 × Speculaasbrok · eigen logo/);assert.match(product,/rood lint/);assert(!/Private|private@|€|50,00/.test(product));
 });
+test('main holiday products exclude numbered transport costs and separate order agreements while retaining production instructions',()=>{
+ const text=['PRODUCTEN EN PRIJS','165 × Speculaasbrok met letter · zonder amandel · grote spuitletter · letter S · puur · eigen logo · € 16,10 p.s. ex btw · € 2.656,50',
+  '1 × Bezorgkosten · postcode 6531 AB · automatisch · € 15,00 incl. btw · € 13,76 p.s. ex btw · € 13,76','1x Verzendkosten · € 7,50','Verzendtoeslag: € 2,50','Transportkosten: € 10,00',
+  'Afhalen bij Strik Lent','OVERIGE ORDERAFSPRAKEN','Bij 1× Chocolade spuitletter: letter R, melk, eigen logo','Graag rood lint','Prijsafspraak: particulier tarief','Factuur: private-invoice'].join('\n');
+ const source=order({orderText:text,textInstructions:'Letter S bovenop de plak',importantNotes:'Koel bewaren',packaging:'Los verpakken'}),before=JSON.stringify(source);
+ const result=projection.holidayOrder(source);
+ assert.equal(result.products,'165 × Speculaasbrok met letter · zonder amandel · grote spuitletter · letter S · puur · eigen logo');
+ for(const value of ['Bezorg','Verzend','Transportkosten','Afhalen','ORDERAFSPRAKEN','Graag rood lint','Prijsafspraak','private-invoice'])assert(!result.products.includes(value),value);
+ for(const value of ['Letter S bovenop de plak','Koel bewaren','Bij 1× Chocolade spuitletter: letter R, melk, eigen logo','Graag rood lint'])assert(result.instructions.includes(value),value);
+ assert.equal(result.packaging,'Los verpakken');assert.match(result.letters[0],/25× Spuitletter A · puur · groot · eigen logo · vegan/);
+ assert(!/€|13,76|16,10|2\.656|private-invoice/.test(JSON.stringify(result)));
+ assert.equal(JSON.stringify(source),before,'projection never edits the original order');
+});
+test('original folder wishes remain in details and never mix contact, quotation or delivery sections into product summaries',()=>{
+ const text=['BEDRIJF EN CONTACT','Bedrijf: Demo','Contactpersoon: private-person','E-mail: private@invalid.example','',
+  'GEKOZEN SINTERKLAASPRODUCTEN','25 × Speculaasbrok met letter · zonder amandel · grote letter S','€ 12,00 p.s. excl. btw · € 300,00 totaal excl. btw · inclusief eigen logo',
+  '','PRIJSINDICATIE','€ 300,00 excl. btw / € 327,00 incl. btw','Extra verpakking en bezorging in overleg.','','GEWENSTE LEVERING','26 november 2026','Afleveradres: private-address','','WENSEN','Bij 1× letter R gebruiken; overige letters S.','Graag rood lint'].join('\n');
+ const result=projection.holidayOrder(order({orderText:text,textInstructions:'Graag rood lint'}));
+ assert.match(result.products,/25 × Speculaasbrok met letter · zonder amandel · grote letter S · eigen logo/);
+ assert(!/R gebruiken|rood lint|ORDERAFSPRAKEN|WENSEN|PRIJS|bezorging|november|private/.test(result.products));
+ assert.match(result.instructions,/Bij 1× letter R gebruiken; overige letters S/);assert.match(result.instructions,/rood lint/);
+ assert(!/private|327,00|300,00|€/.test(JSON.stringify(result)));
+});
+test('custom Christmas package quantities, variant contents and product-specific details remain intact',()=>{
+ const text=['BEDRIJF EN CONTACT','Private person','','KERSTPAKKET OP MAAT','12 gelijke pakketten, met per pakket:',
+  '1 × Kerststol zonder amandel · € 8,00 excl. btw per pakket','2 × Chocolade kerstboom · puur · eigen logo · € 2,00 excl. btw per pakket',
+  'Per pakket: € 12,00 excl. btw','Pakkettotaal: € 144,00 excl. btw','','PRIJSINDICATIE','€ 144,00','','WENSEN','Logo per boom rechtop plaatsen'].join('\n');
+ const result=projection.holidayOrder(order({season:'kerst',orderText:text,letterLines:[]}));
+ assert.match(result.products,/12 × Kerstpakket op maat · per pakket: 1 × Kerststol zonder amandel; 2 × Chocolade kerstboom · puur · eigen logo/);
+ assert.match(result.instructions,/Logo per boom rechtop plaatsen/);assert(!result.products.includes('Logo per boom'));
+ assert(!/€|144,00|PRIJS/.test(result.products));
+});
+test('legacy grouped orders retain their only product source and letter variants instead of dropping free text as administrative notes',()=>{
+ const groups=load('app/sinterklaas/b2b/groupedLetterOrders.ts');
+ const stichting=load('app/sinterklaas/b2b/stichting12q.ts',{'./groupedLetterOrders':groups});
+ const source=order(stichting.stichting12qImport()),result=projection.holidayOrder(source);
+ assert.match(result.products,/585 grote chocolade vormletters Q/);
+ assert.match(result.products,/Deadline week 47 \(2026\)/);
+ assert.match(result.products,/Verdeling per bedrijf bij de letteromschrijving/);
+ assert(!/Verkoopprijs|Inkoop|€/.test(result.products));
+ assert.equal(result.letters.length,source.letterLines.length);
+ assert(result.letters.some(line=>/Q · wit · groot · eigen logo/.test(line)));
+ assert(result.letters.some(line=>/Q · melk · groot$/.test(line)));
+ const legacyNotes=projection.productionProductsText('OVERIGE ORDERAFSPRAKEN\n40 vormletters Q · 20 melk, 10 wit, 10 puur · eigen logo\nGebruik groene doos');
+ assert.match(legacyNotes,/40 vormletters Q · 20 melk, 10 wit, 10 puur · eigen logo/);assert.match(legacyNotes,/Gebruik groene doos/);
+});
 test('holiday lists only show confirmed, noncancelled orders for the chosen holiday and keep delivered history readonly',()=>{
  const values=[order(),order({id:'kerst',season:'kerst'}),order({id:'both',season:'sint-kerst'}),order({id:'draft',status:'aanvraag'}),order({id:'quotation',status:'offerte'}),order({id:'cancelled',cancelled:true}),order({id:'delivered',delivered:true})];
  assert.deepEqual(Array.from(projection.productionHolidayOrders(values,'sint'),o=>o.id).sort(),['both','delivered','order-1']);assert.deepEqual(Array.from(projection.productionHolidayOrders(values,'kerst'),o=>o.id).sort(),['both','kerst']);
