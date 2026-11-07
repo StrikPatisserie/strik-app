@@ -656,7 +656,7 @@
 .worksheetRoot .weekPicker button{color:#1b3344;background:transparent;border:0}
 .worksheetRoot .plannerFilters{margin-left:auto}.worksheetRoot .plannerFilters select{min-height:32px;color:#1b3344;border-color:#aabbaa;background:#fff}
 .worksheetRoot .plannerMeta{gap:5px}.worksheetRoot .weekProgress{display:none}
-.worksheetRoot .plannerWithRequests{grid-template-columns:minmax(0,1fr) 205px!important;gap:12px;align-items:stretch!important}
+.worksheetRoot .plannerWithRequests{grid-template-columns:minmax(0,1fr) 280px!important;gap:12px;align-items:stretch!important}
 .worksheetRoot .board{border:1px solid #aabbaa;border-radius:8px;box-shadow:none;overflow:hidden}
 .worksheetRoot :is(.boardHeader,.departmentRow){grid-template-columns:56px repeat(var(--days),minmax(0,1fr))}
 .worksheetRoot .boardHeader{background:#1b3344;color:#fff}
@@ -681,16 +681,16 @@
 .worksheetRoot .task_active{border-color:#d75a4c;border-left-width:4px;background:#fff6ed}
 .worksheetRoot .task_done{background:#c3d3bc;border-color:#9bb28e;border-left-color:#c3d3bc}
 .worksheetRoot .task_blocked{border-color:#d75a4c;background:#f9eee8}
-.worksheetRoot .taskCheck{display:grid;place-items:center;width:19px;height:19px;min-width:19px;min-height:19px;margin-top:1px;border:1.5px solid #6c827b;border-radius:3px;background:white;padding:0;color:#1b3344}
+.worksheetRoot .taskCheck{display:grid;place-items:center;width:22px;height:22px;min-width:22px;min-height:22px;margin-top:1px;border:1.5px solid #6c827b;border-radius:3px;background:white;padding:0;color:#1b3344}
 .worksheetRoot .task_active .taskCheck{background:#d75a4c;border-color:#d75a4c;color:#fff}
 .worksheetRoot .task_done .taskCheck{background:#1b3344;border-color:#1b3344;color:#fff}
 .worksheetRoot .taskOpen{flex:1;min-width:0;padding:0;width:auto!important;color:#1b3344}
-.worksheetRoot .taskOpen strong{display:block;font-size:13px;font-weight:750;line-height:1.23;overflow-wrap:normal;word-break:normal;hyphens:none;color:#1b3344}
+.worksheetRoot .taskOpen strong{display:block;font-size:16px;font-weight:750;line-height:1.23;overflow-wrap:normal;word-break:normal;hyphens:none;color:#1b3344}
 .worksheetRoot .taskOpen strong b{font-size:1em}
 .worksheetRoot [data-fit-word]{white-space:nowrap;overflow-wrap:normal;word-break:normal;hyphens:none}
-.worksheetRoot .taskOpen>span{display:block;font-size:10px;margin-top:3px;color:#1b3344;overflow-wrap:normal;word-break:normal}
+.worksheetRoot .taskOpen>span{display:block;font-size:12px;margin-top:3px;color:#1b3344;overflow-wrap:normal;word-break:normal}
 .worksheetRoot .taskOpen small{font-size:9px;color:#8b392e;line-height:1.2;margin-top:3px}.worksheetRoot .taskOpen small:empty{display:none}
-.worksheetRoot .taskWarning{color:#a33e30}.worksheetRoot .taskCard:has(.recipeNudge) .taskOpen{padding-right:17px}
+.worksheetRoot .taskWarning{color:#a33e30}.worksheetRoot .taskCard:has(.recipeNudge) .taskOpen strong{padding-right:17px}
 .worksheetRoot .recipeNudge{position:absolute;right:3px;top:3px;display:block;width:21px;height:21px;padding:0;margin:0;border:0;background:transparent;flex-basis:auto}
 .worksheetRoot .recipeNudge button{display:grid;place-items:center;width:21px;height:21px;color:#a33e30;padding:0;border:0;background:transparent;font-size:10px}
 .worksheetRoot .cellAdd{margin-top:auto;min-height:22px;padding:2px;color:#1b3344;opacity:1;border:0;background:transparent}.worksheetRoot .cellAdd>span{display:none}
@@ -704,7 +704,13 @@
 .offerHeading{display:flex;align-items:center;justify-content:space-between;min-height:30px;margin-bottom:4px;color:#1b3344;font-size:13px;font-weight:700}
 .recipeGroup{position:absolute;right:5px;bottom:4px;display:inline-flex;align-items:center;gap:3px;padding:2px 4px;border-radius:4px;font-size:9px!important;line-height:1.2;white-space:nowrap}
 .recipeGroupTone0{background:#e1ebf1;color:#254f67}.recipeGroupTone1{background:#f9e8d6;color:#80532f}.recipeGroupTone2{background:#e2ebdc;color:#3d6049}
-.worksheetRoot .taskCard{position:relative}.worksheetRoot .taskCard:has(.recipeGroup) .taskOpen{padding-bottom:18px}
+.worksheetRoot .taskCard{position:relative}
+.worksheetRoot .taskCard:has(.recipeGroup) .taskOpen>span{padding-right:42px}
+.worksheetRoot .taskCard:has([data-warning-only]) .taskOpen strong{padding-right:17px}
+.worksheetRoot .taskOpen small[data-warning-only]{position:absolute;top:5px;right:5px;margin:0}
+.worksheetRoot .recipeGroup{bottom:5px;font-size:10px!important}
+.worksheetRoot .taskCard:has(.recipeNudge) .taskOpen small[data-warning-only]{right:25px}
+.worksheetRoot .taskCard:has(.recipeNudge):has([data-warning-only]) .taskOpen strong{padding-right:34px}
 .recipeRepairLinks{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.recipeRepairLinks button{display:inline-flex;align-items:center;gap:5px;border:1px solid currentColor;border-radius:5px;padding:5px 8px;font-size:12px;background:white}
 .offerHeading .offerEdit{position:static;width:28px;min-height:26px}
 .offerTile{position:relative;min-height:100px}
@@ -726,7 +732,7 @@
  .worksheetRoot[data-screen-density=dense] .sidebarBottom{padding-top:12px}
  .worksheetRoot[data-screen-density=dense] .cellAdd{min-height:18px}
 }
-@media(min-width:1600px){.worksheetRoot .taskOpen strong{font-size:15px}.worksheetRoot .plannerWithRequests{grid-template-columns:minmax(0,1fr) 230px!important}.worksheetRoot .departmentLabel{min-height:140px}}
+@media(min-width:1600px){.worksheetRoot .taskOpen strong{font-size:18px}.worksheetRoot .plannerWithRequests{grid-template-columns:minmax(0,1fr) 320px!important}.worksheetRoot .departmentLabel{min-height:140px}}
 @media(max-width:800px){.screenFrame{height:auto;overflow:visible}.worksheetRoot{display:block}.worksheetRoot .sidebar{display:none}.worksheetRoot .planningActions{flex-wrap:wrap;gap:6px}.screenActions{flex-wrap:wrap}.worksheetRoot .plannerToolbar{flex-wrap:wrap}.worksheetRoot .weekPicker>div{display:block}.worksheetRoot .plannerFilters{margin-left:0}.worksheetRoot .plannerWithRequests{display:flex;flex-direction:column}.worksheetRoot .boardHeader{display:none}.worksheetRoot .departmentRow{display:block}.worksheetRoot .departmentLabel{min-height:0!important;display:flex;flex-direction:row;justify-content:space-between;padding:9px 12px}.worksheetRoot .departmentLabel h2{writing-mode:horizontal-tb;transform:none;font-size:13px}.worksheetRoot .dayCell{display:none!important;padding:9px}.worksheetRoot .dayCell.mobileSelectedDay{display:flex!important;min-height:80px!important}.worksheetRoot .taskOpen strong{font-size:15px}.worksheetRoot .taskOpen>span{font-size:12px}.planningRail{display:grid;grid-template-columns:minmax(0,1fr) 110px}.offerTile{min-height:100px;aspect-ratio:1;font-size:11px!important}.worksheetRoot .mobileRhythm .dayRhythm{background:#1b3344;padding:7px;border-radius:5px;margin:6px 0}.worksheetRoot .dayRhythm>div{justify-content:flex-start}}
 @media print{.screenFrame{height:auto;overflow:visible}.worksheetRoot{transform:none!important;width:100%!important}.planningRail,.screenActions{display:none}}
 

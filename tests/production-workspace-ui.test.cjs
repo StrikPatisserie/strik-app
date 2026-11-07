@@ -15,7 +15,7 @@ function harness() {
  // network, effects or live data. Each component retains its own hook storage.
  const records=new Map();let current,index,context;
  const slot=initial=>{const i=index++;if(!(i in current))current[i]=typeof initial==='function'?initial():initial;return i;};
- const react={createContext:value=>({Provider:'workspace-provider',defaultValue:value}),useContext:c=>context || c.defaultValue,useEffect:()=>{},useMemo:fn=>fn(),useRef:value=>current[slot(()=>({current:value}))],useState:initial=>{const i=slot(initial),store=current;return[store[i],next=>{store[i]=typeof next==='function'?next(store[i]):next;}];}};
+ const react={Fragment:jsx.Fragment,createContext:value=>({Provider:'workspace-provider',defaultValue:value}),useContext:c=>context || c.defaultValue,useEffect:()=>{},useMemo:fn=>fn(),useRef:value=>current[slot(()=>({current:value}))],useState:initial=>{const i=slot(initial),store=current;return[store[i],next=>{store[i]=typeof next==='function'?next(store[i]):next;}];}};
  const navigation={__esModule:true,default:function Navigation(){},ProductionMobileNavigation:function MobileNavigation(){}};
  const offerWidget={__esModule:true,default:function ProductionWeekOffer(){}};
  const pickerWidget={__esModule:true,default:function ProductionItemPicker(){}};
@@ -246,6 +246,52 @@ test('recipe group badges connect each preparation to the root production task',
  find(card,n=>n.type==='button' && n.props['aria-label']?.includes('Hoort bij Fruitdesserttaart')).props.onClick();
  tree=h.render(h.Component,{live});
  assert.equal(find(tree,n=>typeof n.type==='function' && !!n.props.onMove).props.task.id,'group-root');
+});
+
+test('complete task names keep wrapping spaces outside the nonbreaking word spans in normal and XL views',()=>{
+ const name='Citroen-meringuetaart met gekaramelliseerde Italiaanse hazelnoten';
+ function inlineParts(node){
+  if(typeof node==='string')return [{space:node}];
+  if(!node||typeof node!=='object')return [];
+  if(Array.isArray(node))return Array.from(node).flatMap(inlineParts);
+  if(node.type==='span'&&node.props['data-fit-word'])return [{word:text(node)}];
+  return inlineParts(node.props?.children);
+ }
+ for(const large of [false,true]){
+  const h=harness(),state=sample.initialPreviewState();
+  const task=state.tasks.find(task=>task.departmentId==='dessert'&&task.status==='planned');
+  const item=state.items.find(item=>item.id===task.itemId);
+  item.name=name;item.unit='stuks';task.quantity=42;
+  const live={state,today:sample.DEMO_TODAY,recipes:sample.demoRecipes,ingredients:[],canManage:true,departments:['dessert'],revision:1};
+  const tree=large?xl(h,{live}):h.render(h.Component,{live});
+  const card=find(tree,node=>node.type==='article'&&node.key===task.id);
+  const title=find(card,node=>node.type==='strong'&&node.props['data-fit-text']);
+  const words=nodes(title).filter(node=>node.type==='span'&&node.props['data-fit-word']);
+  assert.deepEqual(words.map(text),['42×',...name.split(' ')]);
+  for(const word of words)assert.equal(text(word).trim(),text(word),'A nowrap word span must not contain surrounding whitespace');
+  assert.equal(text(title),`42× ${name}`,'The full product name and every normal word separator remain visible');
+  const expected=['42×',...name.split(' ')].flatMap((word,index)=>[...(index?[{space:' '}]:[]),{word}]);
+  assert.deepEqual(inlineParts(title),expected,'Wrapping opportunities sit between the spans, outside their nowrap boxes');
+ }
+});
+
+test('warning-only positioning never removes active, blocked or stock metadata from normal task flow',()=>{
+ for(const status of ['planned','active','blocked','stock','no-issue']){
+  const h=harness(),state=sample.initialPreviewState();
+  const task=state.tasks.find(task=>task.departmentId==='dessert'&&task.status==='planned');
+  task.status=status==='stock'?'done':status==='no-issue'?'planned':status;
+  task.dependsOn=undefined;task.requires=undefined;task.dueDate=status==='no-issue'?undefined:planning.addDays(task.date,-1);
+  if(status==='stock')task.stockFulfillmentId='stock-fulfillment';
+  const live={state,today:sample.DEMO_TODAY,recipes:sample.demoRecipes,ingredients:[],canManage:true,departments:['dessert'],revision:1};
+  const tree=h.render(h.Component,{live}),card=find(tree,node=>node.type==='article'&&node.key===task.id);
+  const open=find(card,node=>node.props?.className==='taskOpen'),metadata=find(open,node=>node.type==='small');
+  assert.equal(metadata.props['data-warning-only'],status==='planned'?true:undefined,status);
+  if(['planned','active','blocked'].includes(status))assert(nodes(metadata).some(node=>node.props?.className==='taskWarning'));
+  if(status==='active')assert.match(text(metadata),/Bezig/);
+  if(status==='blocked')assert.match(text(metadata),/Controleren/);
+  if(status==='stock')assert.match(text(metadata),/Uit voorraad/);
+  if(status==='no-issue')assert.equal(text(metadata),'');
+ }
 });
 
 test('the operational recipe list combines parts with token search and excludes financial management for bakers',()=>{

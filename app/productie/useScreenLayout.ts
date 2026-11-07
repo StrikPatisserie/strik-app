@@ -25,10 +25,11 @@ export default function useScreenLayout(xl:boolean,enabled=true){
       labels.forEach(el=>el.style.fontSize="");
       // Read all base widths before writing the smaller sizes.
       const sizes=labels.map(el=>{
-        const available=el.clientWidth-1;
+        const computed=getComputedStyle(el);
+        const available=el.clientWidth-(parseFloat(computed.paddingLeft)||0)-(parseFloat(computed.paddingRight)||0)-1;
         const words=Array.from(el.querySelectorAll<HTMLElement>("[data-fit-word]"));
         const widest=Math.max(0,...words.map(word=>word.getBoundingClientRect().width));
-        const base=parseFloat(getComputedStyle(el).fontSize);
+        const base=parseFloat(computed.fontSize);
         return available>0&&widest>available?base*available/widest:undefined;
       });
       labels.forEach((el,i)=>{if(sizes[i]!==undefined)el.style.fontSize=`${sizes[i]}px`;});

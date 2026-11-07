@@ -27,7 +27,7 @@ import Icon, { type IconName } from "../../productie/ProductionIcon";
 import ProductionNavigation, { ProductionMobileNavigation } from "../../productie/ProductionNavigation";
 import { productionView, type ProductionView } from "../../productie/navigation";
 import { productionDayRhythm, plannedOperation } from "../../productie/dayRhythm";
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { Fragment, createContext, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import {
   addDays, addItem, applyCleaningCommand, BOARDS, completedOutput, dateLabel, DEPARTMENTS,
   departmentsFor, durationLabel, KIND_LABELS, linkRecipe, moveTask, removePlannedTask, recipeProductionTasks, removeRecipeProduction, SOURCE_LABELS,
@@ -281,12 +281,13 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
     const group = taskGroups.get(task.id);
     const issues = taskIssues(task, state.tasks,state.items);
     if(recipeUpdates.has(task.id))issues.push("Recept gewijzigd · controleer de planning.");
+    const warningOnly=issues.length>0&&!task.stockFulfillmentId&&task.status!=="active"&&task.status!=="blocked";
     return <article key={task.id} className={`${s.taskCard} ${s[`task_${task.status}`]}`} draggable={canManage && !saving && task.status !== "done"} onDragStart={e => { e.dataTransfer.setData("text/plain", task.id); e.dataTransfer.effectAllowed = "move"; setDragged(task.id); }} onDragEnd={() => setDragged(null)}>
       <button disabled={saving || !!task.stockFulfillmentId} className={s.taskCheck} aria-label={`${task.stockFulfillmentId ? "Uit voorraad" : task.status === "done" ? "Heropen" : "Afronden"}: ${item.name} · ${task.operation}`} aria-pressed={task.status === "done"} onClick={() => changeStatus(task.id, task.status === "done" ? "planned" : "done")}>{task.status === "done" ? <Icon name="check" size={12} /> : task.status === "active" ? <Icon name="play" size={12} /> : null}</button>
       <button className={s.taskOpen} onClick={() => setModal({ type: "detail", id: task.id })} aria-label={`Open ${quantity(task.quantity)} ${item.unit} ${item.name} · ${task.operation}`}>
-        <strong data-fit-text><span data-fit-word>{quantity(task.quantity)}{item.unit === "stuks" ? "×" : ` ${item.unit}`}</span> {item.name.split(/\s+/).map((word,i)=><span data-fit-word key={i}>{word}{" "}</span>)}</strong>
+        <strong data-fit-text><span data-fit-word>{quantity(task.quantity)}{item.unit === "stuks" ? "×" : ` ${item.unit}`}</span> {item.name.split(/\s+/).map((word,i)=><Fragment key={i}>{i>0?" ":null}<span data-fit-word>{word}</span></Fragment>)}</strong>
         <span>{task.operation}</span>
-        <small>{task.stockFulfillmentId && "Uit voorraad"}{task.status==="active"&&<><WorkClock state={state} taskId={task.id}/>{!state.productionWork?.timers?.[task.id]&&"Bezig"}</>}{task.status==="blocked"&&"Controleren"}{issues.length>0&&<span className={s.taskWarning} title={issues.join(" ")}><Icon name="warning" size={12}/></span>}</small>
+        <small data-warning-only={warningOnly||undefined}>{task.stockFulfillmentId && "Uit voorraad"}{task.status==="active"&&<><WorkClock state={state} taskId={task.id}/>{!state.productionWork?.timers?.[task.id]&&"Bezig"}</>}{task.status==="blocked"&&"Controleren"}{issues.length>0&&<span className={s.taskWarning} title={issues.join(" ")}><Icon name="warning" size={12}/></span>}</small>
       </button>
       {group && <button type="button" className={`${s.recipeGroup} ${s[`recipeGroupTone${group.tone}`]}`} title={`Hoort bij ${group.name}`} aria-label={`${group.label} · Hoort bij ${group.name}`} onClick={() => setModal({type:"detail",id:group.rootId})}><Icon name="link" size={10}/>{group.label}</button>}
       {item.kind!=="activity"&&!item.recipeId&&<div className={s.recipeNudge}><button title="Recept aanvullen" aria-label={`Recept aanvullen: ${item.name}`} type="button" disabled={saving||!!live&&!live.departments.includes(item.departmentId)} onClick={()=>{setQuickRecipeTask(task.id);setQuickRecipeItem(item.id);}}><Icon name="warning" size={16}/></button></div>}
