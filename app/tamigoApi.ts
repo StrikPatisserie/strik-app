@@ -2212,6 +2212,7 @@ export function tamigoHoursWritesEnabled() {
 export async function updateTamigoActualShift(payload: import("./management/urencontrole/correctionTypes").TamigoShiftUpdate): Promise<unknown> {
   if (!tamigoHoursWritesEnabled()) throw new TamigoConfigurationError("Terugschrijven van uren is nog niet ingeschakeld.");
   if(payload.PlanStatusCode!==3 || payload.PlanStatus!=="actual" || !payload.DepartmentId || !payload.EmployeeId || !payload.ShiftId) throw new TamigoConfigurationError("Alleen een gecontroleerde open werkelijke dienst kan worden geïmporteerd.");
+  if (!payload.BreakCode || payload.BreakCodeLength !== undefined) throw new TamigoConfigurationError("Een dienst zonder pauze is tijdelijk geblokkeerd voor import: ook BreakCodeLength 0 bewaart nul pauze niet betrouwbaar. Gebruik een gecontroleerde pauzecode of pas de dienst rechtstreeks in Tamigo aan.");
   const response = await fetch(createTamigoUrl("/v2/Shifts/Import",{validateConfiguredWarnings:"true",runInBackground:"false"}), {
     method: "POST",
     headers: { Accept: "application/json", "Content-Type": "application/json", "x-tamigo-token": await getTamigoAccessToken() },

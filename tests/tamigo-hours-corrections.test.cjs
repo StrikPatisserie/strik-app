@@ -43,7 +43,7 @@ function fixture(settings={}){
  const deps={read:async ref=>{if(ref.revision==='verify'&&settings.verifyFails)throw Error('read failed');return getContext();},day:async(_,date)=>({state:settings.closedDate===date?'closed':settings.dayState||'open',httpStatus:settings.dayState==='unknown'?401:undefined,message:'test',employeeApprovalIsNotManagerApproval:true}),store,enabled:()=>enabled,now:()=>Date.parse(clock),id:()=>intentId,write:async payload=>{
   attempts.push(structuredClone(payload));if(settings.timeout)throw Error('timeout');
   if(settings.responseFalse)return [{Success:false,Message:'private upstream text'}];
-  if(!settings.ignoreWrite){const ms=value=>Number(value.match(/Date\((-?\d+)(?:[+-]\d{4})?\)/)[1]);const option=options.find(x=>x.code===(payload.BreakCode||''));raw={...raw,StartDateTime:new Date(ms(payload.StartTime)).toISOString(),EndDateTime:new Date(ms(payload.EndTime)).toISOString(),BreakCode:payload.BreakCode||'',BreakCodeHours:option.minutes/60,ShiftHours:(ms(payload.EndTime)-ms(payload.StartTime))/3600000-option.minutes/60};}
+  if(!settings.ignoreWrite){const ms=value=>Number(value.match(/Date\((-?\d+)(?:[+-]\d{4})?\)/)[1]);const code=payload.BreakCode||'2';const option=options.find(x=>x.code===code);raw={...raw,StartDateTime:new Date(ms(payload.StartTime)).toISOString(),EndDateTime:new Date(ms(payload.EndTime)).toISOString(),BreakCode:code,BreakCodeHours:option.minutes/60,ShiftHours:(ms(payload.EndTime)-ms(payload.StartTime))/3600000-option.minutes/60};}
   if(settings.commentLoss)raw.Comments='';if(settings.timeoutAfterWrite)throw Error('timeout after processing');
   return settings.malformedResponse?null:[{Success:true}];
  }};
@@ -250,7 +250,7 @@ test('v2 import cannot create a detached extra service or replace an ambiguous i
 });
 test('no-break and no-activity use null while import always fixes the employee, department and actual/open status',()=>{
  const raw=rawShift({ShiftActivityId:undefined});const before=normalized(raw),after=rules.correctionValues(draft({start:'2026-10-05T08:00',end:'2026-10-05T10:00',breakCode:''}),before,options),payload=rules.updatePayload(raw,before,after);
- assert.equal(payload.BreakCode,null);assert.equal(payload.ShiftActivityId,null);assert.equal(payload.PlanStatusCode,3);assert.equal(payload.PlanStatus,'actual');assert.equal(payload.DepartmentId,department);assert.equal(payload.EmployeeId,employee);
+ assert.equal(payload.BreakCode,null);assert.equal(payload.BreakCodeLength,0);assert.equal(payload.ShiftActivityId,null);assert.equal(payload.PlanStatusCode,3);assert.equal(payload.PlanStatus,'actual');assert.equal(payload.DepartmentId,department);assert.equal(payload.EmployeeId,employee);
 });
 test('changed planning or sibling actual services block the commit before import',async()=>{
  for(const field of ['planned','actual']){
@@ -310,9 +310,51 @@ test('employee history keeps an older uncertain correction visible after the ser
  const denied=routeFixture({id:actor,active:true,role:'manager'});assert.equal((await denied.route.GET(new Request('https://example.test/api/tamigo-hours-review/corrections?shift='+shiftId+'&employee=bad-filter'))).status,400);
 });
 
- test('no-break imports are blocked because Tamigo automatically recalculates breaks',async()=>{
- const f=fixture();const p=await f.service.prepare(actor,f.reference,draft({breakCode:''}),types.DEFAULT_REVIEW_CONFIG);assert.equal(p.id,null);assert.match(p.blockers.join(' '),/automatisch een pauzecode/);assert.equal(f.attempts.length,0);
- });
+test('zero-pause corrections stay blocked even with the explicit zero representation',async()=>{
+ const f=fixture();const p=await f.service.prepare(actor,f.reference,draft({breakCode:''}),types.DEFAULT_REVIEW_CONFIG);
+ assert.equal(p.id,null);assert.equal(p.after.breakMinutes,0);assert.match(p.blockers.join(' '),/zonder pauze.*geblokkeerd/);assert.equal(f.records.size,0);assert.equal(f.attempts.length,0);
+});
+test('time-only corrections block zero pause and preserve fifteen and thirty minutes for start and end separately',async()=>{
+ for(const [code,minutes] of [['',0],['1',15],['2',30]])for(const changed of ['start','end']){
+  const f=fixture({raw:{BreakCode:code,BreakCodeHours:minutes/60,ShiftHours:(559-minutes)/60}});
+  const values=draft({start:'2026-10-05T07:50',end:'2026-10-05T17:09',breakCode:code,[changed]:changed==='start'?'2026-10-05T08:00':'2026-10-05T17:00'});
+  const preview=await f.service.prepare(actor,f.reference,values,types.DEFAULT_REVIEW_CONFIG);assert.equal(preview.after.breakMinutes,minutes);
+  if(minutes===0){assert.equal(preview.id,null);assert.match(preview.blockers.join(' '),/zonder pauze.*geblokkeerd/);assert.equal(f.attempts.length,0);assert.equal(f.records.size,0);continue;}
+  assert.equal(preview.id,intentId);
+  assert.equal((await f.service.commit(actor,intentId,true)).state,'applied');assert.equal(f.attempts.length,1);assert.equal(f.getContext().before.breakMinutes,minutes);assert.equal(f.attempts[0].BreakCode,code||null);
+  assert.equal(Object.hasOwn(f.attempts[0],'BreakCodeLength'),false);
+  const unchanged=changed==='start'?'end':'start';assert.equal(f.getContext().before[unchanged].iso,preview.before[unchanged].iso);
+ }
+});
+test('an explicit change from thirty minutes to no pause cannot be submitted',async()=>{
+ const f=fixture({raw:{BreakCode:'2',BreakCodeHours:.5,ShiftHours:529/60}});
+ const preview=await f.service.prepare(actor,f.reference,draft({start:'2026-10-05T07:50',end:'2026-10-05T17:09',breakCode:''}),types.DEFAULT_REVIEW_CONFIG);
+ assert.equal(preview.id,null);assert.equal(preview.deltaMinutes,30);assert.match(preview.blockers.join(' '),/zonder pauze.*geblokkeerd/);assert.equal(f.attempts.length,0);assert.equal(f.getContext().before.breakMinutes,30);
+});
+test('an earlier uncertain zero-pause import stays locked when Tamigo added thirty minutes',async()=>{
+ const f=fixture();await f.service.prepare(actor,f.reference,draft(),types.DEFAULT_REVIEW_CONFIG);
+ const archived=f.records.get(intentId);archived.after=rules.correctionValues(draft({breakCode:''}),archived.before,options);archived.payload=rules.updatePayload(f.getContext().raw,archived.before,archived.after);archived.state='unknown';
+ f.setRaw({StartDateTime:archived.after.start,EndDateTime:archived.after.end,BreakCode:'2',BreakCodeHours:.5,ShiftHours:8.5});
+ assert.equal((await f.service.reconcile(actor,intentId)).state,'unknown');assert.equal((await f.service.commit(actor,intentId,true)).state,'unknown');assert.equal(f.records.get(intentId).state,'unknown');assert.equal(f.attempts.length,0);
+});
+test('previously prepared zero-pause proposals are rejected even if they include explicit zero',async()=>{
+ for(const explicitZero of [true,false]){
+  const f=fixture();await f.service.prepare(actor,f.reference,draft(),types.DEFAULT_REVIEW_CONFIG);
+  const archived=f.records.get(intentId);archived.after=rules.correctionValues(draft({breakCode:''}),archived.before,options);archived.payload=rules.updatePayload(f.getContext().raw,archived.before,archived.after);if(!explicitZero)delete archived.payload.BreakCodeLength;
+  const result=await f.service.commit(actor,intentId,true);assert.equal(result.state,'rejected');assert.match(result.message,/zonder pauze.*geblokkeerd/);assert.equal(f.attempts.length,0);
+ }
+});
+test('write transport rejects all zero-pause imports before any request, while existing pause codes remain allowed',async()=>{
+ const calls=[],env={TAMIGO_API_KEY:'fixture-token',TAMIGO_HOURS_WRITE_ENABLED:'1'};
+ const api=loader({}, {process:{env},fetch:async(url,options)=>{calls.push({url:String(url),...options});return Response.json([{Success:true}]);}})('app/tamigoApi.ts');
+ const before=normalized(rawShift()),payload=rules.updatePayload(rawShift(),before,rules.correctionValues(draft({breakCode:''}),before,options));
+ for(const length of [undefined,null,'0',-1,0,30])await assert.rejects(()=>api.updateTamigoActualShift({...payload,BreakCodeLength:length}),/pauze/);
+ await assert.rejects(()=>api.updateTamigoActualShift({...payload,BreakCode:''}),/pauze/);
+ for(const length of [null,'0',-1,0,30])await assert.rejects(()=>api.updateTamigoActualShift({...payload,BreakCode:'2',BreakCodeLength:length}),/pauze/);
+ env.TAMIGO_APPLICATION_NAME='fixture-application';await assert.rejects(()=>api.updateTamigoActualShift(payload),/pauze/);assert.equal(calls.length,0);delete env.TAMIGO_APPLICATION_NAME;
+ const allowed=rules.updatePayload(rawShift(),before,rules.correctionValues(draft(),before,options));
+ await api.updateTamigoActualShift(allowed);assert.equal(calls.length,1);const sent=JSON.parse(calls[0].body);assert.equal(Object.hasOwn(sent[0],'BreakCodeLength'),false);assert.equal(sent[0].BreakCode,'2');assert.equal(sent[0].PlanStatus,'actual');
+});
  test('legacy numeric-only import intent is rejected before transport',async()=>{
  const f=fixture();await f.service.prepare(actor,f.reference,draft(),types.DEFAULT_REVIEW_CONFIG);delete f.records.get(intentId).payload.PlanStatus;assert.equal((await f.service.commit(actor,intentId,true)).state,'rejected');assert.equal(f.attempts.length,0);
  });

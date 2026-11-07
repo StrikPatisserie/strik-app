@@ -39,7 +39,7 @@ export function createCorrectionService(deps: Dependencies) {
       if (!expected || expected.start !== after.start || expected.end !== after.end || Math.abs(expected.breakMinutes - after.breakMinutes) > .001) throw new CorrectionError("Het voorstel past niet meer bij het actuele rooster en de regels. Haal het overzicht opnieuw op of kies Zelf aanpassen.", 409);
     }
     const blockers = sourceWriteBlockers(context.raw, before);
-    if (!after.breakCode) blockers.push("Een dienst zonder pauze kan nu niet via de import worden opgeslagen: Tamigo kan automatisch een pauzecode toekennen. Pas deze dienst rechtstreeks in Tamigo aan.");
+    if (after.breakMinutes === 0) blockers.push("Een dienst zonder pauze is tijdelijk geblokkeerd voor import: Tamigo heeft ook met expliciete nul pauze automatisch 30 minuten toegevoegd. Pas deze dienst rechtstreeks in Tamigo aan.");
     if(before.start.ms!==null&&before.end.ms!==null&&!(Date.parse(after.start)<before.end.ms&&Date.parse(after.end)>before.start.ms))blockers.push("De nieuwe tijden overlappen de oorspronkelijke dienst niet. De import zou een extra dienst kunnen maken; pas dit rechtstreeks in Tamigo aan.");
     if (!deps.enabled()) blockers.push("Terugschrijven is nog niet ingeschakeld. De koppeling moet eerst worden vrijgegeven.");
     if (!context.complete) blockers.push("Niet alle afdelingen zijn volledig gelezen. Overlap kan niet betrouwbaar worden uitgesloten.");

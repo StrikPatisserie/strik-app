@@ -1,0 +1,118 @@
+<div id="strik-wedding-alert-preview">
+  <div class="demo-toolbar">
+    <div class="demo-label">Voorbeeld · iPad Ziekerstraat</div>
+    <div class="demo-phases" role="group" aria-label="Moment bekijken">
+      <button class="cursor-interaction" type="button" data-phase="morning" aria-pressed="true">Ochtend · 08:00</button>
+      <button class="cursor-interaction" type="button" data-phase="reminder" aria-pressed="false">15 min vooraf · 13:45</button>
+    </div>
+  </div>
+  <div class="store-screen">
+    <header class="store-header"><span class="store-wordmark">STRIK<span>PATISSERIE</span></span><span class="store-location"><i data-lucide="store" aria-hidden="true"></i> Ziekerstraat</span><time data-clock>08:00</time></header>
+    <div class="store-background" inert>
+      <div class="store-eyebrow">W I N K E L</div>
+      <div class="store-menu">
+        <div><i data-lucide="store" aria-hidden="true"></i><span>Winkelpresentatie</span></div>
+        <div><i data-lucide="clipboard-check" aria-hidden="true"></i><span>HACCP &amp; werkplannen</span></div>
+        <div><i data-lucide="cake" aria-hidden="true"></i><span>Bruidstaarten</span></div>
+        <div><i data-lucide="files" aria-hidden="true"></i><span>Documenten</span></div>
+      </div>
+      <span class="store-footer-link">Sinterklaas- &amp; kerstfolder →</span>
+    </div>
+    <div class="alert-layer" data-layer>
+      <section class="appointment-alert" role="dialog" aria-modal="false" aria-labelledby="strik-appointment-alert-title" aria-describedby="strik-appointment-alert-description">
+        <div class="alert-topline"><span class="alert-symbol"><i data-lucide="bell" aria-hidden="true"></i></span><span class="alert-label" data-kicker>VANDAAG IN DE WINKEL</span><button type="button" class="alert-close cursor-interaction" aria-label="Melding wegklikken" data-close>×</button></div>
+        <h2 id="strik-appointment-alert-title" data-heading>Let op, vandaag een<br>bruidstaartafspraak</h2>
+        <p id="strik-appointment-alert-description" data-description>Er komt vandaag een bruidspaar langs in de Ziekerstraat.</p>
+        <div class="appointment-summary"><div class="appointment-time"><i data-lucide="clock-3" aria-hidden="true"></i><strong>14:00</strong><span>tot 14:30</span></div><div class="appointment-couple"><strong>Noor &amp; Joris</strong><span>Bruidstaartgesprek</span><small>Voorbeeldafspraak</small></div></div>
+        <div class="alert-actions"><button type="button" class="acknowledge cursor-interaction" data-dismiss>Ik heb het gezien <i data-lucide="check" aria-hidden="true"></i></button><button type="button" class="appointment-link cursor-interaction" data-details>Bekijk afspraak →</button></div>
+        <div class="alert-note" data-note><i data-lucide="bell-ring" aria-hidden="true"></i><span>Om 13:45 krijg je nog één herinnering.</span></div>
+      </section>
+    </div>
+    <div class="details-layer" data-details-layer hidden>
+      <section class="appointment-alert" role="region" aria-label="Voorbeeld afspraakdetails"><span class="alert-label">AFSPRAAK · VOORBEELD</span><h2>Noor &amp; Joris</h2><div class="details-list"><p><span>Tijd</span><strong>14:00 – 14:30</strong></p><p><span>Locatie</span><strong>Winkel Ziekerstraat</strong></p><p><span>Afspraak</span><strong>Bruidstaartgesprek</strong></p></div><button type="button" class="acknowledge cursor-interaction" data-back>Terug naar melding</button></section>
+    </div>
+  </div>
+  <div class="demo-status" aria-live="polite" data-status>Ochtendmelding · blijft staan tot weggeklikt</div>
+</div>
+<style>
+#strik-wedding-alert-preview{--strik-green:light-dark(#c3d3bc,#293b30);--strik-paper:light-dark(#fffdf9,#202a24);--strik-ink:light-dark(#49342d,#f2e8db);--strik-muted:light-dark(#766b60,#bdb4aa);--strik-line:light-dark(#e8e1d7,#425046);--strik-sage:light-dark(#eff3ea,#2c3d31);--strik-deep:light-dark(#244b37,#bbd2ba);--strik-deep-ink:light-dark(#fffdf7,#18271d);--strik-gold:light-dark(#f5e5b7,#544831);--strik-gold-ink:light-dark(#755516,#f4dda6);font-family:Arial,Helvetica,sans-serif;color:var(--strik-ink);width:100%;box-sizing:border-box}
+#strik-wedding-alert-preview *{box-sizing:border-box}
+#strik-wedding-alert-preview [hidden]{display:none!important}
+#strik-wedding-alert-preview button{font:inherit;touch-action:manipulation}
+#strik-wedding-alert-preview .demo-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;justify-content:space-between;margin-bottom:12px}
+#strik-wedding-alert-preview .demo-label,#strik-wedding-alert-preview .demo-status{font-size:12px;color:var(--strik-muted)}
+#strik-wedding-alert-preview .demo-phases{display:flex;flex-wrap:wrap;gap:6px}
+#strik-wedding-alert-preview .demo-phases button{min-height:42px;padding:9px 12px;border:1px solid var(--strik-line);border-radius:10px;color:var(--strik-ink);background:var(--strik-paper);font-size:12px}
+#strik-wedding-alert-preview .demo-phases button[aria-pressed=true]{background:var(--strik-deep);color:var(--strik-deep-ink);border-color:var(--strik-deep)}
+#strik-wedding-alert-preview .store-screen{position:relative;isolation:isolate;overflow:hidden;border-radius:20px;min-height:530px;background:var(--strik-green)}
+#strik-wedding-alert-preview .store-header{display:flex;align-items:center;gap:20px;justify-content:space-between;padding:22px 26px;border-bottom:1px solid color-mix(in srgb,var(--strik-ink) 12%,transparent)}
+#strik-wedding-alert-preview .store-wordmark{font-family:Georgia,serif;font-weight:700;letter-spacing:3px;font-size:23px}
+#strik-wedding-alert-preview .store-wordmark span{display:block;letter-spacing:3px;font-size:8px;margin-top:3px}
+#strik-wedding-alert-preview .store-location{display:flex;align-items:center;gap:8px;font-size:13px}
+#strik-wedding-alert-preview [data-clock]{font-variant-numeric:tabular-nums;font-size:14px}
+#strik-wedding-alert-preview .store-background{padding:24px;transition:filter .15s}
+#strik-wedding-alert-preview .store-eyebrow{font-size:15px;margin:10px 0 24px}
+#strik-wedding-alert-preview .store-menu{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+#strik-wedding-alert-preview .store-menu>div{display:flex;align-items:center;gap:12px;background:var(--strik-paper);padding:22px 15px;min-height:84px;border-radius:20px;font-size:14px;font-weight:600}
+#strik-wedding-alert-preview .store-menu svg{flex-shrink:0}
+#strik-wedding-alert-preview .store-footer-link{display:block;font-size:12px;text-decoration:underline;text-underline-offset:4px;margin:25px 0}
+#strik-wedding-alert-preview .alert-layer,#strik-wedding-alert-preview .details-layer{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;background:light-dark(#26342677,#080f0a99);backdrop-filter:blur(4px)}
+#strik-wedding-alert-preview .appointment-alert{width:100%;max-width:490px;border-radius:25px;background:var(--strik-paper);box-shadow:0 18px 65px light-dark(#182b1e44,#0007);padding:28px}
+#strik-wedding-alert-preview .alert-topline{display:flex;gap:12px;align-items:center}
+#strik-wedding-alert-preview .alert-symbol{display:flex;align-items:center;justify-content:center;flex-shrink:0;height:44px;width:44px;border-radius:14px;background:var(--strik-gold);color:var(--strik-gold-ink)}
+#strik-wedding-alert-preview .alert-label{font-size:10px;letter-spacing:1.5px;font-weight:700;color:var(--strik-muted)}
+#strik-wedding-alert-preview .alert-close{margin-left:auto;flex-shrink:0;width:44px;height:44px;border:0;background:transparent;color:var(--strik-muted);font-size:25px;border-radius:50%}
+#strik-wedding-alert-preview h2{font-family:Georgia,'Times New Roman',serif;font-size:29px;line-height:1.15;font-weight:400;letter-spacing:-.6px;margin:23px 0 12px;color:var(--strik-ink)}
+#strik-wedding-alert-preview [data-description]{font-size:14px;line-height:1.55;color:var(--strik-muted);margin:0 0 20px}
+#strik-wedding-alert-preview .appointment-summary{display:flex;align-items:center;gap:20px;background:var(--strik-sage);border-radius:15px;padding:19px;margin-bottom:23px}
+#strik-wedding-alert-preview .appointment-time{display:flex;align-items:center;flex-wrap:wrap;gap:7px;width:102px;flex-shrink:0;color:var(--strik-deep)}
+#strik-wedding-alert-preview .appointment-time strong{font-size:25px;font-weight:700;letter-spacing:-1px;font-variant-numeric:tabular-nums}
+#strik-wedding-alert-preview .appointment-time span{width:100%;font-size:12px;color:var(--strik-muted);padding-left:24px}
+#strik-wedding-alert-preview .appointment-time svg{width:17px;height:17px}
+#strik-wedding-alert-preview .appointment-couple{display:flex;flex-direction:column;gap:5px;border-left:1px solid var(--strik-line);padding-left:20px;min-width:0}
+#strik-wedding-alert-preview .appointment-couple strong{font-size:15px}
+#strik-wedding-alert-preview .appointment-couple span{font-size:12px;color:var(--strik-muted)}
+#strik-wedding-alert-preview .appointment-couple small{font-size:10px;color:var(--strik-muted)}
+#strik-wedding-alert-preview .alert-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+#strik-wedding-alert-preview .acknowledge{display:inline-flex;align-items:center;justify-content:center;gap:18px;min-height:48px;border:0;border-radius:11px;background:var(--strik-deep);color:var(--strik-deep-ink);padding:13px 18px;font-size:14px;font-weight:600}
+#strik-wedding-alert-preview .acknowledge svg{width:17px;height:17px}
+#strik-wedding-alert-preview .appointment-link{background:transparent;color:var(--strik-deep);font-size:12px;min-height:44px;border:0;padding:8px 0;text-decoration:underline;text-underline-offset:4px}
+#strik-wedding-alert-preview .alert-note{display:flex;align-items:center;gap:8px;margin-top:18px;color:var(--strik-muted);font-size:11px;line-height:1.4}
+#strik-wedding-alert-preview .alert-note svg{width:14px;height:14px;flex-shrink:0}
+#strik-wedding-alert-preview .demo-status{padding:12px 0;min-height:32px}
+#strik-wedding-alert-preview .details-list{margin:24px 0}#strik-wedding-alert-preview .details-list p{display:flex;justify-content:space-between;gap:14px;padding-bottom:12px;border-bottom:1px solid var(--strik-line);font-size:13px}#strik-wedding-alert-preview .details-list span{color:var(--strik-muted)}
+@media(max-width:440px){#strik-wedding-alert-preview .store-screen{min-height:570px}#strik-wedding-alert-preview .store-header{padding:18px;gap:10px}#strik-wedding-alert-preview .store-location{font-size:11px;gap:5px}#strik-wedding-alert-preview .store-location svg{width:15px}#strik-wedding-alert-preview .store-background{padding:18px}#strik-wedding-alert-preview .store-menu{grid-template-columns:1fr}#strik-wedding-alert-preview .alert-layer,#strik-wedding-alert-preview .details-layer{padding:14px}#strik-wedding-alert-preview .appointment-alert{padding:22px}#strik-wedding-alert-preview h2{font-size:27px}#strik-wedding-alert-preview .appointment-summary{gap:12px;padding:15px}#strik-wedding-alert-preview .appointment-couple{padding-left:12px}#strik-wedding-alert-preview .alert-actions{gap:3px}#strik-wedding-alert-preview .alert-label{font-size:9px;letter-spacing:1px}#strik-wedding-alert-preview .appointment-time{width:94px}}
+@media(prefers-reduced-motion:reduce){#strik-wedding-alert-preview *{transition:none!important}}
+</style>
+<script>
+(function(){
+  const root=document.getElementById('strik-wedding-alert-preview');
+  const layer=root.querySelector('[data-layer]'),details=root.querySelector('[data-details-layer]'),heading=root.querySelector('[data-heading]'),description=root.querySelector('[data-description]'),kicker=root.querySelector('[data-kicker]'),clock=root.querySelector('[data-clock]'),note=root.querySelector('[data-note] span'),status=root.querySelector('[data-status]');
+  const phaseButtons=root.querySelectorAll('[data-phase]');
+  let phase='morning',dismissed=false;
+  const initial=window.openai?.widgetState;
+  const restore=value=>{const state=value?.privateContent;if(state&&['morning','reminder'].includes(state.phase)){phase=state.phase;dismissed=state.dismissed===true;}};
+  restore(initial);
+  function paint(){
+    const reminder=phase==='reminder';
+    clock.textContent=reminder?'13:45':'08:00';
+    kicker.textContent=reminder?'OVER 15 MINUTEN':'VANDAAG IN DE WINKEL';
+    heading.innerHTML=reminder?'Let op, over 15 minuten<br>een bruidstaartafspraak':'Let op, vandaag een<br>bruidstaartafspraak';
+    description.textContent=reminder?'Noor & Joris komen zo langs. De afspraak begint om 14:00.':'Er komt vandaag een bruidspaar langs in de Ziekerstraat.';
+    note.textContent=reminder?'Deze herinnering blijft staan tot je hem wegklikt.':'Om 13:45 krijg je nog één herinnering.';
+    layer.hidden=dismissed;details.hidden=true;
+    phaseButtons.forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.phase===phase)));
+    status.textContent=dismissed?(reminder?'Herinnering weggeklikt':'Ochtendmelding weggeklikt · volgende melding om 13:45'):(reminder?'Herinnering · 15 minuten vóór de afspraak':'Ochtendmelding · blijft staan tot weggeklikt');
+  }
+  function remember(){if(window.openai?.setWidgetState)window.openai.setWidgetState({modelContent:{preview:'Bruidstaartmelding Ziekerstraat',phase,dismissed},privateContent:{phase,dismissed}}).catch(()=>{});}
+  phaseButtons.forEach(button=>button.addEventListener('click',()=>{phase=button.dataset.phase;dismissed=false;paint();remember();}));
+  const dismiss=()=>{dismissed=true;paint();remember();};
+  root.querySelector('[data-dismiss]').addEventListener('click',dismiss);
+  root.querySelector('[data-close]').addEventListener('click',dismiss);
+  root.querySelector('[data-details]').addEventListener('click',()=>{layer.hidden=true;details.hidden=false;});
+  root.querySelector('[data-back]').addEventListener('click',()=>{details.hidden=true;layer.hidden=false;});
+  root.addEventListener('keydown',event=>{if(event.key==='Escape'){dismiss();}});
+  window.addEventListener('openai:set_globals',event=>{if(event.detail?.globals?.widgetState){restore(event.detail.globals.widgetState);paint();}});
+  paint();
+})();
+</script>

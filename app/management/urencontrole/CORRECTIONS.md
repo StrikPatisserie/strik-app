@@ -2,13 +2,29 @@
 
 De controlepagina en afgeschermde correctieflow zijn op 23 oktober 2026 gepubliceerd. De productiemigratie voor correctiehistorie is op 28 oktober 2026 uitgevoerd en gecontroleerd. De eerste door Feline gekozen en bevestigde praktijkcorrectie is afgewezen met HTTP 401; de oorspronkelijke dienst is daarna ongewijzigd teruggelezen. Terugschrijven is daarom opnieuw uitgeschakeld. Nieuwe diensten, verlof, ziekte, salarisexports en het openen/sluiten van dagen vallen buiten deze functie.
 
+## Praktijkproef 6 november — expliciete nul bewaart de pauze niet
+
+Calvin bevestigde `PlanStatus:"actual"` en stelde expliciet `BreakCodeLength:0` voor om automatische pauze te voorkomen. Na fictieve tests is met toestemming precies één echte dienst van 3 november als proef geïmporteerd: van 08:00–17:30 zonder pauze naar 08:15–17:30 zonder pauze, verwacht 555 minuten netto. De aanvraag bevatte `BreakCode:null` én `BreakCodeLength:0`.
+
+De onafhankelijke teruglezing vond dezelfde dienst terug met 08:15–17:30, maar met pauzecode 2, 30 minuten pauze en 525 minuten netto. De proef bevestigt dus niet dat expliciete nul de pauze bewaart. De echte import wijzigde de dienst; door de afwijking is de uitkomst eerst als `unknown` bewaard in de correctiehistorie. Er is niet opnieuw geïmporteerd. De algemene productieschakelaar bleef uit.
+
+Feline heeft de onbedoelde pauze vervolgens rechtstreeks in Tamigo verwijderd. De afzonderlijke leescontrole bevestigt dezelfde dienst met 08:15–17:30, nul pauze en 555 minuten netto. De bestaande hercontrole vergeleek ook de beschermde velden, volledige brondekking, planning en overige diensten. Alleen daarna is het bestaande record via `unknown → applied` afgerond, met een expliciete melding over het handmatige pauzeherstel door Feline. Deze hercontrole verstuurde nul imports en bewijst geen werkende nul-pauze-import.
+
+Nul-pauzecorrecties zijn daarom opnieuw geblokkeerd in zowel de serverbeoordeling als de transportadapter vóór login of import. Ook eerder voorbereide voorstellen met expliciete nul worden bij bevestiging afgewezen. De nulrepresentatie blijft alleen beschikbaar in de payloadmapper voor audit en verder onderzoek; zij geeft geen toestemming om een import te versturen. Een historische onzekere poging blijft geblokkeerd zolang de bedoelde tijden, nul pauze en netto uren niet exact zijn teruggelezen.
+
+De [officiële Swagger](https://api.tamigo.com/api-docs/swagger.json), gelezen op 6 november, definieert `BreakCodeLength` als decimal maar noemt geen eenheid of positief voorbeeld. Daarom verstuurt deze versie geen positieve lengtes op basis van een gegokte omzetting: 15 en 30 minuten blijven via de bestaande pauzecodes lopen. Positieve waarden toevoegen vraagt eerst bevestiging van de eenheid door Tamigo.
+
+Voor bestaande pauzes blijven de gecontroleerde pauzecodes behouden. De handmatige editor neemt de oorspronkelijke pauzeduur over; alleen een andere gekozen pauze of een expliciet overgenomen voorstel verandert die duur. De onafhankelijke hercontrole blijft tijden, pauze, netto uren, planning en overige diensten vergelijken; een automatisch gewijzigde pauze is geen geslaagde correctie.
+
+De herstelde blokkades zijn met fictieve diensten getest. Er is geen productie-instelling gewijzigd; alleen de afzonderlijk toegestane praktijkimport is uitgevoerd.
+
 ## Praktijkproef 3 november — statusnaam en automatische pauze
 
 De v2-import wijst een aanvraag met alleen `PlanStatusCode:3` expliciet af: `Plan Status is invalid. Valid plan status: actual / planned`. De adapter stuurt daarom daarnaast `PlanStatus:"actual"` en blokkeert oude voorstellen zonder dit veld. De afgewezen aanvragen zijn ongewijzigd teruggelezen.
 
 Een vervolgens geaccepteerde, door Feline gekozen starttijdcorrectie behield dienst-ID, medewerker, afdeling, eindtijd, planning en overige diensten, maar Tamigo kende bij `BreakCode:null` automatisch code 2 / 30 minuten pauze toe. De onafhankelijke hercontrole markeerde dit terecht als onzeker, omdat nul pauze was gevraagd. Er is niet opnieuw geïmporteerd na die afwijking. De historische blokkering blijft staan totdat de exact bedoelde waarden onafhankelijk zijn bevestigd.
 
-Nieuwe importvoorstellen zonder expliciete pauzecode worden geblokkeerd: de import bewaart nul pauze niet bewezen. Deze diensten moeten voorlopig rechtstreeks in Tamigo worden aangepast. De algemene productieschakelaar blijft uit; de proef gaf alleen de ene gekozen dienst vrij.
+Na deze proef werden nieuwe importvoorstellen zonder expliciete pauzecode geblokkeerd: de import bewaarde nul pauze niet bewezen. De praktijkproef van 6 november met expliciete nul en de herstelde blokkades staan hierboven. De proef gaf alleen de ene gekozen dienst vrij; de algemene productieschakelaar is daarbij niet ingeschakeld.
 
 ## Huidige versie — v2-import, 3 november 2026
 

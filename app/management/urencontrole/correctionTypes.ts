@@ -22,5 +22,8 @@ export type ImportVerification = {transport:"v2-import";planned:string[];otherAc
 // Deliberately no employee, department, activity or comment editing in the UI.
 export type TamigoShiftUpdate = {
   ShiftId: string; EmployeeId: string; DepartmentId:string; PlanStatusCode:3; PlanStatus:"actual"; StartTime: string; EndTime: string; BreakCode: string | null;
+  // Retained for investigation; zero-pause imports are blocked even with this field.
+  // Positive lengths are unsupported until Tamigo confirms their unit.
+  BreakCodeLength?: 0;
   Comment: string | null; IsAvailable: boolean; IsExchange: boolean; ShiftActivityId: string | null;
 };
