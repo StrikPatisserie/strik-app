@@ -19,7 +19,7 @@ function harness() {
  const navigation={__esModule:true,default:function Navigation(){},ProductionMobileNavigation:function MobileNavigation(){}};
  const offerWidget={__esModule:true,default:function ProductionWeekOffer(){}};
  const pickerWidget={__esModule:true,default:function ProductionItemPicker(){}};
- const component=load('app/preview/productie/ProductionPreview.tsx',{'react':react,'react/jsx-runtime':jsx,'next/link':'a','../../productie/ProductionIcon':{__esModule:true,default:()=>null},'../../productie/ProductionNavigation':navigation,'../../productie/navigation':load('app/productie/navigation.ts',{'./planning':planning}),'../../productie/dayRhythm':load('app/productie/dayRhythm.ts',{'./planning':planning}),'next/dynamic':()=>()=>null,'../../productie/WeddingWeekLane':{__esModule:true,default:()=>null},'../../productie/useProductionUpdates':{__esModule:true,default:()=>false},'../../productie/productionUpdates':{},'../../productie/useScreenLayout':{__esModule:true,default:()=>({frameRef:{current:null},workspaceRef:{current:null}})},'../../productie/TaskWorkPanel':{__esModule:true,default:function TaskWorkPanel(){},WorkClock:function WorkClock(){},PreparationControl:function PreparationControl(){},RecipeWorkHistory:function RecipeWorkHistory(){}},'../../productie/workCommands':workCommands,'../../productie/QuickRecipeForm':{__esModule:true,default:()=>null},'../../productie/ProductionRequests':{__esModule:true,default:()=>null},'../../productie/ProductionWeekOffer':offerWidget,'../../productie/ProductionItemPicker':pickerWidget,'../../productie/recipeGroups':recipeGrouping,'../../productie/taskOperations':taskOperations,'../../productie/CleaningWeekLane':{__esModule:true,default:()=>null},'../../productie/weddingPlanning':{},'../../productie/planning':planning,'./sampleData':sample,'./production.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})},'../../productie/workspaceData':{},'../../productie/recipePlanning':recipePlanning});
+ const component=load('app/preview/productie/ProductionPreview.tsx',{'react':react,'react/jsx-runtime':jsx,'next/link':'a','../../productie/ProductionIcon':{__esModule:true,default:()=>null},'../../productie/ProductionNavigation':navigation,'../../productie/navigation':load('app/productie/navigation.ts',{'./planning':planning}),'../../productie/dayRhythm':load('app/productie/dayRhythm.ts',{'./planning':planning}),'next/dynamic':()=>()=>null,'../../productie/WeddingWeekLane':{__esModule:true,default:()=>null},'../../productie/useProductionUpdates':{__esModule:true,default:()=>false},'../../productie/productionUpdates':{},'../../productie/useScreenLayout':{__esModule:true,default:()=>({frameRef:{current:null},workspaceRef:{current:null}})},'../../productie/TaskWorkPanel':{__esModule:true,default:function TaskWorkPanel(){},WorkClock:function WorkClock(){},PreparationControl:function PreparationControl(){},RecipeWorkHistory:function RecipeWorkHistory(){}},'../../productie/workCommands':workCommands,'../../productie/QuickRecipeForm':{__esModule:true,default:()=>null},'../../productie/ProductionRequests':{__esModule:true,default:()=>null},'../../productie/ProductionWeekOffer':offerWidget,'../../productie/ProductionItemPicker':pickerWidget,'../../productie/SearchableChoice':{__esModule:true,default:function SearchableChoice(){}},'../../productie/recipeGroups':recipeGrouping,'../../productie/taskOperations':taskOperations,'../../productie/CleaningWeekLane':{__esModule:true,default:()=>null},'../../productie/weddingPlanning':{},'../../productie/planning':planning,'./sampleData':sample,'./production.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})},'../../productie/workspaceData':{},'../../productie/recipePlanning':recipePlanning});
  const render=(fn,props={},value)=>{if(!records.has(fn))records.set(fn,[]);current=records.get(fn);index=0;context=value;return fn(props);};
  return{render,Component:component.default,navigation,offerWidget:offerWidget.default,pickerWidget:pickerWidget.default};
 }
@@ -327,4 +327,47 @@ test('a fulfilled stock task is visible as stock use and cannot be reopened from
  const card = find(tree, node => node.type === 'article' && node.key === task.id);
  assert(text(card).includes('Uit voorraad'));
  assert.equal(find(card, node => node.type === 'button' && node.props.className === 'taskCheck').props.disabled, true);
+});
+
+test('temporary parts can be renamed and linked later without creating an empty recipe or rewriting tasks',async()=>{
+ const h=harness();
+ let tree=h.render(h.Component,{initialView:'recipes'});
+ button(tree,'Los onderdeel toevoegen').props.onClick();tree=h.render(h.Component,{initialView:'recipes'});
+ const form=find(tree,n=>typeof n.type==='function'&&!!n.props.onSave&&n.props.state);
+ const temporary={id:'temporary-test',name:'Tijdelijk beslag',kind:'component',unit:'kg',departmentId:'dessert',stock:0,note:''};
+ const next=planning.addItem(form.props.state,temporary),tasksBefore=JSON.stringify(next.tasks);
+ await form.props.onSave(next);tree=h.render(h.Component,{initialView:'recipes'});
+ assert.equal(tree.props.value.recipes.length,sample.demoRecipes.length);
+ const row=find(tree,n=>n.props?.className==='workRecipeRow'&&text(n).includes('Tijdelijk beslag'));
+ assert(text(row).includes('Zonder recept'));
+ row.props.onClick();tree=h.render(h.Component,{initialView:'recipes'});
+ let detail=find(tree,n=>typeof n.type==='function'&&!!n.props.onLink&&n.props.item.id===temporary.id);
+ let view=h.render(detail.type,detail.props,tree.props.value);
+ assert(button(view,'Nieuw recept maken'));
+ assert(find(view,n=>n.type==='input'&&n.props.name==='name'));
+ const picker=find(view,n=>typeof n.type==='function'&&n.props.label==='Bestaand recept koppelen');
+ assert(picker.props.choices.length);assert(picker.props.choices.every(choice=>sample.demoRecipes.some(recipe=>recipe.id===choice.id&&recipe.unit==='kg')));
+ assert(await detail.props.onUpdate({name:'  Fruitdesserttaart  '}));
+ assert.equal(await detail.props.onUpdate({name:'  Tijdelijke mousse  ',departmentId:'dessert',note:'Later uitwerken'}),undefined);
+ tree=h.render(h.Component,{initialView:'recipes'});detail=find(tree,n=>typeof n.type==='function'&&!!n.props.onLink&&n.props.item.id===temporary.id);
+ assert.equal(detail.props.item.name,'Tijdelijke mousse');assert.equal(detail.props.item.recipeId,undefined);
+ assert.equal(JSON.stringify(detail.props.state.tasks),tasksBefore);
+ assert.equal(await detail.props.onLink(picker.props.choices[0].id),undefined);
+ tree=h.render(h.Component,{initialView:'recipes'});detail=find(tree,n=>typeof n.type==='function'&&!!n.props.onLink&&n.props.item.id===temporary.id);
+ assert.equal(detail.props.item.recipeId,picker.props.choices[0].id);
+ assert.equal(JSON.stringify(detail.props.state.tasks),tasksBefore);
+ view=h.render(detail.type,detail.props,tree.props.value);
+ assert(button(view,'Recept aanpassen'));assert(!nodes(view).some(n=>n.type==='input'&&n.props.name==='name'));
+});
+
+test('a recipe-free planning task opens its name, recipe link and explicit creation controls',()=>{
+ const h=harness(),state=sample.initialPreviewState(),task=state.tasks.find(task=>task.status==='planned');
+ const item=state.items.find(item=>item.id===task.itemId);delete item.recipeId;
+ const live={state,today:sample.DEMO_TODAY,recipes:sample.demoRecipes,ingredients:[],canManage:true,departments:planning.DEPARTMENTS.map(d=>d.id),revision:1};
+ let tree=h.render(h.Component,{live,initialTask:task.id});
+ const detail=find(tree,n=>typeof n.type==='function'&&n.props.task?.id===task.id&&!!n.props.onItem);
+ const view=h.render(detail.type,detail.props,tree.props.value);
+ button(view,'Naam of recept koppelen').props.onClick();tree=h.render(h.Component,{live,initialTask:task.id});
+ const part=find(tree,n=>typeof n.type==='function'&&!!n.props.onLink&&n.props.item.id===item.id);
+ assert.equal(part.props.item.id,task.itemId);
 });

@@ -336,8 +336,26 @@ export function matchesProductionSearch(query:string,values:(string|undefined)[]
   return normalize(query).trim().split(/\s+/).filter(Boolean).every(part=>haystack.includes(part));
 }
 
-export function validProductionRequests(value:unknown):value is ProductionRequest[]{
- if(!Array.isArray(value)||value.length>5000)return false;
- const ids=new Set<string>();
- try{return value.every((r:ProductionRequest)=>{if(!r||typeof r.id!=='string'||!r.id||r.id.length>200||ids.has(r.id)||typeof r.itemId!=='string'||!r.itemId||!Number.isFinite(r.quantity)||r.quantity<=0||r.quantity>1000000||typeof r.note!=='string'||r.note.length>2000||typeof r.createdBy!=='string'||!r.createdBy||!Number.isFinite(Date.parse(r.createdAt)))return false;if(r.departmentId!==undefined&&r.departmentId!==null&&!DEPARTMENTS.some(d=>d.id===r.departmentId))return false;ids.add(r.id);if(r.neededBy)addDays(r.neededBy,0);return (!r.cancelledAt||Number.isFinite(Date.parse(r.cancelledAt)))&&(!r.plannedTaskId||typeof r.plannedTaskId==='string');});}catch{return false;}
+export function validProductionRequests(value:unknown):value is ProductionRequest[] {
+  if (!Array.isArray(value) || value.length>5000) return false;
+  const ids=new Set<string>();
+  try {
+    return value.every((request:ProductionRequest)=>{
+      if (!request || typeof request.id!=="string" || !request.id || request.id.length>200 || ids.has(request.id)
+        || typeof request.itemId!=="string" || !request.itemId
+        || !Number.isFinite(request.quantity) || request.quantity<=0 || request.quantity>1000000
+        || typeof request.note!=="string" || request.note.length>2000
+        || typeof request.createdBy!=="string" || !request.createdBy
+        || !Number.isFinite(Date.parse(request.createdAt))) return false;
+      if (request.departmentId!==undefined && request.departmentId!==null && !DEPARTMENTS.some(department=>department.id===request.departmentId)) return false;
+      if (request.updatedBy!==undefined && (typeof request.updatedBy!=="string" || !request.updatedBy.trim() || request.updatedBy.length>200)) return false;
+      if (request.updatedAt!==undefined && (typeof request.updatedAt!=="string" || !Number.isFinite(Date.parse(request.updatedAt)))) return false;
+      if ((request.updatedBy===undefined)!==(request.updatedAt===undefined)) return false;
+      ids.add(request.id);
+      if (request.neededBy) addDays(request.neededBy,0);
+      return (!request.cancelledAt || Number.isFinite(Date.parse(request.cancelledAt))) && (!request.plannedTaskId || typeof request.plannedTaskId==="string");
+    });
+  } catch {
+    return false;
+  }
 }

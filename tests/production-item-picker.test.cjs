@@ -59,11 +59,13 @@ function options(tree) {
   return nodes(tree).filter(node => node.props?.role === 'option');
 }
 
-function harness(overrides = {}) {
+function harness(overrides = {}, generic = false) {
   const slots = [];
   const changes = [];
   let index = 0;
   let pendingEffects = [];
+  let validationMessage = '';
+  const inputElement = { focus() {}, setCustomValidity(message) { validationMessage = message; } };
   let props = {
     items,
     value: '',
@@ -103,19 +105,27 @@ function harness(overrides = {}) {
       }
     },
   };
-  const Component = load('app/productie/ProductionItemPicker.tsx', {
+  const Choice = load('app/productie/SearchableChoice.tsx', {
     react,
     'react/jsx-runtime': jsx,
     './ProductionIcon': { __esModule: true, default: () => null },
     './planning': planning,
-    './ProductionItemPicker.module.css': { __esModule: true, default: new Proxy({}, { get: (_, key) => key }) },
+    './SearchableChoice.module.css': { __esModule: true, default: new Proxy({}, { get: (_, key) => key }) },
+  }).default;
+  const Component = load('app/productie/ProductionItemPicker.tsx', {
+    react,
+    'react/jsx-runtime': jsx,
+    './planning': planning,
+    './SearchableChoice': { __esModule: true, default: Choice },
   }).default;
 
   function render(nextProps = {}) {
     props = { ...props, ...nextProps };
     index = 0;
     pendingEffects = [];
-    const tree = Component(props);
+    const element = generic ? null : Component(props);
+    const tree = Choice(generic ? props : element.props);
+    find(tree, node => node.props?.role === 'combobox').props.ref.current = inputElement;
     pendingEffects.forEach(effect => effect());
     return tree;
   }
@@ -142,7 +152,7 @@ function harness(overrides = {}) {
     return { tree: render(), event };
   }
 
-  return { render, input, type, key, changes };
+  return { render, input, type, key, changes, get validationMessage() { return validationMessage; } };
 }
 
 test('product search matches middle substrings, accents, article numbers and independent ingredient tokens', () => {
@@ -179,17 +189,19 @@ test('arrows move the active option and Enter selects without submitting the pla
   assert.equal(options(enter.tree).length, 0);
 });
 
-test('Escape closes suggestions first and editing clears the previous committed product', () => {
+test('typing is tentative and Escape restores the previously committed product', () => {
   const h = harness({ value: 'fruit' });
   let tree = h.render();
   assert.equal(h.input(tree).props.value, items[0].name);
   tree = h.type('citroen');
-  assert.deepEqual(h.changes, ['']);
+  assert.deepEqual(h.changes, []);
+  assert.equal(h.validationMessage, 'Kies een resultaat of wis de zoekopdracht.');
   assert.equal(h.input(tree).props.value, 'citroen');
   const escape = h.key('Escape');
   assert.equal(escape.event.prevented, true);
   assert.equal(escape.event.stopped, true);
-  assert.equal(h.input(escape.tree).props.value, '');
+  assert.equal(h.input(escape.tree).props.value, items[0].name);
+  assert.equal(h.validationMessage, '');
   assert.equal(h.input(escape.tree).props['aria-expanded'], false);
   assert.equal(h.key('Escape').event.prevented, false, 'A second Escape remains available to the surrounding dialog');
 });
@@ -229,4 +241,120 @@ test('large catalogs render a bounded list while a refined query can still reach
   assert.equal(h.input(tree).props.disabled, true);
   assert.equal(h.input(tree).props.value, 'Catalogusartikel 1400');
   assert.equal(options(tree).length, 0);
+});
+
+test('generic choices preserve missing IDs, validation descriptions and canonical form values', () => {
+  const h = harness({
+    label: 'Grondstof', name: 'ingredient', value: 'deleted-id', invalid: true, describedBy: 'line-error',
+    choices: [
+      { id: 'flour-a', name: 'Bloem crème', description: 'Molen Noord' },
+      { id: 'flour-b', name: 'Bloem crème', description: 'Jumbo', searchValues: ['B-204'] },
+    ],
+  }, true);
+  let tree = h.render();
+  assert.equal(h.input(tree).props.value, 'Ontbrekende koppeling (deleted-id)');
+  assert.equal(h.input(tree).props['aria-invalid'], true);
+  assert.equal(h.input(tree).props['aria-describedby'], 'line-error');
+  assert.equal(find(tree, node => node.type === 'input' && node.props.name === 'ingredient').props.value, 'deleted-id');
+  tree = h.type('204 CREME jumbo');
+  assert.equal(options(tree).length, 1);
+  assert(h.input(tree).props['aria-describedby'].includes('line-error'));
+  assert(h.input(tree).props['aria-describedby'].includes('picker-test-status'));
+  let prevented = false;
+  options(tree)[0].props.onMouseDown({ preventDefault() { prevented = true; } });
+  options(tree)[0].props.onClick();
+  tree = h.render({ invalid: false });
+  assert.equal(prevented, true);
+  assert.deepEqual(h.changes, ['flour-b']);
+  assert.equal(find(tree, node => node.type === 'input' && node.props.name === 'ingredient').props.value, 'flour-b');
+  assert.equal(h.input(tree).props.value, 'Bloem crème');
+  assert.equal(h.input(tree).props['aria-invalid'], undefined);
+});
+
+test('disabled choices are skipped by keyboard and cannot be selected by touch or Enter', () => {
+  const h = harness({
+    label: 'Halffabricaat',
+    choices: [
+      { id: 'old', name: 'Niet beschikbaar', disabled: true },
+      { id: 'first', name: 'Vanillecrème' },
+      { id: 'second', name: 'Citroencrème' },
+    ],
+  }, true);
+  let tree = h.type('');
+  assert.equal(options(tree)[0].props['aria-disabled'], true);
+  assert.equal(options(tree)[1].props['aria-selected'], true);
+  options(tree)[0].props.onClick();
+  assert.deepEqual(h.changes, []);
+  tree = h.key('ArrowDown').tree;
+  assert.equal(options(tree)[2].props['aria-selected'], true);
+  h.key('Enter');
+  assert.deepEqual(h.changes, ['second']);
+  tree = h.type('niet');
+  assert.equal(h.input(tree).props['aria-activedescendant'], undefined);
+  h.key('Enter');
+  assert.deepEqual(h.changes, ['second']);
+});
+
+test('tentative optional searches retain the old ID on blur while explicit clear unlinks it', () => {
+  const h = harness({ label: 'Bake-it artikel', name: 'article', value: 'old', choices: [{ id: 'old', name: 'Bestaand artikel' }] }, true);
+  let tree = h.type('niet gevonden');
+  assert.equal(h.validationMessage, 'Kies een resultaat of wis de zoekopdracht.');
+  assert.equal(find(tree, node => node.props?.name === 'article').props.value, 'old');
+  assert.deepEqual(h.changes, []);
+  tree.props.onBlur({ currentTarget: { contains: () => false }, relatedTarget: null });
+  tree = h.render();
+  assert.equal(h.input(tree).props.value, 'Bestaand artikel');
+  assert.equal(h.validationMessage, '');
+  assert.equal(find(tree, node => node.props?.name === 'article').props.value, 'old');
+  find(tree, node => node.props?.['aria-label'] === 'Bake-it artikel wissen').props.onClick();
+  tree = h.render();
+  assert.equal(find(tree, node => node.props?.name === 'article').props.value, '');
+  assert.equal(h.validationMessage, '');
+  assert.deepEqual(h.changes, ['']);
+});
+
+test('focus or opening by arrow preserves the selected ID when labels are identical, while deliberate navigation changes it', () => {
+  const choices = [
+    { id: 'A101', name: 'Vanillemousse 1 kg', description: 'Leverancier A' },
+    { id: 'A102', name: 'Vanillemousse 1 kg', description: 'Leverancier B' },
+  ];
+  for (const openWithArrow of [false, true]) {
+    const h = harness({ label: 'Bake-it artikel', name: 'article', value: 'A102', choices }, true);
+    let tree = h.render();
+    if (openWithArrow) tree = h.key('ArrowDown').tree;
+    else {
+      h.input(tree).props.onFocus({ currentTarget: { select() {} } });
+      tree = h.render();
+    }
+    assert.equal(options(tree)[1].props['aria-selected'], true);
+    tree = h.key('Enter').tree;
+    assert.deepEqual(h.changes, []);
+    assert.equal(find(tree, node => node.props?.name === 'article').props.value, 'A102');
+    h.type(choices[0].name);tree = h.key('Enter').tree;
+    assert.deepEqual(h.changes, []);
+    h.input(tree).props.onFocus({ currentTarget: { select() {} } }); h.render();
+    tree = h.key('ArrowUp').tree;
+    assert.equal(options(tree)[0].props['aria-selected'], true);
+    tree = h.key('Enter').tree;
+    assert.deepEqual(h.changes, ['A101']);
+    assert.equal(find(tree, node => node.props?.name === 'article').props.value, 'A101');
+  }
+});
+
+test('a selected duplicate beyond the result limit stays active and a missing ID never defaults to the first choice', () => {
+  const choices = Array.from({ length: 65 }, (_, index) => ({ id: `A${index}`, name: 'Vanillemousse 1 kg', description: `Leverancier ${index}` }));
+  const selected = harness({ label: 'Artikel', name: 'article', value: 'A64', choices }, true);
+  let tree = selected.key('ArrowDown').tree;
+  assert.equal(options(tree).length, 60);
+  assert(text(find(tree, node => node.props?.role === 'status')).includes('60 van 65'));
+  assert(text(find(tree, node => node.props?.role === 'option' && node.props['aria-selected'])).includes('Leverancier 64'));
+  selected.key('Enter');
+  assert.deepEqual(selected.changes, []);
+  const missing = harness({ label: 'Artikel', value: 'deleted-id', choices }, true);
+  tree = missing.render();
+  missing.input(tree).props.onFocus({ currentTarget: { select() {} } });tree = missing.render();
+  assert.equal(missing.input(tree).props.value, 'Ontbrekende koppeling (deleted-id)');
+  assert.equal(options(tree).length, 0);
+  missing.key('Enter');
+  assert.deepEqual(missing.changes, []);
 });

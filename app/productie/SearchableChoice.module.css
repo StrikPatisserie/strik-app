@@ -34,12 +34,16 @@
   outline-offset: 2px;
 }
 
+.control[data-invalid="true"] {
+  border-color: #a13d2f;
+}
+
 .control[data-disabled="true"] {
   background: #f0f2ed;
   color: #63736c;
 }
 
-.control .input {
+.picker .control .input {
   flex: 1;
   min-width: 0;
   width: 100%;
@@ -53,13 +57,13 @@
   font-size: 12px;
 }
 
-.control .input:focus,
-.control .input:focus-visible {
+.picker .control .input:focus,
+.picker .control .input:focus-visible {
   outline: 0;
   box-shadow: none;
 }
 
-.clear {
+.picker .clear {
   display: grid;
   flex: 0 0 36px;
   place-items: center;
@@ -73,7 +77,7 @@
   cursor: pointer;
 }
 
-.clear:hover {
+.picker .clear:hover {
   background: #edf2e9;
 }
 
@@ -117,6 +121,11 @@
   border-bottom: 0;
 }
 
+.option[aria-disabled="true"] {
+  color: #65736b;
+  cursor: default;
+}
+
 .active,
 .option:hover {
   background: #e4eddc;
@@ -134,7 +143,7 @@
   font-size: 10px;
 }
 
-.blocked {
+.badge {
   color: #963d2f;
   font-size: 10px;
   font-weight: 700;
@@ -151,12 +160,12 @@
 }
 
 @media (max-width: 800px), (pointer: coarse) {
-  .control .input {
+  .picker .control .input {
     min-height: 44px;
     font-size: 16px;
   }
 
-  .clear {
+  .picker .clear {
     flex-basis: 44px;
     min-width: 44px;
     min-height: 44px;

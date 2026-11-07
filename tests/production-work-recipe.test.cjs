@@ -69,6 +69,20 @@ test('changing a mislinked ingredient to a supplier record with the same name is
  const response=await e.route.POST(post(input));assert.equal(response.status,200,JSON.stringify(await response.json()));assert.equal(e.writes.length,1);
  const saved=e.writes[0][3];assert.equal(saved.recipes[0].ingredients[0].ingredientId,'correct-flour');assert.equal(saved.ingredients.length,2);assert.equal(saved.ingredients[1].supplierArticleNumber,'correct-supplier-code');assert.equal(saved.recipes[0].id,'r');assert.match(e.writes[0][2].productionWork.history[0].summary,/koppeling aangepast/);
 });
+test('an ordinary baker can replace, remove and add canonical ingredients and preparations without financial permissions',async()=>{
+ const e=endpoint(baker);e.data.ingredients.push({id:'sugar',name:'Suiker',supplier:'Bestaande leverancier',supplierArticleNumber:'sugar-42',lastPrice:200,allergens:[]});
+ const suppliers=JSON.stringify(e.data.ingredients),response=await e.route.GET(read()),view=await response.json();
+ assert.equal(access.canManageProduction(baker),true);assert.equal(access.hasFullAccess(baker),false);assert.equal(response.status,200);
+ for(const secret of ['costPrice','salesPrice','costContribution','invoice','private-photo'])assert(!JSON.stringify(view).includes(secret),secret);
+ view.draft.ingredients=[{ingredientId:'sugar',quantity:80,unit:'gram'}];view.draft.semiFinishedItems=[{recipeId:'semi',quantity:1,unit:'kg'}];
+ view.draft.instructions='Suiker mengen met beslag';view.draft.workInstructions='Klaarzetten';view.draft.finishingInstructions='Afwerken';view.draft.costPrice=0;view.draft.salesPrice=0;
+ const savedResponse=await e.route.POST(post(view.draft));assert.equal(savedResponse.status,200,JSON.stringify(await savedResponse.json()));assert.equal(e.writes.length,1);
+ const planner=e.writes[0][2],data=e.writes[0][3],saved=data.recipes.find(recipe=>recipe.id==='r'),audit=planner.productionWork.history[0];
+ assert.equal(saved.id,'r');assert.equal(saved.name,'Recept');assert.equal(data.recipes.length,2);assert.deepEqual(plain(saved.ingredients.map(line=>line.ingredientId)),['sugar']);assert.deepEqual(plain(saved.semiFinishedItems.map(line=>line.semiFinishedRecipeId)),['semi']);assert.equal(JSON.stringify(data.ingredients),suppliers);
+ assert.equal(saved.costPrice,77);assert.equal(saved.salesPrice,99);assert.equal(saved.productionLog[0].id,'log');assert.equal(data.invoiceImports[0].amount,456);assert.equal(audit.actorId,baker.id);assert.match(audit.summary,/koppeling aangepast/);assert(audit.before.ingredients.some(line=>line.name==='Bloem'));assert(audit.after.ingredients.some(line=>line.name==='Suiker'));assert(audit.after.ingredients.some(line=>line.name==='Beslag'));
+ const foreign=endpoint(baker);foreign.state.items[0].departmentId='ijs';const command=work.editableWorkRecipe(foreign.state,foreign.data,'recipe:r');command.ingredients[0].quantity=200;
+ assert.equal((await foreign.route.POST(post(command))).status,403);assert.equal(foreign.writes.length,0);
+});
 test('a disconnected canonical child repairs its source unit and link while preserving historical task amounts and source audit',async()=>{
  const e=endpoint(editor);
  e.data.recipes[0].semiFinishedItems=[{semiFinishedRecipeId:'semi',quantity:2,unit:'kg',costContribution:0}];

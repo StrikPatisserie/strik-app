@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { Item } from "./planning";
 import type { IngredientView } from "./workspaceData";
 import { WORK_RECIPE_UNITS, workRecipeComponentError, type WorkRecipeComponent, type WorkRecipeInput } from "./workRecipe";
+import SearchableChoice from "./SearchableChoice";
 import s from "./requests.module.css";
 
 type ComponentRow = Omit<WorkRecipeComponent, "quantity"> & { key: number; quantity: string };
@@ -60,6 +61,17 @@ export default function QuickRecipeForm({ item, ingredients, getRevision, recipe
   }, [item.id, item.recipeId, taskId]);
 
   const semiFinished = loaded?.semiFinished || [];
+  const ingredientChoices = useMemo(() => ingredients.map(ingredient => ({
+    id: ingredient.id,
+    name: ingredient.name,
+    description: ingredient.supplier,
+    searchValues: [ingredient.id, ingredient.unit],
+  })), [ingredients]);
+  const semiFinishedChoices = useMemo(() => (loaded?.semiFinished || []).map(recipe => ({
+    id: recipe.id,
+    name: recipe.name,
+    searchValues: [recipe.id],
+  })), [loaded]);
   const ingredientIds = ingredients.map(ingredient => ingredient.id);
   const semiFinishedIds = semiFinished.map(recipe => recipe.id);
   const rowErrors = rows.map(row => workRecipeComponentError(
@@ -149,13 +161,11 @@ export default function QuickRecipeForm({ item, ingredients, getRevision, recipe
             <option value="semiFinished">Halffabricaat</option>
           </select>
         </label>}
-        <label>{label}
-          <select name={`component-${row.key}`} value={row.linkedId} disabled={busy} aria-invalid={Boolean(rowError)} aria-describedby={rowError ? errorId : undefined} onChange={event => updateRow(row.key, { linkedId: event.target.value })}>
-            <option value="">Kies {label.toLocaleLowerCase("nl-NL")}</option>
-            {missing && <option value={row.linkedId} disabled>Ontbrekende koppeling ({row.linkedId})</option>}
-            {row.kind === "ingredient" ? ingredients.map(ingredient => <option key={ingredient.id} value={ingredient.id}>{ingredient.name}{ingredient.supplier ? ` · ${ingredient.supplier}` : ""}</option>) : semiFinished.map(recipe => <option key={recipe.id} value={recipe.id}>{recipe.name}</option>)}
-          </select>
-        </label>
+        <SearchableChoice label={label} name={`component-${row.key}`} value={row.linkedId}
+          choices={row.kind === "ingredient" ? ingredientChoices : semiFinishedChoices}
+          disabled={busy} required invalid={Boolean(rowError)} describedBy={rowError ? errorId : undefined}
+          placeholder={`Zoek ${label.toLocaleLowerCase("nl-NL")}${row.kind === "ingredient" ? " of leverancier" : ""}…`}
+          onChange={linkedId => updateRow(row.key, { linkedId })}/>
         <label>Hoeveelheid<input name={`quantity-${row.key}`} type="number" min="0.000001" max="1000000" step="any" required disabled={busy} value={row.quantity} onChange={event => updateRow(row.key, { quantity: event.target.value })} /></label>
         <label>Eenheid
           <select name={`unit-${row.key}`} disabled={busy} value={row.unit} onChange={event => updateRow(row.key, { unit: event.target.value })}>
