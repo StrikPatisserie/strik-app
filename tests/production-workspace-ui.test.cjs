@@ -19,11 +19,19 @@ function harness() {
  const navigation={__esModule:true,default:function Navigation(){},ProductionMobileNavigation:function MobileNavigation(){}};
  const offerWidget={__esModule:true,default:function ProductionWeekOffer(){}};
  const pickerWidget={__esModule:true,default:function ProductionItemPicker(){}};
- const component=load('app/preview/productie/ProductionPreview.tsx',{'react':react,'react/jsx-runtime':jsx,'next/link':'a','../../productie/ProductionIcon':{__esModule:true,default:()=>null},'../../productie/ProductionNavigation':navigation,'../../productie/navigation':load('app/productie/navigation.ts',{'./planning':planning}),'../../productie/dayRhythm':load('app/productie/dayRhythm.ts',{'./planning':planning}),'next/dynamic':()=>()=>null,'../../productie/WeddingWeekLane':{__esModule:true,default:()=>null},'../../productie/useProductionUpdates':{__esModule:true,default:()=>false},'../../productie/productionUpdates':{},'../../productie/useScreenLayout':{__esModule:true,default:()=>({frameRef:{current:null},workspaceRef:{current:null}})},'../../productie/TaskWorkPanel':{__esModule:true,default:function TaskWorkPanel(){},WorkClock:function WorkClock(){},PreparationControl:function PreparationControl(){},RecipeWorkHistory:function RecipeWorkHistory(){}},'../../productie/workCommands':workCommands,'../../productie/QuickRecipeForm':{__esModule:true,default:()=>null},'../../productie/ProductionRequests':{__esModule:true,default:()=>null},'../../productie/ProductionWeekOffer':offerWidget,'../../productie/ProductionItemPicker':pickerWidget,'../../productie/SearchableChoice':{__esModule:true,default:function SearchableChoice(){}},'../../productie/recipeGroups':recipeGrouping,'../../productie/taskOperations':taskOperations,'../../productie/CleaningWeekLane':{__esModule:true,default:()=>null},'../../productie/weddingPlanning':{},'../../productie/planning':planning,'./sampleData':sample,'./production.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})},'../../productie/workspaceData':{},'../../productie/recipePlanning':recipePlanning});
+ const component=load('app/preview/productie/ProductionPreview.tsx',{'react':react,'react/jsx-runtime':jsx,'next/link':'a','../../productie/ProductionIcon':{__esModule:true,default:()=>null},'../../productie/ProductionNavigation':navigation,'../../productie/navigation':load('app/productie/navigation.ts',{'./planning':planning}),'../../productie/dayRhythm':load('app/productie/dayRhythm.ts',{'./planning':planning}),'next/dynamic':()=>()=>null,'../../productie/WeddingWeekLane':{__esModule:true,default:()=>null},'../../productie/useProductionUpdates':{__esModule:true,default:()=>false},'../../productie/usePhysicalKeyboard':{__esModule:true,default:()=>({physicalKeyboard:false,setPhysicalKeyboard(){},storageError:false})},'../../productie/productionUpdates':{},'../../productie/useScreenLayout':{__esModule:true,default:()=>({frameRef:{current:null},workspaceRef:{current:null}})},'../../productie/TaskWorkPanel':{__esModule:true,default:function TaskWorkPanel(){},WorkClock:function WorkClock(){},PreparationControl:function PreparationControl(){},RecipeWorkHistory:function RecipeWorkHistory(){}},'../../productie/workCommands':workCommands,'../../productie/QuickRecipeForm':{__esModule:true,default:()=>null},'../../productie/ProductionRequests':{__esModule:true,default:()=>null},'../../productie/ProductionWeekOffer':offerWidget,'../../productie/ProductionItemPicker':pickerWidget,'../../productie/SearchableChoice':{__esModule:true,default:function SearchableChoice(){}},'../../productie/recipeGroups':recipeGrouping,'../../productie/taskOperations':taskOperations,'../../productie/CleaningWeekLane':{__esModule:true,default:()=>null},'../../productie/weddingPlanning':{},'../../productie/planning':planning,'./sampleData':sample,'./production.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})},'../../productie/workspaceData':{},'../../productie/recipePlanning':recipePlanning});
  const render=(fn,props={},value)=>{if(!records.has(fn))records.set(fn,[]);current=records.get(fn);index=0;context=value;return fn(props);};
  return{render,Component:component.default,navigation,offerWidget:offerWidget.default,pickerWidget:pickerWidget.default};
 }
 function nodes(tree) {if(!tree || typeof tree!=='object')return[];if(Array.isArray(tree))return tree.flatMap(nodes);return[tree,...nodes(tree.props?.children)];}
+function visibleNodes(tree) {
+ if(!tree||typeof tree!=='object')return [];
+ if(Array.isArray(tree))return tree.flatMap(visibleNodes);
+ const children=tree.type==='details'&&!tree.props.open
+  ?nodes(tree.props.children).filter(node=>node.type==='summary')
+  :tree.props?.children;
+ return [tree,...visibleNodes(children)];
+}
 function text(tree){if(typeof tree==='string' || typeof tree==='number')return String(tree);if(Array.isArray(tree))return tree.map(text).join('');return tree?.props?text(tree.props.children):'';}
 function find(tree,predicate){const node=nodes(tree).find(predicate);assert(node,'Expected rendered control');return node;}
 function button(tree,label){return find(tree,n=>n.type==='button' && (text(n)===label || n.props['aria-label']===label));}
@@ -152,7 +160,7 @@ test('adding through a department keeps that department and preserves the draft 
  tree=h.render(h.Component,{live});
  let form=find(tree,n=>typeof n.type==='function' && !!n.props.onPlan);
  const render=()=>h.render(form.type,form.props,tree.props.value);
- const field=(view,label,type)=>find(find(view,n=>n.type==='label' && text(n).startsWith(label)),n=>n.type===type);
+ const field=(view,label,type)=>find(find(view,n=>n.type==='label' && text(n).startsWith(label) && (label!=='Afdeling'||nodes(n).some(child=>child.type==='select'&&!child.props['aria-label']))),n=>n.type===type);
  let view=render();
  const picker=find(view,n=>n.type===h.pickerWidget);
  assert(picker.props.items.some(item=>item.id==='fruit' && item.searchValues.includes('Vers fruit')));
@@ -195,7 +203,8 @@ test('normal task creation submits checked extra operations and an optional tota
  let view=render();
  find(view,n=>n.type===h.pickerWidget).props.onChange('creme');view=render();
  const time=find(view,n=>n.type==='input'&&n.props.name==='minutes');
- assert(!nodes(find(view,n=>n.type==='details')).includes(time),'Time belongs in the visible task form');
+ const more=find(view,n=>n.type==='details'&&nodes(n).some(child=>child.type==='summary'&&text(child)==='Meer opties'));
+ assert.equal(more.props.open,undefined);assert(nodes(more).includes(time),'Time stays mounted inside the closed optional controls');
  assert.equal(time.props.required,undefined);
  const options=find(view,n=>typeof n.type==='function'&&n.type.name==='TaskOperationOptions'&&!n.props.label);
  const optionsView=h.render(options.type,options.props,tree.props.value);
@@ -209,6 +218,56 @@ test('normal task creation submits checked extra operations and an optional tota
  await submit();
  assert.equal(submitted[1].task.operation,'Bereiden + storten');
  assert.equal(Object.hasOwn(submitted[1].task,'minutes'),false);
+});
+
+test('the compact planning form foregrounds product, quantity and day while optional inputs stay mounted in closed details',async()=>{
+ const h=harness();let tree=xl(h);
+ button(tree,'Inplannen').props.onClick();tree=h.render(h.Component);
+ const form=find(tree,node=>typeof node.type==='function'&&!!node.props.onPlan),submitted=[];
+ const props={...form.props,onPlan:async command=>{submitted.push(command);}},render=()=>h.render(form.type,props,tree.props.value);
+ let view=render(),visible=visibleNodes(view);
+ const picker=find(view,node=>node.type===h.pickerWidget);
+ assert.equal(picker.props.label,'Wat wil je maken?');assert.equal(picker.props.required,true);
+ assert.deepEqual(visible.filter(node=>node.type==='input').map(node=>node.props.type),['number','date']);
+ assert(button(view,'Zonder recept toevoegen'));
+ picker.props.onChange('fruit');view=render();visible=visibleNodes(view);
+ const more=find(view,node=>node.type==='details'&&nodes(node).some(child=>child.type==='summary'&&text(child)==='Meer opties'));
+ const parts=find(view,node=>node.type==='details'&&nodes(node).some(child=>child.type==='summary'&&text(child)==='Onderdelen aanpassen'));
+ for(const details of [more,parts])assert.equal(details.props.open,undefined,'Optional sections start closed');
+ for(const name of ['dueDate','operation','minutes','source','note','output']){
+  const field=find(more,node=>node.props?.name===name);
+  assert(!visible.includes(field),`${name} is optional and stays outside the initial compact form`);
+ }
+ assert(visible.some(node=>node.type==='select'&&node.props.value==='quantity'),'The explicit Recept × choice remains available');
+ assert(visible.some(node=>node.type==='label'&&text(node)==='Onderdelen meeplannen'));
+ const outline=find(view,node=>node.props?.['aria-label']==='Productiestappen Fruitdesserttaart');
+ assert(visible.includes(outline));assert(text(outline).includes('Vanillecrème'));assert(text(outline).includes(sample.demoRecipes.find(recipe=>recipe.id==='demo-kapsel').name));assert(text(outline).includes('Fruitdesserttaart afwerken'));
+ const preparationDate=find(parts,node=>node.type==='input'&&node.props['aria-label']?.startsWith('Productiedatum '));
+ assert(!visible.includes(preparationDate));assert(preparationDate.props.value);
+ const primaryDate=find(view,node=>node.type==='label'&&text(node)==='Productiedatum').props.children.find(node=>node?.type==='input');
+ assert.equal(primaryDate.props.value,sample.DEMO_TODAY);
+ const submit=find(view,node=>node.type==='button'&&node.props.type==='submit');assert.equal(text(submit),'Inplannen');assert.equal(submit.props.disabled,false);
+ await find(view,node=>node.type==='form').props.onSubmit({preventDefault:()=>{},currentTarget:{source:'manual',note:'',dueDate:'',output:'on'}});
+ assert.equal(submitted[0].task.operation,'Afwerken');assert.equal(submitted[0].task.date,sample.DEMO_TODAY);assert.equal(submitted[0].preparation.daysBefore,1);
+ const result=recipePlanning.buildRecipePlan(form.props.state,sample.demoRecipes,submitted[0]);
+ assert(result.tasks.some(task=>task.generatedFor===submitted[0].task.id),'The compact outline still schedules actual preparation tasks');
+});
+
+test('global planning follows the selected product department while a day-cell plus keeps its chosen day and row',()=>{
+ const live={state:sample.initialPreviewState(),today:sample.DEMO_TODAY,recipes:sample.demoRecipes,ingredients:[],canManage:true,departments:planning.DEPARTMENTS.map(department=>department.id),revision:1};
+ for(const clicked of [false,true]){
+  const h=harness();let tree=xl(h,{live});
+  if(clicked)find(tree,node=>node.type==='button'&&node.props['aria-label']==='Taak toevoegen · Luxe gebak · do 29 okt').props.onClick();
+  else button(tree,'Inplannen').props.onClick();
+  tree=h.render(h.Component,{live});
+  const form=find(tree,node=>typeof node.type==='function'&&!!node.props.onPlan),render=()=>h.render(form.type,form.props,tree.props.value);
+  let view=render();find(view,node=>node.type===h.pickerWidget).props.onChange('creme');view=render();
+  const more=find(view,node=>node.type==='details'&&nodes(node).some(child=>child.type==='summary'&&text(child)==='Meer opties'));
+  const department=find(find(more,node=>node.type==='label'&&text(node).startsWith('Afdeling')),node=>node.type==='select');
+  assert.equal(department.props.value,clicked?'luxe':live.state.items.find(item=>item.id==='creme').departmentId);
+  const date=find(find(view,node=>node.type==='label'&&text(node)==='Productiedatum'),node=>node.type==='input');
+  assert.equal(date.props.value,clicked?'2026-10-29':sample.DEMO_TODAY);
+ }
 });
 
 test('blocked recipes remain selectable and repair actions open the specific linked recipe',()=>{
@@ -240,7 +299,16 @@ test('recipe group badges connect each preparation to the root production task',
  const badges=nodes(tree).filter(n=>n.type==='button' && n.props['aria-label']?.includes('Hoort bij Fruitdesserttaart'));
  const family=state.tasks.filter(task=>task.id==='group-root' || task.generatedFor==='group-root');
  assert.equal(badges.length,family.length);
- assert.equal(new Set(badges.map(text)).size,1);
+ assert(badges.some(badge=>text(badge)==='Recept Fruitdesserttaart'));
+ assert.equal(badges.filter(badge=>text(badge)==='Voor Fruitdesserttaart').length,family.length-1);
+ for(const task of family){
+  const card=find(tree,node=>node.type==='article'&&node.key===task.id);
+  const metadata=find(card,node=>node.props?.className==='taskMeta');
+  const badge=find(metadata,node=>node.type==='button'&&node.props['aria-label']?.includes('Hoort bij Fruitdesserttaart'));
+  const open=find(card,node=>node.props?.className==='taskOpen');
+  assert(!nodes(open).includes(badge),'The recipe badge follows the task title in metadata instead of overlapping it');
+  const step=find(metadata,node=>node.props?.className==='taskStep');assert.equal(step.props.type,'button');assert(step.props['aria-label'].startsWith('Stap '));
+ }
  const preparation=state.tasks.find(task=>task.generatedFor==='group-root');
  const card=find(tree,n=>n.type==='article' && n.key===preparation.id);
  find(card,n=>n.type==='button' && n.props['aria-label']?.includes('Hoort bij Fruitdesserttaart')).props.onClick();
@@ -284,7 +352,7 @@ test('warning-only positioning never removes active, blocked or stock metadata f
   if(status==='stock')task.stockFulfillmentId='stock-fulfillment';
   const live={state,today:sample.DEMO_TODAY,recipes:sample.demoRecipes,ingredients:[],canManage:true,departments:['dessert'],revision:1};
   const tree=h.render(h.Component,{live}),card=find(tree,node=>node.type==='article'&&node.key===task.id);
-  const open=find(card,node=>node.props?.className==='taskOpen'),metadata=find(open,node=>node.type==='small');
+  const step=find(card,node=>node.props?.className==='taskStep'),metadata=find(step,node=>node.type==='small');
   assert.equal(metadata.props['data-warning-only'],status==='planned'?true:undefined,status);
   if(['planned','active','blocked'].includes(status))assert(nodes(metadata).some(node=>node.props?.className==='taskWarning'));
   if(status==='active')assert.match(text(metadata),/Bezig/);

@@ -137,9 +137,15 @@ export const STATUS_LABELS: Record<TaskStatus, string> = { planned: "Gepland", a
 export const SOURCE_LABELS: Record<Task["source"], string> = { manual: "Handmatig", shop: "Winkelbehoefte", order: "Bestelling", routine: "Vaste taak" };
 export const KIND_LABELS: Record<ItemKind, string> = { product: "Eindproduct", component: "Halffabricaat", activity: "Werkzaamheid" };
 export const BOARDS: { id: BoardId; name: string }[] = [
-  { id: "patisserie", name: "Patisserie" }, { id: "bak", name: "Bakkant" },
-  { id: "ijs", name: "IJs" }, { id: "chocolade", name: "Chocolade" },
+  { id: "patisserie", name: "Patisserie" }, { id: "bak", name: "Bak & brood" },
+  { id: "chocolade", name: "Chocola & ijs" },
 ];
+
+// Department and saved task IDs stay unchanged. The old ice board opens the
+// combined board, so existing bookmarks and reload preferences keep working.
+export function canonicalBoardId(board: BoardId): BoardId {
+  return board === "ijs" ? "chocolade" : board;
+}
 
 function calendarDate(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw Error("Ongeldige datum.");
@@ -174,7 +180,9 @@ export function durationLabel(minutes: number) {
   const hours = Math.floor(minutes / 60), remainder = minutes % 60;
   return hours ? `${hours}u${remainder ? ` ${remainder}m` : ""}` : `${remainder}m`;
 }
-export function departmentsFor(board: BoardId) { return DEPARTMENTS.filter(d => d.board === board); }
+export function departmentsFor(board: BoardId) {
+  return DEPARTMENTS.filter(d => canonicalBoardId(d.board) === canonicalBoardId(board));
+}
 export function requiredTaskIds(task: Task): string[] { return task.stockFulfillmentId && task.status === "done" ? [] : [...new Set([...(task.dependsOn ? [task.dependsOn] : []), ...(task.requires || [])])]; }
 export function taskIssues(task: Task, tasks: Task[], items: Item[] = []): string[] {
   if(task.stockFulfillmentId&&task.status==="done")return [];

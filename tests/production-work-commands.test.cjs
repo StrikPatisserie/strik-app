@@ -34,6 +34,21 @@ test('command API requires an active production account, own department, valid o
  for(const request of [post({kind:'start',taskId:'task',who:'Bakker'},'action-test-100',0),post({kind:'start',taskId:'task',who:'Bakker'},'action-test-100',1,'https://foreign.invalid')]){const e=endpoint();assert.notEqual((await e.route.POST(request)).status,200);assert.equal(e.writes.length,0);}
  const e=endpoint(baker,true);assert.equal((await e.route.POST(post({kind:'start',taskId:'task',who:'Bakker'}))).status,409);assert.equal(e.store.planner.data.tasks[0].status,'planned');
 });
+test('the shared bakery screen starts work on both combined boards with the existing task and audit identities',async()=>{
+ const screen={...baker,email:'strikpatisserie1937@gmail.com'};
+ for(const departmentId of ['bak','brood','ijs','chocolade']){
+  const e=endpoint(screen),state=e.store.planner.data;
+  state.items[0].departmentId=departmentId;state.tasks[0].departmentId=departmentId;
+  const before=structuredClone(state.tasks[0]);
+  const response=await e.route.POST(post({kind:'start',taskId:'task',who:'Bakker A',crewSize:2}));
+  assert.equal(response.status,200);assert.equal(e.writes.length,1);assert.equal(e.writes[0].actor,screen.id);
+  const saved=e.store.planner.data;
+  assert.equal(saved.tasks[0].id,before.id);assert.equal(saved.tasks[0].batchId,before.batchId);assert.equal(saved.tasks[0].departmentId,departmentId);assert.equal(saved.tasks[0].quantity,before.quantity);assert.equal(saved.tasks[0].status,'active');
+  assert.equal(saved.productionWork.timers.task.actorId,screen.id);assert.equal(saved.productionWork.timers.task.crewSize,2);
+ }
+ const denied=endpoint(baker);denied.store.planner.data.items[0].departmentId='ijs';denied.store.planner.data.tasks[0].departmentId='ijs';
+ assert.equal((await denied.route.POST(post({kind:'start',taskId:'task',who:'Bakker A'}))).status,400);assert.equal(denied.writes.length,0);
+});
 test('a retried action never duplicates work and a competing stale action cannot overwrite the stored timer',async()=>{
  const e=endpoint(),command={kind:'start',taskId:'task',who:'Bakker'};let response=await e.route.POST(post(command));assert.equal(response.status,200);assert.match(response.headers.get('Cache-Control'),/no-store/);const data=await response.json();assert.equal(data.state.productionWork.timers.task.actorId,baker.id);
  response=await e.route.POST(post(command));assert.equal(response.status,200);assert.equal(e.writes.length,1);

@@ -1,10 +1,10 @@
-import { canAccessBakkerijIjsChocolade, canAccessBakkerijPatisserie, hasFullAccess } from "../lib/auth/access";
+import { canAccessBakkerijIjsChocolade, canAccessBakkerijPatisserie, hasFullAccess, isBakeryScreenAccount } from "../lib/auth/access";
 import type { UserProfile } from "../lib/supabase/types";
 import { DEPARTMENTS, type DepartmentId, type PreviewState } from "./planning";
 
 export function productionDepartments(profile: UserProfile | null): DepartmentId[] {
   if (!profile?.active) return [];
-  const all = hasFullAccess(profile) || Boolean(profile.permissions?.["productie.manage"]);
+  const all = hasFullAccess(profile) || Boolean(profile.permissions?.["productie.manage"]) || isBakeryScreenAccount(profile);
   return DEPARTMENTS.filter(d => all || (d.board === "ijs" || d.board === "chocolade" ? canAccessBakkerijIjsChocolade(profile) : canAccessBakkerijPatisserie(profile))).map(d => d.id);
 }
 export function visibleWorkspace(state: PreviewState): PreviewState {

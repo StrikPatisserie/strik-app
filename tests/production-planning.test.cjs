@@ -28,15 +28,22 @@ test('calendar weeks survive Amsterdam clock changes and ISO year boundaries', (
   assert.equal(m.dateLabel('2026-10-28', true), 'wo 28 okt');
   assert.throws(() => m.addDays('2026-02-30', 1), /datum/);
 });
-test('Bakkant combines baking and bread while patisserie, ice and chocolate keep their boards', () => {
+test('three planning boards retain department IDs and combine baking/bread and chocolate/ice', () => {
   assert.deepEqual(Array.from(m.departmentsFor('patisserie'), d => d.id), ['dessert', 'luxe', 'kapsel', 'slagroom', 'bruidstaarten']);
   assert.deepEqual(Array.from(m.departmentsFor('bak'), d => d.id), ['bak', 'brood']);
-  assert.equal(m.BOARDS.find(board => board.id === 'bak').name, 'Bakkant');
+  assert.equal(m.BOARDS.find(board => board.id === 'bak').name, 'Bak & brood');
   assert.equal(m.BOARDS.some(board => board.id === 'brood'), false);
-  for (const id of ['ijs', 'chocolade']) assert.equal(m.departmentsFor(id).length, 1);
+  assert.deepEqual(Array.from(m.BOARDS, board => board.id), ['patisserie', 'bak', 'chocolade']);
+  assert.equal(m.BOARDS.find(board => board.id === 'chocolade').name, 'Chocola & ijs');
+  for (const id of ['ijs', 'chocolade']) assert.deepEqual(Array.from(m.departmentsFor(id), department => department.id), ['ijs', 'chocolade']);
+  assert.equal(m.DEPARTMENTS.find(department => department.id === 'ijs').board, 'ijs', 'legacy department metadata is retained');
+  assert.equal(m.canonicalBoardId('ijs'), 'chocolade');
+  assert.equal(m.canonicalBoardId('bak'), 'bak');
   assert(sample.initialPreviewState().tasks.some(task => task.departmentId === 'brood'));
   const nav = load('app/productie/navigation.ts', {'./planning':m});
   assert.equal(nav.productionBoard('brood'), 'bak');
+  assert.equal(nav.productionBoard('ijs'), 'chocolade');
+  assert.equal(nav.productionBoard('chocolade'), 'chocolade');
   assert.equal(nav.productionBoard('unknown'), undefined);
 });
 test('a standalone component needs no recipe and retains its ID and tasks when linked later', () => {
@@ -129,7 +136,7 @@ test('the fixed day rhythm applies only to Patisserie Monday through Friday, inc
  for(const date of ['2026-10-31','2026-11-01','2026-10-25'])assert.equal(rhythm.productionDayRhythm('patisserie',date).length,0);
  for(const board of ['bak','ijs','chocolade'])assert.equal(rhythm.productionDayRhythm(board,'2026-10-28').length,0);
  assert.throws(()=>rhythm.productionDayRhythm('patisserie','2026-02-30'),/datum/);
- assert.equal(rhythm.plannedOperation('product',true,false),'Decoreren / afmaken');
+ assert.equal(rhythm.plannedOperation('product',true,false),'Afwerken');
  assert.equal(rhythm.plannedOperation('component',false,false),'Bereiden');
  assert.equal(rhythm.plannedOperation('product',false,false),'Maken');
  assert.equal(rhythm.plannedOperation('product',true,true),'Afwerken');

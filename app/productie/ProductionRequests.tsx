@@ -1,6 +1,6 @@
 "use client";
 import {useCallback,useEffect,useRef,useState,type FormEvent} from 'react';
-import {DEPARTMENTS,type BoardId,type DepartmentId,type Item,type Task} from './planning';
+import {DEPARTMENTS,departmentsFor,type BoardId,type DepartmentId,type Item,type Task} from './planning';
 import {requestDepartmentId,requestsForBoard,type ProductionRequest,type RequestCommand} from './requestPlanning';
 import Icon from './ProductionIcon';
 import SearchableChoice from './SearchableChoice';
@@ -49,7 +49,7 @@ export default function ProductionRequests({board,week,onPlanned,logistics=false
    <button type="submit" disabled={busy}>{busy?'Opslaan…':editing?'Wijzigingen opslaan':'Verzoek toevoegen'}</button>
   </form>}
   <div className={s.list}>{open.sort((a,b)=>(a.neededBy||'9999').localeCompare(b.neededBy||'9999')||a.createdAt.localeCompare(b.createdAt)).map(r=>{
-   const item=data?.items.find(i=>i.id===r.itemId),departmentId=requestDepartmentId(r,item),allowed=(data?.departments||[]).filter(id=>!board||DEPARTMENTS.find(d=>d.id===id)?.board===board);
+   const item=data?.items.find(i=>i.id===r.itemId),departmentId=requestDepartmentId(r,item),allowed=(data?.departments||[]).filter(id=>!board||departmentsFor(board).some(department=>department.id===id));
    return <article key={r.id}><div className={s.row}>
     <div className={s.requestName}><strong>{item?.name||'Product niet meer beschikbaar'} <small className={s.requestQuantity}>{r.quantity.toLocaleString('nl-NL')}{item?.unit&&item.unit!=='stuks'?` ${item.unit}`:''}</small></strong>{(r.neededBy||departmentId===null)&&<span>{r.neededBy?`Uiterlijk ${r.neededBy.split('-').reverse().join('-')}`:''}{departmentId===null?`${r.neededBy?' · ':''}Nog geen afdeling`:''}</span>}</div>
     <div className={s.rowActions}>

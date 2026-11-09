@@ -705,11 +705,15 @@
 .recipeGroup{position:absolute;right:5px;bottom:4px;display:inline-flex;align-items:center;gap:3px;padding:2px 4px;border-radius:4px;font-size:9px!important;line-height:1.2;white-space:nowrap}
 .recipeGroupTone0{background:#e1ebf1;color:#254f67}.recipeGroupTone1{background:#f9e8d6;color:#80532f}.recipeGroupTone2{background:#e2ebdc;color:#3d6049}
 .worksheetRoot .taskCard{position:relative}
-.worksheetRoot .taskCard:has(.recipeGroup) .taskOpen>span{padding-right:42px}
+.worksheetRoot .taskBody{flex:1;min-width:0}
+.worksheetRoot .taskOpen{display:block;width:100%!important}
+.worksheetRoot .taskMeta{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:2px 8px;margin-top:3px}
+.worksheetRoot .taskStep{display:flex;align-items:center;flex-wrap:wrap;gap:4px;padding:0;color:#1b3344;font-size:12px;text-align:left}
+.worksheetRoot .taskStep small{display:inline-flex;align-items:center;gap:4px;margin:0;font-size:10px;color:#8b392e}.worksheetRoot .taskStep small:empty{display:none}
 .worksheetRoot .taskCard:has([data-warning-only]) .taskOpen strong{padding-right:17px}
-.worksheetRoot .taskOpen small[data-warning-only]{position:absolute;top:5px;right:5px;margin:0}
-.worksheetRoot .recipeGroup{bottom:5px;font-size:10px!important}
-.worksheetRoot .taskCard:has(.recipeNudge) .taskOpen small[data-warning-only]{right:25px}
+.worksheetRoot .taskStep small[data-warning-only]{position:absolute;top:5px;right:5px;margin:0}
+.worksheetRoot .taskMeta .recipeGroup{position:static;display:inline-flex;align-items:center;gap:4px;max-width:100%;padding:2px 5px;font-size:11px!important;white-space:normal;word-break:normal;text-align:left}
+.worksheetRoot .taskCard:has(.recipeNudge) .taskStep small[data-warning-only]{right:25px}
 .worksheetRoot .taskCard:has(.recipeNudge):has([data-warning-only]) .taskOpen strong{padding-right:34px}
 .recipeRepairLinks{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.recipeRepairLinks button{display:inline-flex;align-items:center;gap:5px;border:1px solid currentColor;border-radius:5px;padding:5px 8px;font-size:12px;background:white}
 .offerHeading .offerEdit{position:static;width:28px;min-height:26px}
@@ -745,3 +749,12 @@
 .operationOptions input {width:16px;height:16px;margin:0;accent-color:var(--brand-navy);}
 .preparationWork {grid-column:1/-1;display:flex;align-items:flex-end;flex-wrap:wrap;gap:12px 22px;padding-top:9px;border-top:1px solid var(--line);}
 .preparationWork > label {max-width:150px;}
+
+.planQuickLinks{display:flex;align-items:center;flex-wrap:wrap;gap:4px 18px;margin:8px 0 12px}
+.planQuickLinks .textLink{font-size:11px!important;min-height:30px}
+.planRecipeOutline{border:1px solid #cbd8c5;border-radius:6px;overflow:hidden;background:#fff}
+.planRecipeOutline>strong{display:block;padding:9px 12px;background:#edf2e9;color:#1b3344;font-size:14px}
+.planRecipeOutline>div{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px 12px;padding:8px 12px;border-top:1px solid #e1e7dc;font-size:13px}
+.planRecipeOutline small{color:#63736c;font-size:11px}
+.planRecipeOutline .planFinishingRow{background:#edf2e9;font-weight:700}
+.planDetails>.field,.planDetails>.formGrid{margin:12px 0}

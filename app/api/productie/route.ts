@@ -17,8 +17,8 @@ export async function GET() {
   try {
     const [recipes,planner]=await Promise.all([readDocument<RecepturenData>("recipes"),readDocument<PreviewState>("planner")]);
     if (!recipes || !planner) return Response.json({message:"De receptenoverdracht moet eerst worden afgerond.",setupRequired:true,canManage:hasFullAccess(profile)},{status:503,headers});
-    const state=syncRecipeCatalog(planner.data,recipes.data);
-    return Response.json({appVersion:productionRelease(),state:visibleWorkspace(state),revision:planner.revision,recipeRevision:recipes.revision,updatedAt:planner.updated_at,today:todayAmsterdam(),recipes:recipeViews(recipes.data),ingredients:ingredientViews(recipes.data),canManage:canManageProduction(profile),canManageData:hasFullAccess(profile),screenAccount:isBakeryScreenAccount(profile),canManageScreenMessages:canManageScreenMessages(profile),departments:allowed,weeklyOffers:(recipes.data.bakeryHome?.offers || []).map(o=>({id:o.id,weekStart:o.weekStart,weekEnd:o.weekEnd,label:o.label,imageUrl:o.imageUrl}))},{headers});
+    const views=recipeViews(recipes.data),state=syncRecipeCatalog(planner.data,recipes.data,views);
+    return Response.json({appVersion:productionRelease(),state:visibleWorkspace(state),revision:planner.revision,recipeRevision:recipes.revision,updatedAt:planner.updated_at,today:todayAmsterdam(),recipes:views,ingredients:ingredientViews(recipes.data),canManage:canManageProduction(profile),canManageData:hasFullAccess(profile),screenAccount:isBakeryScreenAccount(profile),canManageScreenMessages:canManageScreenMessages(profile),departments:allowed,weeklyOffers:(recipes.data.bakeryHome?.offers || []).map(o=>({id:o.id,weekStart:o.weekStart,weekEnd:o.weekEnd,label:o.label,imageUrl:o.imageUrl}))},{headers});
   } catch (error) { return Response.json({message:error instanceof ProductionStoreError?error.message:"Strik Productie is tijdelijk niet bereikbaar."},{status:503,headers}); }
 }
 export async function PUT(request:Request) {

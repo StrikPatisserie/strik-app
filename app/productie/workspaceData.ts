@@ -39,9 +39,8 @@ export function ingredientViews(data: RecepturenData): IngredientView[] {
     allergens: i.specification?.allergensConfirmed ? (i.allergens?.join(", ") || "Geen opgegeven allergenen") : "Nog controleren",
   }));
 }
-export function seedWorkspace(data: RecepturenData): PreviewState {
+export function seedWorkspace(data: RecepturenData, views = recipeViews(data)): PreviewState {
   const state: PreviewState = { version: 1, items: [], tasks: [] };
-  const views=recipeViews(data);
   for (const recipe of data.recipes) {
     const group = (recipe.productGroup || "").trim().toLocaleLowerCase("nl-NL");
     const departmentId: DepartmentId = group === "ijs" ? "ijs" : ["chocolade", "bonbons"].includes(group) ? "chocolade" : "dessert";
@@ -70,11 +69,10 @@ export function seedWorkspace(data: RecepturenData): PreviewState {
   }
   return state;
 }
-export function syncRecipeCatalog(state: PreviewState, data: RecepturenData): PreviewState {
-  const source = seedWorkspace({...data,manualProductionPlanningItems:[],recipes:data.recipes.map(r=>({...r,productionRequests:[]}))});
+export function syncRecipeCatalog(state: PreviewState, data: RecepturenData, recipes = recipeViews(data)): PreviewState {
+  const source = seedWorkspace({...data,manualProductionPlanningItems:[],recipes:data.recipes.map(r=>({...r,productionRequests:[]}))},recipes);
   const known = new Set(state.items.map(i=>i.id));
   const linkedRecipes=new Set(state.items.map(i=>i.recipeId).filter(Boolean));
-  const recipes = recipeViews(data);
   const items = state.items.map(item=> {
     if (!item.recipeId) return item;
     const recipe = recipes.find(r=>r.id===item.recipeId);

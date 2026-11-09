@@ -55,6 +55,14 @@ test('unassigned requests remain visible on every board while legacy requests in
  assert.equal(planned.tasks[0].departmentId,'bak');
  assert.equal(planned.items[0].departmentId,'dessert','Assigning a request must retain an established product category');
 });
+test('both combined chocolate/ice board aliases share their requests without leaking other assigned departments',()=>{
+ const items=[{...state().items[0],id:'ice',departmentId:'ijs'},{...state().items[0],id:'chocolate',departmentId:'chocolade'},{...state().items[0],id:'bread',departmentId:'brood'}];
+ const rows=items.map(item=>({id:`request-${item.id}`,itemId:item.id,quantity:15,note:'',createdBy:'actor',createdAt:now}));
+ rows.push({...rows[0],id:'unassigned',departmentId:null});
+ for(const board of ['ijs','chocolade'])assert.deepEqual(Array.from(requests.requestsForBoard(rows,items,board),request=>request.id),['request-ice','request-chocolate','unassigned']);
+ assert.deepEqual(Array.from(requests.requestsForBoard(rows,items,'bak'),request=>request.id),['request-bread','unassigned']);
+ assert.equal(rows[0].plannedTaskId,undefined);assert.equal(items[0].departmentId,'ijs');
+});
 test('new recipe-free requests can defer their department until planning without orphaning a product',()=>{
  const initial=state(),command={...create,itemId:'__new',departmentId:null,newItem:{name:'Nog in te delen beslag',kind:'component',unit:'kg'}};
  const next=apply(initial,command);
@@ -94,6 +102,17 @@ test('logistics and production accounts create; bakers plan only in their allowe
  assert.equal((await harness(baker,current).route.POST(post({...command,departmentId:'ijs'}))).status,403);
  const h=harness(baker,current);assert.equal((await h.route.POST(post(command))).status,200);assert.equal(h.saves[0][1],3);assert.equal(h.saves[0][2].tasks.length,1);
  assert.equal((await harness(manager).route.POST(post(create,3,'https://foreign.invalid'))).status,403);
+});
+test('the shared bakery screen can plan requests into both combined boards through the normal API',async()=>{
+ const screen={...baker,email:'strikpatisserie1937@gmail.com'};
+ const current=apply(state(),{...create,departmentId:null});
+ for(const departmentId of ['bak','brood','ijs','chocolade']){
+  const h=harness(screen,current),response=await h.route.POST(post({kind:'plan',id:'request-1',date:'2026-11-05',departmentId}));
+  assert.equal(response.status,200);assert.equal(h.saves.length,1);assert.equal(h.saves[0][2].tasks[0].departmentId,departmentId);assert.equal(h.saves[0][2].tasks[0].quantity,20);
+ }
+ const departments=(await(await harness(screen).route.GET()).json()).departments;
+ assert(departments.includes('ijs'));assert(departments.includes('chocolade'));assert(departments.includes('brood'));
+ const inactive=harness({...screen,active:false},current);assert.equal((await inactive.route.POST(post({kind:'plan',id:'request-1',date:'2026-11-05',departmentId:'ijs'}))).status,403);assert.equal(inactive.saves.length,0);
 });
 test('a stale revision cannot overwrite another request or plan; logistics receives a minimal catalog, not recipes or ingredients',async()=>{
  const h=harness(logistics);assert.equal((await h.route.POST(post(create,2))).status,409);assert.equal(h.saves.length,0);
@@ -270,6 +289,23 @@ function requestUi(initial){
  const find=(tree,predicate)=>{const found=nodes(tree).find(predicate);assert(found,'Expected request control');return found;};
  return{render,nodes,find,posted,refresh:async next=>{remote=next;await refresh();}};
 }
+test('both combined chocolate/ice board aliases offer both allowed request planning rows',()=>{
+ const initial=state(),items=[{...initial.items[0],id:'ice',name:'Vanille-ijs',departmentId:'ijs'},{...initial.items[0],id:'chocolate',name:'Bonbons',departmentId:'chocolade'}];
+ const source=apply({...initial,items},{...create,itemId:'ice',departmentId:'ijs'});
+ const data={revision:3,canCreate:true,departments:['dessert','bak','brood','ijs','chocolade'],items,requests:source.productionRequests};
+ for(const board of ['ijs','chocolade']){
+  const ui=requestUi(data);let tree=ui.render({board,compact:true});
+  ui.find(tree,node=>node.props?.['aria-label']==='Inplannen: Vanille-ijs').props.onClick();tree=ui.render({board,compact:true});
+  const department=ui.find(tree,node=>node.type==='select'&&node.props.name==='departmentId');
+  assert.equal(department.props.defaultValue,'ijs');
+  assert.deepEqual(ui.nodes(department).filter(node=>node.type==='option').map(node=>node.props.value),['','ijs','chocolade']);
+ }
+ const scoped=requestUi({...data,departments:['chocolade']});let tree=scoped.render({board:'chocolade'});
+ scoped.find(tree,node=>node.props?.['aria-label']==='Inplannen: Vanille-ijs').props.onClick();tree=scoped.render({board:'chocolade'});
+ const department=scoped.find(tree,node=>node.type==='select'&&node.props.name==='departmentId');
+ assert.equal(department.props.defaultValue,'');
+ assert.deepEqual(scoped.nodes(department).filter(node=>node.type==='option').map(node=>node.props.value),['','chocolade']);
+});
 test('request editing pre-fills the shared searchable picker and all fields, then keeps its original revision across refreshes',async()=>{
  const source=apply(state(),create);
  const data={revision:3,canCreate:true,departments:['dessert'],items:[...source.items,{...source.items[0],id:'bread',name:'Brood'}],requests:source.productionRequests};

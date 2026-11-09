@@ -32,3 +32,10 @@ test('restoration rejects expired/corrupt/foreign preferences and never restores
  for(const input of [null,'bad',JSON.stringify({route,at:now+1,view}),JSON.stringify({route,at:now-1800001,view}),JSON.stringify({route,at:now,view:{...view,day:'2026-02-30'}}),JSON.stringify({route,at:now,view:{...view,board:'unknown'}})])assert.equal(updates.decodeReloadView(input,route,now),null);
  assert.equal(updates.decodeReloadView(raw,'/other',now),null);
 });
+test('an older ice board reload preference keeps the week, department and XL mode on the combined board',()=>{
+ const route='/bakkerij/productie?board=ijs',now=10000000;
+ const old={...view,board:'ijs',department:'ijs'},raw=JSON.stringify({route,at:now,view:old});
+ const restored=updates.decodeReloadView(raw,route,now+1);
+ assert.deepEqual(JSON.parse(JSON.stringify(restored)),{...old,board:'chocolade'});
+ assert.equal(JSON.parse(updates.encodeReloadView(old,route,now)).view.board,'ijs','encoding retains compatible caller preferences while decoding canonicalizes them');
+});

@@ -9,6 +9,15 @@ import type { RecipeTransferReport } from "./recipeMigration";
 import s from "../preview/productie/production.module.css";
 import type { BoardId, DepartmentId } from "./planning";
 
+function unchangedWorkspace(current:LiveWorkspace,next:LiveWorkspace) {
+  if(current.revision!==next.revision || current.recipeRevision!==next.recipeRevision)return false;
+  if(Object.keys(current).length!==Object.keys(next).length)return false;
+  // The document revisions cover these large projections. Other metadata,
+  // including permissions, date and offers, can change independently.
+  return Object.entries(next).every(([key,value])=>
+    ["state","recipes","ingredients"].includes(key) || JSON.stringify(current[key as keyof LiveWorkspace])===JSON.stringify(value));
+}
+
 export default function ProductionClient({canManage,initialView,initialBoard,initialDepartment,initialWeek,initialTask,appVersion='development'}:{appVersion?:string;canManage:boolean;initialView?:string;initialBoard?:BoardId;initialDepartment?:DepartmentId;initialWeek?:string;initialTask?:string}) {
   const session=useProductionSession();
   const [workspace,setWorkspace]=useState<LiveWorkspace|null>(null);
@@ -18,18 +27,21 @@ export default function ProductionClient({canManage,initialView,initialBoard,ini
   const [report,setReport]=useState<RecipeTransferReport|null>(null);
   const [loading,setLoading]=useState(true);
   const serial=useRef(0);
+  const pending=useRef(0);
   const [mountedVersion]=useState(appVersion);
   const load=useCallback(async()=>{
     const id=++serial.current;
+    pending.current++;
+    const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),20000);
     try {
-      const response=await fetch("/api/productie",{cache:"no-store"}),data=await response.json();
+      const response=await fetch("/api/productie",{cache:"no-store",signal:controller.signal}),data=await response.json();
       if (!response.ok) { setSetup(!!data.setupRequired); throw Error(data.message || "De planning kon niet worden vernieuwd."); }
-      if(id===serial.current){setWorkspace(current=>current&&current.revision>data.revision?current:data);setError("");setSetup(false);}
-    } catch(e) {if(id===serial.current)setError((e as Error).message);} finally {if(id===serial.current)setLoading(false);}
+      if(id===serial.current){setWorkspace(current=>current&&(current.revision>data.revision || unchangedWorkspace(current,data))?current:data);setError("");setSetup(false);}
+    } catch(e) {if(id===serial.current)setError(controller.signal.aborted?"Verversen duurt te lang. Probeer opnieuw.":(e as Error).message);} finally {clearTimeout(timeout);pending.current--;if(id===serial.current)setLoading(false);}
   },[]);
   const available=!!workspace;
   useEffect(()=>{void load();},[load]);
-  useEffect(()=>{if(!available || busy)return;const timer=setInterval(()=>{if(!document.hidden)void load();},15000);return()=>clearInterval(timer);},[load,available,busy]);
+  useEffect(()=>{if(!available || busy)return;const timer=setInterval(()=>{if(!document.hidden&&!pending.current&&(typeof navigator==='undefined'||navigator.onLine!==false))void load();},15000);return()=>clearInterval(timer);},[load,available,busy]);
   async function transfer(migrate=false) {
     setBusy(true);setError("");
     try {

@@ -1,4 +1,4 @@
-import { BOARDS, type BoardId } from "./planning";
+import { BOARDS, canonicalBoardId, type BoardId } from "./planning";
 
 export const PRODUCTION_HOME = "/bakkerij/productie";
 export const PRODUCTION_VIEWS = ["planning", "catalog", "recipes", "ingredients", "stock", "settings"] as const;
@@ -7,9 +7,10 @@ export function productionView(value?: string): ProductionView {
   return PRODUCTION_VIEWS.includes(value as ProductionView) ? value as ProductionView : "planning";
 }
 export function productionBoard(value?: string): BoardId | undefined {
-  // Old links to the bread board now open Bakkant without changing department IDs.
+  // Keep older department-specific bookmarks on their combined planning board.
   if (value === "brood") return "bak";
-  return BOARDS.some(board => board.id === value) ? value as BoardId : undefined;
+  if (value === "ijs") return canonicalBoardId(value);
+  return BOARDS.some(board => board.id === value) ? canonicalBoardId(value as BoardId) : undefined;
 }
 export const DATA_SECTIONS = [
   { id: "recepten", label: "Eindproducten" },

@@ -13,5 +13,5 @@ export function productionDayRhythm(board: BoardId, date: string) {
 
 export function plannedOperation(kind: ItemKind | undefined, withPreparation: boolean, followingStep: boolean) {
   if (followingStep) return "Afwerken";
-  return kind === "product" && withPreparation ? "Decoreren / afmaken" : kind === "component" ? "Bereiden" : "Maken";
+  return kind === "product" && withPreparation ? "Afwerken" : kind === "component" ? "Bereiden" : "Maken";
 }

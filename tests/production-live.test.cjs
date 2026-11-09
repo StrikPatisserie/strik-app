@@ -81,6 +81,15 @@ test('an existing recipe without known yield keeps unscaled quantities and unkno
  const state=workspace.seedWorkspace(data);assert(workspace.validWorkspace(state,views));assert.equal(state.items[0].stockKnown,false);
  const renamed=structuredClone(data);renamed.recipes[0].name='Nieuwe naam';const next=workspace.syncRecipeCatalog(state,renamed);assert.equal(next.items[0].id,state.items[0].id);assert.equal(next.items[0].name,'Nieuwe naam');
 });
+test('catalog synchronization reuses a single recipe projection without rescanning canonical ingredients',()=>{
+ const data=fixture(),sourceIngredients=data.ingredients;let scans=0;
+ data.ingredients=new Proxy(sourceIngredients,{get(target,key,receiver){if(key==='find'||key==='some')scans++;return Reflect.get(target,key,receiver);}});
+ const views=workspace.recipeViews(data),projectionScans=scans,state=workspace.seedWorkspace(data,views);
+ assert(projectionScans>0);assert.equal(scans,projectionScans,'seeding with the projection should not rebuild it');
+ const shared=workspace.syncRecipeCatalog(state,data,views);assert.equal(scans,projectionScans,'syncing should reuse the supplied projection');
+ scans=0;const automatic=workspace.syncRecipeCatalog(state,data);assert.equal(scans,projectionScans,'the default path should project once');
+ assert.equal(JSON.stringify(shared),JSON.stringify(automatic));assert.equal(shared.tasks,state.tasks);assert.equal(shared.items[0].id,state.items[0].id);
+});
 test('source transfer validates, locks, compares, preserves full snapshot, commits once and then retires WordPress',async()=>{
  const source={data:fixture(),allergenLists:[],locked:true,retired:false};let active=null;const calls=[];
  const api=load('app/api/productie/transfer/route.ts',{'node:crypto':crypto,'@/app/lib/auth/session':{getCurrentProfile:async()=>manager},'@/app/lib/auth/access':access,'@/app/productie/documents.server':{ProductionStoreError:StoreError,readDocument:async()=>active,importWordPressDocument:async input=>{calls.push('commit');assert.equal(JSON.stringify(input.snapshot),JSON.stringify(source));active={data:input.data,revision:1};}},'@/app/productie/wordpress.server':{wordpressTransfer:async action=>{calls.push(action);return structuredClone(source);}},'@/app/productie/media.server':{copyWordPressImages:async data=>({data,images:0})},'@/app/productie/recipeMigration':migration,'@/app/productie/workspaceData':workspace});

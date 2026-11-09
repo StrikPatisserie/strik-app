@@ -1,4 +1,4 @@
-import {validProductionRequests,addItem,addDays,DEPARTMENTS,type PreviewState,type BoardId,type DepartmentId,type DemoRecipe,type Item,type ItemUnit,type ItemKind,type Task} from './planning';
+import {validProductionRequests,addItem,addDays,DEPARTMENTS,departmentsFor,type PreviewState,type BoardId,type DepartmentId,type DemoRecipe,type Item,type ItemUnit,type ItemKind,type Task} from './planning';
 import {buildRecipePlan} from './recipePlanning';
 import {combineTaskOperation} from './taskOperations';
 export type ProductionRequest={id:string;itemId:string;quantity:number;departmentId?:DepartmentId|null;neededBy?:string;note:string;createdBy:string;createdAt:string;updatedBy?:string;updatedAt?:string;cancelledAt?:string;plannedTaskId?:string};
@@ -10,9 +10,10 @@ export function requestDepartmentId(request:ProductionRequest,item?:Pick<Item,'d
 }
 export function requestsForBoard<T extends ProductionRequest>(requests:T[],items:Pick<Item,'id'|'departmentId'>[],board?:BoardId):T[]{
  const catalog=new Map(items.map(item=>[item.id,item]));
+ const boardDepartments=board?new Set<DepartmentId>(departmentsFor(board).map(department=>department.id)):null;
  return requests.filter(request=>{
   const departmentId=requestDepartmentId(request,catalog.get(request.itemId));
-  return !request.cancelledAt&&(!board||departmentId===null||DEPARTMENTS.some(department=>department.id===departmentId&&department.board===board));
+  return !request.cancelledAt&&(!boardDepartments||departmentId===null||boardDepartments.has(departmentId));
  });
 }
 export function requestPlanningTask(state:PreviewState,request:ProductionRequest):Task|undefined{

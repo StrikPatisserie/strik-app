@@ -16,5 +16,5 @@ export default async function ProductionPage({searchParams}:{searchParams:Promis
   const selectedDepartment=DEPARTMENTS.find(d=>d.id===query.department && productionDepartments(profile).includes(d.id));
   let initialWeek:string|undefined;try{if(query.date)initialWeek=mondayOf(query.date);}catch{}
   const initialTask=typeof query.task==="string" && query.task.length<=200 ? query.task : undefined;
-  return <ProductionClient appVersion={productionRelease()} key={`${query.view || "planning"}:${query.board || ""}:${query.department || ""}:${initialWeek || ""}:${initialTask || ""}`} canManage={canManageProduction(profile)} initialWeek={initialWeek} initialTask={initialTask} initialView={productionView(query.view)} initialBoard={productionBoard(query.board) || selectedDepartment?.board} initialDepartment={selectedDepartment?.id}/>;
+  return <ProductionClient appVersion={productionRelease()} key={`${query.view || "planning"}:${query.board || ""}:${query.department || ""}:${initialWeek || ""}:${initialTask || ""}`} canManage={canManageProduction(profile)} initialWeek={initialWeek} initialTask={initialTask} initialView={productionView(query.view)} initialBoard={productionBoard(query.board) || productionBoard(selectedDepartment?.board)} initialDepartment={selectedDepartment?.id}/>;
 }

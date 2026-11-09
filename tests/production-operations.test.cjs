@@ -26,6 +26,25 @@ test('shared supplier access is limited to active management, bakery and logisti
  assert(access.canAccessPath(logistics,'/leveranciers'));
  assert(!access.canAccessPath(shop,'/leveranciers'));
 });
+test('the active bakery screen can operate every production board without gaining management access',()=>{
+ const screen={...baker,email:' STRIKPATISSERIE1937@gmail.com '};
+ const all=Array.from(planning.DEPARTMENTS,department=>department.id);
+ assert.deepEqual(Array.from(rights.productionDepartments(screen)),all);
+ assert.deepEqual(Array.from(rights.productionDepartments(manager)),all);
+ const iceBaker={...baker,permissions:{'bakkerij.ijs_chocolade':true}};
+ assert.deepEqual(Array.from(rights.productionDepartments(iceBaker)),['ijs','chocolade']);
+ assert(!rights.productionDepartments(baker).includes('ijs'));
+ assert(!rights.productionDepartments(baker).includes('chocolade'));
+ for(const denied of [{...screen,active:false},{...screen,role:'winkel',permissions:{}},logistics,shop])assert.equal(rights.productionDepartments(denied).length,0);
+ assert.equal(access.hasFullAccess(screen),false);
+ assert.equal(access.canAccessPath(screen,'/bakkerij/productie/beheer/recepten'),false);
+ assert.equal(access.canAccessPath(screen,'/management/dashboard'),false);
+ const current=planner(),incoming=structuredClone(current);
+ incoming.items.push({...item,id:'ice',name:'IJs',departmentId:'ijs'});
+ incoming.tasks.push({id:'ice-task',itemId:'ice',departmentId:'ijs',date:'2026-11-09',quantity:10,status:'planned',batchId:'ice-batch',operation:'Maken',source:'manual',recordsOutput:true,note:''});
+ assert.equal(rights.mergeWorkspaceForEmployee(current,incoming,rights.productionDepartments(screen)),incoming);
+ assert.throws(()=>rights.mergeWorkspaceForEmployee(current,incoming,rights.productionDepartments(baker)),/eigen productieafdeling/);
+});
 function supplierApi(who,options={}){
  let doc={revision:1,suppliers:[{...suppliers.defaultSuppliers[0],username:'shared-user',password:'TEST-PRIVATE-SECRET'}]},reads=0,writes=0;
  const api=load('app/api/leveranciers/route.ts',{'@/app/lib/auth/session':{getCurrentProfile:async()=>who},'@/app/lib/auth/access':access,'@/app/productie/documents.server':{ProductionStoreError:StoreError},'@/app/productie/operationalStore.server':{readOperational:async()=>{reads++;return doc;},saveOperational:async(key,revision,next,actor)=>{assert.equal(key,suppliers.SUPPLIER_KEY);assert.equal(revision,doc.revision);assert.equal(actor,who.id);if(options.conflict)throw new StoreError('conflict',409);doc=next;writes++;}},'@/app/leveranciers/model':suppliers});

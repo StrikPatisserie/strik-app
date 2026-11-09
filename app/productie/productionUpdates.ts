@@ -1,4 +1,4 @@
-import {addDays,BOARDS,DEPARTMENTS,type BoardId,type DepartmentId} from './planning';
+import {addDays,BOARDS,DEPARTMENTS,canonicalBoardId,type BoardId,type DepartmentId} from './planning';
 
 export const RELOAD_VIEW_KEY='strik-production-update-view-v1';
 export const UPDATE_IDLE_MS=60000;
@@ -13,8 +13,9 @@ export function decodeReloadView(raw:string|null,route:string,now:number):Planni
   if(!raw)return null;const input=JSON.parse(raw),v=input.view as PlanningView;
   if(input.route!==route||!Number.isFinite(input.at)||now<input.at||now-input.at>1800000||!v)return null;
   addDays(v.week,0);addDays(v.day,0);
-  if(!BOARDS.some(b=>b.id===v.board)||!(v.department==='all'||DEPARTMENTS.some(d=>d.id===v.department))||!['all','open','active','attention','done'].includes(v.statusFilter)||typeof v.wall!=='boolean'||typeof v.weekend!=='boolean')return null;
-  return{week:v.week,day:v.day,board:v.board,department:v.department,statusFilter:v.statusFilter,wall:v.wall,weekend:v.weekend};
+  const board=canonicalBoardId(v.board);
+  if(!BOARDS.some(b=>b.id===board)||!(v.department==='all'||DEPARTMENTS.some(d=>d.id===v.department))||!['all','open','active','attention','done'].includes(v.statusFilter)||typeof v.wall!=='boolean'||typeof v.weekend!=='boolean')return null;
+  return{week:v.week,day:v.day,board,department:v.department,statusFilter:v.statusFilter,wall:v.wall,weekend:v.weekend};
  }catch{return null;}
 }
 export function encodeReloadView(view:PlanningView,route:string,now:number){
