@@ -1,4 +1,4 @@
-import { addDays, addTask, dateLabel, DEPARTMENTS, requiredTaskIds, type DemoRecipe, type DepartmentId, type PreviewState, type Task, type PreparationChoice } from "./planning";
+import { addDays, addTask, dateLabel, defaultComponentDepartment, DEPARTMENTS, requiredTaskIds, type DemoRecipe, type DepartmentId, type PreviewState, type Task, type PreparationChoice } from "./planning";
 
 export type { PreparationChoice } from "./planning";
 export type PlanCommand = {
@@ -68,10 +68,11 @@ export function preparationProposal(state:PreviewState,recipes:DemoRecipe[],comm
         if(!Number.isFinite(needed) || needed<=0 || needed>1000000)throw Error(`Ongeldige benodigde hoeveelheid bij ${child.name}.`);
         const savedDays=state.productionWork?.preparation?.[child.id];
         const plannedDate=choice.date || addDays(date,-(savedDays ?? daysBefore));addDays(plannedDate,0);
-        const departmentId=choice.departmentId || (item.departmentUnconfirmed ? command.task.departmentId : item.departmentId);
+        const componentDepartment=item.departmentUnconfirmed ? defaultComponentDepartment(child.name) : undefined;
+        const departmentId=choice.departmentId || componentDepartment || (item.departmentUnconfirmed ? command.task.departmentId : item.departmentId);
         if(!DEPARTMENTS.some(d=>d.id===departmentId))throw Error("Kies een geldige afdeling voor ieder halffabricaat.");
         let row=nodes.get(child.id);
-        if(!row) {row={recipeId:child.id,itemId:item.id,name:child.name,quantity:0,unit:item.unit,recipeCount:0,date:plannedDate,latestDate:date,departmentId,departmentUnconfirmed:!!item.departmentUnconfirmed&&!choice.departmentId,included,requires:[],operation:choice.operation?.trim() || "Bereiden",...(typeof choice.minutes==="number"?{minutes:choice.minutes}:{})};nodes.set(child.id,row);}
+        if(!row) {row={recipeId:child.id,itemId:item.id,name:child.name,quantity:0,unit:item.unit,recipeCount:0,date:plannedDate,latestDate:date,departmentId,departmentUnconfirmed:!!item.departmentUnconfirmed&&!choice.departmentId&&!componentDepartment,included,requires:[],operation:choice.operation?.trim() || "Bereiden",...(typeof choice.minutes==="number"?{minutes:choice.minutes}:{})};nodes.set(child.id,row);}
         row.quantity+=needed;row.recipeCount=child.yield>0?row.quantity/child.yield:0;
         if(plannedDate<row.date)row.date=plannedDate;
         if(date<row.latestDate)row.latestDate=date;

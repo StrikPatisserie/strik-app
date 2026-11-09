@@ -147,6 +147,15 @@ export function canonicalBoardId(board: BoardId): BoardId {
   return board === "ijs" ? "chocolade" : board;
 }
 
+/** Workstation defaults for these component families. Saved departments and
+ * per-production choices take precedence wherever this fallback is used.
+ */
+export function defaultComponentDepartment(name: string): DepartmentId | undefined {
+  const normalized = name.trim().toLocaleLowerCase("nl-NL").replace(/[-_–]/g, " ").replace(/\s+/g, " ");
+  if (/\bslof(?:fen)?\s*deeg\b/.test(normalized)) return "bak";
+  if (/^decoraties?$/.test(normalized) || /^(?:choco|chocolade)\s*(?:decoraties?|versiering(?:en)?)\b/.test(normalized) || /^(?:decoraties?|versiering(?:en)?) (?:van )?(?:choco|chocolade)\b/.test(normalized)) return "chocolade";
+}
+
 function calendarDate(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw Error("Ongeldige datum.");
   const date = new Date(`${value}T12:00:00Z`);

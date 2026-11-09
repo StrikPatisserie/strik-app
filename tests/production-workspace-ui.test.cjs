@@ -37,6 +37,42 @@ function find(tree,predicate){const node=nodes(tree).find(predicate);assert(node
 function button(tree,label){return find(tree,n=>n.type==='button' && (text(n)===label || n.props['aria-label']===label));}
 function xl(h,props={}) {let tree=h.render(h.Component,props);button(tree,'XL weergave').props.onClick();return h.render(h.Component,props);}
 
+test('a day-cell plus uses its date and department without asking for either again',async()=>{
+ const h=harness();
+ let tree=xl(h);
+ button(tree,'Taak toevoegen · Luxe gebak · do 29 okt').props.onClick();
+ tree=h.render(h.Component);
+ const form=find(tree,node=>typeof node.type==='function'&&!!node.props.onPlan);
+ const submitted=[];
+ const props={...form.props,onPlan:async command=>{submitted.push(command);}};
+ const render=()=>h.render(form.type,props,tree.props.value);
+ let view=render();
+ find(view,node=>node.type===h.pickerWidget).props.onChange('creme');
+ view=render();
+ assert.equal(view.props.subtitle,'Luxe gebak · '+planning.dateLabel('2026-10-29',true));
+ const date=find(find(view,node=>node.type==='label'&&text(node)==='Productiedatum'),node=>node.type==='input');
+ assert.equal(date.props.value,'2026-10-29');
+ assert(!visibleNodes(view).includes(date),'The chosen date is shown as context, with its input tucked under More options');
+ const quantity=find(view,node=>node.type==='input'&&node.props.type==='number');
+ quantity.props.onChange({target:{value:'7'}});
+ view=render();
+ await find(view,node=>node.type==='form').props.onSubmit({preventDefault:()=>{},currentTarget:{source:'manual',note:'',dueDate:'',output:'on'}});
+ assert.equal(submitted[0].task.date,'2026-10-29');
+ assert.equal(submitted[0].task.departmentId,'luxe');
+ assert.equal(submitted[0].amount,7);
+
+ form.props.onNewItem();
+ tree=h.render(h.Component);
+ const itemForm=find(tree,node=>typeof node.type==='function'&&!!node.props.onSave);
+ const state={...itemForm.props.state,items:[...itemForm.props.state.items,{id:'cell-temporary',name:'Tijdelijk onderdeel',kind:'component',unit:'kg',departmentId:'bak',stock:0,note:''}]};
+ await itemForm.props.onSave(state);
+ tree=h.render(h.Component);
+ const returned=find(tree,node=>typeof node.type==='function'&&!!node.props.onPlan);
+ assert.equal(returned.props.initial.fromCell,true);
+ assert.equal(returned.props.initial.date,'2026-10-29');
+ assert.equal(returned.props.initial.departmentId,'luxe');
+});
+
 test('the current calendar offer stays independent of the selected board week and opens a fixed image',()=>{
  const h=harness(),calendarWeek=planning.mondayOf(sample.DEMO_TODAY),boardWeek=planning.addDays(calendarWeek,14);
  const currentOffer={weekStart:calendarWeek,label:'Voorbeeldtaart',imageUrl:'/voorbeeldtaart.png'};

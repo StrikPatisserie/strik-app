@@ -273,3 +273,65 @@ test('unconfirmed preparation departments inherit the clicked category while con
  assert.equal(next.tasks.find(task => task.itemId === 'recipe:mousse').departmentId, 'luxe');
  assert(workspace.validWorkspace(next, recipes));
 });
+
+test('component workstation defaults stay narrow and leave unrelated recipes unassigned', () => {
+ for (const name of ['Sloffendeeg', 'Sloffen deeg', 'Slof-deeg', 'Sloffendeeg (basis)']) assert.equal(planning.defaultComponentDepartment(name), 'bak');
+ for (const name of ['Decoratie', 'Decoraties', 'Chocolade decoratie', 'Chocoladedecoratie', 'Choco-versiering', 'Decoratie van chocolade']) assert.equal(planning.defaultComponentDepartment(name), 'chocolade');
+ for (const name of ['Fruitdecoratie', 'Decoratie fruit', 'Mousse met chocolade decoratie', 'Chocolademousse', 'Chocoladeganache', 'Slagroom', 'Sloffen']) assert.equal(planning.defaultComponentDepartment(name), undefined);
+});
+
+test('unassigned sloffendeeg and chocolate decorations use their workstations while saved and per-plan departments win', () => {
+ const {state, recipes, command} = fixture();
+ command.task.departmentId = 'luxe';
+ for (const [id, name] of [['base', 'Sloffendeeg'], ['mousse', 'Decoratie']]) {
+  recipes.find(recipe => recipe.id === id).name = name;
+  Object.assign(state.items.find(item => item.recipeId === id), {name, departmentUnconfirmed: true});
+ }
+ state.items.find(item => item.recipeId === 'caramel').departmentUnconfirmed = true;
+ const before = JSON.stringify(state);
+ const proposal = rules.preparationProposal(state, recipes, command);
+ assert.equal(proposal.errors.length, 0);
+ assert.equal(proposal.rows.find(row => row.recipeId === 'base').departmentId, 'bak');
+ assert.equal(proposal.rows.find(row => row.recipeId === 'mousse').departmentId, 'chocolade');
+ assert.equal(proposal.rows.find(row => row.recipeId === 'caramel').departmentId, 'luxe');
+ assert.equal(proposal.rows.find(row => row.recipeId === 'base').departmentUnconfirmed, false);
+ const next = rules.buildRecipePlan(state, recipes, command);
+ assert.equal(next.tasks.find(task => task.itemId === 'recipe:base').departmentId, 'bak');
+ assert.equal(next.tasks.find(task => task.itemId === 'recipe:mousse').departmentId, 'chocolade');
+ assert.equal(next.tasks.find(task => task.id === 'order-1').departmentId, 'luxe');
+ assert.equal(JSON.stringify(state), before);
+ state.items.find(item => item.recipeId === 'base').departmentId = 'brood';
+ state.items.find(item => item.recipeId === 'base').departmentUnconfirmed = false;
+ command.preparation.choices.mousse = {departmentId: 'slagroom'};
+ const overridden = rules.preparationProposal(state, recipes, command);
+ assert.equal(overridden.rows.find(row => row.recipeId === 'base').departmentId, 'brood');
+ assert.equal(overridden.rows.find(row => row.recipeId === 'mousse').departmentId, 'slagroom');
+});
+
+test('catalog defaults apply to unassigned legacy components without relocating existing tasks or explicit departments', () => {
+ const data = {ingredients: [], recipes: [
+  {id: 'dough', name: 'Sloffendeeg', type: 'semiFinished', standardBatchQuantity: 5, standardBatchUnit: 'kg'},
+  {id: 'decoration', name: 'Decoratie', type: 'semiFinished', standardBatchQuantity: 5, standardBatchUnit: 'kg'},
+  {id: 'mousse', name: 'Chocolademousse', type: 'semiFinished', standardBatchQuantity: 5, standardBatchUnit: 'kg'},
+  {id: 'ice', name: 'Decoratie', type: 'semiFinished', productGroup: 'IJs', standardBatchQuantity: 5, standardBatchUnit: 'kg'},
+  {id: 'final', name: 'Sloffendeeg', type: 'finalProduct', standardBatchQuantity: 5, standardBatchUnit: 'kg'},
+ ]};
+ const seeded = workspace.seedWorkspace(data);
+ assert.equal(seeded.items.find(item => item.recipeId === 'dough').departmentId, 'bak');
+ assert.equal(seeded.items.find(item => item.recipeId === 'decoration').departmentId, 'chocolade');
+ assert.equal(seeded.items.find(item => item.recipeId === 'mousse').departmentUnconfirmed, true);
+ assert.equal(seeded.items.find(item => item.recipeId === 'ice').departmentId, 'ijs');
+ assert.equal(seeded.items.find(item => item.recipeId === 'final').departmentUnconfirmed, true);
+ const legacy = {...seeded, items: seeded.items.map(item => item.recipeId === 'dough' || item.recipeId === 'decoration' ? {...item, departmentId: 'dessert', departmentUnconfirmed: true} : item), tasks: [{id: 'existing', itemId: 'recipe:dough', departmentId: 'luxe'}]};
+ const before = JSON.stringify(legacy);
+ const current = workspace.syncRecipeCatalog(legacy, data);
+ assert.equal(current.items.find(item => item.recipeId === 'dough').departmentId, 'bak');
+ assert.equal(current.items.find(item => item.recipeId === 'decoration').departmentId, 'chocolade');
+ assert.equal(current.items.find(item => item.recipeId === 'dough').departmentUnconfirmed, false);
+ assert.equal(current.tasks, legacy.tasks);
+ assert.equal(current.tasks[0].departmentId, 'luxe');
+ assert.equal(JSON.stringify(legacy), before);
+ current.items.find(item => item.recipeId === 'dough').departmentId = 'brood';
+ const reloaded = workspace.syncRecipeCatalog(current, data);
+ assert.equal(reloaded.items.find(item => item.recipeId === 'dough').departmentId, 'brood');
+});

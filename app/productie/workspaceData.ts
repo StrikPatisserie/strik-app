@@ -1,5 +1,5 @@
 import type { RecepturenData } from "../bakkerij/recepturen/recepturenApi";
-import { type DepartmentId, type DemoRecipe, type ItemUnit, type PreviewState, type Task, validProductionRequests, DEPARTMENTS, addDays, requiredTaskIds, validRecipePlan, validStaffingSettings, validCleaningDays } from "./planning";
+import { type DepartmentId, type DemoRecipe, type ItemUnit, type PreviewState, type Task, validProductionRequests, DEPARTMENTS, addDays, requiredTaskIds, validRecipePlan, validStaffingSettings, validCleaningDays, defaultComponentDepartment } from "./planning";
 
 export type IngredientView = { id: string; name: string; supplier: string; unit: string; linked: boolean; specification: string; allergens: string };
 export type LiveWorkspace = {
@@ -43,10 +43,12 @@ export function seedWorkspace(data: RecepturenData, views = recipeViews(data)): 
   const state: PreviewState = { version: 1, items: [], tasks: [] };
   for (const recipe of data.recipes) {
     const group = (recipe.productGroup || "").trim().toLocaleLowerCase("nl-NL");
-    const departmentId: DepartmentId = group === "ijs" ? "ijs" : ["chocolade", "bonbons"].includes(group) ? "chocolade" : "dessert";
+    const componentDepartment = recipe.type === "semiFinished" ? defaultComponentDepartment(recipe.name) : undefined;
+    const knownGroup = ["ijs", "chocolade", "bonbons"].includes(group);
+    const departmentId: DepartmentId = group === "ijs" ? "ijs" : ["chocolade", "bonbons"].includes(group) ? "chocolade" : componentDepartment || "dessert";
     state.items.push({ id: `recipe:${recipe.id}`, recipeId: recipe.id, name: recipe.name,
       kind: recipe.type === "semiFinished" ? "component" : "product", unit: itemUnit(recipe.standardBatchUnit),
-      departmentId, departmentUnconfirmed: !["ijs", "chocolade", "bonbons"].includes(group),
+      departmentId, departmentUnconfirmed: !knownGroup && !componentDepartment,
       stock: 0, stockKnown: false, note: recipe.internalNotes || recipe.notes || "", articleNumber: recipe.strikArticleNumber,
       productionBlocked: !!views.find(r=>r.id===recipe.id)?.reviewRequired,
     });
@@ -77,7 +79,8 @@ export function syncRecipeCatalog(state: PreviewState, data: RecepturenData, rec
     if (!item.recipeId) return item;
     const recipe = recipes.find(r=>r.id===item.recipeId);
     if (!recipe || recipe.unit!==item.unit) return {...item,recipeId:undefined,note:`${item.note}\nReceptkoppeling opnieuw controleren: bronrecept of eenheid gewijzigd.`};
-    return {...item,name:recipe.name,kind:recipe.type==="semiFinished"?"component" as const:"product" as const,productionBlocked:!!recipe.reviewRequired};
+    const componentDepartment = item.departmentUnconfirmed && recipe.type === "semiFinished" ? defaultComponentDepartment(recipe.name) : undefined;
+    return {...item,name:recipe.name,kind:recipe.type==="semiFinished"?"component" as const:"product" as const,...(componentDepartment?{departmentId:componentDepartment,departmentUnconfirmed:false}:{}),productionBlocked:!!recipe.reviewRequired};
   });
   return {...state,items:[...items,...source.items.filter(i=>!known.has(i.id)&&(!i.recipeId||!linkedRecipes.has(i.recipeId)))]};
 }
