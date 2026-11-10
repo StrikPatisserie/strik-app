@@ -789,6 +789,25 @@
 .periodToggle button{min-height:30px;padding:5px 13px;border-radius:4px;color:#1b3344;font-size:13px;font-weight:700}
 .periodToggle button[aria-pressed=true]{background:#1b3344;color:#fff}
 .periodToggle button:focus-visible{outline:2px solid #d75a4c;outline-offset:2px}
+.worksheetRoot .keyboardToggle {
+ position:relative;
+ width:38px;
+ padding:6px;
+}
+.keyboardCheck {
+ position:absolute;
+ right:3px;
+ bottom:3px;
+ display:grid;
+ place-items:center;
+ width:13px;
+ height:13px;
+ border-radius:50%;
+ background:#1b3344;
+ color:#fff;
+ box-shadow:0 0 0 2px #c3d3bc;
+}
+.keyboardToggle:focus-visible{outline:2px solid #d75a4c;outline-offset:2px}
 .dayView .mobileDays{display:none}
 @media(min-width:801px){
  .worksheetRoot.dayView .board{display:grid;grid-template-columns:repeat(var(--departments),minmax(0,1fr));align-items:stretch}

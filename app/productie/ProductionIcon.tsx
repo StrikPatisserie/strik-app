@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-export type IconName = "cleaning" | "edit" | "refresh" | "trash" | "users" | "gift" | "grid" | "book" | "box" | "leaf" | "stock" | "settings" | "arrow" | "plus" | "chevron" | "check" | "clock" | "screen" | "close" | "search" | "warning" | "link" | "back" | "move" | "play";
+export type IconName = "cleaning" | "edit" | "refresh" | "trash" | "users" | "gift" | "grid" | "book" | "box" | "leaf" | "stock" | "settings" | "arrow" | "plus" | "chevron" | "check" | "clock" | "screen" | "keyboard" | "close" | "search" | "warning" | "link" | "back" | "move" | "play";
 
 export default function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, ReactNode> = {
@@ -21,6 +21,7 @@ export default function Icon({ name, size = 18 }: { name: IconName; size?: numbe
     check: <path d="m5 12 4 4L19 6" />,
     clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
     screen: <><rect x="2" y="3" width="20" height="14" rx="2" /><path d="M12 17v4M7 21h10" /></>,
+    keyboard: <><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 12h.01M10 12h.01M14 12h.01M18 12h.01M7 16h10" /></>,
     close: <path d="m6 6 12 12M6 18 18 6" />,
     search: <><circle cx="10" cy="10" r="6" /><path d="m15 15 6 6" /></>,
     warning: <><path d="m12 3 10 18H2L12 3ZM12 9v5M12 17h.01" /></>,
