@@ -784,3 +784,24 @@
 .worksheetRoot .taskWorkBadge{font-size:12px}
 @media(min-width:1600px){.worksheetRoot .cellWorkTotals,.worksheetRoot .taskWorkBadge{font-size:14px}.worksheetRoot .taskWorkBadge svg,.worksheetRoot .cellWorkTotals svg{width:14px;height:14px}}
 @media(max-width:800px){.worksheetRoot .dayCellFooter{min-height:32px}.worksheetRoot .dayCellFooter .cellAdd{flex-basis:36px;width:36px;min-height:32px}.cellWorkTotals{font-size:13px}}
+
+.periodToggle{display:inline-flex;align-items:center;padding:3px;border:1px solid #aabbaa;border-radius:6px;background:#edf2e9;gap:3px}
+.periodToggle button{min-height:30px;padding:5px 13px;border-radius:4px;color:#1b3344;font-size:13px;font-weight:700}
+.periodToggle button[aria-pressed=true]{background:#1b3344;color:#fff}
+.periodToggle button:focus-visible{outline:2px solid #d75a4c;outline-offset:2px}
+.dayView .mobileDays{display:none}
+@media(min-width:801px){
+ .worksheetRoot.dayView .board{display:grid;grid-template-columns:repeat(var(--departments),minmax(0,1fr));align-items:stretch}
+ .worksheetRoot.dayView .boardHeader{grid-column:1/-1;display:flex;min-width:0}
+ .worksheetRoot.dayView .departmentColumn{display:none}
+ .worksheetRoot.dayView .dayHeading{flex:1;border:0;padding:9px 12px}
+ .worksheetRoot.dayView .departmentRow{display:flex;flex-direction:column;min-width:0;border-top:1px solid #aabbaa;border-right:1px solid #b6c5b3}
+ .worksheetRoot.dayView .departmentLabel,.worksheetRoot.dayView .cleaningLane .departmentLabel{min-height:46px;flex-direction:row;justify-content:space-between;padding:8px 10px;border:0;border-bottom:1px solid #9cb292}
+ .worksheetRoot.dayView .departmentLabel h2{writing-mode:horizontal-tb;transform:none;white-space:normal;line-height:1.25;font-size:16px}
+ .worksheetRoot.dayView .dayCell{flex:1;border:0;min-height:170px!important;padding:7px;gap:6px}
+ .worksheetRoot.dayView .taskOpen strong{font-size:20px}
+ .worksheetRoot.dayView .taskStep{font-size:13px}
+ .worksheetRoot.dayView .cellWorkTotals{font-size:15px}
+ .worksheetRoot.dayView .board>p{grid-column:1/-1}
+}
+@media(max-width:800px){.periodToggle button{min-height:32px;padding:5px 12px}.dayView .weekPicker strong{text-transform:capitalize}}

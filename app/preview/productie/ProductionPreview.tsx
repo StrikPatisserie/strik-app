@@ -98,15 +98,17 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
   const [hydrated, setHydrated] = useState(false);
   const [view, setView] = useState<View>(()=>productionView(initialView));
   const [board, setBoard] = useState<BoardId>(()=>canonicalBoardId(initialBoard && (!live || departmentsFor(initialBoard).some(d=>live.departments.includes(d.id))) ? initialBoard : live && !live.departments.includes("dessert") ? (live.departments.includes("bak") || live.departments.includes("brood") ? "bak" : "chocolade") : "patisserie"));
-  const [week, setWeek] = useState(()=>initialWeek || (demo ? DEMO_WEEK : mondayOf(today)));
+  const [weekAnchor, setWeek] = useState(()=>initialWeek || (demo ? DEMO_WEEK : mondayOf(today)));
+  const [period,setPeriod]=useState<"week"|"day">("week");
   const [department, setDepartment] = useState<DepartmentId | "all">(initialDepartment || "all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
   const [query, setQuery] = useState("");
   const [day, setDay] = useState(today);
+  const week=period==="day"?mondayOf(day):weekAnchor;
   const [wall, setWall] = useState(false);
   const screenFit=view==="planning";
-  const {frameRef,workspaceRef}=useScreenLayout(wall,screenFit);
+  const {frameRef,workspaceRef}=useScreenLayout(wall,screenFit,period==="day"?`day:${day}`:"week");
   const {physicalKeyboard,setPhysicalKeyboard,storageError:keyboardStorageError}=usePhysicalKeyboard(frameRef);
   const [largeText, setLargeText] = useState(false);
   const [weekend, setWeekend] = useState(false);
@@ -118,14 +120,14 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
   const [dragged, setDragged] = useState<string | null>(null);
   const [movingTask,setMovingTask]=useState<string|null>(null);
   const touchDrag=useTaskDrag({frameRef,enabled:view==="planning"&&canManage&&!saving&&!modal&&!quickRecipeItem,onMove:move,onDragChange:setDragged});
-  const updatePending=useProductionUpdates({enabled:!demo&&view==="planning",clientVersion:releaseVersion,serverVersion:live?.appVersion,blocked:saving||!!modal||!!quickRecipeItem||!!dragged||!connectionHealthy,view:{week,day,board,department,statusFilter,wall,weekend}});
+  const updatePending=useProductionUpdates({enabled:!demo&&view==="planning",clientVersion:releaseVersion,serverVersion:live?.appVersion,blocked:saving||!!modal||!!quickRecipeItem||!!dragged||!connectionHealthy,view:{week,day,board,department,statusFilter,wall,weekend,period}});
   useEffect(()=>{
     if(demo)return;
     try{
       const saved=decodeReloadView(sessionStorage.getItem(RELOAD_VIEW_KEY),location.pathname+location.search,Date.now());
       sessionStorage.removeItem(RELOAD_VIEW_KEY);
       if(saved&&(!live||departmentsFor(saved.board).some(d=>live.departments.includes(d.id)))){
-        setWeek(saved.week);setDay(saved.day);setBoard(canonicalBoardId(saved.board));setDepartment(saved.department);setStatusFilter(saved.statusFilter);setWall(saved.wall);setWeekend(saved.weekend);
+        setPeriod(saved.period || "week");setWeek(saved.period==="day"?mondayOf(saved.day):saved.week);setDay(saved.day);setBoard(canonicalBoardId(saved.board));setDepartment(saved.department);setStatusFilter(saved.statusFilter);setWall(saved.wall);setWeekend(saved.weekend);
       }
     }catch{/* No planner snapshot is ever restored from browser storage. */}
   // Restore view preferences once; subsequent data always comes from the API.
@@ -163,7 +165,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
     return () => clearTimeout(timer);
   }, [message]);
 
-  const days = Array.from({ length: weekend ? 7 : 6 }, (_, i) => addDays(week, i));
+  const days = period==="day"?[day]:Array.from({ length: weekend ? 7 : 6 }, (_, i) => addDays(week, i));
   const boardDepartments = useMemo(()=>departmentsFor(board),[board]);
   const visibleDepartments = boardDepartments.filter(d => department === "all" || d.id === department);
   const weekTasks = useMemo(()=>state.tasks.filter(t => t.date >= week && t.date <= addDays(week, 6) && boardDepartments.some(d => d.id === t.departmentId)),[state.tasks,week,boardDepartments]);
@@ -172,7 +174,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
   const preparationRoots=useMemo(()=>new Set(state.tasks.flatMap(task=>task.generatedFor?[task.generatedFor]:[])),[state.tasks]);
   const end = addDays(week, 6);
   const recipeUpdates=useMemo(()=>new Map(weekTasks.filter(t=>!t.generatedFor && !t.dependsOn && (t.recipePlan || state.tasks.some(c=>c.generatedFor===t.id))).map(t=>[t.id,recipePlanChanges(state,recipeList,t)]).filter(([,review])=>typeof review!=="string" && review.changed) as [string,ReturnType<typeof recipePlanChanges>][]),[state,recipeList,weekTasks]);
-  const filtered = state.tasks.filter(t => t.date >= week && t.date <= end && (weekend || t.date !== end) && visibleDepartments.some(d => d.id === t.departmentId))
+  const filtered = state.tasks.filter(t => (period==="day"?t.date===day:t.date >= week && t.date <= end && (weekend || t.date !== end)) && visibleDepartments.some(d => d.id === t.departmentId))
     .filter(t => statusFilter === "all" || (statusFilter === "open" ? t.status !== "done" : statusFilter === "attention" ? (taskIssues(t, state.tasks,state.items).length > 0 || recipeUpdates.has(t.id)) : t.status === statusFilter))
     .filter(t => !query || `${state.items.find(i => i.id === t.itemId)?.name} ${t.operation} ${t.note}`.toLocaleLowerCase("nl-NL").includes(query.toLocaleLowerCase("nl-NL")));
 
@@ -185,6 +187,16 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
   function navigate(next: View) { setView(next); setQuery(""); setDepartment("all"); setKindFilter("all"); }
   function chooseBoard(id: BoardId) { setBoard(canonicalBoardId(id)); setDepartment("all"); }
   function shiftWeek(direction: number) { const next = addDays(week, direction * 7); setWeek(next); setDay(next); }
+  function choosePeriod(next:"week"|"day") {
+    if(next==="day"&&mondayOf(day)!==week)setDay(week);
+    if(next==="week"){setWeek(week);if(day===addDays(week,6))setWeekend(true);}
+    setPeriod(next);
+  }
+  function shiftPeriod(direction:number) {
+    if(period==="week"){shiftWeek(direction);return;}
+    const next=addDays(day,direction);
+    setDay(next);setWeek(mondayOf(next));
+  }
   async function persist(next:PreviewState, success:string,command?:PlanCommand,replaceTaskId?:string,options?:{optimistic?:boolean;request?:{url:string;body:Record<string,unknown>}}):Promise<string|undefined> {
     if (savingRef.current) return "Wacht tot de vorige wijziging is opgeslagen.";
     if (demo) { setState(next); notify(success); return; }
@@ -316,7 +328,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
     }
     return persist({...state,items:state.items.map(i=>i.id===id?{...i,...changes,departmentUnconfirmed:false}:i)},"Onderdeel bijgewerkt.");
   }
-  const style = { "--days": days.length } as CSSProperties;
+  const style = { "--days": days.length, "--departments":visibleDepartments.length+(board==="patisserie"&&department==="all"?1:0) } as CSSProperties;
 
   function dayWork(departmentId:DepartmentId,date:string) {
     const total=dailyWork.get(`${departmentId}:${date}`);
@@ -362,7 +374,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
     </article>;
   }
 
-  return <WorkspaceContext.Provider value={{demo,recipes:recipeList,canManage,saving}}><div ref={frameRef} className={screenFit?s.screenFrame:undefined}><div ref={workspaceRef} className={`${s.root} ${screenFit?s.worksheetRoot:""} ${wall ? s.wall : ""} ${screenFit?s.screenFit:""} ${largeText ? s.largeText : ""}`} style={style} data-production-preview={demo || undefined} aria-busy={saving}>
+  return <WorkspaceContext.Provider value={{demo,recipes:recipeList,canManage,saving}}><div ref={frameRef} className={screenFit?s.screenFrame:undefined}><div ref={workspaceRef} className={`${s.root} ${screenFit?s.worksheetRoot:""} ${period==="day"?s.dayView:""} ${wall ? s.wall : ""} ${screenFit?s.screenFit:""} ${largeText ? s.largeText : ""}`} style={style} data-production-preview={demo || undefined} data-planning-period={period} aria-busy={saving}>
     {!wall && <ProductionNavigation active={view} boards={availableBoards} canManage={canManage} canManageData={canManageData} canBakery={canBakery} demo={demo} activeBoard={board} onNavigate={navigate} onBoard={id=>{navigate("planning");chooseBoard(id);}} />}
 
     <main className={s.main} data-production-content={view!=="planning"?"":undefined}><div className={s.fitCanvas}>
@@ -374,11 +386,11 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
       <ProductionMobileNavigation active={view} canManage={canManage} canManageData={canManageData} canBakery={canBakery} demo={demo} onNavigate={navigate} />
 
       {view === "planning" ? <>
-        <header className={s.planningActions} aria-label="Planningacties"><h1 className={s.srOnly}>Weekplanning · STRAK gepland</h1>
+        <header className={s.planningActions} aria-label="Planningacties"><h1 className={s.srOnly}>{period==="day"?"Dagplanning":"Weekplanning"} · STRAK gepland</h1>
           <ProductionStaffing compact week={week} canManage={canManage} demo={demo} onSettingsSaved={onRefresh}/>
-          <div className={s.screenActions}>{live?.screenAccount&&<button type="button" className={s.secondaryButton} aria-pressed={physicalKeyboard} title="Alleen dit apparaat" onClick={()=>setPhysicalKeyboard(!physicalKeyboard)}>Fysiek toetsenbord</button>}<button className={s.secondaryButton} aria-pressed={wall} onClick={()=>setWall(!wall)}><Icon name="screen" size={17}/>XL weergave</button><button className={s.secondaryButton} aria-label="Volledig scherm" title="Volledig scherm" onClick={()=>void fullscreen()}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5"/></svg></button>{canManage&&<button className={s.primaryButton} onClick={()=>setModal({type:"task",date:day,departmentId:department!=="all"?department:undefined})}><Icon name="plus" size={17}/>Inplannen</button>}</div>
+          <div className={s.screenActions}><div className={s.periodToggle} role="group" aria-label="Weergave"><button type="button" aria-label="Per week" aria-pressed={period==="week"} disabled={saving} onClick={()=>choosePeriod("week")}>Week</button><button type="button" aria-label="Per dag" aria-pressed={period==="day"} disabled={saving} onClick={()=>choosePeriod("day")}>Dag</button></div>{live?.screenAccount&&<button type="button" className={s.secondaryButton} aria-pressed={physicalKeyboard} title="Alleen dit apparaat" onClick={()=>setPhysicalKeyboard(!physicalKeyboard)}>Fysiek toetsenbord</button>}<button className={s.secondaryButton} aria-pressed={wall} onClick={()=>setWall(!wall)}><Icon name="screen" size={17}/>XL weergave</button><button className={s.secondaryButton} aria-label="Volledig scherm" title="Volledig scherm" onClick={()=>void fullscreen()}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5"/></svg></button>{canManage&&<button className={s.primaryButton} onClick={()=>setModal({type:"task",date:day,departmentId:department!=="all"?department:undefined})}><Icon name="plus" size={17}/>Inplannen</button>}</div>
         </header>
-        <section className={s.plannerToolbar} aria-label="Week en filters"><div className={s.weekPicker}><button aria-label="Vorige week" onClick={() => shiftWeek(-1)} className={s.previous}><Icon name="chevron" size={16} /></button><div><strong>Week {weekNumber(week)}</strong><span>{weekLabel(week)}</span></div><button aria-label="Volgende week" onClick={() => shiftWeek(1)}><Icon name="chevron" size={16} /></button><button className={s.thisWeek} onClick={() => { setWeek(demo ? DEMO_WEEK : mondayOf(today)); setDay(today); }}>{demo ? "Voorbeeldweek" : "Deze week"}</button></div>
+        <section className={s.plannerToolbar} aria-label="Week en filters"><div className={s.weekPicker}><button aria-label={period==="day"?"Vorige dag":"Vorige week"} onClick={() => shiftPeriod(-1)} className={s.previous}><Icon name="chevron" size={16} /></button><div><strong>{period==="day"?dateLabel(day,true):`Week ${weekNumber(week)}`}</strong><span>{period==="day"?`Week ${weekNumber(week)} · ${day.slice(0,4)}`:weekLabel(week)}</span></div><button aria-label={period==="day"?"Volgende dag":"Volgende week"} onClick={() => shiftPeriod(1)}><Icon name="chevron" size={16} /></button><button className={s.thisWeek} onClick={() => { setWeek(demo ? DEMO_WEEK : mondayOf(today)); setDay(today); }}>{period==="day"?"Vandaag":demo ? "Voorbeeldweek" : "Deze week"}</button></div>
           <div className={`${s.plannerFilters} ${showFilters ? s.filtersExpanded : ""}`}><label><span className={s.srOnly}>Planning</span><select value={board} onChange={e => chooseBoard(e.target.value as BoardId)}>{availableBoards.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label><button className={s.mobileFilterToggle} aria-label="Toon of verberg filters" aria-expanded={showFilters} onClick={() => setShowFilters(!showFilters)}><Icon name="settings" size={16} /></button><label className={s.extraFilter}><span className={s.srOnly}>Afdeling</span><select value={department} onChange={e => setDepartment(e.target.value as DepartmentId | "all")}><option value="all">Alle afdelingen</option>{boardDepartments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></label><label className={s.extraFilter}><span className={s.srOnly}>Taakstatus</span><select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="all">Alle taken</option><option value="open">Nog te doen</option><option value="active">Bezig</option><option value="attention">Aandacht nodig</option><option value="done">Afgerond</option></select></label>{wall && <button className={s.textSize} title="Tekstgrootte" aria-label="Tekstgrootte" onClick={() => setLargeText(!largeText)} aria-pressed={largeText}>A<span>A</span></button>}</div>
           <div className={s.plannerMeta}>{updatePending&&<span role="status" className={s.updatePending} title="Wordt bijgewerkt zodra niemand invoert of opslaat en het scherm één minuut niet is gebruikt.">Nieuwe versie klaar</span>}<span className={s.weekProgress} title={`${done} van ${weekTasks.length} taken klaar`}>{done}/{weekTasks.length} klaar</span><button title={`${attention.length} aandachtspunt${attention.length===1?"":"en"}`} aria-label={`${attention.length} aandachtspunt${attention.length===1?"":"en"}`} onClick={()=>setModal({type:"attention"})} className={attention.length?s.attentionButton:s.quietButton}><Icon name="warning" size={14}/>{attention.length}</button>
             <details className={s.syncDetails}><summary title="Opslag en verversen"><span className={s.liveDot}/><span role="status">{demo?(storageError?"Opslagfout":"Preview"):saving?"Opslaan…":"Opgeslagen"}</span></summary><div>{demo?<><p>{storageError?"Bewaren niet mogelijk · wijzigingen vervallen bij herladen":"Voorbeeldgegevens · wijzigingen blijven alleen in deze browser"}</p><button onClick={()=>setModal({type:"reset"})}>Herstel voorbeeld</button></>:<><p>Opgeslagen in Supabase{syncedAt?` · bijgewerkt ${new Intl.DateTimeFormat("nl-NL",{timeZone:"Europe/Amsterdam",hour:"2-digit",minute:"2-digit"}).format(new Date(syncedAt))}`:""}</p><button disabled={saving} onClick={()=>void onRefresh?.()}>Verversen</button></>}</div></details>
@@ -387,7 +399,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
         <div className={s.mobileDays} role="group" aria-label="Kies dag">{days.map(d => <button key={d} data-task-date={d} data-today={d===today || undefined} aria-pressed={day === d} onClick={() => setDay(d)}>{dateLabel(d)}</button>)}</div>
         <div className={s.mobileRhythm}><DayRhythm board={board} date={day}/></div>
         <div className={s.plannerWithRequests}><div className={s.plannerBoardColumn}>
-        <section className={s.board} aria-label="Weekbord">
+        <section className={s.board} aria-label={period==="day"?"Dagbord":"Weekbord"}>
           <div className={s.boardHeader}><div className={s.departmentColumn}/>{days.map(d => <div key={d} className={`${s.dayHeading} ${d === today ? s.today : ""}`}><div><strong>{dateLabel(d)}</strong>{d===today&&<span>Vandaag</span>}</div><DayRhythm board={board} date={d}/></div>)}</div>
           {visibleDepartments.map(dep => {
             if(dep.id==="bruidstaarten")return <WeddingWeekLane renderTaskWork={completionBadge} renderDayWork={date=>dayWork("bruidstaarten",date)} dragFrameRef={frameRef} onDragChange={setDragged} key={dep.id} week={week} days={days} day={day} today={today} state={state} canManage={canManage} saving={saving} demo={demo} statusFilter={statusFilter} Dialog={ModalFrame} onUpdate={updateWedding}/>;
@@ -404,7 +416,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
           })}
           {board==="patisserie" && department==="all" && <CleaningWeekLane dragFrameRef={frameRef} onDragChange={setDragged} days={days} day={day} today={today} rows={state.cleaning || []} canManage={canManage} canCheck={!live || live.departments.some(id=>departmentsFor("patisserie").some(d=>d.id===id))} saving={saving} statusFilter={statusFilter} selected={modal?.type==="cleaning"?modal:null} Dialog={ModalFrame} onOpen={selection=>setModal(selection?{type:"cleaning",...selection}:null)} onCommand={clean}/>}
         </section>
-        <footer className={s.boardFooter}><span><i />Gepland <i className={s.activeLegend} />Bezig <i className={s.doneLegend} />Klaar <i className={s.blockedLegend} />Geblokkeerd</span><span>{canManage ? "Sleep om te verplaatsen · open een taak om te wijzigen" : "Open een taak voor details en status"}</span>{!weekend && (weekTasks.some(t => t.date === end) || (board==="patisserie" && state.cleaning?.some(d=>d.date===end))) && <button onClick={() => setWeekend(true)}>Zondag heeft taken · toon zondag</button>}</footer>
+        <footer className={s.boardFooter}><span><i />Gepland <i className={s.activeLegend} />Bezig <i className={s.doneLegend} />Klaar <i className={s.blockedLegend} />Geblokkeerd</span><span>{canManage ? "Sleep om te verplaatsen · open een taak om te wijzigen" : "Open een taak voor details en status"}</span>{period==="week" && !weekend && (weekTasks.some(t => t.date === end) || (board==="patisserie" && state.cleaning?.some(d=>d.date===end))) && <button onClick={() => setWeekend(true)}>Zondag heeft taken · toon zondag</button>}</footer>
         </div><aside className={s.planningRail}>{live?<ProductionRequests compact board={board} week={week} today={today} onPlanned={onRefresh}/>:<div className={s.demoRequests}>Productieverzoeken<button aria-label="Nieuw productieverzoek" onClick={()=>setModal({type:"item"})}><Icon name="plus"/></button></div>}{canBakery && <ProductionWeekOffer key={offerWeek} offers={live?.weeklyOffers} week={offerWeek} paused={!!modal || !!quickRecipeItem} onOpen={(selectedWeek, offer) => setModal({type:"offer",week:selectedWeek,imageUrl:offer.imageUrl,label:offer.label})} onManage={canManageData ? selectedWeek => setModal({type:"offer-manage",week:selectedWeek}) : undefined}/>}</aside></div>
       </> : view === "catalog" ? <>
         <div className={s.sectionIntro}><p>Alles wat je maakt, ook zonder uitgewerkt recept.</p><span>{state.items.filter(i=>i.kind==="product").length} eindproducten · {state.items.filter(i=>i.kind==="component").length} halffabricaten</span></div>

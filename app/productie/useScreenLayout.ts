@@ -7,7 +7,7 @@ type WordMeasurement={text:string;base:number;widest:number};
 /** Fit the complete workspace once, then retain its layout until real overflow
  * or a viewport resize requires another fit. Browser zoom keeps native scrolling.
  */
-export default function useScreenLayout(xl:boolean,enabled=true){
+export default function useScreenLayout(xl:boolean,enabled=true,layoutKey='week'){
   const frameRef=useRef<HTMLDivElement>(null),workspaceRef=useRef<HTMLDivElement>(null);
   useLayoutEffect(()=>{
     if(!enabled)return;
@@ -141,6 +141,6 @@ export default function useScreenLayout(xl:boolean,enabled=true){
       workspace.removeEventListener("load",onContent,true);document.fonts?.removeEventListener("loadingdone",onFonts);
       reset();restoreFrame();
     };
-  },[xl,enabled]);
+  },[xl,enabled,layoutKey]);
   return {frameRef,workspaceRef};
 }

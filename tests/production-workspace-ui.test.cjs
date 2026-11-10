@@ -203,7 +203,7 @@ test('the current calendar offer stays independent of the selected board week an
  let tree=xl(h,props);
  const actions=find(tree,n=>n.type==='header' && n.props['aria-label']==='Planningacties');
  const labels=nodes(actions).filter(n=>n.type==='button').map(n=>n.props['aria-label'] || text(n));
- assert.deepEqual(labels,['XL weergave','Volledig scherm','Inplannen']);
+ assert.deepEqual(labels,['Per week','Per dag','XL weergave','Volledig scherm','Inplannen']);
  let offer=find(tree,n=>n.type===h.offerWidget);
  assert.equal(offer.props.week,calendarWeek);
  assert.equal(offer.props.paused,false);
@@ -737,4 +737,189 @@ test('persisted bridal tasks reuse work badges and daily totals while their own 
  button(tree,'Bridal work summary').props.onClick();tree=render();assert.equal(find(tree,node=>node.type==='bridal-dialog').props.title,'BRUID-TEST');
  props.statusFilter='open';dayCalls.length=0;tree=render();assert(!nodes(tree).some(node=>node.type==='article'&&node.key==='BRUID-TEST'));assert.deepEqual(dayCalls,[sample.DEMO_TODAY],'Filtering a completed bridal card does not remove its daily totals');
  delete props.renderTaskWork;delete props.renderDayWork;props.statusFilter='all';tree=render();assert(!nodes(tree).some(node=>node.props?.className==='taskMeta'),'No empty metadata row is reserved when the optional badge renderer is absent');
+});
+
+test('day view switches locally and shows only the chosen day with every department and its real totals',()=>{
+ const h=harness();let tree=xl(h);
+ button(tree,'Per dag').props.onClick();tree=h.render(h.Component);
+ assert(find(tree,node=>node.type==='section'&&node.props['aria-label']==='Dagbord'));
+ assert.equal(find(tree,node=>node.props?.['data-planning-period']).props['data-planning-period'],'day');
+ assert.equal(button(tree,'Per dag').props['aria-pressed'],true);
+ const dates=[...new Set(nodes(tree).filter(node=>node.props?.onDrop).map(node=>node.props['data-task-date']))];
+ assert.deepEqual(dates,[sample.DEMO_TODAY]);
+ assert(button(tree,'Open 36 stuks Fruitdesserttaart · Vullen & afwerken'));
+ assert(!nodes(tree).some(node=>node.props?.['aria-label']==='Open 24 stuks Fruitdesserttaart · Vullen & afwerken'));
+ assert(find(tree,node=>node.props?.['aria-label']==='Productieve uren · Desserttaart & fruit · wo 28 okt'));
+ assert(text(tree).includes('wo 28 okt'));assert(button(tree,'Vandaag'));
+ button(tree,'Per week').props.onClick();tree=h.render(h.Component);
+ assert(find(tree,node=>node.type==='section'&&node.props['aria-label']==='Weekbord'));
+ assert.equal(new Set(nodes(tree).filter(node=>node.props?.onDrop).map(node=>node.props['data-task-date'])).size,6);
+});
+
+test('day navigation includes Sunday, crosses week boundaries and retains Sunday when returning to week view',()=>{
+ const h=harness();let tree=xl(h);
+ button(tree,'Per dag').props.onClick();tree=h.render(h.Component);
+ for(let step=0;step<4;step++){button(tree,'Volgende dag').props.onClick();tree=h.render(h.Component);}
+ assert(text(tree).includes('zo 1 nov'));
+ assert(nodes(tree).some(node=>node.props?.onDrop&&node.props['data-task-date']==='2026-11-01'));
+ button(tree,'Per week').props.onClick();tree=h.render(h.Component);
+ assert(nodes(tree).some(node=>node.props?.onDrop&&node.props['data-task-date']==='2026-11-01'));
+ button(tree,'Per dag').props.onClick();tree=h.render(h.Component);
+ button(tree,'Volgende dag').props.onClick();tree=h.render(h.Component);
+ assert(text(tree).includes('ma 2 nov'));assert(text(tree).includes('Week 45'));
+ button(tree,'Vorige dag').props.onClick();tree=h.render(h.Component);
+ assert(text(tree).includes('zo 1 nov'));assert(text(tree).includes('Week 44'));
+ button(tree,'Vandaag').props.onClick();tree=h.render(h.Component);
+ assert(text(tree).includes('wo 28 okt'));
+});
+
+test('a day-cell plus and native drag keep the selected date and department in day mode',()=>{
+ const h=harness();let tree=xl(h);
+ button(tree,'Per dag').props.onClick();tree=h.render(h.Component);
+ const card=find(tree,node=>node.type==='article'&&node.props['data-task-id']==='f3');
+ card.props.onDragStart({dataTransfer:{setData(){}}});tree=h.render(h.Component);
+ const target=find(tree,node=>node.props?.onDrop&&node.props['data-task-department']==='luxe');
+ target.props.onDrop({preventDefault(){}});tree=h.render(h.Component);
+ assert(nodes(find(tree,node=>node.props?.onDrop&&node.props['data-task-department']==='luxe')).some(node=>node.props?.['data-task-id']==='f3'));
+ button(tree,'Taak toevoegen · Luxe gebak · wo 28 okt').props.onClick();tree=h.render(h.Component);
+ const form=find(tree,node=>typeof node.type==='function'&&node.type.name==='TaskForm');
+ assert.equal(form.props.initial.date,sample.DEMO_TODAY);assert.equal(form.props.initial.departmentId,'luxe');
+ assert.equal(form.props.initial.fromCell,true);
+});
+
+test('switching to day view after changing weeks selects a day inside that displayed week',()=>{
+ const h=harness();let tree=xl(h);
+ button(tree,'Volgende week').props.onClick();tree=h.render(h.Component);
+ button(tree,'Per dag').props.onClick();tree=h.render(h.Component);
+ assert(text(tree).includes('ma 2 nov'));
+ assert(nodes(tree).some(node=>node.props?.onDrop&&node.props['data-task-date']==='2026-11-02'));
+});
+
+test('cross-week wedding moves keep the selected day, week and totals aligned through success or rollback',async()=>{
+ const order={code:'DAY-CROSS-WEEK',name:'Voorbeeld bruidspaar',date:'2026-10-31',updatedAt:'2026-10-28T09:00:00.000Z',size:'Voorbeeldformaat',time:'12:00',lines:[],config:{}};
+ const destination='2026-10-23';
+ for(const succeeds of [true,false]){
+  const state=weddingPlanning.scheduleWedding(sample.initialPreviewState(),order,sample.DEMO_TODAY,'planned');
+  const original=state.tasks.find(task=>task.weddingCode===order.code);
+  original.minutes=75;
+  const before=JSON.stringify(state),m=movingTaskHarness(state);
+  const lane=tree=>find(tree,node=>typeof node.type==='function'&&!!node.props.onUpdate&&!!node.props.state);
+  function assertSelection(tree,date){
+   const props=lane(tree).props,expectedWeek=planning.mondayOf(date);
+   assert.equal(props.day,date);
+   assert.equal(props.week,expectedWeek);
+   assert.deepEqual([...props.days],[date]);
+   assert.equal(button(tree,'Per dag').props['aria-pressed'],true);
+   const picker=find(tree,node=>node.props?.className==='weekPicker');
+   assert(text(picker).includes(planning.dateLabel(date,true)));
+   assert(text(picker).includes(`Week ${planning.weekNumber(expectedWeek)}`));
+   const totals=props.renderDayWork(date);
+   assert.equal(text(dayWorkMetric(totals,'Nog gepland · ','Bruidstaarten',date)),'1u15');
+   assert.equal(props.state.tasks.find(task=>task.id===original.id).date,date);
+  }
+  let tree=m.render();button(tree,'Per dag').props.onClick();tree=m.render();
+  assertSelection(tree,sample.DEMO_TODAY);
+  const result=lane(tree).props.onUpdate(order,destination,'planned');
+  tree=m.render();assertSelection(tree,destination);
+  assert.equal(lane(tree).props.saving,true);
+  assert.equal(m.requests.length,1);
+  const request=m.requests[0];
+  assert.equal(request.url,'/api/productie/weddings');
+  request.resolve({ok:succeeds,status:succeeds?200:403,json:async()=>succeeds?{state:weddingPlanning.scheduleWedding(state,order,destination,'planned'),revision:8,updatedAt:'2026-10-28T10:00:00.000Z'}:{message:'Bruidstaart verplaatsen geweigerd'}});
+  assert.equal(await result,succeeds?undefined:'Bruidstaart verplaatsen geweigerd');
+  await m.flush();tree=m.render();
+  const selected=succeeds?destination:sample.DEMO_TODAY;
+  assertSelection(tree,selected);
+  assert.equal(lane(tree).props.saving,false);
+  assert.equal(m.refreshes,succeeds?0:1);
+  assert.equal(m.requests.length,1);
+  assert.equal(m.timers.size,0);
+  assert.equal(JSON.stringify(state),before,'The supplied workspace remains unchanged');
+  button(tree,'Per week').props.onClick();tree=m.render();
+  assert.equal(lane(tree).props.week,planning.mondayOf(selected));
+  assert.equal(lane(tree).props.days[0],planning.mondayOf(selected));
+  assert(lane(tree).props.days.includes(selected),'Returning to week view retains the selected date');
+ }
+});
+
+test('a selected bridal source survives a week change and reloads immediately after both the dialog and save finish',async()=>{
+ function effectsHarness(order){
+  const slots=[],requests=[],intervals=new Map();
+  let index=0,dirty=false,timerId=0,layoutEffects=[],effects=[];
+  const sameDependencies=(before,after)=>before&&after&&before.length===after.length&&after.every((value,i)=>Object.is(value,before[i]));
+  function effect(callback,dependencies,queue){
+   const position=index++,previous=slots[position];
+   if(previous&&sameDependencies(previous.dependencies,dependencies))return;
+   const next={dependencies,cleanup:undefined};slots[position]=next;
+   queue.push(()=>{previous?.cleanup?.();next.cleanup=callback();});
+  }
+  const react={
+   useState(initial){
+    const position=index++;
+    if(!(position in slots))slots[position]=typeof initial==='function'?initial():initial;
+    return [slots[position],update=>{const next=typeof update==='function'?update(slots[position]):update;if(!Object.is(next,slots[position])){slots[position]=next;dirty=true;}}];
+   },
+   useRef(initial){const position=index++;return slots[position]??=({current:initial});},
+   useCallback(callback,dependencies){
+    const position=index++,previous=slots[position];
+    if(!previous||!sameDependencies(previous.dependencies,dependencies))slots[position]={dependencies,callback};
+    return slots[position].callback;
+   },
+   useLayoutEffect:(callback,dependencies)=>effect(callback,dependencies,layoutEffects),
+   useEffect:(callback,dependencies)=>effect(callback,dependencies,effects),
+  };
+  const WeddingLane=load('app/productie/WeddingWeekLane.tsx',{'react':react,'react/jsx-runtime':jsx,'next/dynamic':()=>()=>null,'./planning':planning,'./weddingPlanning':weddingPlanning,'../bruidstaart-studio/data':{initialWeddingCakeConfig:{},cakeSizes:[]},'./ProductionIcon':{__esModule:true,default:()=>null},'./useTaskDrag':{__esModule:true,default:()=>({getHandleProps:()=>({onClick(){}})})},'../preview/productie/production.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})}},{
+   fetch:(url,options)=>new Promise(resolve=>requests.push({url,options,resolve})),
+   document:{hidden:false},
+   setInterval:(callback,delay)=>{const id=++timerId;intervals.set(id,{callback,delay});return id;},
+   clearInterval:id=>intervals.delete(id),
+  }).default;
+  const props={week:sample.DEMO_WEEK,days:[sample.DEMO_TODAY],day:sample.DEMO_TODAY,today:sample.DEMO_TODAY,state:weddingPlanning.scheduleWedding(sample.initialPreviewState(),order,sample.DEMO_TODAY,'planned'),canManage:true,saving:false,demo:false,statusFilter:'all',Dialog:'bridal-dialog',onUpdate:async()=>{}};
+  function render(){
+   for(let pass=0;pass<10;pass++){
+    index=0;dirty=false;layoutEffects=[];effects=[];
+    const tree=WeddingLane(props);
+    layoutEffects.forEach(run=>run());effects.forEach(run=>run());
+    if(!dirty)return tree;
+   }
+   assert.fail('Bridal effects did not settle');
+  }
+  return {props,requests,intervals,render,close:()=>slots.forEach(slot=>slot?.cleanup?.())};
+ }
+ const order={code:'DAY-RETAIN-SOURCE',name:'Voorbeeld bruidspaar',date:'2026-10-31',updatedAt:'2026-10-28T09:00:00.000Z',size:'Voorbeeldformaat',time:'12:00',lines:[{label:'Bronontwerp',value:'Bewaarde decoratie'}],config:{}};
+ for(const closeBeforeSaved of [true,false]){
+  const h=effectsHarness(order);
+  try{
+   h.render();assert.equal(h.requests.length,1);
+   h.requests[0].resolve({ok:true,json:async()=>({orders:[order]})});
+   await new Promise(resolve=>setImmediate(resolve));
+   let tree=h.render();
+   button(tree,`${order.name}${order.size}${order.time} · ${order.code}`).props.onClick();tree=h.render();
+   assert.equal(find(tree,node=>node.type==='bridal-dialog').props.title,order.name);
+   const destination='2026-10-23';
+   Object.assign(h.props,{week:planning.mondayOf(destination),days:[destination],day:destination,saving:true,state:weddingPlanning.scheduleWedding(h.props.state,order,destination,'planned')});
+   tree=h.render();
+   assert.equal(find(tree,node=>node.type==='bridal-dialog').props.title,order.name);
+   assert(text(tree).includes('Bewaarde decoratie'),'Changing weeks preserves the selected source details');
+   assert(button(tree,'Productiekaart afdrukken'));
+   assert(!text(tree).includes('De brongegevens van deze ingeplande bruidstaart ontbreken'));
+   assert.equal(h.requests.length,1,'No request starts during the active save or dialog');
+   if(closeBeforeSaved)button(tree,'Terug naar het bord').props.onClick();
+   else h.props.saving=false;
+   tree=h.render();assert.equal(h.requests.length,1,'The remaining interaction still blocks reloading');
+   if(closeBeforeSaved)h.props.saving=false;
+   else button(tree,'Terug naar het bord').props.onClick();
+   tree=h.render();
+   assert.equal(h.requests.length,2,'The source reload starts as soon as both interactions finish');
+   assert.equal(h.requests[1].url,`/api/productie/weddings?week=${planning.mondayOf(destination)}`);
+   assert.equal(h.requests[1].options.cache,'no-store');
+   assert.equal(h.intervals.size,1,'Week changes replace the previous polling timer');
+   const refreshed={...order,name:'Bijgewerkt bruidspaar'};
+   h.requests[1].resolve({ok:true,json:async()=>({orders:[refreshed]})});
+   await new Promise(resolve=>setImmediate(resolve));tree=h.render();
+   button(tree,`${refreshed.name}${refreshed.size}${refreshed.time} · ${refreshed.code}`).props.onClick();tree=h.render();
+   assert.equal(find(tree,node=>node.type==='bridal-dialog').props.title,refreshed.name);
+  }finally{h.close();}
+  assert.equal(h.intervals.size,0);
+ }
 });

@@ -12,7 +12,7 @@ type Props={week:string;days:string[];day:string;today:string;state:PreviewState
 export default function WeddingWeekLane({week,days,day,today,state,canManage,saving,demo,statusFilter,dragFrameRef,onDragChange,renderTaskWork,renderDayWork,Dialog,onUpdate}:Props){
  const [orders,setOrders]=useState<WeddingProductionOrder[]>([]),[error,setError]=useState(""),[loading,setLoading]=useState(true),[selected,setSelected]=useState<string|null>(null),[dragged,setDragged]=useState<string|null>(null),[zoom,setZoom]=useState(false);
  const detailsRef=useRef<HTMLDivElement>(null),laneRef=useRef<HTMLDivElement>(null),loadSerial=useRef(0);
- const interacting=useRef(false);
+ const interacting=useRef(false),reloadAfterInteraction=useRef(false);
  useLayoutEffect(()=>{interacting.current=!!dragged||saving||!!selected;},[dragged,saving,selected]);
  const invalidateLoad=useCallback(()=>{loadSerial.current++;},[]);
  const load=useCallback(async()=>{
@@ -22,7 +22,8 @@ export default function WeddingWeekLane({week,days,day,today,state,canManage,sav
   try{const response=await fetch(`/api/productie/weddings?week=${week}`,{cache:"no-store"}),data=await response.json();if(!response.ok)throw Error(data.message || "Bruidstaarten laden is mislukt.");if(serial!==loadSerial.current||interacting.current)return;setOrders(data.orders);setError("");}
   catch(e){if(serial===loadSerial.current&&!interacting.current)setError((e as Error).message);}finally{if(serial===loadSerial.current&&!interacting.current)setLoading(false);}
  },[week,demo]);
- useEffect(()=>{let active=true;setLoading(true);setOrders([]);void load();const timer=setInterval(()=>{if(active && !document.hidden)void load();},60000);return()=>{active=false;invalidateLoad();clearInterval(timer);};},[load,invalidateLoad]);
+ useEffect(()=>{let active=true;setLoading(true);reloadAfterInteraction.current=interacting.current;if(!interacting.current)setOrders([]);void load();const timer=setInterval(()=>{if(active && !document.hidden)void load();},60000);return()=>{active=false;invalidateLoad();clearInterval(timer);};},[load,invalidateLoad]);
+ useEffect(()=>{if(!saving&&!selected&&!dragged&&reloadAfterInteraction.current){reloadAfterInteraction.current=false;void load();}},[saving,selected,dragged,load]);
  const saved=state.tasks.filter(t=>t.weddingCode),findTask=(code:string)=>saved.find(t=>t.weddingCode?.toLowerCase()===code.toLowerCase());
  const cards=[...orders.map(order=>({code:order.code,order,task:findTask(order.code)})),...saved.filter(t=>t.date>=week && t.date<=addDays(week,6) && !orders.some(o=>o.code.toLowerCase()===t.weddingCode!.toLowerCase())).map(task=>({code:task.weddingCode!,order:undefined,task}))];
  const selectedCard=cards.find(c=>c.code===selected),order=selectedCard?.order,task=selectedCard?.task;

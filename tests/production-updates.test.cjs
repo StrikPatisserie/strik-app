@@ -39,3 +39,23 @@ test('an older ice board reload preference keeps the week, department and XL mod
  assert.deepEqual(JSON.parse(JSON.stringify(restored)),{...old,board:'chocolade'});
  assert.equal(JSON.parse(updates.encodeReloadView(old,route,now)).view.board,'ijs','encoding retains compatible caller preferences while decoding canonicalizes them');
 });
+test('automatic updates preserve a selected day view while older snapshots remain compatible',()=>{
+ const route='/bakkerij/productie',now=10000000;
+ for(const period of ['day','week']){
+  const selected={...view,period};
+  const encoded=updates.encodeReloadView(selected,route,now);
+  assert.deepEqual(JSON.parse(JSON.stringify(updates.decodeReloadView(encoded,route,now+1))),selected);
+ }
+ const old=updates.encodeReloadView(view,route,now);
+ assert.deepEqual(JSON.parse(JSON.stringify(updates.decodeReloadView(old,route,now+1))),view);
+ const h=harness();h.options.view={...view,period:'day'};h.advance(60000);h.tick();
+ assert.equal(h.reloads,1);assert.deepEqual(JSON.parse(h.storage.get(updates.RELOAD_VIEW_KEY)).view,{...view,period:'day'});h.close();
+});
+test('invalid view periods are rejected instead of silently switching the selected planning mode',()=>{
+ const route='/bakkerij/productie',now=10000000;
+ for(const period of [null,'month','',false,3]){
+  const selected={...view,period};
+  assert.equal(updates.decodeReloadView(JSON.stringify({route,at:now,view:selected}),route,now),null);
+  assert.throws(()=>updates.encodeReloadView(selected,route,now),/Ongeldige scherminstellingen/);
+ }
+});
