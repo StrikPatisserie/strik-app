@@ -919,6 +919,7 @@
  .worksheetRoot:not(.screenFit) .taskMeta{margin-top:2px;gap:1px 4px}
  .worksheetRoot:not(.screenFit) .taskStep{font-size:10px;line-height:1.2}
  .worksheetRoot:not(.screenFit) .taskMeta .recipeGroup{font-size:9px!important;padding:1px 3px}
+ .worksheetRoot:not(.screenFit):not(.dayView) .taskMeta .recipeGroup{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
  .worksheetRoot:not(.screenFit) :is(.cellWorkTotals,.taskWorkBadge){font-size:10px;gap:2px}
  .worksheetRoot:not(.screenFit) .taskWorkBadge{padding:1px 3px}
  .worksheetRoot:not(.screenFit) .taskWorkBadge svg{width:11px;height:11px}
