@@ -117,9 +117,8 @@ export const winkelWorkPlanDefinitions: WinkelWorkPlanDefinition[] = [
             visibleOnWeekdays: [2],
           },
           {
-            id: "di-koekschappen",
-            label: "Koekschappen en schap suikerbrood schoon",
-            detail: "Alles van z'n plaats en datumcheck doen.",
+            id: "vr-wc",
+            label: "WC schoon",
             visibleOnWeekdays: [2],
           },
         ],
@@ -154,17 +153,18 @@ export const winkelWorkPlanDefinitions: WinkelWorkPlanDefinition[] = [
             label: "Werkbank en bureau opruimen",
             visibleOnWeekdays: [4],
           },
+          {
+            id: "di-koekschappen",
+            label: "Koekschappen en schap suikerbrood schoon",
+            detail: "Alles van z'n plaats en datumcheck doen.",
+            visibleOnWeekdays: [4],
+          },
         ],
       },
       {
         id: "week-vrijdag",
         title: "Weektaak vrijdag",
         items: [
-          {
-            id: "vr-wc",
-            label: "WC schoon",
-            visibleOnWeekdays: [5],
-          },
           {
             id: "vr-vriesmeubel-winkel",
             label: "Vriesmeubel winkel schoon",

@@ -43,9 +43,17 @@ test('Sunday includes both cooling-cleaning procedures and the regular daily tas
   assert(!items.some(item=>item.id.startsWith('za-')));
   assert.equal(new Set(items.map(item=>item.id)).size,items.length);
 });
-test('weekday cleaning and closing plans retain their existing schedule',()=>{
+test('weekday cleaning moves WC to Tuesday and shelves to Thursday while retaining the closing schedule',()=>{
+  const tuesday=itemsFor('2026-11-10');
+  assert(tuesday.some(item=>item.id==='vr-wc'));
+  assert(tuesday.some(item=>item.id==='di-koelingen-achter'));
+  assert(!tuesday.some(item=>item.id==='di-koekschappen'));
+  const thursday=itemsFor('2026-11-12');
+  assert(thursday.some(item=>item.id==='di-koekschappen'));
+  assert(!thursday.some(item=>item.id==='vr-wc'));
   const items=itemsFor('2026-10-23');
-  assert(items.some(item=>item.id==='vr-wc'));
+  assert(!items.some(item=>item.id==='vr-wc'));
+  assert(items.some(item=>item.id==='vr-vriesmeubel-winkel'));
   assert(!items.some(item=>item.id.startsWith('za-')||item.id.startsWith('zo-')));
   const closing=plans.getWinkelWorkPlanDefinition('heyendaal','afsluitplan');
   assert(visible(closing,'2026-10-23').length>0);
