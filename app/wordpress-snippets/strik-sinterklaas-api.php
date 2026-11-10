@@ -703,7 +703,25 @@ function strik_sinterklaas_sanitize_b2b_letter_lines($lines) {
     return $clean;
 }
 
-function strik_sinterklaas_sanitize_b2b_order($order, $existing = array()) {
+function strik_sinterklaas_b2b_has_package_letters($text) {
+    // Package letters live in the product row, not in the separately sold
+    // letterLines. Do not insert them there: production derives them already.
+    $products = explode("\nOVERIGE ORDERAFSPRAKEN", str_replace(array("\r\n", "\r"), "\n", $text))[0];
+    $found = false;
+    foreach (explode("\n", $products) as $row) {
+        if (!preg_match('/^(\d+)\s*[×x]\s*(.+?)(?: · €\s*[\d.,]+ p\.s\. ex btw.*)?$/u', trim($row), $match)) continue;
+        $description = $match[2];
+        if (preg_match('/^(?:Amandelletter & gevulde staven|Marsepein letter)(?: ·|$)/iu', $description)) continue;
+        if (!preg_match('/(?:letter|Sintpakket)/i', $description)) continue;
+        if ((int) $match[1] < 1 || (int) $match[1] > 10000) return false;
+        if (!preg_match('/^(?:Speculaasbrok met letter · Speculaasbrok (?:zonder|met) amandel · (?:kleine|grote) spuitletter(?: · letter [A-Z])?|Klein Sintpakket · (?:zonder|met) amandel · letter [A-Z]) · chocolade (?:melk|puur|wit)(?: · eigen logo)?$/iu', $description)) return false;
+        $found = true;
+    }
+    return $found;
+}
+
+function strik_sinterklaas_sanitize_b2b_order($order, $existing = array(), &$validation_error = null) {
+    $validation_error = 'Geen geldige B2B-bestelling ontvangen.';
     if (!is_array($order)) return null;
 
     $customer_name = isset($order['customerName']) ? strik_sinterklaas_text($order['customerName'], 180) : '';
@@ -715,11 +733,14 @@ function strik_sinterklaas_sanitize_b2b_order($order, $existing = array()) {
     $delivery_week = isset($order['deliveryWeek']) ? strik_sinterklaas_text($order['deliveryWeek'], 12) : '';
     $letter_lines = isset($order['letterLines']) ? strik_sinterklaas_sanitize_b2b_letter_lines($order['letterLines']) : array();
 
-    if (isset($order['letterLines']) && (!is_array($order['letterLines']) || count($letter_lines) !== count($order['letterLines']))) return null;
+    if (isset($order['letterLines']) && (!is_array($order['letterLines']) || count($letter_lines) !== count($order['letterLines']))) {
+        $validation_error = 'Controleer de chocoladeletterregels: kies per regel een geldige letter, chocoladesmaak, soort, formaat en aantal (1–10.000).';
+        return null;
+    }
 
-    if ($customer_name === '') return null;
-    if ($delivery_window_type === 'range' && ($delivery_date === '' || $delivery_date_end === '' || $delivery_date_end < $delivery_date)) return null;
-    if ($delivery_window_type === 'week' && !preg_match('/^\d{4}-W\d{2}$/', $delivery_week)) return null;
+    if ($customer_name === '') { $validation_error = 'Vul de klantnaam in.'; return null; }
+    if ($delivery_window_type === 'range' && ($delivery_date === '' || $delivery_date_end === '' || $delivery_date_end < $delivery_date)) { $validation_error = 'Controleer de leverperiode: vul een begin- en einddatum in; de einddatum mag niet eerder zijn.'; return null; }
+    if ($delivery_window_type === 'week' && !preg_match('/^\d{4}-W\d{2}$/', $delivery_week)) { $validation_error = 'Kies een geldige leverweek.'; return null; }
 
     $id = isset($order['id']) ? strik_sinterklaas_text($order['id'], 120) : '';
     if ($id === '') {
@@ -729,9 +750,14 @@ function strik_sinterklaas_sanitize_b2b_order($order, $existing = array()) {
     $now = wp_date(DATE_ATOM);
     $status = isset($order['status']) ? strik_sinterklaas_text($order['status'], 20) : 'akkoord';
     if (!in_array($status, array('aanvraag', 'offerte', 'akkoord', 'afgewezen'), true)) $status = 'aanvraag';
-    if ($status === 'akkoord' && ($delivery_date === '' || $order_text === '')) return null;
+    if ($status === 'akkoord' && $delivery_date === '') { $validation_error = 'Kies een leverdatum voordat je de bestelling definitief maakt.'; return null; }
+    if ($status === 'akkoord' && $order_text === '') { $validation_error = 'Voeg de bestelde producten toe voordat je de bestelling definitief maakt.'; return null; }
     $department = isset($order['department']) ? strik_sinterklaas_text($order['department'], 80) : 'chocolade';
-    if ($status === 'akkoord' && $department !== 'bakkerij' && empty($letter_lines) && (empty($existing) || (isset($existing['status']) && $existing['status'] !== 'akkoord')) && (!isset($order['source']) || $order['source'] !== 'excel')) return null;
+    if ($status === 'akkoord' && $department !== 'bakkerij' && empty($letter_lines) && (empty($existing) || (isset($existing['status']) && $existing['status'] !== 'akkoord')) && (!isset($order['source']) || $order['source'] !== 'excel') && !strik_sinterklaas_b2b_has_package_letters($order_text)) {
+        $validation_error = 'Vul de chocoladeletterregels in. Bij een combinatiepakket kies je de letter en chocoladesmaak bij het product.';
+        return null;
+    }
+    $validation_error = null;
 
     return array(
         'id' => $id,
@@ -1483,10 +1509,11 @@ function strik_sinterklaas_b2b_save_unlocked($request) {
         if (!strik_business_b2b_store_confirmed($order)) return new WP_Error('confirmation_receipt_storage', 'De verzending is verwerkt, maar de status kon niet bij de bestelling worden opgeslagen. Probeer opnieuw; dezelfde versie wordt niet dubbel verstuurd.', array('status' => 503));
         return rest_ensure_response($order);
     }
-    $order = strik_sinterklaas_sanitize_b2b_order(array_merge(is_array($existing) ? $existing : array(), $params), is_array($existing) ? $existing : array());
+    $validation_error = null;
+    $order = strik_sinterklaas_sanitize_b2b_order(array_merge(is_array($existing) ? $existing : array(), $params), is_array($existing) ? $existing : array(), $validation_error);
 
     if ($order === null) {
-        return new WP_Error('strik_sinterklaas_invalid_b2b_order', 'Controleer klantnaam, bestelling, leverdatum en chocoladeletterregels (soort, formaat, letter en aantal).', array('status' => 400));
+        return new WP_Error('strik_sinterklaas_invalid_b2b_order', $validation_error, array('status' => 400));
     }
 
     if (!empty($existing)) {
