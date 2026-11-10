@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import {roadLegMinutes,renameRoadPoint,routeFingerprint,DEPOT_ID,NEW_STOP_ID,type AddressLocation,type RoadRoute,type SmartStopInsertion} from "./roadRouting";
+import {roadLegMinutes,roadStopAddress,renameRoadPoint,routeFingerprint,DEPOT_ID,NEW_STOP_ID,type AddressLocation,type RoadRoute,type SmartStopInsertion} from "./roadRouting";
+import { useRoadRouteTimes } from "./useRoadRouteTimes";
 const AddRouteStopDialog=dynamic(()=>import("./AddRouteStopDialog"));
 import { createRouteSaveQueue } from "./routeSaveQueue";
 import { sinterklaasAcquisitionEndDate } from "./sinterklaasAcquisitionCampaign";
@@ -6605,13 +6606,13 @@ function preferredBusForReceipt(receipt: ReceiptSummary): BusId | "" {
 }
 
 function outsideClusterKeyForReceipt(receipt: ReceiptSummary) {
-  const text = receiptSearchText(receipt);
+  const text = `${receipt.customer} ${receiptTargetLine(receipt)}`.toLowerCase();
   const normalizedText = normalizeMatchText(text);
 
   if (/jonkerbos|sanadome|cwz|goffert|crematorium|nxp|novio tech|douglas/.test(text)) {
     return "jonkerbos";
   }
-  if (/thermen|berendonck|wijchen|beuningen/.test(text)) {
+  if (/thermen|berendonck|wijchen|beuningen|winssen/.test(text)) {
     return "west-buiten";
   }
   if (
@@ -6664,6 +6665,7 @@ function routePointForSearchText(value: string): RoutePoint {
   const text = normalizeMatchText(value);
   const postcode = routePostcodeForText(value);
 
+  if (/\bwinssen\b/.test(text) || postcode === "6645") return { x: -4.7, y: 6.7 };
   if (/dries|elst/.test(text)) return { x: -0.2, y: 8.1 };
   if (/gendt|huigensstraat|bemmel|arnhem/.test(text)) return { x: 1.1, y: 8.8 };
   if (/lent|oosterhout/.test(text)) return { x: 0.1, y: 5.9 };
@@ -6704,10 +6706,11 @@ function routePointForSearchText(value: string): RoutePoint {
 }
 
 function receiptRoutePoint(receipt: ReceiptSummary): RoutePoint {
-  const shopPoint = routePointForShopKey(shopKeyForReceipt(receipt));
+  const shopPoint = isShopReceipt(receipt) || receiptFulfillment(receipt) === "afhalen"
+    ? routePointForShopKey(shopKeyForReceipt(receipt)) : null;
   if (shopPoint) return shopPoint;
 
-  return routePointForSearchText(receiptSearchText(receipt));
+  return routePointForSearchText(receiptTargetLine(receipt));
 }
 
 function routePointForStop(stop: RouteStop): RoutePoint {
@@ -6717,11 +6720,7 @@ function routePointForStop(stop: RouteStop): RoutePoint {
   );
   if (shopKey) return shopRouteMeta[shopKey].point;
 
-  return routePointForSearchText(
-    [stop.label, stop.learningLabel || "", stop.learningTarget || "", stop.detail].join(
-      " "
-    )
-  );
+  return routePointForSearchText(roadStopAddress(stop) || stop.label);
 }
 
 function acquisitionRouteClusterForStop(
@@ -9852,7 +9851,10 @@ export default function BakkerijLogistiekDashboard() {
     useState<DeletedRouteStopSnapshot | null>(null);
   const [routesEdited, setRoutesEdited] = useState(false);
   const [routeHasUnsavedChanges, setRouteHasUnsavedChanges] = useState(false);
-  const routeRounds = manualRouteRounds || automaticRouteRounds;
+  const { routes: routeRounds, message: roadTimingMessage } = useRoadRouteTimes(
+    manualRouteRounds || automaticRouteRounds,
+    activeTab === "routes" && batchLoadState === "ready" && loadedBatchDate === selectedPlan.date
+  );
   const acquisitionSuggestions = useMemo(
     () =>
       buildAcquisitionSuggestions(
@@ -10331,7 +10333,7 @@ export default function BakkerijLogistiekDashboard() {
   }
 
   function moveRouteStop(move: RouteStopMove) {
-    const currentRoutes = manualRouteRounds || automaticRouteRounds;
+    const currentRoutes = routeRounds;
     const movedRoutes = moveRouteStopInRounds(currentRoutes, move, loadProfile);
     if (movedRoutes === currentRoutes) return;
 
@@ -10347,7 +10349,7 @@ export default function BakkerijLogistiekDashboard() {
   }
 
   function updatePlannedBusDeparture(bus: BusId, value: string) {
-    const currentRoutes = manualRouteRounds || automaticRouteRounds;
+    const currentRoutes = routeRounds;
     const departure = value || formatClockMinute(defaultRouteDepartureMinute);
     const departureLabel = `vertrek ${departure}`;
     let firstRouteUpdated = false;
@@ -10375,7 +10377,7 @@ export default function BakkerijLogistiekDashboard() {
   }
 
   function addRouteRound(vehicle: string) {
-    const currentRoutes = manualRouteRounds || automaticRouteRounds;
+    const currentRoutes = routeRounds;
     const nextRoutes = addRouteRoundForVehicle(currentRoutes, vehicle, loadProfile);
     if (nextRoutes === currentRoutes) return;
 
@@ -10393,7 +10395,7 @@ export default function BakkerijLogistiekDashboard() {
     const cleanDetail = detail.replace(/\s+/g, " ").trim();
     if (!cleanLabel) return;
 
-    const currentRoutes = manualRouteRounds || automaticRouteRounds;
+    const currentRoutes = routeRounds;
     const target=currentRoutes.find(route=>route.id===routeId);
     if(!target)return false;
     if(smart&&smart.snapshot!==routeFingerprint(target.stops)){setRouteSaveMessage("Route gewijzigd; bereken de nieuwe stop opnieuw.");return false;}
@@ -10444,7 +10446,7 @@ export default function BakkerijLogistiekDashboard() {
   ) {
     if (acquisitionUpdatingStopId) return;
 
-    const currentRoutes = manualRouteRounds || automaticRouteRounds;
+    const currentRoutes = routeRounds;
     const sourceId = `acquisition:${suggestion.stop.id}`;
     if (
       currentRoutes.some((route) =>
@@ -10539,7 +10541,7 @@ export default function BakkerijLogistiekDashboard() {
   ) {
     if (acquisitionUpdatingStopId) return;
 
-    const currentRoutes = manualRouteRounds || automaticRouteRounds;
+    const currentRoutes = routeRounds;
     const stop = currentRoutes
       .find((route) => route.id === routeId)
       ?.stops.find((item) => item.id === stopId);
@@ -10606,7 +10608,7 @@ export default function BakkerijLogistiekDashboard() {
   }
 
   function removeRouteStopOnly(routeId: string, stopId: string) {
-    const currentRoutes = manualRouteRounds || automaticRouteRounds;
+    const currentRoutes = routeRounds;
     const sourceRoute = currentRoutes.find((route) => route.id === routeId);
     const stop = sourceRoute?.stops.find((item) => item.id === stopId);
     if (!sourceRoute || !stop) return;
@@ -10647,7 +10649,7 @@ export default function BakkerijLogistiekDashboard() {
   }
 
   function deleteRouteStop(routeId: string, stopId: string) {
-    const currentRoutes = manualRouteRounds || automaticRouteRounds;
+    const currentRoutes = routeRounds;
     const sourceRoute = currentRoutes.find((route) => route.id === routeId);
     const stop = sourceRoute?.stops.find((item) => item.id === stopId);
     if (!sourceRoute || !stop) return;
@@ -10700,7 +10702,7 @@ export default function BakkerijLogistiekDashboard() {
       (override) =>
         override.id === receiptOverrideId(selectedPlan.date, receipt)
     );
-    const currentRoutes = manualRouteRounds || automaticRouteRounds;
+    const currentRoutes = routeRounds;
     const nextRoutes = compactEmptyRouteRounds(
       currentRoutes.map((route) =>
         refreshRouteRoundAfterManualMove(
@@ -10766,7 +10768,7 @@ export default function BakkerijLogistiekDashboard() {
   }
 
   function deleteRouteRound(routeId: string) {
-    const currentRoutes = manualRouteRounds || automaticRouteRounds;
+    const currentRoutes = routeRounds;
     const route = currentRoutes.find((item) => item.id === routeId);
     if (!route || isStandardRouteRound(route)) return;
 
@@ -10818,7 +10820,7 @@ export default function BakkerijLogistiekDashboard() {
     routeSaveQueueRef.current!.invalidate();
     pendingRouteDateRef.current = "";
     await routeSaveQueueRef.current!.settled();
-    const currentRoutes = manualRouteRounds || automaticRouteRounds;
+    const currentRoutes = routeRounds;
     const acquisitionPlacements = currentRoutes.flatMap((route) =>
       route.stops
         .filter((stop) =>
@@ -11785,6 +11787,7 @@ export default function BakkerijLogistiekDashboard() {
             routeCanSave={routeCanSave}
             routePrintBlockedReason={getRoutePrintBlockedReason(batchLoadState, isImporting, loadedBatchDate === selectedPlan.date)}
             routeRounds={routeRounds}
+            roadTimingMessage={roadTimingMessage}
             routeSaveMessage={routeSaveMessage}
             routeSaveState={routeSaveState}
             routesEdited={routesEdited}
@@ -12577,13 +12580,7 @@ function routeStopDeliveryTime(stop: RouteStop) {
 }
 
 function routeStopAddressLabel(stop: RouteStop) {
-  if (stop.learningTarget?.trim()) return stop.learningTarget.trim();
-
-  const time = routeStopDeliveryTime(stop);
-  return stop.detail
-    .split(" · ")
-    .map((part) => part.trim())
-    .find((part) => part && part !== time && !/^vast:/i.test(part)) || "Adres controleren";
+  return roadStopAddress(stop) || "Adres controleren";
 }
 
 const routeDragMimeType = "application/x-strik-route-stop";
@@ -12682,6 +12679,7 @@ function RoutesPanel({
   routeCanSave,
   routePrintBlockedReason,
   routeRounds,
+  roadTimingMessage,
   routeSaveMessage,
   routeSaveState,
   routesEdited,
@@ -12705,6 +12703,7 @@ function RoutesPanel({
   routeCanSave: boolean;
   routePrintBlockedReason: string;
   routeRounds: RouteRound[];
+  roadTimingMessage: string;
   routeSaveMessage: string;
   routeSaveState: RouteSaveState;
   routesEdited: boolean;
@@ -12832,6 +12831,7 @@ function RoutesPanel({
         <h2 className="text-[0.68rem] font-bold uppercase tracking-[0.14em] text-[#52654f]">
           Routeplanning
         </h2>
+        {roadTimingMessage && <span role="status" className="text-[0.62rem] font-semibold text-[#6b645b]">{roadTimingMessage}</span>}
         <div className="flex flex-wrap items-center justify-end gap-2">
           {deletedRouteStopLabel && (
             <button
@@ -12934,7 +12934,7 @@ function RoutesPanel({
           </label>
         ))}
         <span className="text-[0.6rem] font-semibold italic tracking-normal text-[#7b746c]">
-          aankomst- en terugtijden rekenen direct mee
+          Rijtijden zonder actuele files · OSRM / <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="underline">OpenStreetMap</a>
         </span>
       </div>
 

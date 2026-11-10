@@ -130,6 +130,7 @@ test('already stored receipts can recover an explicit delivery address without u
 });
 
 const dashboard = load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx', {
+  './useRoadRouteTimes': {},
   'next/dynamic':{default:()=>()=>null}, './roadRouting':load('app/bakkerij/logistiek/roadRouting.ts'), "../../productie/ProductionRequests":{}, react: React, 'react/jsx-runtime': require('react/jsx-runtime'),
   './routeSaveQueue': load('app/bakkerij/logistiek/routeSaveQueue.ts'),
   './sinterklaasAcquisitionCampaign': load('app/bakkerij/logistiek/sinterklaasAcquisitionCampaign.ts'),

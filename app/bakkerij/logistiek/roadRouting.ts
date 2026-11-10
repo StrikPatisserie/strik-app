@@ -26,6 +26,10 @@ export type SmartStopInsertion = {
     road?: RoadRoute;
 };
 export const DEPOT_ID = "__depot", NEW_STOP_ID = "__new";
+export function roadStopAddress(stop: { learningTarget?: string; detail: string }) {
+    return stop.learningTarget?.trim() || stop.detail.split(" · ").map(part => part.trim())
+        .find(part => part && !/^vast:/i.test(part) && !/\b\d{1,2}:\d{2}\b/.test(part)) || "";
+}
 export function cleanLocation(value: unknown): AddressLocation | undefined {
     if (!value || typeof value !== "object")
         return;

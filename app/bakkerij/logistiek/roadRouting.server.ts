@@ -33,16 +33,23 @@ export async function lookupAddress(id: string): Promise<AddressLocation> {
 }
 export async function resolveAddress(query: string) {
     // Never resolve a company name or a generic town to a guessed address.
-    const house = query.match(/\b\d{1,5}[a-z]?\b/i)?.[0];
+    const postcode = query.match(/\b\d{4}\s?[a-z]{2}\b/i)?.[0].replace(/\s/g, "").toUpperCase();
+    const street = query.replace(/\b\d{4}\s?[a-z]{2}\b/gi, " ");
+    const house = street.match(/\b\d{1,5}[a-z]?\b/i)?.[0];
     if (!house)
         return null;
-    const candidates = await findAddresses(query);
+    const candidates = await findAddresses(postcode ? `${postcode} ${house}` : query);
     if (!candidates.length)
         return null;
     const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
     const wanted = normalize(query), matches = candidates.filter((item: {
         label: string;
-    }) => { const actual = normalize(item.label); return actual.split(" ").includes(normalize(house)) && wanted.split(" ").filter(word => word.length > 2 && !/^\d+$/.test(word)).every(word => actual.includes(word)); });
+    }) => {
+        const actual = normalize(item.label);
+        if (!actual.split(" ").includes(normalize(house))) return false;
+        if (postcode) return actual.replace(/\s/g, "").includes(postcode.toLowerCase());
+        return wanted.split(" ").filter(word => word.length > 2 && !/^\d+$/.test(word)).every(word => actual.includes(word));
+    });
     return matches.length === 1 ? lookupAddress(matches[0].id) : null;
 }
 const cache = new Map<string, {
