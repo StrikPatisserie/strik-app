@@ -19,7 +19,7 @@ export async function GET(request: Request) {
       .eq("status", "SENDING").lt("last_attempt_at", staleBefore);
     const { data: jobs, error } = await supabase.from("letter_mail_outbox")
       .select("order_id").in("status", ["PENDING", "FAILED"])
-      .in("template", ["ONLINE_CONFIRMATION", "INTERNAL_ORDER_BACKUP"])
+      .in("template", ["ONLINE_CONFIRMATION", "INTERNAL_ORDER_BACKUP", "ORDER_CHANGE"])
       .lt("attempts", 10).order("created_at").limit(100);
     if (error) throw error;
     const orderIds = [...new Set((jobs || []).map((job) => job.order_id))];

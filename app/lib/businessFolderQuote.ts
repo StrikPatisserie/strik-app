@@ -128,8 +128,9 @@ export function buildBusinessFolderQuote(value: unknown) {
       const tier = tierFor(configured, tierCount);
       const unit = (vat: boolean) => roundMoney(productUnitPrice(configured, tier, vat) + (withLogo ? productLogoPrice(vat) : 0) + (withGiftWrap ? letterGiftWrapPrice(vat) : 0));
       const detail = letter ? choice : productChoiceLabel(product, choice);
+      const logoPlacement = withLogo && product.logoPlacement ? ` · logo op ${product.logoPlacement}` : "";
       const colors = customColors && product.customColorMinimum && quantity >= product.customColorMinimum ? ` · eigen kleuren: ${customColors}` : product.defaultColors ? ` · standaard ${product.defaultColors}` : "";
-      rows.push(`${quantity} × ${product.name} · ${detail}${colors}`, `  ${money(unit(false))} p.s. excl. btw · ${money(roundMoney(quantity * unit(false)))} totaal excl. btw${withLogo ? " · inclusief eigen logo" : ""}${withGiftWrap ? ` · inclusief cadeaupapier (${money(letterGiftWrapPrice(true))} incl. btw per letter)` : ""}`);
+      rows.push(`${quantity} × ${product.name} · ${detail}${logoPlacement}${colors}`, `  ${money(unit(false))} p.s. excl. btw · ${money(roundMoney(quantity * unit(false)))} totaal excl. btw${withLogo ? " · inclusief eigen logo" : ""}${withGiftWrap ? ` · inclusief cadeaupapier (${money(letterGiftWrapPrice(true))} incl. btw per letter)` : ""}`);
       totalEx += roundMoney(quantity * unit(false)); totalIncl += roundMoney(quantity * unit(true));
       if (letter) letterLines.push({ ...letter, withLogo });
       hasPackaging ||= withGiftWrap; hasLogo ||= withLogo;

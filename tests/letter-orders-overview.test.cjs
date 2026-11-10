@@ -35,3 +35,13 @@ test('letter specifications, logo and array-shaped product relations remain sear
   assert.match(onlineItemLabel(item), /vormletter M · puur · klein/);
   assert.equal(filterOnlineOrders([original], 'puur', '').length, 1);
 });
+
+test('quantity edits recalculate stored logo and wrapping charges and reject incomplete or unchanged inputs',()=>{
+ const original=order();original.letter_order_items[0].id='line-1';
+ const before=JSON.stringify(original);
+ const lines=exportsMap.onlineQuantityChanges(original,{'line-1':'5'});
+ assert.equal(exportsMap.onlineChangedTotal(original,lines),7600);
+ assert.equal(JSON.stringify(original),before);
+ for(const value of ['', '0', '-1', '1.5','100001','no number','4'])assert.throws(()=>exportsMap.onlineQuantityChanges(original,{'line-1':value}));
+ assert.throws(()=>exportsMap.onlineQuantityChanges(original,{}));
+});

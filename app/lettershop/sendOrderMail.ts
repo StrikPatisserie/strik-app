@@ -53,7 +53,7 @@ export async function sendLettershopOrderMails(orderId: string) {
   const supabase = adminClient();
   const { data: jobs, error: readError } = await supabase.from("letter_mail_outbox")
     .select("id,template,payload,status,attempts,created_at")
-    .eq("order_id", orderId).in("template", ["INTERNAL_ORDER_BACKUP", "ONLINE_CONFIRMATION"])
+    .eq("order_id", orderId).in("template", ["INTERNAL_ORDER_BACKUP", "ONLINE_CONFIRMATION", "ORDER_CHANGE"])
     .in("status", ["PENDING", "FAILED"])
     .order("created_at");
   if (readError) throw readError;
@@ -68,6 +68,9 @@ export async function sendLettershopOrderMails(orderId: string) {
       const payload = job.payload as Record<string, unknown>;
       const mailPayload = {
         ...payload,
+        ...(job.template === "ORDER_CHANGE" ? {
+          notes: ["Gewijzigde bestelbevestiging. Deze aantallen en dit totaal vervangen de eerdere bevestiging.", payload.notes].filter(Boolean).join("\n\n"),
+        } : {}),
         requested_date: typeof payload.requested_date === "string"
           ? formatPickupDate(payload.requested_date)
           : payload.requested_date,
@@ -83,7 +86,9 @@ export async function sendLettershopOrderMails(orderId: string) {
           "Content-Type": "application/json",
           Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`,
         },
-        body: JSON.stringify({ id: job.id, template: job.template, payload: mailPayload, attachments }),
+        // The existing WordPress relay renders customer confirmations. Each edit
+        // keeps its own immutable outbox ID so retrying cannot resend a prior edit.
+        body: JSON.stringify({ id: job.id, template: job.template === "ORDER_CHANGE" ? "ONLINE_CONFIRMATION" : job.template, payload: mailPayload, attachments }),
         signal: AbortSignal.timeout(20000),
       });
       if (!response.ok) throw new Error(`WordPress-mail gaf status ${response.status}.`);

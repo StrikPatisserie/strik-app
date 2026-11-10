@@ -19,6 +19,7 @@ export type Product = {
   fixedSurchargeIncl?: number;
   personalizationText?: string;
   logoAvailable?: boolean;
+  logoPlacement?: string;
   logoBlockedChoices?: string[];
   accent: string;
   options?: string[];
@@ -189,6 +190,8 @@ export const products: Product[] = [
     ],
     allergens: ["gluten", "lactose", "amandel", "soja", "ei"],
     accent: "#f7c8aa",
+    logoAvailable: true,
+    logoPlacement: "het marsepeinen stafje",
     tiers: [
       { min: 1, price: 16.95, label: "<15", discountPercent: 0 },
       { min: 15, price: 16.15, label: "15–50", discountPercent: 5 },

@@ -1,4 +1,5 @@
 export type OnlineOrderItem = {
+  id: string;
   quantity: number;
   logo: boolean;
   logo_storage_path: string | null;
@@ -9,6 +10,8 @@ export type OnlineOrderItem = {
 
 export type OnlineLetterOrder = {
   id: string;
+  revision: number;
+  edit_block_reason?: string | null;
   order_number: string;
   customer_name: string;
   customer_email: string;
@@ -22,6 +25,24 @@ export type OnlineLetterOrder = {
   created_at: string;
   letter_order_items: OnlineOrderItem[];
 };
+
+export type OnlineQuantityChange = { itemId: string; quantity: number };
+
+export function onlineQuantityChanges(order: OnlineLetterOrder, values: Record<string, string>): OnlineQuantityChange[] {
+  const lines = order.letter_order_items.map(item => ({ itemId: item.id, quantity: Number(values[item.id]) }));
+  if (lines.some(line => values[line.itemId]?.trim() === "" || !Number.isInteger(line.quantity) || line.quantity < 0 || line.quantity > 100000)) {
+    throw new Error("Vul per letter een heel aantal van 0 t/m 100.000 in.");
+  }
+  if (!lines.some(line => line.quantity > 0)) throw new Error("Er moet minimaal één letter overblijven.");
+  if (!lines.some((line, index) => line.quantity !== order.letter_order_items[index].quantity)) throw new Error("Pas eerst een aantal aan.");
+  return lines;
+}
+
+export function onlineChangedTotal(order: OnlineLetterOrder, lines: OnlineQuantityChange[]) {
+  return onlineOrderTotal({ ...order, letter_order_items: order.letter_order_items.map(item => ({
+    ...item, quantity: lines.find(line => line.itemId === item.id)?.quantity ?? item.quantity,
+  })) });
+}
 
 export const onlineOrderStatuses: Record<string, string> = { NEW: "Besteld", READY: "Klaar", COMPLETED: "Opgehaald", CANCELLED: "Geannuleerd" };
 

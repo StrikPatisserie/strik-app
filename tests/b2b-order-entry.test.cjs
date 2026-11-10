@@ -98,6 +98,49 @@ test('Sint letter rules retain quantities and pricing when review is revisited',
   assert.ok(ui.calls[0].totalExVat); assert.match(ui.calls[0].orderText, /25/);
 });
 
+test('individual gift wrapping saves with the order and survives note edits, review and reopening', async () => {
+  const ui = entry();
+  ui.field('Bedrijfsnaam / klantnaam *', 'Inpakbedrijf');
+  ui.field('Vaste leverdatum', '2026-11-30');
+  ui.button('Verder naar producten →');
+  ui.field('Letter', 'S'); ui.field('Chocolade', 'melk'); ui.field('Soort', 'spuit');
+  ui.field('Formaat', 'groot'); ui.field('Aantal letters', '13'); ui.button('+ Letter toevoegen');
+  ui.field('Notities verpakking/logo', 'Sticker met letter en smaak.');
+  ui.check('Alles apart in cadeaupapier', true);
+  ui.field('Notities verpakking/logo', 'Sticker met letter en smaak.\nPer klant in een doos.');
+  ui.button('Bestelling controleren →');
+  assert.match(label(ui.render()), /Alles apart in cadeaupapier verpakken\./);
+  await ui.submit();
+
+  assert.equal(ui.calls.length, 1);
+  const saved = ui.calls[0];
+  assert.equal(saved.packaging, 'Alles apart in cadeaupapier verpakken.\nSticker met letter en smaak.\nPer klant in een doos.');
+  assert.equal(saved.logo, '');
+  assert.equal(saved.packagingChecked, false);
+
+  const reopened = entry('sint', { ...saved, id: 'wrapped-order', packagingChecked: true });
+  const checkbox = nodes(reopened.render(), node => node.type === 'label' && label(node).startsWith('Alles apart in cadeaupapier'))[0];
+  assert.equal(nodes(checkbox, node => node.type === 'input')[0].props.checked, true);
+  reopened.check('Alles apart in cadeaupapier', false);
+  reopened.button('Verder naar producten →'); reopened.button('Bestelling controleren →');
+  await reopened.submit();
+  assert.equal(reopened.calls[0].packaging, 'Sticker met letter en smaak.\nPer klant in een doos.');
+  assert.equal(reopened.calls[0].packagingChecked, false);
+  assert.equal(reopened.calls[0].totalExVat, saved.totalExVat);
+});
+
+test('gift wrapping toggles preserve existing free packaging and logo instructions without duplication', async () => {
+  const original = { ...entry().blank(), id: 'existing-wrapping', customerName: 'Bestaande klant', packaging: 'Per stuk in cadeaupapier, met lettersticker.', logo: 'Logo rechtsboven' };
+  const ui = entry('sint', original);
+  ui.check('Alles apart in cadeaupapier', true);
+  ui.check('Alles apart in cadeaupapier', true);
+  ui.button('Verder naar producten →'); ui.button('Bestelling controleren →');
+  await ui.submit();
+  assert.equal(ui.calls[0].packaging, 'Alles apart in cadeaupapier verpakken.\nPer stuk in cadeaupapier, met lettersticker.');
+  assert.equal(ui.calls[0].logo, 'Logo rechtsboven');
+  assert.equal(original.packaging, 'Per stuk in cadeaupapier, met lettersticker.');
+});
+
 test('speculaas packages retain a chosen letter through entry, review and reopening; old packages retain S', async () => {
   const ui = entry(); ui.field('Bedrijfsnaam / klantnaam *', 'Voorbeeld pakket'); ui.button('Verder naar producten →');
   const product = sint.products.find(item => item.id === 'speculaasbrok-met-letter');
@@ -206,6 +249,40 @@ function addPackage(ui, quantity, withLogo=false) {
   ui.field('Product',product.id);ui.field('Variant',sint.productChoiceCandidates(product)[0]);ui.field('Aantal producten',String(quantity));
   ui.check('Eigen logo op dit product',withLogo);ui.button('+ Product toevoegen');
 }
+
+test('Stafwerk standard folder rows reopen with a logo on the marzipan staff and retain the quoted price once', async () => {
+  const quote = quoteBuilder({
+    requestId: 'f1234567-1234-4567-8123-123456789abc', season: 'sint',
+    company: 'Voorbeeld Stafwerk', email: 'voorbeeld@example.invalid',
+    delivery: { method: 'pickup', momentType: 'date', date: '2026-12-01' },
+    selection: { lines: [{ productId: 'stafwerk', quantity: 14, choice: '', withLogo: true }] },
+  });
+  assert.match(quote.quoteText, /Stafwerk pakket · Standaard · logo op het marsepeinen stafje/);
+  assert.equal(quote.order.totalExVat, '243.74');
+  const ui = entry('sint', { ...entry().blank(), ...quote.order, letterLines: [] });
+  const parsed = ui.parse(quote.order.orderText);
+  assert.equal(parsed.productLines[0].productId, 'stafwerk');
+  assert.equal(parsed.productLines[0].withLogo, true);
+  assert.equal(parsed.productLines[0].unitPriceEx, '17.41');
+  assert.ok(nodes(ui.render(), node => node.props?.['aria-label'] === 'Logo op Stafwerk pakket')[0].props.checked);
+  assert.match(label(ui.render()), /Logo op het marsepeinen stafje/);
+  ui.check('Logo op Stafwerk pakket', false);
+  ui.check('Logo op Stafwerk pakket', true);
+  ui.button('Verder naar producten →'); ui.button('Bestelling controleren →');
+  await ui.submit();
+  assert.equal(ui.calls[0].totalExVat, '€ 243,74');
+  assert.match(ui.calls[0].orderText, /logo op het marsepeinen stafje · eigen logo/);
+  const reopened = entry('sint', { ...ui.calls[0], id: 'stafwerk-saved' });
+  assert.equal(reopened.parse(ui.calls[0].orderText).productLines[0].withLogo, true);
+});
+
+test('older Stafwerk standard descriptions expose the logo choice with the existing quoted price', () => {
+  const ui = entry();
+  const parsed = ui.parse('PRODUCTEN EN PRIJS\n14 × Stafwerk pakket · Standaard · eigen logo · € 17,41 p.s. ex btw · € 243,74');
+  assert.equal(parsed.productLines[0].productId, 'stafwerk');
+  assert.equal(parsed.productLines[0].withLogo, true);
+  assert.equal(parsed.productLines[0].unitPriceEx, '17.41');
+});
 
 test('10 letters with a logo and 3 packages without retain separate charges through save and reopening',async()=>{
   const ui=entry();ui.field('Bedrijfsnaam / klantnaam *','Logo voorbeeld');ui.button('Verder naar producten →');

@@ -60,6 +60,20 @@ import {
 const CUSTOM_PRODUCT_ID = "anders";
 const PRODUCT_SECTION_HEADING = "PRODUCTEN EN PRIJS";
 const OTHER_ORDER_HEADING = "OVERIGE ORDERAFSPRAKEN";
+const INDIVIDUAL_GIFT_WRAP = "Alles apart in cadeaupapier verpakken.";
+
+function hasIndividualGiftWrap(packaging: string) {
+  return packaging.split("\n").some(line => line.trim() === INDIVIDUAL_GIFT_WRAP);
+}
+
+function packagingWithoutGiftWrap(packaging: string) {
+  return packaging.split("\n").filter(line => line.trim() !== INDIVIDUAL_GIFT_WRAP).join("\n");
+}
+
+function withIndividualGiftWrap(packaging: string, enabled: boolean) {
+  const notes = packagingWithoutGiftWrap(packaging);
+  return enabled ? [INDIVIDUAL_GIFT_WRAP, notes].filter(Boolean).join("\n") : notes;
+}
 
 type B2BProductLine = {
   id: string;
@@ -190,7 +204,8 @@ function lineDescription(line: B2BProductLine) {
   const choice = visibleChoiceLabel(product, line.choice);
   const includeChoice = choice && choice !== "Standaard";
   const withLogo = line.withLogo && productSupportsLogo(product, line.choice);
-  return `${product.name}${includeChoice ? ` · ${choice}` : ""}${product.id === "klein-sintpakket" && line.packageLetter ? ` · letter ${line.packageLetter}` : ""}${combinationProduct(product.id) && line.letterChocolate ? ` · chocolade ${line.letterChocolate}` : ""}${withLogo ? " · eigen logo" : ""}`;
+  const logoPlacement = withLogo && product.logoPlacement ? ` · logo op ${product.logoPlacement}` : "";
+  return `${product.name}${includeChoice ? ` · ${choice}` : ""}${product.id === "klein-sintpakket" && line.packageLetter ? ` · letter ${line.packageLetter}` : ""}${combinationProduct(product.id) && line.letterChocolate ? ` · chocolade ${line.letterChocolate}` : ""}${logoPlacement}${withLogo ? " · eigen logo" : ""}`;
 }
 
 type B2BLinePriceBreakdown = {
@@ -357,7 +372,11 @@ function matchCatalogDescription(description: string) {
       const label = visibleChoiceLabel(product, choice);
       const candidate = `${product.name}${label && label !== "Standaard" ? ` · ${label}` : ""}`;
       const legacyCandidate = productHasLetterChoice(product) ? `${product.name} · ${choice}` : "";
-      if (candidate === cleanDescription || legacyCandidate === cleanDescription) return {
+      const descriptions = [candidate];
+      if (legacyCandidate) descriptions.push(legacyCandidate);
+      if (!choice) descriptions.push(`${product.name} · Standaard`);
+      if (product.logoPlacement) descriptions.push(...descriptions.map(description => `${description} · logo op ${product.logoPlacement}`));
+      if (descriptions.includes(cleanDescription)) return {
         product,
         choice,
         withLogo: withLogo && productSupportsLogo(product, choice),
@@ -588,10 +607,11 @@ function createFormState(): B2BFormState {
 }
 
 function packagingLogoNotes(form: Pick<B2BFormState, "packaging" | "logo">) {
+  const packaging = packagingWithoutGiftWrap(form.packaging);
   const logo = form.logo.trim();
   const generatedLogo = /^(?:ja|eigen logo volgens orderregels|\d+ letters met bedrijfslogo; \d+ zonder logo\. Zie verdeling per bedrijf\.)$/i.test(logo);
-  if (!logo || generatedLogo || form.packaging.trim() === logo) return form.packaging;
-  return form.packaging ? `${form.packaging}\n${logo}` : logo;
+  if (!logo || generatedLogo || packaging.trim() === logo) return packaging;
+  return packaging ? `${packaging}\n${logo}` : logo;
 }
 
 function formStateFromOrder(order: SinterklaasB2BOrder | null | undefined, season: BusinessSeason = "sint") {
@@ -1042,7 +1062,11 @@ export function B2BOrderForm({
   function updatePackagingLogoNotes(value: string) {
     // Keep logo selection separate from the note: packaging instructions alone
     // must never enable logos or change their price on legacy orders.
-    setForm(current => ({ ...current, packaging: value, logo: current.logo.trim() ? "Eigen logo volgens orderregels" : "" }));
+    setForm(current => ({
+      ...current,
+      packaging: withIndividualGiftWrap(value, hasIndividualGiftWrap(current.packaging) || hasIndividualGiftWrap(value)),
+      logo: current.logo.trim() ? "Eigen logo volgens orderregels" : "",
+    }));
   }
 
   function updateLetterGroup(group: LetterOrderGroup) {
@@ -1453,7 +1477,10 @@ export function B2BOrderForm({
           </div>}</div></div>
           <div className={styles.cartQuantity}>{editable ? <label><span>Aantal</span><input aria-label={`Aantal ${title}`} type="number" min="1" max="10000" value={line.quantity} onChange={event => updateProductLine(line.id, { quantity: Math.max(1, Number(event.target.value) || 1) })}/></label> : <strong>{line.quantity}×</strong>}</div>
           <div className={styles.cartUnit}>{editable ? <label><span>Prijs / stuk excl. logo</span><input aria-label={`Prijs ${title}`} type="text" inputMode="decimal" value={basePriceInputs[line.id] ?? decimalInput(base)} onChange={event => editBasePrice(line, event.target.value)} onBlur={() => finishBasePrice(line.id)}/></label> : <strong>{money(base)}</strong>}{line.manualPrice && product && editable && <button type="button" className={styles.priceReset} onClick={() => updateProductLine(line.id, { manualPrice: false })}>Folderprijs gebruiken</button>}</div>
-          <div className={styles.cartLogo}>{product && productSupportsLogo(product, line.choice) ? editable ? <label data-selected={line.withLogo}><input aria-label={`Logo op ${title}`} type="checkbox" checked={line.withLogo} onChange={event => updateProductLine(line.id, { withLogo: event.target.checked })}/><span>{line.withLogo ? "Met logo" : "Zonder logo"}<small>{line.withLogo ? `+ ${money(logo)}` : "+ € 0,00"}</small></span></label> : <span>{line.withLogo ? `Met logo · + ${money(logo)}` : "Zonder logo"}</span> : <small>Niet beschikbaar</small>}</div>
+          <div className={styles.cartLogo}>
+            {product && productSupportsLogo(product, line.choice) ? editable ? <label data-selected={line.withLogo}><input aria-label={`Logo op ${title}`} type="checkbox" checked={line.withLogo} onChange={event => updateProductLine(line.id, { withLogo: event.target.checked })}/><span>{line.withLogo ? "Met logo" : "Zonder logo"}<small>{line.withLogo ? `+ ${money(logo)}` : "+ € 0,00"}</small></span></label> : <span>{line.withLogo ? `Met logo · + ${money(logo)}` : "Zonder logo"}</span> : <small>Niet beschikbaar</small>}
+            {line.withLogo && product?.logoPlacement && <small>Logo op {product.logoPlacement}</small>}
+          </div>
           <div className={styles.cartAmount}><span>Regeltotaal</span><strong>{money(roundCents(line.quantity * base + logo))}</strong><small>{line.quantity} × {money(base)}{logo > 0 ? ` + ${money(logo)} logo` : ""}</small></div>
           {editable && <button type="button" aria-label={`${title} verwijderen`} className={styles.removeItem} onClick={() => setProductLines(form.productLines.filter(item => item.id !== line.id))}>×</button>}
         </div>;
@@ -1594,7 +1621,7 @@ export function B2BOrderForm({
               </>}
               <label className={styles.field}>Aantal<input data-order-draft aria-label="Aantal producten" type="number" min="1" max="10000" value={productDraft.quantity || ""} onChange={event => updateProductDraft({ quantity: Number(event.target.value) })} /></label>
               <details className={styles.letterExtras}><summary>Prijs aanpassen{productDraft.unitPriceEx ? ` · € ${productDraft.unitPriceEx.replace(".", ",")} excl. btw` : ""}</summary>              <label className={styles.field}>Prijs p.s. excl. btw<input data-order-draft type="number" min="0" step="0.01" value={productDraft.unitPriceEx} onChange={event => updateProductDraft({ unitPriceEx: event.target.value, manualPrice: true })} /></label></details>
-              {draftProduct && productSupportsLogo(draftProduct, productDraft.choice) && <label className={styles.field}><span><input type="checkbox" aria-label="Eigen logo op dit product" checked={productDraft.withLogo} onChange={event => updateProductDraft({ withLogo: event.target.checked })} /> Eigen logo · + {money(productLogoPrice(false))} p.s. excl. btw</span></label>}
+              {draftProduct && productSupportsLogo(draftProduct, productDraft.choice) && <label className={styles.field}><span><input type="checkbox" aria-label="Eigen logo op dit product" checked={productDraft.withLogo} onChange={event => updateProductDraft({ withLogo: event.target.checked })} /> Eigen logo · + {money(productLogoPrice(false))} p.s. excl. btw</span>{draftProduct.logoPlacement && <small>Logo op {draftProduct.logoPlacement}</small>}</label>}
               <div className={styles.addLine}><button type="button" className={styles.button} onClick={addProductToOrder}>+ Product toevoegen</button></div>
             </div>
           </div>
@@ -1602,6 +1629,14 @@ export function B2BOrderForm({
           {form.letterLines.length > 0 && <details className={styles.priceAgreements}><summary>Prijsafspraak voor chocoladeletters aanpassen</summary><p>Deze stukprijs geldt voor de letterregels met dezelfde soort, hetzelfde formaat en dezelfde logo-keuze. Logokosten komen daar apart bij.</p>{form.productLines.filter(line => ["chocoladeletter", "chocolade-vormletter"].includes(line.productId)).map(line => <label key={line.id} className={styles.priceAgreementField}><span>{lineDescription(line)} · {line.quantity} stuks<br/><small>Prijs per stuk excl. logo en btw</small></span><input aria-label={`Prijs ${lineDescription(line)}`} type="text" inputMode="decimal" value={basePriceInputs[line.id] ?? decimalInput(unitPriceWithoutLogo(line))} onChange={event => editBasePrice(line, event.target.value)} onBlur={() => finishBasePrice(line.id)}/><button type="button" className={styles.priceReset} onClick={() => updateProductLine(line.id, { manualPrice: false })}>Folderprijs</button></label>)}</details>}
           </>}
           {form.letterOrderText && !form.letterGroup && <details className={styles.extra}><summary>Oude vrije letteromschrijving</summary><p className="whitespace-pre-wrap">{form.letterOrderText}</p></details>}
+          <label className={styles.giftWrapChoice}>
+            <input
+              type="checkbox"
+              checked={hasIndividualGiftWrap(form.packaging)}
+              onChange={event => setField("packaging", withIndividualGiftWrap(form.packaging, event.target.checked))}
+            />
+            <span>Alles apart in cadeaupapier<small>Hele bestelling · inpakkosten via prijsafspraak</small></span>
+          </label>
           <details className={`${styles.extra} ${styles.orderNotes}`}>
             <summary>Afspraken & notities{extraDataCount ? ` · ${extraDataCount} ingevuld` : ""}</summary>
           {form.productLines.some(line => { const product = catalogProduct(line.productId); return product && productSupportsLogo(product, line.choice); }) && <div className={styles.cartBulk}><span>Logo’s in één keer instellen:</span><button type="button" onClick={() => applyLogoToAll(true)}>Logo bij alle geschikte artikelen</button><button type="button" onClick={() => applyLogoToAll(false)}>Alle logo’s uit</button></div>}
@@ -1625,6 +1660,7 @@ export function B2BOrderForm({
             ["Fase", { aanvraag: "Aanvraag", offerte: "Offerte", akkoord: "Definitief · klant heeft akkoord gegeven", afgewezen: "Niet doorgegaan" }[form.status]],
           ].filter(([, value]) => value).map(([label, value]) => <div key={label} className={styles.reviewRow}><span>{label}</span><span>{value}</span></div>)}
           {form.letterGroup ? <GroupedLetterBreakdown group={form.letterGroup} matches={letterGroupMatchesOrder(form.letterGroup, form)} /> : renderOrderItems(false)}
+          {hasIndividualGiftWrap(form.packaging) && <div className={styles.reviewRow}><span>Verpakking</span><span>{INDIVIDUAL_GIFT_WRAP}</span></div>}
           {[["Aanvullende afspraken", form.orderText], ["Notities verpakking/logo", packagingLogoNotes(form)], ["Tekst", form.textInstructions], ["Prijsafspraak", form.priceAgreement], ["Interne opmerkingen", form.importantNotes], ["Factuurgegevens", form.invoiceInfo]].filter(([, value]) => value).map(([label, value]) => <div key={label} className={styles.reviewRow}><span>{label}</span><span>{value}</span></div>)}
           <p className={styles.reviewNote}>{form.status === "akkoord" ? "Na opslaan kun je de klant een definitieve bevestiging mailen. De interne back-up gaat automatisch naar info@strik-patisserie.nl." : "Deze bestelling is nog niet definitief. Je kunt de fase later aanpassen."}</p>
         </section>
@@ -1734,6 +1770,7 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
       <div className={styles.customer}>
         <h3 className={styles.customerHeading}><span>{order.customerName}</span>{!archived&&(logoOrderRequested(order)||expanded)&&<OrderLogos orderId={order.id} year={order.year} customer={order.customerName} printComplete={order.logoPrintComplete} missing={logoOrderRequested(order)&&order.logoAttachmentCount===0} onCountChange={(count,printed)=>onLogoCount(order.id,count,printed)}/>}</h3>
         <p className={styles.orderProduct}><B2BProductText text={orderSummary || "Bestelling nog invullen"} /></p>
+        {hasIndividualGiftWrap(order.packaging) && <p className={styles.giftWrapFlag}>Apart in cadeaupapier</p>}
         <p className={styles.delivery}>{order.deliveryMethod || "Levering nog afspreken"}{order.season === "sint-kerst" ? " · Sint & Kerst" : ""}</p>
         {!archived&&!order.cancelled&&logoOrderRequested(order)&&order.logoAttachmentCount===0&&<p className={styles.warning} style={{color:"#b23827"}}>! Nog geen logo geüpload — controleer</p>}
         {order.reminderEmailError && <p className={styles.warning}>! Interne controlewaarschuwing niet bevestigd</p>}

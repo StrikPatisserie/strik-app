@@ -8,6 +8,7 @@ import LetterOrderCard from "../LetterOrderCard";
 import { LetterOrdersColumns, LetterOrdersHeader } from "../LetterOrdersLayout";
 import styles from "../LetterOrders.module.css";
 import DeleteOnlineLetterOrderButton from "./DeleteOnlineLetterOrderButton";
+import EditOnlineLetterOrder from "./EditOnlineLetterOrder";
 import { filterOnlineOrders, onlineItemLabel, onlineOrderStatuses, onlineOrderTotal, type OnlineLetterOrder } from "./onlineOrders";
 
 function money(cents: number) {
@@ -52,6 +53,7 @@ export default function OnlineLetterOrdersClient({ orders, photoUrls, error }: {
             status={onlineOrderStatuses[order.fulfillment_status] || order.fulfillment_status}
             tone={order.fulfillment_status === "READY" ? "ready" : ["COMPLETED", "CANCELLED"].includes(order.fulfillment_status) ? "closed" : undefined}
             amount={money(onlineOrderTotal(order))}
+            action={<EditOnlineLetterOrder order={order} />}
             warning={order.notes ? <p>Let op: {order.notes}</p> : undefined}
           >
             <div className={styles.detailGrid}>
@@ -68,6 +70,7 @@ export default function OnlineLetterOrdersClient({ orders, photoUrls, error }: {
                 <p>{formatPickupDate(order.requested_date)}</p>
                 <p>{lettershopShopLabel(order.pickup_location)}</p>
                 <p className={styles.muted}>Besteld via de Lettershop · {order.order_number}</p>
+                {order.edit_block_reason && <p className={styles.muted}>{order.edit_block_reason}</p>}
               </div>
             </div>
             {order.fulfillment_status === "NEW" && <div className={styles.detailActions}><DeleteOnlineLetterOrderButton orderId={order.id} orderNumber={order.order_number} className={styles.remove} /></div>}

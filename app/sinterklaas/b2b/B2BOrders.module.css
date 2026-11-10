@@ -87,6 +87,7 @@
 .customer { min-width: 0; }
 .orderProduct { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; color: var(--b2b-muted); margin-top: 2px !important; font-size: 11px; line-height: 1.35; overflow-wrap: anywhere; }
 .delivery { color: var(--b2b-muted); font-size: 10px; margin-top: 2px !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.giftWrapFlag { margin-top: 3px !important; color: var(--b2b-accent); font-size: 10px; font-weight: 600; }
 .orderMain[data-expanded] .orderProduct { -webkit-line-clamp: unset; }
 .orderMain[data-expanded] .delivery { white-space: normal; }
 .status { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 500; padding: 2px 6px; border-radius: 4px; background: #faf3e4; color: #815f28; }
@@ -160,6 +161,9 @@
 .field small { color: var(--b2b-muted); font-size: 11px; font-weight: 400; }
 .fullWidth { grid-column: 1/-1; }
 .rule { border: 0; border-top: 1px solid var(--b2b-border); margin: 22px 0; }
+.giftWrapChoice { display: flex; align-items: center; gap: 10px; margin-top: 18px; padding: 10px 12px; border: 1px solid var(--b2b-border); border-radius: 7px; background: var(--b2b-pale); font-size: 12px; cursor: pointer; }
+.giftWrapChoice input { width: 18px; height: 18px; flex-shrink: 0; accent-color: var(--b2b-accent); }
+.giftWrapChoice small { display: block; margin-top: 2px; color: var(--b2b-muted); font-size: 10px; }
 .segments { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 17px; }
 .segments button { padding: 8px 13px; border: 1px solid var(--b2b-border); border-radius: 7px; background: #fff; font-size: 12px; }
 .segments button[aria-pressed="true"] { border-color: var(--b2b-accent); background: var(--b2b-pale); color: var(--b2b-accent); }

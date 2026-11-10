@@ -15,9 +15,15 @@ export default async function OnlineLetterOrdersPage() {
     auth: { autoRefreshToken: false, persistSession: false },
   });
   const { data, error } = await supabase.from("letter_orders")
-    .select("id,order_number,customer_name,customer_email,phone,notes,requested_date,pickup_location,gift_wrap,gift_wrap_price_cents,fulfillment_status,created_at,letter_order_items(quantity,logo,logo_storage_path,unit_price_cents,logo_price_cents,letter_products(letter,flavour,size,style))")
+    .select("id,revision,order_number,customer_name,customer_email,phone,notes,requested_date,pickup_location,gift_wrap,gift_wrap_price_cents,fulfillment_status,created_at,letter_order_items(id,quantity,logo,logo_storage_path,unit_price_cents,logo_price_cents,letter_products(letter,flavour,size,style))")
     .eq("channel", "ONLINE").order("created_at", { ascending: false }).limit(100);
   const orders = (data || []) as unknown as OnlineLetterOrder[];
+  if (orders.length) {
+    const { data: states, error: stateError } = await supabase.rpc("lettershop_order_edit_states", { p_order_ids: orders.map(order => order.id) });
+    const blocked = new Map<string, string | null>((states || []).map((row: { order_id: string; block_reason: string | null }) => [row.order_id, row.block_reason]));
+    for (const order of orders) order.edit_block_reason = stateError || !blocked.has(order.id)
+      ? "Wijzigen is nog niet beschikbaar. De productiecontrole kon niet worden geladen." : blocked.get(order.id);
+  }
   const seasons=[...new Set(orders.map(order=>order.requested_date.slice(0,4)))];
   const ready=new Set((await Promise.all(seasons.map(season=>loadReadyProductionRecipients(season).catch(()=>new Set<string>())))).flatMap(set=>[...set]));
   for(const order of orders)if(order.fulfillment_status==="NEW" && ready.has(`central:${order.id}`))order.fulfillment_status="READY";
