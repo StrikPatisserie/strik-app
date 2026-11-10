@@ -12,6 +12,7 @@ import {decodeReloadView,RELOAD_VIEW_KEY} from "../../productie/productionUpdate
 import TaskWorkPanel,{WorkClock,PreparationControl,RecipeWorkHistory} from "../../productie/TaskWorkPanel";
 import {applyWorkCommand} from "../../productie/workCommands";
 import type {WorkCommand} from "../../productie/productionWork";
+import {departmentDayWork,taskWorkSummary} from "../../productie/workSummary";
 import WeddingWeekLane from "../../productie/WeddingWeekLane";
 import QuickRecipeForm from "../../productie/QuickRecipeForm";
 import ProductionRequests from "../../productie/ProductionRequests";
@@ -72,6 +73,12 @@ function DayRhythm({board,date}:{board:BoardId;date:string}) {
 }
 
 function quantity(value: number) { return value.toLocaleString("nl-NL", { maximumFractionDigits: 1 }); }
+function workDuration(minutes:number) {
+  const rounded=Math.round(minutes),hours=Math.floor(rounded/60),rest=rounded%60;
+  if(minutes>0&&rounded===0)return "<1m";
+  return hours?`${hours}u${rest?String(rest).padStart(2,"0"):""}`:rounded?`${rounded}m`:"0u";
+}
+function workTotalLabel(minutes:number,missing:number) { return missing&&minutes===0?"—":`${missing?"≥":""}${workDuration(minutes)}`; }
 function departmentName(id: DepartmentId) { return DEPARTMENTS.find(d => d.id === id)?.name || id; }
 function newId(prefix: string) { return `${prefix}-${crypto.randomUUID()}`; }
 
@@ -161,6 +168,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
   const visibleDepartments = boardDepartments.filter(d => department === "all" || d.id === department);
   const weekTasks = useMemo(()=>state.tasks.filter(t => t.date >= week && t.date <= addDays(week, 6) && boardDepartments.some(d => d.id === t.departmentId)),[state.tasks,week,boardDepartments]);
   const taskGroups = useMemo(() => recipeGroups(state.tasks, state.items), [state.tasks, state.items]);
+  const dailyWork = useMemo(() => departmentDayWork({...state,tasks:weekTasks},recipeList), [state,weekTasks,recipeList]);
   const preparationRoots=useMemo(()=>new Set(state.tasks.flatMap(task=>task.generatedFor?[task.generatedFor]:[])),[state.tasks]);
   const end = addDays(week, 6);
   const recipeUpdates=useMemo(()=>new Map(weekTasks.filter(t=>!t.generatedFor && !t.dependsOn && (t.recipePlan || state.tasks.some(c=>c.generatedFor===t.id))).map(t=>[t.id,recipePlanChanges(state,recipeList,t)]).filter(([,review])=>typeof review!=="string" && review.changed) as [string,ReturnType<typeof recipePlanChanges>][]),[state,recipeList,weekTasks]);
@@ -310,6 +318,21 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
   }
   const style = { "--days": days.length } as CSSProperties;
 
+  function dayWork(departmentId:DepartmentId,date:string) {
+    const total=dailyWork.get(`${departmentId}:${date}`);
+    if(!total)return null;
+    const actual=`Afgerond · ${workTotalLabel(total.doneLaborMinutes,total.doneMissingCount)} arbeidstijd. Personen × werktijd.${total.doneMissingCount?` ${total.doneMissingCount} taken zonder volledige tijdregistratie.`:""}`;
+    const planned=`Nog gepland · ${workTotalLabel(total.plannedLaborMinutes,total.plannedMissingCount)} arbeidstijd. Richttijd of ingevoerde tijd voor één persoon, tenzij een team is gestart.${total.plannedMissingCount?` ${total.plannedMissingCount} taken zonder tijdsinschatting.`:""}`;
+    return <div className={s.cellWorkTotals} role="group" aria-label={`Productieve uren · ${departmentName(departmentId)} · ${dateLabel(date,true)}`}>
+      <span className={s.workDone} title={actual} aria-label={actual}><Icon name="check" size={13}/>{workTotalLabel(total.doneLaborMinutes,total.doneMissingCount)}</span>
+      <span className={s.workPlanned} title={planned} aria-label={planned}><Icon name="clock" size={13}/>{workTotalLabel(total.plannedLaborMinutes,total.plannedMissingCount)}</span>
+    </div>;
+  }
+  function completionBadge(task:Task,name:string,onOpen:()=>void) {
+    const completed=task.status==="done"?taskWorkSummary(state,task):undefined;
+    const completionLabel=completed&&!completed.fromStock?`Afronding ${name} · ${completed.crewSize===undefined?"aantal personen niet geregistreerd":`${completed.crewSize} ${completed.crewSize===1?"persoon":"personen"}`} · ${completed.minutes===undefined?"tijd niet geregistreerd":`${quantity(completed.minutes)} minuten`}`:undefined;
+    return completed&&completionLabel&&<button type="button" className={s.taskWorkBadge} title={completionLabel} aria-label={completionLabel} onClick={onOpen}><Icon name="users" size={12}/><span>{completed.crewSize??"—"}</span><Icon name="clock" size={12}/><span>{completed.minutes===undefined?"—":workDuration(completed.minutes)}</span></button>;
+  }
   function taskCard(task: Task) {
     const item = state.items.find(i => i.id === task.itemId)!;
     const group = taskGroups.get(task.id);
@@ -331,6 +354,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
             <span>{step}</span>
             <small data-warning-only={warningOnly||undefined}>{task.stockFulfillmentId&&"Uit voorraad"}{task.status==="active"&&<><WorkClock state={state} taskId={task.id}/>{!state.productionWork?.timers?.[task.id]&&"Bezig"}</>}{task.status==="blocked"&&"Controleren"}{issues.length>0&&<span className={s.taskWarning} title={issues.join(" ")}><Icon name="warning" size={12}/></span>}</small>
           </button>
+          {completionBadge(task,item.name,()=>setModal({type:"detail",id:task.id}))}
           {group&&<button type="button" className={`${s.recipeGroup} ${s[`recipeGroupTone${group.tone}`]}`} title={`Hoort bij ${group.name}`} aria-label={`${group.label} · Hoort bij ${group.name}`} onClick={()=>setModal({type:"detail",id:group.rootId})}><Icon name="link" size={11}/>{task.generatedFor?"Voor":"Recept"} {group.name}</button>}
         </div>
       </div>
@@ -366,14 +390,14 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
         <section className={s.board} aria-label="Weekbord">
           <div className={s.boardHeader}><div className={s.departmentColumn}/>{days.map(d => <div key={d} className={`${s.dayHeading} ${d === today ? s.today : ""}`}><div><strong>{dateLabel(d)}</strong>{d===today&&<span>Vandaag</span>}</div><DayRhythm board={board} date={d}/></div>)}</div>
           {visibleDepartments.map(dep => {
-            if(dep.id==="bruidstaarten")return <WeddingWeekLane dragFrameRef={frameRef} onDragChange={setDragged} key={dep.id} week={week} days={days} day={day} today={today} state={state} canManage={canManage} saving={saving} demo={demo} statusFilter={statusFilter} Dialog={ModalFrame} onUpdate={updateWedding}/>;
+            if(dep.id==="bruidstaarten")return <WeddingWeekLane renderTaskWork={completionBadge} renderDayWork={date=>dayWork("bruidstaarten",date)} dragFrameRef={frameRef} onDragChange={setDragged} key={dep.id} week={week} days={days} day={day} today={today} state={state} canManage={canManage} saving={saving} demo={demo} statusFilter={statusFilter} Dialog={ModalFrame} onUpdate={updateWedding}/>;
             const tasks = filtered.filter(t => t.departmentId === dep.id);
             const total = tasks.reduce((sum, t) => sum + (t.minutes || 0), 0);
             return <div className={`${s.departmentRow} ${s[`tone_${dep.tone}`]}`} data-department={dep.id} key={dep.id}>
               <div className={s.departmentLabel} title={`${dep.name} · ${tasks.filter(t=>t.status==="done").length}/${tasks.length} klaar · ${durationLabel(total)} gepland`}><span className={s.departmentMark} /><h2>{dep.name}</h2><span>{tasks.filter(t => t.status === "done").length}/{tasks.length} klaar</span><small><Icon name="clock" size={12} />{durationLabel(total)} gepland</small></div>
               {days.map(d => <div key={d} data-task-date={d} data-task-department={dep.id} data-task-drag-kind="production" className={`${s.dayCell} ${d === day ? s.mobileSelectedDay : ""} ${d === today ? s.todayCell : ""} ${dragged ? s.dropTarget : ""}`} onDragOver={e => { if (canManage && !saving && dragged) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }} onDrop={e => { e.preventDefault(); if (canManage && !saving && dragged) move(dragged, d, dep.id); }} aria-label={`${dep.name} · ${dateLabel(d, true)}`}>
                 {tasks.filter(t => t.date === d).map(taskCard)}
-                {canManage && <button className={s.cellAdd} aria-label={`Taak toevoegen · ${dep.name} · ${dateLabel(d, true)}`} onClick={() => setModal({ type: "task", date: d, departmentId: dep.id, fromCell: true })}><Icon name="plus" size={14} /><span>Toevoegen</span></button>}
+                <div className={s.dayCellFooter}>{dayWork(dep.id,d)}{canManage && <button className={s.cellAdd} aria-label={`Taak toevoegen · ${dep.name} · ${dateLabel(d, true)}`} onClick={() => setModal({ type: "task", date: d, departmentId: dep.id, fromCell: true })}><Icon name="plus" size={14} /><span>Toevoegen</span></button>}</div>
                 {wall && !canManage && !tasks.some(t => t.date === d) && <span className={s.emptyCell}>—</span>}
               </div>)}
             </div>;
@@ -381,7 +405,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
           {board==="patisserie" && department==="all" && <CleaningWeekLane dragFrameRef={frameRef} onDragChange={setDragged} days={days} day={day} today={today} rows={state.cleaning || []} canManage={canManage} canCheck={!live || live.departments.some(id=>departmentsFor("patisserie").some(d=>d.id===id))} saving={saving} statusFilter={statusFilter} selected={modal?.type==="cleaning"?modal:null} Dialog={ModalFrame} onOpen={selection=>setModal(selection?{type:"cleaning",...selection}:null)} onCommand={clean}/>}
         </section>
         <footer className={s.boardFooter}><span><i />Gepland <i className={s.activeLegend} />Bezig <i className={s.doneLegend} />Klaar <i className={s.blockedLegend} />Geblokkeerd</span><span>{canManage ? "Sleep om te verplaatsen · open een taak om te wijzigen" : "Open een taak voor details en status"}</span>{!weekend && (weekTasks.some(t => t.date === end) || (board==="patisserie" && state.cleaning?.some(d=>d.date===end))) && <button onClick={() => setWeekend(true)}>Zondag heeft taken · toon zondag</button>}</footer>
-        </div><aside className={s.planningRail}>{live?<ProductionRequests compact board={board} week={week} onPlanned={onRefresh}/>:<div className={s.demoRequests}>Productieverzoeken<button aria-label="Nieuw productieverzoek" onClick={()=>setModal({type:"item"})}><Icon name="plus"/></button></div>}{canBakery && <ProductionWeekOffer key={offerWeek} offers={live?.weeklyOffers} week={offerWeek} paused={!!modal || !!quickRecipeItem} onOpen={(selectedWeek, offer) => setModal({type:"offer",week:selectedWeek,imageUrl:offer.imageUrl,label:offer.label})} onManage={canManageData ? selectedWeek => setModal({type:"offer-manage",week:selectedWeek}) : undefined}/>}</aside></div>
+        </div><aside className={s.planningRail}>{live?<ProductionRequests compact board={board} week={week} today={today} onPlanned={onRefresh}/>:<div className={s.demoRequests}>Productieverzoeken<button aria-label="Nieuw productieverzoek" onClick={()=>setModal({type:"item"})}><Icon name="plus"/></button></div>}{canBakery && <ProductionWeekOffer key={offerWeek} offers={live?.weeklyOffers} week={offerWeek} paused={!!modal || !!quickRecipeItem} onOpen={(selectedWeek, offer) => setModal({type:"offer",week:selectedWeek,imageUrl:offer.imageUrl,label:offer.label})} onManage={canManageData ? selectedWeek => setModal({type:"offer-manage",week:selectedWeek}) : undefined}/>}</aside></div>
       </> : view === "catalog" ? <>
         <div className={s.sectionIntro}><p>Alles wat je maakt, ook zonder uitgewerkt recept.</p><span>{state.items.filter(i=>i.kind==="product").length} eindproducten · {state.items.filter(i=>i.kind==="component").length} halffabricaten</span></div>
         <div className={s.listToolbar}><Search value={query} onChange={setQuery} placeholder="Zoek op naam of artikelnummer…" /><select aria-label="Type onderdeel" value={kindFilter} onChange={e => setKindFilter(e.target.value)}><option value="all">Alle typen</option><option value="product">Eindproducten</option><option value="component">Halffabricaten</option><option value="activity">Werkzaamheden</option></select><DepartmentSelect value={department} onChange={setDepartment} /></div>

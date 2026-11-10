@@ -11,6 +11,7 @@ const recipeGrouping=load('app/productie/recipeGroups.ts');
 const taskOperations=load('app/productie/taskOperations.ts');
 const weddingPlanning=load('app/productie/weddingPlanning.ts',{'./planning':planning,'../bruidstaart-studio/pricing':{}});
 const productionWork=load('app/productie/productionWork.ts',{'./planning':planning,'./recipePlanning':recipePlanning}),workCommands=load('app/productie/workCommands.ts',{'./productionWork':productionWork});
+const workSummary=load('app/productie/workSummary.ts',{'./productionWork':productionWork});
 function harness({fetchImpl,timerApi={}}={}) {
  // Exercise the component's real handlers and render state without a browser,
  // network, effects or live data. Each component retains its own hook storage.
@@ -20,7 +21,7 @@ function harness({fetchImpl,timerApi={}}={}) {
  const navigation={__esModule:true,default:function Navigation(){},ProductionMobileNavigation:function MobileNavigation(){}};
  const offerWidget={__esModule:true,default:function ProductionWeekOffer(){}};
  const pickerWidget={__esModule:true,default:function ProductionItemPicker(){}};
- const component=load('app/preview/productie/ProductionPreview.tsx',{'react':react,'react/jsx-runtime':jsx,'next/link':'a','../../productie/ProductionIcon':{__esModule:true,default:()=>null},'../../productie/ProductionNavigation':navigation,'../../productie/navigation':load('app/productie/navigation.ts',{'./planning':planning}),'../../productie/dayRhythm':load('app/productie/dayRhythm.ts',{'./planning':planning}),'next/dynamic':()=>()=>null,'../../productie/WeddingWeekLane':{__esModule:true,default:()=>null},'../../productie/useProductionUpdates':{__esModule:true,default:()=>false},'../../productie/usePhysicalKeyboard':{__esModule:true,default:()=>({physicalKeyboard:false,setPhysicalKeyboard(){},storageError:false})},'../../productie/useTaskDrag':{__esModule:true,default:()=>({getHandleProps:()=>({onClick(){}}),cancelDrag(){}})},'../../productie/productionUpdates':{},'../../productie/useScreenLayout':{__esModule:true,default:()=>({frameRef:{current:null},workspaceRef:{current:null}})},'../../productie/TaskWorkPanel':{__esModule:true,default:function TaskWorkPanel(){},WorkClock:function WorkClock(){},PreparationControl:function PreparationControl(){},RecipeWorkHistory:function RecipeWorkHistory(){}},'../../productie/workCommands':workCommands,'../../productie/QuickRecipeForm':{__esModule:true,default:()=>null},'../../productie/ProductionRequests':{__esModule:true,default:()=>null},'../../productie/ProductionWeekOffer':offerWidget,'../../productie/ProductionItemPicker':pickerWidget,'../../productie/SearchableChoice':{__esModule:true,default:function SearchableChoice(){}},'../../productie/recipeGroups':recipeGrouping,'../../productie/taskOperations':taskOperations,'../../productie/CleaningWeekLane':{__esModule:true,default:()=>null},'../../productie/weddingPlanning':weddingPlanning,'../../productie/planning':planning,'./sampleData':sample,'./production.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})},'../../productie/workspaceData':{},'../../productie/recipePlanning':recipePlanning},{fetch:fetchImpl||(()=>assert.fail('Unexpected live request in the UI harness')),...timerApi});
+ const component=load('app/preview/productie/ProductionPreview.tsx',{'react':react,'react/jsx-runtime':jsx,'next/link':'a','../../productie/ProductionIcon':{__esModule:true,default:()=>null},'../../productie/ProductionNavigation':navigation,'../../productie/navigation':load('app/productie/navigation.ts',{'./planning':planning}),'../../productie/dayRhythm':load('app/productie/dayRhythm.ts',{'./planning':planning}),'next/dynamic':()=>()=>null,'../../productie/WeddingWeekLane':{__esModule:true,default:()=>null},'../../productie/useProductionUpdates':{__esModule:true,default:()=>false},'../../productie/usePhysicalKeyboard':{__esModule:true,default:()=>({physicalKeyboard:false,setPhysicalKeyboard(){},storageError:false})},'../../productie/useTaskDrag':{__esModule:true,default:()=>({getHandleProps:()=>({onClick(){}}),cancelDrag(){}})},'../../productie/productionUpdates':{},'../../productie/useScreenLayout':{__esModule:true,default:()=>({frameRef:{current:null},workspaceRef:{current:null}})},'../../productie/TaskWorkPanel':{__esModule:true,default:function TaskWorkPanel(){},WorkClock:function WorkClock(){},PreparationControl:function PreparationControl(){},RecipeWorkHistory:function RecipeWorkHistory(){}},'../../productie/workCommands':workCommands,'../../productie/workSummary':workSummary,'../../productie/QuickRecipeForm':{__esModule:true,default:()=>null},'../../productie/ProductionRequests':{__esModule:true,default:()=>null},'../../productie/ProductionWeekOffer':offerWidget,'../../productie/ProductionItemPicker':pickerWidget,'../../productie/SearchableChoice':{__esModule:true,default:function SearchableChoice(){}},'../../productie/recipeGroups':recipeGrouping,'../../productie/taskOperations':taskOperations,'../../productie/CleaningWeekLane':{__esModule:true,default:()=>null},'../../productie/weddingPlanning':weddingPlanning,'../../productie/planning':planning,'./sampleData':sample,'./production.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})},'../../productie/workspaceData':{},'../../productie/recipePlanning':recipePlanning},{fetch:fetchImpl||(()=>assert.fail('Unexpected live request in the UI harness')),...timerApi});
  const render=(fn,props={},value)=>{if(!records.has(fn))records.set(fn,[]);current=records.get(fn);index=0;context=value;return fn(props);};
  return{render,Component:component.default,navigation,offerWidget:offerWidget.default,pickerWidget:pickerWidget.default};
 }
@@ -641,4 +642,99 @@ test('a recipe-free planning task opens its name, recipe link and explicit creat
  button(view,'Naam of recept koppelen').props.onClick();tree=h.render(h.Component,{live,initialTask:task.id});
  const part=find(tree,n=>typeof n.type==='function'&&!!n.props.onLink&&n.props.item.id===item.id);
  assert.equal(part.props.item.id,task.itemId);
+});
+
+
+function summaryWorkspace(tasks,completions={},timers={}){
+ const state=sample.initialPreviewState();
+ const source=state.tasks.find(task=>task.itemId==='fruit');
+ state.tasks=tasks.map(({id,...changes})=>({...source,id,batchId:`summary:${id}`,date:sample.DEMO_TODAY,departmentId:'dessert',operation:'Maken',status:'planned',quantity:10,minutes:undefined,...changes}));
+ state.productionWork={overrides:{},preparation:{},history:[],work:[],completions,timers};
+ const live={state,today:sample.DEMO_TODAY,recipes:sample.demoRecipes,ingredients:[],canManage:true,departments:planning.DEPARTMENTS.map(department=>department.id),revision:1};
+ return {state,live};
+}
+function dayWorkGroup(tree,department='Desserttaart & fruit',date=sample.DEMO_TODAY){
+ return find(tree,node=>node.props?.role==='group'&&node.props['aria-label']===`Productieve uren · ${department} · ${planning.dateLabel(date,true)}`);
+}
+function dayWorkMetric(tree,label,department,date){return find(dayWorkGroup(tree,department,date),node=>node.type==='span'&&node.props['aria-label']?.startsWith(label));}
+
+test('completed task badges show the recorded crew and elapsed time while day totals use productive person-minutes',()=>{
+ const {live}=summaryWorkspace([{id:'summary-done',status:'done'},{id:'summary-next',minutes:40}],{'summary-done':{minutes:35,crewSize:2,laborMinutes:70}});
+ const h=harness();let tree=xl(h,{live});
+ const card=find(tree,node=>node.type==='article'&&node.key==='summary-done');
+ const badge=find(card,node=>node.type==='button'&&node.props.className==='taskWorkBadge');
+ assert.equal(badge.props['aria-label'],'Afronding Fruitdesserttaart · 2 personen · 35 minuten');
+ assert.equal(text(badge),'235m');
+ assert.equal(text(dayWorkMetric(tree,'Afgerond · ')),'1u10');
+ assert.equal(text(dayWorkMetric(tree,'Nog gepland · ')),'40m');
+ assert.equal(find(card,node=>node.props?.className==='taskMeta').props.children.includes(badge),true,'Crew and time stay in existing task metadata');
+ badge.props.onClick();tree=h.render(h.Component,{live});
+ assert.equal(find(tree,node=>typeof node.type==='function'&&!!node.props.onMove).props.task.id,'summary-done','The compact badge opens existing task details');
+});
+
+test('legacy and stock-completed tasks keep unknown values explicit and never invent productive time',()=>{
+ const {state,live}=summaryWorkspace([{id:'summary-legacy',status:'done'},{id:'summary-stock',status:'done',stockFulfillmentId:'stock-summary'},{id:'summary-estimate'}]);
+ state.productionWork.work.push({taskId:'summary-legacy',minutes:90,crewSize:3,laborMinutes:270});
+ const h=harness(),tree=h.render(h.Component,{live});
+ const legacy=find(tree,node=>node.type==='article'&&node.key==='summary-legacy');
+ const unknown=find(legacy,node=>node.props?.className==='taskWorkBadge');
+ assert.match(unknown.props['aria-label'],/aantal personen niet geregistreerd · tijd niet geregistreerd/);
+ assert.equal(text(unknown),'——');
+ const stock=find(tree,node=>node.type==='article'&&node.key==='summary-stock');
+ assert(text(stock).includes('Uit voorraad'));
+ assert(!nodes(stock).some(node=>node.props?.className==='taskWorkBadge'));
+ assert.equal(text(dayWorkMetric(tree,'Afgerond · ')),'—');
+ assert.match(dayWorkMetric(tree,'Afgerond · ').props['aria-label'],/1 taken zonder volledige tijdregistratie/);
+ assert.equal(text(dayWorkMetric(tree,'Nog gepland · ')),'—');
+ const stockOnly=summaryWorkspace([{id:'summary-stock',status:'done',stockFulfillmentId:'stock-only'}]);
+ const stockHarness=harness();assert.equal(text(dayWorkMetric(stockHarness.render(stockHarness.Component,{live:stockOnly.live}),'Afgerond · ')),'0u');
+});
+
+test('daily productive totals include hidden completed tasks, unfinished estimates and active team sizes independently of filters',()=>{
+ const {live}=summaryWorkspace([{id:'summary-done',status:'done'},{id:'summary-unknown-done',status:'done'},{id:'summary-next',minutes:25,status:'active'},{id:'summary-unknown-open'},{id:'summary-other-department',departmentId:'luxe',minutes:120},{id:'summary-other-day',date:planning.addDays(sample.DEMO_TODAY,1),minutes:180}],{'summary-done':{minutes:35,crewSize:2}}, {'summary-next':{crewSize:3}});
+ const h=harness();let tree=h.render(h.Component,{live});
+ const assertTotals=()=>{
+  assert.equal(text(dayWorkMetric(tree,'Afgerond · ')),'≥1u10');
+  assert.equal(text(dayWorkMetric(tree,'Nog gepland · ')),'≥1u15');
+  assert.match(dayWorkMetric(tree,'Afgerond · ').props['aria-label'],/1 taken zonder volledige tijdregistratie/);
+  assert.match(dayWorkMetric(tree,'Nog gepland · ').props['aria-label'],/1 taken zonder tijdsinschatting/);
+ };
+ assertTotals();
+ find(tree,node=>node.type==='select'&&text(node).includes('Nog te doen')).props.onChange({target:{value:'open'}});
+ tree=h.render(h.Component,{live});assert(!nodes(tree).some(node=>node.type==='article'&&node.key==='summary-done'));assertTotals();
+ find(tree,node=>node.type==='select'&&text(node).includes('Nog te doen')).props.onChange({target:{value:'done'}});
+ tree=h.render(h.Component,{live});assert(!nodes(tree).some(node=>node.type==='article'&&node.key==='summary-next'));assertTotals();
+ assert.equal(text(dayWorkMetric(tree,'Nog gepland · ','Luxe gebak')),'2u');
+ assert.equal(text(dayWorkMetric(tree,'Nog gepland · ','Desserttaart & fruit',planning.addDays(sample.DEMO_TODAY,1))),'3u');
+});
+
+test('an unestimated open task uses the existing confirmed recipe labor estimate without rewriting its plan',()=>{
+ const {state,live}=summaryWorkspace([{id:'summary-prior',date:planning.addDays(sample.DEMO_TODAY,-7)},{id:'summary-future',quantity:20}]);
+ const completed=productionWork.confirmTaskCompletion(productionWork.workView(state,sample.demoRecipes),{taskId:'summary-prior',who:'Bakker',minutes:30,quantity:10,crewSize:2},'summary-completion','2026-10-21T10:00:00.000Z');
+ live.state=productionWork.storeWork(completed,state.productionWork);
+ const before=JSON.stringify(live.state),h=harness(),tree=h.render(h.Component,{live});
+ assert.equal(text(dayWorkMetric(tree,'Nog gepland · ')),'2u');
+ assert(!dayWorkMetric(tree,'Nog gepland · ').props['aria-label'].includes('zonder tijdsinschatting'));
+ assert.equal(live.state.tasks.find(task=>task.id==='summary-future').minutes,undefined);
+ assert.equal(JSON.stringify(live.state),before,'The learned estimate is presentation only and never saves a fabricated task time');
+});
+
+
+test('persisted bridal tasks reuse work badges and daily totals while their own detail and drag controls stay intact',()=>{
+ const source=sample.initialPreviewState(),base=source.tasks.find(task=>task.itemId==='fruit');
+ const task={...base,id:'bridal-summary',weddingCode:'BRUID-TEST',departmentId:'bruidstaarten',date:sample.DEMO_TODAY,status:'done'},state={...source,tasks:[task]};
+ const slots=[];let index=0;
+ const react={useState:initial=>{const position=index++;if(!(position in slots))slots[position]=typeof initial==='function'?initial():initial;return[slots[position],value=>{slots[position]=typeof value==='function'?value(slots[position]):value;}];},useRef:value=>{const position=index++;return slots[position]??=( {current:value});},useCallback:callback=>callback,useEffect:()=>{},useLayoutEffect:()=>{}};
+ const WeddingLane=load('app/productie/WeddingWeekLane.tsx',{'react':react,'react/jsx-runtime':jsx,'next/dynamic':()=>()=>null,'./planning':planning,'./weddingPlanning':weddingPlanning,'../bruidstaart-studio/data':{initialWeddingCakeConfig:{},cakeSizes:[]},'./ProductionIcon':{__esModule:true,default:()=>null},'./useTaskDrag':{__esModule:true,default:()=>({getHandleProps:()=>({onClick(){}})})},'../preview/productie/production.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})}}).default;
+ const badgeCalls=[],dayCalls=[];
+ const props={week:sample.DEMO_WEEK,days:[sample.DEMO_TODAY,planning.addDays(sample.DEMO_TODAY,1)],day:sample.DEMO_TODAY,today:sample.DEMO_TODAY,state,canManage:true,saving:false,demo:true,statusFilter:'all',Dialog:'bridal-dialog',onUpdate:async()=>{},renderTaskWork:(task,name,onOpen)=>{badgeCalls.push({task,name});return jsx.jsx('button',{'aria-label':'Bridal work summary',onClick:onOpen,children:'—'});},renderDayWork:date=>{dayCalls.push(date);return jsx.jsx('span',{children:'Bridal day work'});}};
+ const render=()=>{index=0;return WeddingLane(props);};
+ let tree=render();
+ assert.equal(badgeCalls[0].task,task);assert.equal(badgeCalls[0].name,'BRUID-TEST');assert.deepEqual(dayCalls,[sample.DEMO_TODAY]);
+ const card=find(tree,node=>node.type==='article'&&node.key==='BRUID-TEST');
+ assert.equal(card.props['data-task-drag-kind'],'wedding');assert.equal(card.props['data-task-department'],'bruidstaarten');assert.equal(card.props.draggable,false);
+ const body=find(card,node=>node.props?.className==='taskBody');assert(nodes(body).some(node=>node.props?.className==='taskOpen'));
+ button(tree,'Bridal work summary').props.onClick();tree=render();assert.equal(find(tree,node=>node.type==='bridal-dialog').props.title,'BRUID-TEST');
+ props.statusFilter='open';dayCalls.length=0;tree=render();assert(!nodes(tree).some(node=>node.type==='article'&&node.key==='BRUID-TEST'));assert.deepEqual(dayCalls,[sample.DEMO_TODAY],'Filtering a completed bridal card does not remove its daily totals');
+ delete props.renderTaskWork;delete props.renderDayWork;props.statusFilter='all';tree=render();assert(!nodes(tree).some(node=>node.props?.className==='taskMeta'),'No empty metadata row is reserved when the optional badge renderer is absent');
 });

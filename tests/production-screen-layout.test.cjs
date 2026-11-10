@@ -139,18 +139,19 @@ test('a display DPI change keeps the complete workspace fitted when browser and 
 test('worksheet task names and request rail use readable desktop sizes while keeping whole words intact',()=>{
  const css=fs.readFileSync('app/preview/productie/production.module.css','utf8');
  const requests=fs.readFileSync('app/productie/requests.module.css','utf8');
- assert.match(requests,/\.compact\s+\.row\s+strong\s*\{[^}]*font-size\s*:\s*18px\b/);
+ assert.match(requests,/\.compact\s+\.row\s+strong\s*\{[^}]*font-size\s*:\s*20px\b/);
  assert.match(requests,/\.compact\s+\.row\s+span\s*\{[^}]*font-size\s*:\s*12px\b/);
- assert.match(requests,/\.compact\s+\.row\s+\.requestQuantity\s*\{[^}]*font-size\s*:\s*13px\b/);
+ assert.match(requests,/\.compact\s+\.row\s+\.requestQuantity\s*\{[^}]*font-size\s*:\s*14px\b/);
+ assert.match(requests,/\.compact\s+\.deadline\s*\{[^}]*font-size\s*:\s*16px\b[^}]*font-weight\s*:\s*800\b/);
  assert.match(requests,/\.compact\s+h2\s*\{[^}]*font-size\s*:\s*18px\b/);
  assert.match(requests,/\.compact\s+\.row\s+strong\s*\{[^}]*overflow-wrap\s*:\s*normal\s*;\s*word-break\s*:\s*normal\s*;\s*hyphens\s*:\s*none\b/);
- assert.match(css,/\.worksheetRoot\s+\.plannerWithRequests\s*\{[^}]*grid-template-columns\s*:\s*minmax\(0,\s*1fr\)\s+280px\b/);
+ assert.match(css,/\.worksheetRoot\s+\.plannerWithRequests\s*\{[^}]*grid-template-columns\s*:\s*minmax\(0,\s*1fr\)\s+clamp\(300px,\s*23vw,\s*360px\)/);
  assert.match(css,/\.worksheetRoot\s+\.taskOpen\s+strong\s*\{[^}]*font-size\s*:\s*16px\b/);
  assert.match(css,/\.worksheetRoot\s+\.taskStep\s*\{[^}]*font-size\s*:\s*12px\b/);
  const large=css.match(/@media\s*\(\s*min-width\s*:\s*1600px\s*\)\s*\{([^@]*)/)?.[1];
  assert(large,'Large desktop sizes must remain scoped to the 1600px breakpoint');
  assert.match(large,/\.worksheetRoot\s+\.taskOpen\s+strong\s*\{[^}]*font-size\s*:\s*18px\b/);
- assert.match(large,/\.worksheetRoot\s+\.plannerWithRequests\s*\{[^}]*grid-template-columns\s*:\s*minmax\(0,\s*1fr\)\s+320px\b/);
+ assert.match(large,/\.worksheetRoot\s+\.plannerWithRequests\s*\{[^}]*grid-template-columns\s*:\s*minmax\(0,\s*1fr\)\s+clamp\(360px,\s*23vw,\s*440px\)/);
  const words=css.match(/\.worksheetRoot\s+\[data-fit-word\]\s*\{([^}]*)\}/)?.[1];
  assert(words);
  for(const property of ['white-space:nowrap','overflow-wrap:normal','word-break:normal','hyphens:none'])assert(words.replace(/\s+/g,'').includes(property),property);
@@ -171,4 +172,15 @@ test('recipe group links flow beside task metadata while warnings retain their o
  assert(!/small:has\([^}]*taskWarning:only-child/.test(css),'A warning element can share its metadata row with visible status text');
  assert.match(css,/\.taskCard:has\(\.recipeNudge\)\s+\.taskStep\s+small\[data-warning-only\]\s*\{[^}]*right\s*:\s*25px\b/);
  assert.match(css,/\.taskStep\s+small:empty\s*\{[^}]*display\s*:\s*none\b/);
+});
+
+
+test('compact work summaries reuse the day footer and task metadata without absolute overlap',()=>{
+ const css=fs.readFileSync('app/preview/productie/production.module.css','utf8');
+ const footer=css.match(/\.dayCellFooter\s*\{([^}]*)\}/)?.[1];assert(footer);
+ assert.match(footer,/display\s*:\s*flex/);assert.match(footer,/margin-top\s*:\s*auto/);assert.match(footer,/min-width\s*:\s*0/);
+ const badge=css.match(/\.taskWorkBadge\s*\{([^}]*)\}/)?.[1];assert(badge);
+ assert.match(badge,/display\s*:\s*inline-flex/);assert.match(badge,/white-space\s*:\s*nowrap/);
+ assert(!/position\s*:\s*absolute/.test(badge),'Work metadata must not cover warnings, recipe groups or the touch handle');
+ assert.match(css,/\.worksheetRoot\s+\.dayCellFooter\s+\.cellAdd\s*\{[^}]*margin\s*:\s*0/);
 });

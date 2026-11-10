@@ -656,7 +656,7 @@
 .worksheetRoot .weekPicker button{color:#1b3344;background:transparent;border:0}
 .worksheetRoot .plannerFilters{margin-left:auto}.worksheetRoot .plannerFilters select{min-height:32px;color:#1b3344;border-color:#aabbaa;background:#fff}
 .worksheetRoot .plannerMeta{gap:5px}.worksheetRoot .weekProgress{display:none}
-.worksheetRoot .plannerWithRequests{grid-template-columns:minmax(0,1fr) 280px!important;gap:12px;align-items:stretch!important}
+.worksheetRoot .plannerWithRequests{grid-template-columns:minmax(0,1fr) clamp(300px,23vw,360px)!important;gap:12px;align-items:stretch!important}
 .worksheetRoot .board{border:1px solid #aabbaa;border-radius:8px;box-shadow:none;overflow:hidden}
 .worksheetRoot :is(.boardHeader,.departmentRow){grid-template-columns:56px repeat(var(--days),minmax(0,1fr))}
 .worksheetRoot .boardHeader{background:#1b3344;color:#fff}
@@ -736,7 +736,7 @@
  .worksheetRoot[data-screen-density=dense] .sidebarBottom{padding-top:12px}
  .worksheetRoot[data-screen-density=dense] .cellAdd{min-height:18px}
 }
-@media(min-width:1600px){.worksheetRoot .taskOpen strong{font-size:18px}.worksheetRoot .plannerWithRequests{grid-template-columns:minmax(0,1fr) 320px!important}.worksheetRoot .departmentLabel{min-height:140px}}
+@media(min-width:1600px){.worksheetRoot .taskOpen strong{font-size:18px}.worksheetRoot .plannerWithRequests{grid-template-columns:minmax(0,1fr) clamp(360px,23vw,440px)!important}.worksheetRoot .departmentLabel{min-height:140px}}
 @media(max-width:800px){.screenFrame{height:auto;overflow:visible}.worksheetRoot{display:block}.worksheetRoot .sidebar{display:none}.worksheetRoot .planningActions{flex-wrap:wrap;gap:6px}.screenActions{flex-wrap:wrap}.worksheetRoot .plannerToolbar{flex-wrap:wrap}.worksheetRoot .weekPicker>div{display:block}.worksheetRoot .plannerFilters{margin-left:0}.worksheetRoot .plannerWithRequests{display:flex;flex-direction:column}.worksheetRoot .boardHeader{display:none}.worksheetRoot .departmentRow{display:block}.worksheetRoot .departmentLabel{min-height:0!important;display:flex;flex-direction:row;justify-content:space-between;padding:9px 12px}.worksheetRoot .departmentLabel h2{writing-mode:horizontal-tb;transform:none;font-size:13px}.worksheetRoot .dayCell{display:none!important;padding:9px}.worksheetRoot .dayCell.mobileSelectedDay{display:flex!important;min-height:80px!important}.worksheetRoot .taskOpen strong{font-size:15px}.worksheetRoot .taskOpen>span{font-size:12px}.planningRail{display:grid;grid-template-columns:minmax(0,1fr) 110px}.offerTile{min-height:100px;aspect-ratio:1;font-size:11px!important}.worksheetRoot .mobileRhythm .dayRhythm{background:#1b3344;padding:7px;border-radius:5px;margin:6px 0}.worksheetRoot .dayRhythm>div{justify-content:flex-start}}
 @media print{.screenFrame{height:auto;overflow:visible}.worksheetRoot{transform:none!important;width:100%!important}.planningRail,.screenActions{display:none}}
 
@@ -773,3 +773,14 @@
  .worksheetRoot .taskCard:has(.taskDragHandle) .taskStep small[data-warning-only]{right:49px}
  .worksheetRoot .taskCard:has(.taskDragHandle):has(.recipeNudge) .taskStep small[data-warning-only]{right:69px}
 }
+
+.taskWorkBadge{display:inline-flex;align-items:center;gap:4px;padding:2px 5px;border:1px solid #91a489;border-radius:5px;background:#ffffff80;color:#1b3344;font-size:12px;font-weight:700;line-height:1.25;white-space:nowrap;font-variant-numeric:tabular-nums}
+.taskWorkBadge svg{flex-shrink:0}.taskWorkBadge:focus-visible{outline:2px solid #1b3344;outline-offset:2px}
+.dayCellFooter{display:flex;align-items:center;justify-content:flex-end;gap:6px;margin-top:auto;min-height:24px;min-width:0}
+.cellWorkTotals{display:flex;align-items:center;flex-wrap:wrap;gap:3px 6px;margin-right:auto;min-width:0;font-size:12px;font-weight:750;line-height:1.25;font-variant-numeric:tabular-nums}
+.cellWorkTotals>span{display:inline-flex;align-items:center;gap:3px;padding:2px 3px;white-space:nowrap;border-radius:4px}
+.workDone{color:#274735;background:#e8efe3}.workPlanned{color:#1b3344;background:#edf2f5}
+.worksheetRoot .dayCellFooter .cellAdd{flex:0 0 24px;width:24px;min-height:24px;margin:0}
+.worksheetRoot .taskWorkBadge{font-size:12px}
+@media(min-width:1600px){.worksheetRoot .cellWorkTotals,.worksheetRoot .taskWorkBadge{font-size:14px}.worksheetRoot .taskWorkBadge svg,.worksheetRoot .cellWorkTotals svg{width:14px;height:14px}}
+@media(max-width:800px){.worksheetRoot .dayCellFooter{min-height:32px}.worksheetRoot .dayCellFooter .cellAdd{flex-basis:36px;width:36px;min-height:32px}.cellWorkTotals{font-size:13px}}

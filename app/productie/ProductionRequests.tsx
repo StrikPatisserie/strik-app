@@ -1,12 +1,12 @@
 "use client";
 import {useCallback,useEffect,useRef,useState,type FormEvent} from 'react';
-import {DEPARTMENTS,departmentsFor,type BoardId,type DepartmentId,type Item,type Task} from './planning';
+import {DEPARTMENTS,addDays,dateLabel,departmentsFor,type BoardId,type DepartmentId,type Item,type Task} from './planning';
 import {requestDepartmentId,requestsForBoard,type ProductionRequest,type RequestCommand} from './requestPlanning';
 import Icon from './ProductionIcon';
 import SearchableChoice from './SearchableChoice';
 import s from './requests.module.css';
 type Data={revision:number;canCreate:boolean;departments:DepartmentId[];items:Pick<Item,'id'|'name'|'unit'|'departmentId'|'productionBlocked'>[];requests:(ProductionRequest&{plannedTask?:Task;canEdit?:boolean;planningUrl?:string})[]};
-export default function ProductionRequests({board,week,onPlanned,logistics=false,compact=false}:{compact?:boolean;board?:BoardId;week?:string;onPlanned?:()=>Promise<void>;logistics?:boolean}){
+export default function ProductionRequests({board,week,today,onPlanned,logistics=false,compact=false}:{compact?:boolean;board?:BoardId;week?:string;today?:string;onPlanned?:()=>Promise<void>;logistics?:boolean}){
  const [data,setData]=useState<Data|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[adding,setAdding]=useState(false),[planning,setPlanning]=useState(''),[showPlanned,setShowPlanned]=useState(false),[newItem,setNewItem]=useState(false);
  const [editing,setEditing]=useState<ProductionRequest|null>(null),[selectedItem,setSelectedItem]=useState('');
  const lock=useRef(false),serial=useRef(0),formRevision=useRef<number|null>(null);
@@ -30,6 +30,7 @@ export default function ProductionRequests({board,week,onPlanned,logistics=false
   catch(e){setError((e as Error).message);}finally{lock.current=false;setBusy(false);}
  }
  function saveRequest(event:FormEvent<HTMLFormElement>){event.preventDefault();const form=new FormData(event.currentTarget);void act({...(editing?{kind:'edit' as const,id:editing.id}:{kind:'create' as const}),itemId:String(form.get('itemId')),quantity:Number(form.get('quantity')),departmentId:(String(form.get('departmentId'))||null) as DepartmentId|null,neededBy:String(form.get('neededBy'))||undefined,note:String(form.get('note')),...(newItem?{newItem:{name:String(form.get('name')),kind:String(form.get('kind')) as 'product'|'component',unit:String(form.get('unit')) as Item['unit']}}:{})},formRevision.current??undefined);}
+ const referenceDay=today||new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Amsterdam',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
  const items=data?.items||[];
  const requests=requestsForBoard(data?.requests||[],items,board);
  const open=requests.filter(r=>!r.plannedTask&&r.canEdit!==false),planned=requests.filter(r=>r.plannedTask||r.canEdit===false);
@@ -50,13 +51,14 @@ export default function ProductionRequests({board,week,onPlanned,logistics=false
   </form>}
   <div className={s.list}>{open.sort((a,b)=>(a.neededBy||'9999').localeCompare(b.neededBy||'9999')||a.createdAt.localeCompare(b.createdAt)).map(r=>{
    const item=data?.items.find(i=>i.id===r.itemId),departmentId=requestDepartmentId(r,item),allowed=(data?.departments||[]).filter(id=>!board||departmentsFor(board).some(department=>department.id===id));
-   return <article key={r.id}><div className={s.row}>
-    <div className={s.requestName}><strong>{item?.name||'Product niet meer beschikbaar'} <small className={s.requestQuantity}>{r.quantity.toLocaleString('nl-NL')}{item?.unit&&item.unit!=='stuks'?` ${item.unit}`:''}</small></strong>{(r.neededBy||departmentId===null)&&<span>{r.neededBy?`Uiterlijk ${r.neededBy.split('-').reverse().join('-')}`:''}{departmentId===null?`${r.neededBy?' · ':''}Nog geen afdeling`:''}</span>}</div>
+   const deadline=r.neededBy?productionRequestDeadline(r.neededBy,referenceDay):undefined;
+   return <article key={r.id} data-deadline-urgency={deadline?.urgency}><div className={s.row}>
+    <div className={s.requestName}><strong>{item?.name||'Product niet meer beschikbaar'} <small className={s.requestQuantity}>{r.quantity.toLocaleString('nl-NL')}{item?.unit&&item.unit!=='stuks'?` ${item.unit}`:''}</small></strong>{departmentId===null&&<span>Nog geen afdeling</span>}</div>
     <div className={s.rowActions}>
      {data?.canCreate&&<><button disabled={busy} type="button" onClick={()=>openEditor(r)} aria-label={`Bewerk verzoek: ${item?.name}`} title="Verzoek bewerken"><Icon name="edit" size={14}/></button><button className={s.withdraw} disabled={busy} type="button" onClick={()=>void act({kind:'cancel',id:r.id})} aria-label={`Verzoek intrekken: ${item?.name}`} title="Verzoek intrekken"><Icon name="trash" size={14}/></button></>}
      {!logistics&&allowed.length>0&&<button className={s.plan} type="button" disabled={busy||!item||item.productionBlocked} onClick={()=>openPlanning(r.id)} aria-label={`Inplannen: ${item?.name}`} title="Inplannen" aria-expanded={planning===r.id}><Icon name="plus" size={17}/></button>}
     </div>
-   </div>{r.note&&<p>{r.note}</p>}
+   </div>{deadline&&<time className={s.deadline} dateTime={r.neededBy} data-urgency={deadline.urgency} title={`Uiterlijk ${dateLabel(r.neededBy!,true)}`}><Icon name={deadline.urgency==='overdue'?'warning':'grid'} size={16}/>{deadline.label}</time>}{r.note&&<p>{r.note}</p>}
    {planning===r.id&&<form className={s.form} onSubmit={event=>{event.preventDefault();const form=new FormData(event.currentTarget),minutes=String(form.get('minutes')??'').trim();void act({kind:'plan',id:r.id,date:String(form.get('date')),departmentId:String(form.get('departmentId')) as DepartmentId,...(minutes!==''?{minutes:Number(minutes)}:{}),...(form.get('pour')==='on'?{pour:true}:{})},formRevision.current??undefined);}}>
     <label>Productiedag<input name="date" type="date" defaultValue={week||r.neededBy} max={r.neededBy} required disabled={busy}/></label>
     <label>Afdeling<select name="departmentId" required defaultValue={departmentId&&allowed.includes(departmentId)?departmentId:''} disabled={busy}><option value="">Kies afdeling</option>{DEPARTMENTS.filter(d=>allowed.includes(d.id)).map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
@@ -69,4 +71,11 @@ export default function ProductionRequests({board,week,onPlanned,logistics=false
   {!compact&&data&&!open.length&&<p className={s.empty}>Geen open productieverzoeken.</p>}
   {!!planned.length&&<details open={showPlanned} onToggle={event=>setShowPlanned(event.currentTarget.open)}><summary>Ingepland ({planned.length})</summary>{planned.map(r=><div key={r.id} className={s.planned}><span>{data?.items.find(i=>i.id===r.itemId)?.name} · {r.quantity.toLocaleString('nl-NL')}{r.plannedTask?` · ${r.plannedTask.date.split('-').reverse().join('-')}`:''}{r.plannedTask?.status==='done'?' · klaar':''}</span>{r.planningUrl&&!!data?.departments.length?<a href={r.planningUrl}>Open in weekplanning <Icon name="arrow" size={13}/></a>:<small>{r.plannedTask?'Wijzigen via de bakkerijplanning.':'Dit verzoek heeft al productieregistraties.'}</small>}</div>)}</details>}
  </aside>;
+}
+
+export function productionRequestDeadline(date:string,today:string){
+ const label=dateLabel(date,true);
+ const urgency=date<today?'overdue':date<=addDays(today,2)?'soon':'upcoming';
+ const prefix=date<today?'Te laat':date===today?'Vandaag':date===addDays(today,1)?'Morgen':'Uiterlijk';
+ return {urgency,label:`${prefix} · ${label}`};
 }

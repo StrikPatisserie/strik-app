@@ -392,6 +392,27 @@ test('compact edit/cancel/plan icons still execute their actions and planning re
  const planned=apply(source,planUi.posted[0].command,'compact-task');
  assert.equal(planned.tasks[0].quantity,20);assert.equal(planned.tasks[0].minutes,45);assert.equal(planned.tasks[0].operation,'Produceren + storten');
 });
+test('compact request deadlines use the supplied calendar day, short Dutch dates and explicit urgency text',()=>{
+ const source=apply(state(),create),dates=['2026-11-09','2026-11-10','2026-11-11','2026-11-12','2026-11-13',undefined];
+ const rows=dates.map((neededBy,index)=>({...source.productionRequests[0],id:`deadline-${index}`,departmentId:'dessert',neededBy,note:''}));
+ const ui=requestUi({revision:3,canCreate:true,departments:['dessert'],items:source.items,requests:rows});
+ const tree=ui.render({compact:true,today:'2026-11-10'});
+ const badges=ui.nodes(tree).filter(node=>node.type==='time');
+ assert.deepEqual(badges.map(node=>node.props.dateTime),dates.slice(0,5));
+ assert.deepEqual(badges.map(node=>node.props['data-urgency']),['overdue','soon','soon','soon','upcoming']);
+ assert.deepEqual(badges.map(requestText),['Te laat · ma 9 nov','Vandaag · di 10 nov','Morgen · wo 11 nov','Uiterlijk · do 12 nov','Uiterlijk · vr 13 nov']);
+ for(const badge of badges){assert(badge.props.title.startsWith('Uiterlijk '));assert.equal(badge.props.className,'deadline');}
+ assert.equal(ui.nodes(tree).filter(node=>node.type==='article').length,6,'A request without a deadline stays visible without a fabricated date');
+ assert(!requestText(tree).includes('undefined'));
+});
+test('request deadline urgency crosses month and year boundaries without relying on browser local time',()=>{
+ const source=apply(state(),create);
+ const rows=['2026-12-30','2027-01-01','2027-01-02','2027-01-03'].map((neededBy,index)=>({...source.productionRequests[0],id:`boundary-${index}`,departmentId:'dessert',neededBy,note:''}));
+ const ui=requestUi({revision:3,canCreate:false,departments:[],items:source.items,requests:rows});
+ const badges=ui.nodes(ui.render({today:'2026-12-31',logistics:true})).filter(node=>node.type==='time');
+ assert.deepEqual(badges.map(node=>node.props['data-urgency']),['overdue','soon','soon','upcoming']);
+ assert.deepEqual(badges.map(requestText),['Te laat · wo 30 dec','Morgen · vr 1 jan','Uiterlijk · za 2 jan','Uiterlijk · zo 3 jan']);
+});
 test('compact action icons preserve logistics and read-only permissions',()=>{
  const source=apply(state(),create),data={revision:3,canCreate:true,departments:[],items:source.items,requests:source.productionRequests};
  const logisticsUi=requestUi(data),tree=logisticsUi.render({compact:true,logistics:true});
