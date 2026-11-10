@@ -1,4 +1,4 @@
-.root { --ink:#1b3344; --green:#1b3344; --muted:#63736c; --paper:#f4f6ef; --line:#d3decf; --sage:#c3d3bb; --brand-red:#d75a4c; --brand-navy:#1b3344; --brand-green:#c3d3bb; font-family:"Overpass",Arial,sans-serif; font-size:13px; line-height:1.4; color:var(--ink); background:var(--paper); min-height:100dvh; display:grid; grid-template-columns:204px minmax(0,1fr); }
+.root { --ink:#1b3344; --green:#1b3344; --muted:#63736c; --paper:#f4f6ef; --line:#d3decf; --sage:#c3d3bb; --brand-red:#d75a4c; --brand-navy:#1b3344; --brand-green:#c3d3bb; font-family:"Overpass",Arial,sans-serif; font-size:13px; line-height:1.4; color:var(--ink); background:var(--paper); min-height:100dvh; display:grid; grid-template-columns:214px minmax(0,1fr); }
 .root *, .dialog * { box-sizing:border-box; }
 .root :is(h1,h2,h3,p), .dialog :is(h1,h2,h3,p) { margin:0; }
 .root button, .dialog button { font:inherit; cursor:pointer; touch-action:manipulation; }
@@ -13,14 +13,14 @@
 .brand .wordmark { display:block; width:142px; height:auto; max-width:100%; }
 .sidebarCaption { font-size:9px; font-weight:700; letter-spacing:1.8px; padding:0 12px; color:#75836b; }
 .sidebar nav { display:grid; gap:3px; margin-top:12px; }
-.sidebar nav :is(button,a) { display:flex; align-items:center; gap:10px; text-align:left; min-height:43px; padding:9px 12px; border-radius:6px; font-size:12px; color:#56634e; }
+.sidebar nav :is(button,a) { display:flex; align-items:center; gap:10px; text-align:left; min-height:43px; padding:9px 12px; border-radius:6px; font-size:14px; color:#56634e; }
 .sidebar nav :is(button,a) > span:nth-child(2) { flex:1; }
 .sidebar nav :is(button,a)[aria-current=page] { background:#1b3344; color:white; box-shadow:0 2px 5px #1b334414; }
 .sidebar nav :is(button,a):hover:not([aria-current=page]) { background:#ffffff50; }
 .navDot { width:5px; height:5px; border-radius:50%; background:#d0bd8b; }
 .sidebarBoards { display:grid; margin-top:29px; gap:2px; }
 .sidebarBoards > span { margin-bottom:9px; }
-.sidebarBoards :is(button,a) { display:flex; align-items:center; gap:10px; padding:9px 13px; min-height:34px; text-align:left; font-size:12px; color:#68755e; }
+.sidebarBoards :is(button,a) { display:flex; align-items:center; gap:10px; padding:9px 13px; min-height:34px; text-align:left; font-size:14px; color:#68755e; }
 .sidebarBoards :is(button,a) > svg { margin-left:auto; }
 .sidebarBoards :is(button,a)[aria-current=true] { color:#1b3344; font-weight:700; }
 .boardDot { width:7px; height:7px; border-radius:2px; background:#799466; }
@@ -189,8 +189,8 @@
 .moveDetails { margin-top:20px; border-top:1px solid #e1e6d8; padding-top:12px; }.moveDetails summary { display:flex; align-items:center; gap:8px; color:#7a8e68; font-size:11px; min-height:36px; cursor:pointer; }.moveDetails form { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:13px 0; }.moveDetails form button { grid-column:2; }
 .attentionRow { display:flex; align-items:center; gap:12px; text-align:left; padding:17px 0; border-bottom:1px solid #e2e8d9; width:100%; color:#a78251; }.attentionRow > span { flex:1; }.attentionRow strong { display:block; font-size:13px; color:#526645; }.attentionRow small { display:block; font-size:11px; margin-top:4px; }
 .srOnly { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
-@media(min-width:1700px) { .root { grid-template-columns:220px minmax(0,1fr); }.main { padding:0 35px 20px; }.taskOpen strong { font-size:12px; }.taskOpen > span { font-size:10px; }.taskOpen small { font-size:9px; }.dayCell { padding:10px 8px; min-height:155px; }.departmentLabel h2 { font-size:15px; }.dayHeading strong { font-size:14px; } }
-@media(max-width:1250px) and (min-width:801px) { .root { grid-template-columns:174px minmax(0,1fr); }.main { padding-left:17px; padding-right:17px; }.sidebar { padding-left:8px; padding-right:8px; }.sidebar nav :is(button,a) { font-size:10px; gap:8px; }.sidebar nav svg { width:16px; }.brand { gap:7px; padding-left:6px; }.brand img { width:39px; }.brand strong { font-size:19px; }.plannerToolbar { flex-wrap:wrap; gap:10px; }.plannerFilters { margin-left:auto; }.boardHeader,.departmentRow { grid-template-columns:112px repeat(var(--days),minmax(0,1fr)); }.dayHeading { padding-left:7px; }.departmentLabel { padding:13px 9px; }.departmentLabel h2 { font-size:12px; }.dayCell { padding:6px 4px; }.taskCard { padding:7px 5px; gap:4px; }.taskOpen strong { font-size:9px; }.taskOpen > span { font-size:8px; }.taskOpen small { font-size:7px; }.taskCheck { width:12px; height:12px; }.listHeader,.catalogRow { grid-template-columns:minmax(180px,1fr) 120px 100px 90px; gap:10px; padding-left:14px; padding-right:14px; }.recipeGrid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(min-width:1700px) { .main { padding:0 35px 20px; }.taskOpen strong { font-size:12px; }.taskOpen > span { font-size:10px; }.taskOpen small { font-size:9px; }.dayCell { padding:10px 8px; min-height:155px; }.departmentLabel h2 { font-size:15px; }.dayHeading strong { font-size:14px; } }
+@media(max-width:1250px) and (min-width:801px) { .main { padding-left:17px; padding-right:17px; }.sidebar { padding-left:8px; padding-right:8px; }.plannerToolbar { flex-wrap:wrap; gap:10px; }.plannerFilters { margin-left:auto; }.boardHeader,.departmentRow { grid-template-columns:112px repeat(var(--days),minmax(0,1fr)); }.dayHeading { padding-left:7px; }.departmentLabel { padding:13px 9px; }.departmentLabel h2 { font-size:12px; }.dayCell { padding:6px 4px; }.taskCard { padding:7px 5px; gap:4px; }.taskOpen strong { font-size:9px; }.taskOpen > span { font-size:8px; }.taskOpen small { font-size:7px; }.taskCheck { width:12px; height:12px; }.listHeader,.catalogRow { grid-template-columns:minmax(180px,1fr) 120px 100px 90px; gap:10px; padding-left:14px; padding-right:14px; }.recipeGrid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media(max-width:800px) { .root { display:block; }.sidebar { display:none; }.main { padding:0 16px 18px; }.previewBar { font-size:9px; gap:8px; flex-wrap:wrap; padding:6px 0; }.previewBar > span:nth-child(2) { display:none; }.previewBar button { min-height:24px; font-size:9px; }.header { padding:20px 0 16px; align-items:flex-end; }.heading h1 { font-size:24px; }.eyebrow { font-size:8px; letter-spacing:1.4px; }.headerActions { gap:6px; }.headerActions .secondaryButton { width:36px; padding:7px; font-size:0 !important; gap:0; }.headerActions .primaryButton { min-height:36px; padding:8px 10px; font-size:10px !important; gap:5px; }.headerActions svg { width:15px; }.mobileNav { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:0 0 15px; }.mobileNav select { background:transparent; border:0; padding:4px 25px 4px 0; min-height:34px; font-weight:600; font-size:12px; }.mobileNav a { display:grid; place-items:center; width:36px; height:34px; color:#829373; }.plannerToolbar { display:block; padding:13px 0; }.weekPicker { gap:8px; }.weekPicker > div { min-width:130px; flex:1; }.thisWeek { margin-left:auto; }.plannerFilters { margin-top:13px; display:grid; grid-template-columns:1fr 1fr; gap:8px; }.plannerFilters label:first-child { grid-column:1 / -1; }.plannerFilters select { width:100%; max-width:none; font-size:11px; min-height:38px; }.weekSummary { font-size:9px; padding:13px 0; gap:4px; }.weekSummary > div { gap:5px; }.weekSummary progress { display:none; }.attentionButton,.quietButton { font-size:9px !important; gap:4px; padding:5px; }.weekSummary .summaryDivider { margin:0; }.mobileDays { display:flex; gap:5px; padding:0 0 12px; overflow-x:auto; }.mobileDays button { min-width:46px; flex:1; padding:10px 5px; font-size:10px; border:1px solid #dfe5d5; border-radius:5px; white-space:nowrap; }.mobileDays button[aria-pressed=true] { background:#1b3344; border-color:#1b3344; color:white; }.board { border-radius:7px; }.boardHeader { display:none; }.departmentRow { display:block; }.departmentRow:first-of-type { border-top:0; }.departmentLabel { display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:12px 13px; background:var(--lane-bg); }.departmentLabel .departmentMark { width:3px; height:16px; margin:0; }.departmentLabel h2 { font-size:13px; flex:1; }.departmentLabel > span:not(.departmentMark) { margin:0; font-size:9px; }.departmentLabel > small { width:100%; padding-left:12px; margin:0; font-size:9px; }.dayCell { display:none; }.dayCell.mobileSelectedDay { display:grid; gap:8px; padding:11px; border:0; min-height:85px; }.taskCard { padding:12px; gap:9px; }.taskCheck { width:27px; height:27px; margin-top:0; }.taskCheck svg { width:16px; height:16px; }.taskOpen strong { font-size:13px; }.taskOpen > span { font-size:11px; margin-top:4px; }.taskOpen small { font-size:10px; margin-top:8px; }.effort { margin-left:8px; }.statusDot { width:5px; height:5px; }.orderTag { font-size:9px; }.cellAdd { min-height:34px; background:#f7f9f2; border:1px dashed #dfe6d5; font-size:10px !important; }.cellAdd > span { opacity:1; }.boardFooter { font-size:8px; gap:13px; }.boardFooter > span:last-child { display:none; }.boardFooter i { margin-left:4px; }.sectionIntro { margin-bottom:18px; font-size:11px; align-items:flex-start; }.sectionIntro > span { display:none; }.listToolbar { flex-wrap:wrap; gap:8px; }.listToolbar .search { max-width:none; flex-basis:100%; }.listToolbar select { flex:1; max-width:none; min-width:0; font-size:11px; }.listHeader { display:none; }.catalogRow { display:flex; flex-wrap:wrap; padding:14px 12px; gap:9px; }.itemName { width:calc(100% - 90px); flex:1; }.itemName strong { font-size:12px; }.itemName small { font-size:9px; }.itemGlyph { width:32px; height:35px; }.catalogDepartment { display:none; }.catalogRow > .recipeLinked,.catalogRow > .recipeMissing { order:3; flex-basis:100%; padding-left:44px; font-size:9px; }.planButton { font-size:9px !important; padding:6px; }.recipeGrid { grid-template-columns:1fr; gap:13px; margin-top:18px; }.recipeCard { padding:20px; }.recipeCardIcon { margin-bottom:18px; }.infoNote { align-items:flex-start; padding:12px; font-size:10px; gap:9px; }.ingredientList article { flex-wrap:wrap; gap:10px; padding:15px; }.ingredientList h2 { font-size:13px; }.ingredientSpec { flex-basis:100%; text-align:left; padding-left:42px; }.ingredientSpec > span { justify-content:flex-start; }.stockHeader,.stockRow { grid-template-columns:minmax(120px,1fr) 45px 52px 65px; gap:5px; padding:13px 10px; }.stockHeader { font-size:8px; }.stockRow { font-size:10px; }.stockRow button strong { font-size:10px; }.stockRow small { font-size:8px; }.stockRow > .recipeLinked { font-size:9px; }.settingsGrid { grid-template-columns:1fr; gap:16px; }.settingCard { padding:22px; }.toast { bottom:18px; font-size:11px; padding:10px 12px; gap:8px; }.wall .headerActions .secondaryButton { width:auto; font-size:9px !important; gap:5px; }.wall .boardHeader { display:none; }.wall .departmentRow { display:block; }.wall .dayCell { min-height:80px; }.wall .taskOpen strong { font-size:14px; }.wall .main { padding:0 14px; }.wall .header { padding:14px 0; }.wall .mobileNav { display:none; }.dialog { width:calc(100vw - 20px); max-height:calc(100dvh - 20px); border-radius:9px; }.dialogHeader { padding:20px 18px 17px; }.dialogHeader h2 { font-size:20px; }.dialogBody { padding:19px 18px; }.dialogFooter { padding:15px 18px; }.dialogFooter .primaryButton { flex:1; }.formGrid { gap:11px; }.field { font-size:10px; }.field :is(input,select,textarea) { font-size:16px; min-height:44px; }.statusActions .secondaryButton { font-size:10px !important; min-width:65px; padding:8px; }.dialog .checkboxRow { font-size:11px; }.stepsChain small { font-size:9px; } }
 @media(prefers-reduced-motion:reduce) { .taskCard { transition:none; } }
 @media(max-width:800px) {
@@ -282,7 +282,7 @@
 @media(max-width:760px) { .resourceTabs { flex-wrap:nowrap; overflow-x:auto; padding-bottom:4px; }.resourceTabs a { flex-shrink:0; white-space:nowrap; }.embeddedData { height:calc(100dvh - 280px); min-height:500px; }.resourceTabs { gap:5px; }.resourceTabs a { font-size:11px; padding:8px 10px; } }
 
 .sidebar { position:sticky; top:0; align-self:start; height:100dvh; min-height:0; overflow-y:auto; }
-.sidebar nav :is(button,a) { min-height:37px; font-size:11px; }
+.sidebar nav :is(button,a) { min-height:44px; font-size:14px; }
 .sidebarBoards { margin-top:20px; }.sidebarBoards :is(button,a) { min-height:30px; padding-top:6px; padding-bottom:6px; }
 .sidebarBottom { padding-top:20px; }
 
@@ -471,7 +471,7 @@
 /* STRAK gepland — colors sampled from the supplied vector artwork.
    Green stays the canvas; navy provides readable contrast and red marks actions. */
 .sidebar { background:var(--brand-green); border-color:#b6c9ae; scrollbar-width:thin; scrollbar-color:#9fb396 transparent; }
-.sidebar nav :is(button,a) { color:var(--brand-navy); min-height:35px; }
+.sidebar nav :is(button,a) { color:var(--brand-navy); min-height:44px; }
 .sidebar nav :is(button,a)[aria-current=page] { background:var(--brand-navy); color:white; box-shadow:inset 3px 0 var(--brand-red); }
 .sidebar nav :is(button,a):hover:not([aria-current=page]) { background:#ffffff70; }
 .sidebarCaption { color:#556b5c; }.sidebarBoards :is(button,a),.sidebarBottom > :is(button,a) { color:#405a4d; }
@@ -641,10 +641,9 @@
 .worksheetRoot.wall{grid-template-columns:minmax(0,1fr)}
 .worksheetRoot .main{height:auto;min-height:0;overflow:visible;padding:10px 20px 5px}
 .worksheetRoot .fitCanvas{width:auto!important;transform:none!important;min-width:0}
-.worksheetRoot .sidebar{position:static;min-height:100%;max-height:none;overflow:visible;background:#c3d3bc;padding:22px 12px 14px}
-.worksheetRoot .sidebar nav :is(button,a){color:#1b3344;min-height:37px}
+.worksheetRoot .sidebar{background:#c3d3bc}
+.worksheetRoot .sidebar nav :is(button,a){color:#1b3344}
 .worksheetRoot .sidebar nav :is(button,a)[aria-current=page]{color:#fff;background:#1b3344}
-.worksheetRoot .sidebarBottom{padding-top:20px}
 .worksheetRoot .planningActions{min-height:46px;padding:0 0 7px;border-bottom:2px solid #1b3344;display:flex;align-items:center;gap:10px}
 .screenActions{display:flex;align-items:center;gap:8px;margin-left:auto}
 .worksheetRoot :is(.primaryButton,.secondaryButton){min-height:35px;padding:7px 11px;color:#1b3344;border:1px solid #aabbaa;border-radius:6px;font-size:12px!important}
@@ -817,7 +816,7 @@
   display:flex;
   flex-direction:column;
  }
- .worksheetRoot .main::before {
+ .worksheetRoot.screenFit .main::before {
   content:"";
   flex:0 0 calc(60px / var(--screen-fit-scale,1));
  }
@@ -826,7 +825,7 @@
   flex-direction:column;
   flex:1;
  }
- .worksheetRoot .planningActions {
+ .worksheetRoot.screenFit .planningActions {
   order:1;
   margin-top:auto;
   padding:9px 0 0;
@@ -865,7 +864,7 @@
  .worksheetRoot.dayView .planningRail {
   min-height:0;
  }
- .worksheetRoot.dayView .planningRail>aside {
+ .worksheetRoot.screenFit.dayView .planningRail>aside {
   flex:1 1 0;
   height:0;
   min-height:0;
@@ -892,3 +891,22 @@
 }
 @media(max-width:800px){.periodToggle button{min-height:32px;padding:5px 12px}.dayView .weekPicker strong{text-transform:capitalize}}
 @media print{.worksheetRoot.screenFit{min-height:0}}
+
+/* Native desktop/tablet sizing stays independent of the fitted XL canvas. */
+@media(min-width:801px){
+ .worksheetRoot:not(.screenFit) .planningActions{flex-wrap:wrap}
+ .worksheetRoot:not(.screenFit) .plannerFilters select{min-height:40px;font-size:13px}
+ .worksheetRoot:not(.screenFit) .plannerBoardColumn{overflow-x:auto;overscroll-behavior-x:contain}
+ .worksheetRoot:not(.screenFit) .board{min-width:calc(56px + var(--days) * 220px)}
+ .worksheetRoot:not(.screenFit).dayView .board{min-width:0;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))}
+}
+@media(min-width:801px) and (max-width:1399px){
+ .worksheetRoot:not(.screenFit) .plannerWithRequests{grid-template-columns:minmax(0,1fr)!important}
+ .worksheetRoot:not(.screenFit) .planningRail{display:grid;grid-template-columns:minmax(0,1fr) 180px;align-items:start}
+ .worksheetRoot:not(.screenFit) .offerWrap{margin-top:0}
+}
+@media(max-width:800px){
+ .mobileNav select{font-size:16px;min-height:44px}
+ .worksheetRoot:not(.screenFit) :is(.primaryButton,.secondaryButton){font-size:14px!important;min-height:44px}
+ .worksheetRoot:not(.screenFit) .periodToggle button{font-size:14px;min-height:38px}
+}

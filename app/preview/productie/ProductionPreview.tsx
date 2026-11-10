@@ -107,7 +107,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
   const [day, setDay] = useState(today);
   const week=period==="day"?mondayOf(day):weekAnchor;
   const [wall, setWall] = useState(false);
-  const screenFit=view==="planning";
+  const screenFit=view==="planning"&&wall;
   const layoutKey = `${period}:${period === "day" ? day : week}:${board}:${department}:${statusFilter}`;
   const {frameRef,workspaceRef}=useScreenLayout(wall,screenFit,layoutKey);
   const {physicalKeyboard,setPhysicalKeyboard,storageError:keyboardStorageError}=usePhysicalKeyboard(frameRef);
@@ -382,7 +382,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
     </article>;
   }
 
-  return <WorkspaceContext.Provider value={{demo,recipes:recipeList,canManage,saving}}><div ref={frameRef} className={screenFit?s.screenFrame:undefined}><div ref={workspaceRef} className={`${s.root} ${screenFit?s.worksheetRoot:""} ${period==="day"?s.dayView:""} ${wall ? s.wall : ""} ${screenFit?s.screenFit:""} ${largeText ? s.largeText : ""}`} style={style} data-production-preview={demo || undefined} data-planning-period={period} aria-busy={saving}>
+  return <WorkspaceContext.Provider value={{demo,recipes:recipeList,canManage,saving}}><div ref={frameRef} className={screenFit?s.screenFrame:undefined}><div ref={workspaceRef} className={`${s.root} ${view==="planning"?s.worksheetRoot:""} ${period==="day"?s.dayView:""} ${wall ? s.wall : ""} ${screenFit?s.screenFit:""} ${largeText ? s.largeText : ""}`} style={style} data-production-preview={demo || undefined} data-planning-period={period} aria-busy={saving}>
     {!wall && <ProductionNavigation active={view} boards={availableBoards} canManage={canManage} canManageData={canManageData} canBakery={canBakery} demo={demo} activeBoard={board} onNavigate={navigate} onBoard={id=>{navigate("planning");chooseBoard(id);}} />}
 
     <main className={s.main} data-production-content={view!=="planning"?"":undefined}><div className={s.fitCanvas}>
