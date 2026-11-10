@@ -897,7 +897,8 @@
  .worksheetRoot:not(.screenFit) .planningActions{flex-wrap:wrap}
  .worksheetRoot:not(.screenFit) .plannerFilters select{min-height:40px;font-size:13px}
  .worksheetRoot:not(.screenFit) .plannerBoardColumn{overflow-x:auto;overscroll-behavior-x:contain}
- .worksheetRoot:not(.screenFit) .board{min-width:calc(56px + var(--days) * 220px)}
+ .worksheetRoot:not(.screenFit) .board{min-width:calc(56px + var(--days) * 250px)}
+ .worksheetRoot:not(.screenFit):not(.dayView) .taskOpen strong{font-size:16px}
  .worksheetRoot:not(.screenFit).dayView .board{min-width:0;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))}
 }
 @media(min-width:801px) and (max-width:1399px){
