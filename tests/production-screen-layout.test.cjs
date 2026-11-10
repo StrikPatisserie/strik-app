@@ -49,6 +49,7 @@ test('the complete workspace fits Full HD, 4K and reduced desktop heights in bot
   assert(h.scale>0&&h.scale<=Math.max(1,width/1920));
   assert(h.workspace.scrollHeight*h.scale<=height-2+.001);
   assert(h.workspace.scrollWidth*h.scale<=width+.5);
+  assert(Math.abs(parseFloat(h.workspace.style['--screen-fit-height'])*h.scale-(height-2))<.001,'The footer must use the complete available screen height after scaling');
   if(width===3840&&contentHeight===700)assert(h.scale>1.5);
   assert(h.metrics.wordReads<=3,'Natural words are measured once per density, not for every scale probe');
   h.close();
@@ -95,6 +96,7 @@ test('observing the frame avoids resize feedback from the transformed workspace 
  h.events.get('content:load')();h.events.get('content:load')();assert.equal(h.pending,1);h.flush();assert.equal(h.pending,0);
  h.close();assert.equal(h.events.size,0);assert.equal(h.pending,0);
  assert.equal(h.workspace.style.transform,'');assert.equal(h.workspace.style.width,'');assert.equal(h.label.style.fontSize,'');
+ assert.equal(h.workspace.style['--screen-fit-height'],undefined);
 });
 test('clock character and child-list mutations never trigger workspace measurements, while font loading still does',()=>{
  const h=harness();const clock={closest:()=>true};const reads=h.metrics.heightReads;
@@ -109,6 +111,7 @@ test('browser zoom uses unscaled scrollable content, pinch zoom is left untouche
  h.pinch(1.5);assert.equal(h.workspace.style.transform,originalTransform);assert.equal(h.metrics.styleWrites,writes);
  h.pinch(1);assert.equal(h.scale,originalScale);
  h.zoom(1.25);assert.equal(h.workspace.style.transform,'');assert.equal(h.workspace.style.width,'');
+ assert.equal(h.workspace.style['--screen-fit-height'],undefined);
  assert.equal(h.frame.style.height,'auto');assert.equal(h.frame.style.overflow,'visible');
  h.zoom(1);assert(h.workspace.style.transform.startsWith('scale('));assert.equal(h.scale,originalScale);
  h.resize(700,800);assert.equal(h.workspace.style.transform,'');assert.equal(h.workspace.dataset.screenDensity,undefined);

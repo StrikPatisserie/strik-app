@@ -722,7 +722,7 @@
 @keyframes offerSpin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.offerSpinner{animation:none}}
 @media(min-width:801px){
- .screenFrame{height:100dvh;overflow:hidden}
+ .screenFrame{height:100dvh;overflow:clip}
  .worksheetRoot[data-screen-density=compact] .planningActions{min-height:40px;padding-bottom:5px}
  .worksheetRoot[data-screen-density=compact] .plannerToolbar{padding:5px 0}
  .worksheetRoot[data-screen-density=compact] .departmentLabel{min-height:108px}
@@ -810,17 +810,85 @@
 .keyboardToggle:focus-visible{outline:2px solid #d75a4c;outline-offset:2px}
 .dayView .mobileDays{display:none}
 @media(min-width:801px){
- .worksheetRoot.dayView .board{display:grid;grid-template-columns:repeat(var(--departments),minmax(0,1fr));align-items:stretch}
+ .worksheetRoot.screenFit {
+  min-height:var(--screen-fit-height,100dvh);
+ }
+ .worksheetRoot .main {
+  display:flex;
+  flex-direction:column;
+ }
+ .worksheetRoot .main::before {
+  content:"";
+  flex:0 0 calc(60px / var(--screen-fit-scale,1));
+ }
+ .worksheetRoot .fitCanvas {
+  display:flex;
+  flex-direction:column;
+  flex:1;
+ }
+ .worksheetRoot .planningActions {
+  order:1;
+  margin-top:auto;
+  padding:9px 0 0;
+  border-top:2px solid #1b3344;
+  border-bottom:0;
+ }
+ .worksheetRoot .planningActions :is(.primaryButton,.secondaryButton) {
+  min-height:40px;
+  font-size:14px!important;
+ }
+ .worksheetRoot .plannerWithRequests {
+  flex:1;
+  padding-bottom:10px;
+ }
+ .worksheetRoot .plannerBoardColumn {
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+ }
+ .worksheetRoot.dayView .board{display:grid;flex:1;grid-template-columns:repeat(var(--day-columns),minmax(0,1fr));align-content:start;align-items:stretch}
  .worksheetRoot.dayView .boardHeader{grid-column:1/-1;display:flex;min-width:0}
  .worksheetRoot.dayView .departmentColumn{display:none}
  .worksheetRoot.dayView .dayHeading{flex:1;border:0;padding:9px 12px}
  .worksheetRoot.dayView .departmentRow{display:flex;flex-direction:column;min-width:0;border-top:1px solid #aabbaa;border-right:1px solid #b6c5b3}
  .worksheetRoot.dayView .departmentLabel,.worksheetRoot.dayView .cleaningLane .departmentLabel{min-height:46px;flex-direction:row;justify-content:space-between;padding:8px 10px;border:0;border-bottom:1px solid #9cb292}
- .worksheetRoot.dayView .departmentLabel h2{writing-mode:horizontal-tb;transform:none;white-space:normal;line-height:1.25;font-size:16px}
+ .worksheetRoot.dayView .departmentLabel h2{writing-mode:horizontal-tb;transform:none;white-space:normal;line-height:1.25;font-size:20px}
  .worksheetRoot.dayView .dayCell{flex:1;border:0;min-height:170px!important;padding:7px;gap:6px}
- .worksheetRoot.dayView .taskOpen strong{font-size:20px}
- .worksheetRoot.dayView .taskStep{font-size:13px}
- .worksheetRoot.dayView .cellWorkTotals{font-size:15px}
+ .worksheetRoot.dayView .taskCard{padding:10px;gap:10px}
+ .worksheetRoot.dayView .taskOpen strong{font-size:var(--day-title-size)}
+ .worksheetRoot.dayView .taskStep{font-size:var(--day-detail-size)}
+ .worksheetRoot.dayView .taskCheck{width:30px;height:30px;min-width:30px;min-height:30px}
+ .worksheetRoot.dayView .taskMeta{gap:5px 8px;margin-top:5px}
+ .worksheetRoot.dayView .taskMeta .recipeGroup{font-size:14px!important}
+ .worksheetRoot.dayView .cellWorkTotals{font-size:18px}
  .worksheetRoot.dayView .board>p{grid-column:1/-1}
+ .worksheetRoot.dayView .planningRail {
+  min-height:0;
+ }
+ .worksheetRoot.dayView .planningRail>aside {
+  flex:1 1 0;
+  height:0;
+  min-height:0;
+  overflow:auto;
+  overscroll-behavior:contain;
+ }
+ .worksheetRoot.dayView .planningRail>aside>header {
+  position:sticky;
+  top:0;
+  z-index:1;
+ }
+ .worksheetRoot.dayView .offerWrap {
+  flex:none;
+ }
+ .worksheetRoot.dayView .offerTile {
+  min-height:100px;
+  max-height:200px;
+  aspect-ratio:auto;
+ }
+ .worksheetRoot.dayView .offerTile img {
+  max-height:200px;
+  object-fit:contain;
+ }
 }
 @media(max-width:800px){.periodToggle button{min-height:32px;padding:5px 12px}.dayView .weekPicker strong{text-transform:capitalize}}
+@media print{.worksheetRoot.screenFit{min-height:0}}

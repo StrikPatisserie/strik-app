@@ -108,7 +108,8 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
   const week=period==="day"?mondayOf(day):weekAnchor;
   const [wall, setWall] = useState(false);
   const screenFit=view==="planning";
-  const {frameRef,workspaceRef}=useScreenLayout(wall,screenFit,period==="day"?`day:${day}`:"week");
+  const layoutKey = `${period}:${period === "day" ? day : week}:${board}:${department}:${statusFilter}`;
+  const {frameRef,workspaceRef}=useScreenLayout(wall,screenFit,layoutKey);
   const {physicalKeyboard,setPhysicalKeyboard,storageError:keyboardStorageError}=usePhysicalKeyboard(frameRef);
   const [largeText, setLargeText] = useState(false);
   const [weekend, setWeekend] = useState(false);
@@ -328,7 +329,14 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
     }
     return persist({...state,items:state.items.map(i=>i.id===id?{...i,...changes,departmentUnconfirmed:false}:i)},"Onderdeel bijgewerkt.");
   }
-  const style = { "--days": days.length, "--departments":visibleDepartments.length+(board==="patisserie"&&department==="all"?1:0) } as CSSProperties;
+  const departmentCount = visibleDepartments.length + (board === "patisserie" && department === "all" ? 1 : 0);
+  const style = {
+    "--days": days.length,
+    "--departments": departmentCount,
+    "--day-columns": Math.min(departmentCount, 3),
+    "--day-title-size": departmentCount === 1 ? "46px" : departmentCount === 2 ? "38px" : "30px",
+    "--day-detail-size": departmentCount === 1 ? "22px" : departmentCount === 2 ? "20px" : "18px",
+  } as CSSProperties;
 
   function dayWork(departmentId:DepartmentId,date:string) {
     const total=dailyWork.get(`${departmentId}:${date}`);

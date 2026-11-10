@@ -22,6 +22,7 @@ export default function useScreenLayout(xl:boolean,enabled=true,layoutKey='week'
     function reset(){
       workspace!.style.transform="";workspace!.style.width="";
       workspace!.style.removeProperty("--screen-fit-scale");
+      workspace!.style.removeProperty("--screen-fit-height");
       delete workspace!.dataset.screenDensity;
       workspace!.querySelectorAll<HTMLElement>("[data-fit-text]").forEach(el=>el.style.fontSize="");
     }
@@ -65,7 +66,12 @@ export default function useScreenLayout(xl:boolean,enabled=true,layoutKey='week'
       resized||=width!==lastWidth||window.innerHeight!==lastHeight||top!==lastTop;
       lastWidth=width;lastHeight=window.innerHeight;lastTop=top;
       const fits=()=>workspace!.scrollHeight*scale<=height+.5&&workspace!.scrollWidth*scale<=width+.5;
-      const setWidth=()=>{const value=`${width/scale}px`;if(workspace!.style.width!==value)workspace!.style.width=value;};
+      const setWidth=()=>{
+        const value=`${width/scale}px`;
+        if(workspace!.style.width!==value)workspace!.style.width=value;
+        workspace!.style.setProperty("--screen-fit-height",`${height/scale}px`);
+        workspace!.style.setProperty("--screen-fit-scale",String(scale));
+      };
       if(initialized&&!resized){
         if(fontsChanged)fitWords(true);else if(dirtyWords.size)fitWords(false,dirtyWords);
         dirtyWords.clear();
@@ -98,7 +104,6 @@ export default function useScreenLayout(xl:boolean,enabled=true,layoutKey='week'
       }
       const transform=`scale(${scale})`;
       if(workspace!.style.transform!==transform)workspace!.style.transform=transform;
-      workspace!.style.setProperty("--screen-fit-scale",String(scale));
       dirtyWords.clear();initialized=true;
     }
     function schedule(resized=false,fontsChanged=false){
