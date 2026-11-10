@@ -1,28 +1,37 @@
 "use client";
-import { useState,type ComponentType,type ReactNode,type FormEvent } from "react";
+import { useRef,useState,type ComponentType,type ReactNode,type FormEvent,type RefObject } from "react";
 import Icon from "./ProductionIcon";
 import { addDays,mondayOf,dateLabel,cleaningProgress,type CleaningDay,type CleaningCommand } from "./planning";
 import s from "../preview/productie/production.module.css";
+import useTaskDrag from "./useTaskDrag";
 
 type Selection={date:string;edit?:boolean};
 type DialogProps={title:string;subtitle?:string;onClose:()=>void;children:ReactNode};
-type Props={days:string[];day:string;today:string;rows:CleaningDay[];canManage:boolean;canCheck:boolean;saving:boolean;statusFilter:string;selected:Selection|null;Dialog:ComponentType<DialogProps>;onOpen:(selection:Selection|null)=>void;onCommand:(command:CleaningCommand)=>Promise<string|undefined>};
+type Props={days:string[];day:string;today:string;rows:CleaningDay[];canManage:boolean;canCheck:boolean;saving:boolean;statusFilter:string;selected:Selection|null;dragFrameRef?:RefObject<HTMLElement|null>;onDragChange?:(id:string|null)=>void;Dialog:ComponentType<DialogProps>;onOpen:(selection:Selection|null)=>void;onCommand:(command:CleaningCommand)=>Promise<string|undefined>};
 
-export default function CleaningWeekLane({days,day,today,rows,canManage,canCheck,saving,statusFilter,selected,Dialog,onOpen,onCommand}:Props){
-  const [error,setError]=useState("");
+export default function CleaningWeekLane({days,day,today,rows,canManage,canCheck,saving,statusFilter,selected,dragFrameRef,onDragChange,Dialog,onOpen,onCommand}:Props){
+  const [error,setError]=useState(""),[dragged,setDragged]=useState<string|null>(null);
+  const laneRef=useRef<HTMLDivElement>(null);
   const visible=rows.filter(r=>days.includes(r.date)),done=visible.filter(r=>cleaningProgress(r).complete).length;
   const current=selected?rows.find(r=>r.date===selected.date):undefined;
   const open=(selection:Selection|null)=>{setError("");onOpen(selection);};
   const save=async(command:CleaningCommand)=>{const message=await onCommand(command);setError(message || "");return message;};
+  const {getHandleProps}=useTaskDrag({frameRef:dragFrameRef||laneRef,enabled:canManage&&!saving&&!selected,onDragChange:id=>{setDragged(id);onDragChange?.(id);},onMove:(id,to,departmentId)=>{
+    if(departmentId!=="dessert"||!id.startsWith("cleaning:"))return;
+    const date=id.slice(9),row=rows.find(row=>row.date===date);
+    if(row&&cleaningProgress(row).done===0)return save({kind:"move",date,to});
+  }});
   return <>
-    <div className={`${s.departmentRow} ${s.cleaningLane}`} aria-label="Schoonmaak Patisserie" data-department="cleaning">
+    <div ref={laneRef} className={`${s.departmentRow} ${s.cleaningLane}`} aria-label="Schoonmaak Patisserie" data-department="cleaning">
       <div className={s.departmentLabel}><span className={s.departmentMark}/><h2><Icon name="cleaning" size={15}/>Schoonmaak</h2><span>{visible.length?`${done}/${visible.length} dagen klaar`:"Nog niet ingepland"}</span>{canManage && <button className={s.textLink} aria-label="Schoonmaak inplannen" title="Schoonmaak inplannen" onClick={()=>open({date:days.includes(day)?day:days[0],edit:true})}><Icon name="plus" size={13}/><span className={s.cleaningPlanLabel}>Inplannen</span></button>}</div>
       {days.map(date=>{const row=rows.find(r=>r.date===date),progress=row?cleaningProgress(row):undefined;
         const show=row && (statusFilter==="all" || (statusFilter==="done"?progress!.complete:statusFilter==="open"?!progress!.complete:statusFilter==="active"?progress!.done>0 && !progress!.complete:false));
-        return <div key={date} className={`${s.dayCell} ${date===day?s.mobileSelectedDay:""} ${date===today?s.todayCell:""}`} aria-label={`Schoonmaak · ${dateLabel(date,true)}`} onDragOver={event=>{if(canManage && !saving && event.dataTransfer.types.includes("application/x-strik-cleaning")){event.preventDefault();event.dataTransfer.dropEffect="move";}}} onDrop={event=>{const from=event.dataTransfer.getData("application/x-strik-cleaning");if(canManage && !saving && from){event.preventDefault();void save({kind:"move",date:from,to:date});}}}>
-          {show && <article className={`${s.cleaningCard} ${progress!.complete?s.cleaningComplete:""}`} draggable={canManage && !saving && progress!.done===0} onDragStart={event=>{event.dataTransfer.setData("application/x-strik-cleaning",date);event.dataTransfer.effectAllowed="move";}}>
+        const handle=getHandleProps(`cleaning:${date}`);
+        return <div key={date} data-task-date={date} data-task-department="dessert" data-task-drag-kind="cleaning" className={`${s.dayCell} ${date===day?s.mobileSelectedDay:""} ${date===today?s.todayCell:""} ${dragged?s.dropTarget:""}`} aria-label={`Schoonmaak · ${dateLabel(date,true)}`} onDragOver={event=>{if(canManage && !saving && event.dataTransfer.types.includes("application/x-strik-cleaning")){event.preventDefault();event.dataTransfer.dropEffect="move";}}} onDrop={event=>{const from=event.dataTransfer.getData("application/x-strik-cleaning");if(canManage && !saving && from){event.preventDefault();void save({kind:"move",date:from,to:date});}}}>
+          {show && <article data-task-id={`cleaning:${date}`} data-task-department="dessert" data-task-drag-kind="cleaning" className={`${s.cleaningCard} ${progress!.complete?s.cleaningComplete:""}`} draggable={canManage && !saving && progress!.done===0} onDragStart={event=>{event.dataTransfer.setData("application/x-strik-cleaning",date);event.dataTransfer.effectAllowed="move";}}>
             {row.main?<button className={s.cleaningMainCheck} aria-label={`Hoofdtaak afvinken: ${row.main.label} · ${dateLabel(date,true)}`} aria-pressed={row.main.done} disabled={!canCheck || saving} onClick={()=>void save({kind:"check",date,checkId:row.main!.id,done:!row.main!.done})}><span className={s.cleaningCheckBox}>{row.main.done && <Icon name="check" size={12}/>}</span></button>:<Icon name="cleaning" size={15}/>}
             <button className={s.cleaningOpen} aria-label={`Open schoonmaak · ${dateLabel(date,true)}`} onClick={()=>open({date})}><strong>{row.main?.label || "Dagelijkse schoonmaak"}</strong><small>{progress!.done}/{progress!.total} afgevinkt</small></button>
+            {canManage&&progress!.done===0&&<button {...handle} type="button" draggable={false} disabled={saving} className={s.taskDragHandle} aria-label={`Verplaats schoonmaak · ${dateLabel(date,true)}`} onClick={event=>{handle.onClick(event);if(!event.defaultPrevented)open({date});}}><Icon name="move" size={17}/></button>}
           </article>}
           {!row && canManage && <button className={s.cellAdd} aria-label={`Schoonmaak plannen · ${dateLabel(date,true)}`} onClick={()=>open({date,edit:true})}><Icon name="plus" size={14}/><span>Schoonmaak</span></button>}
         </div>;

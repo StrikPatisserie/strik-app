@@ -758,3 +758,18 @@
 .planRecipeOutline small{color:#63736c;font-size:11px}
 .planRecipeOutline .planFinishingRow{background:#edf2e9;font-weight:700}
 .planDetails>.field,.planDetails>.formGrid{margin:12px 0}
+.taskDragHandle{display:none}
+.cleaningCard{position:relative}
+.root .taskDragHandle{touch-action:none;-webkit-user-drag:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:grab}
+.taskDragHandle[data-task-drag-pressed]{background:#c3d3bc;color:#1b3344;outline:2px solid #d75a4c;cursor:grabbing}
+.taskCard[data-task-dragging],.cleaningCard[data-task-dragging]{opacity:.3;outline:1px dashed #1b3344}
+.taskCard[data-task-saving]{outline:2px solid #d75a4c;outline-offset:-1px}
+.worksheetRoot [data-task-drag-over]{background:#fff1e6;outline:3px solid #d75a4c;outline-offset:-3px;color:#1b3344}
+@media(any-pointer:coarse),(max-width:800px){
+ .worksheetRoot .taskCard:has(.taskDragHandle),.worksheetRoot .cleaningCard:has(.taskDragHandle){padding-right:48px}
+ .worksheetRoot .taskDragHandle{display:grid;place-items:center;position:absolute;top:3px;bottom:3px;right:3px;width:40px;padding:0;border:1px solid #aabbaa;border-radius:5px;color:#1b3344;background:#f1f5ee}
+ .worksheetRoot .taskDragHandle[data-task-drag-pressed]{background:#c3d3bc}
+ .worksheetRoot .taskCard:has(.taskDragHandle) .recipeNudge{right:48px}
+ .worksheetRoot .taskCard:has(.taskDragHandle) .taskStep small[data-warning-only]{right:49px}
+ .worksheetRoot .taskCard:has(.taskDragHandle):has(.recipeNudge) .taskStep small[data-warning-only]{right:69px}
+}

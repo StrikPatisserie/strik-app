@@ -1,16 +1,17 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
 const jsx=require('react/jsx-runtime');
-function load(file,imports={}) {
- const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{exports,require:name=>{assert(name in imports,`Unmocked ${name}`);return imports[name];},Date,Intl,Error,Map,Set,structuredClone,FormData:class{constructor(fields){const data=new FormData();for(const [name,value]of Object.entries(fields))data.set(name,value);return data;}},crypto:require('node:crypto').webcrypto});return exports;
+function load(file,imports={},globals={}) {
+ const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{exports,require:name=>{assert(name in imports,`Unmocked ${name}`);return imports[name];},Date,Intl,Error,Map,Set,structuredClone,AbortController,setTimeout,clearTimeout,FormData:class{constructor(fields){const data=new FormData();for(const [name,value]of Object.entries(fields))data.set(name,value);return data;}},crypto:require('node:crypto').webcrypto,...globals});return exports;
 }
 const planning=load('app/productie/planning.ts');
 const sample=load('app/preview/productie/sampleData.ts',{'../../productie/planning':planning});
 const recipePlanning=load('app/productie/recipePlanning.ts',{'./planning':planning});
 const recipeGrouping=load('app/productie/recipeGroups.ts');
 const taskOperations=load('app/productie/taskOperations.ts');
+const weddingPlanning=load('app/productie/weddingPlanning.ts',{'./planning':planning,'../bruidstaart-studio/pricing':{}});
 const productionWork=load('app/productie/productionWork.ts',{'./planning':planning,'./recipePlanning':recipePlanning}),workCommands=load('app/productie/workCommands.ts',{'./productionWork':productionWork});
-function harness() {
+function harness({fetchImpl,timerApi={}}={}) {
  // Exercise the component's real handlers and render state without a browser,
  // network, effects or live data. Each component retains its own hook storage.
  const records=new Map();let current,index,context;
@@ -19,7 +20,7 @@ function harness() {
  const navigation={__esModule:true,default:function Navigation(){},ProductionMobileNavigation:function MobileNavigation(){}};
  const offerWidget={__esModule:true,default:function ProductionWeekOffer(){}};
  const pickerWidget={__esModule:true,default:function ProductionItemPicker(){}};
- const component=load('app/preview/productie/ProductionPreview.tsx',{'react':react,'react/jsx-runtime':jsx,'next/link':'a','../../productie/ProductionIcon':{__esModule:true,default:()=>null},'../../productie/ProductionNavigation':navigation,'../../productie/navigation':load('app/productie/navigation.ts',{'./planning':planning}),'../../productie/dayRhythm':load('app/productie/dayRhythm.ts',{'./planning':planning}),'next/dynamic':()=>()=>null,'../../productie/WeddingWeekLane':{__esModule:true,default:()=>null},'../../productie/useProductionUpdates':{__esModule:true,default:()=>false},'../../productie/usePhysicalKeyboard':{__esModule:true,default:()=>({physicalKeyboard:false,setPhysicalKeyboard(){},storageError:false})},'../../productie/productionUpdates':{},'../../productie/useScreenLayout':{__esModule:true,default:()=>({frameRef:{current:null},workspaceRef:{current:null}})},'../../productie/TaskWorkPanel':{__esModule:true,default:function TaskWorkPanel(){},WorkClock:function WorkClock(){},PreparationControl:function PreparationControl(){},RecipeWorkHistory:function RecipeWorkHistory(){}},'../../productie/workCommands':workCommands,'../../productie/QuickRecipeForm':{__esModule:true,default:()=>null},'../../productie/ProductionRequests':{__esModule:true,default:()=>null},'../../productie/ProductionWeekOffer':offerWidget,'../../productie/ProductionItemPicker':pickerWidget,'../../productie/SearchableChoice':{__esModule:true,default:function SearchableChoice(){}},'../../productie/recipeGroups':recipeGrouping,'../../productie/taskOperations':taskOperations,'../../productie/CleaningWeekLane':{__esModule:true,default:()=>null},'../../productie/weddingPlanning':{},'../../productie/planning':planning,'./sampleData':sample,'./production.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})},'../../productie/workspaceData':{},'../../productie/recipePlanning':recipePlanning});
+ const component=load('app/preview/productie/ProductionPreview.tsx',{'react':react,'react/jsx-runtime':jsx,'next/link':'a','../../productie/ProductionIcon':{__esModule:true,default:()=>null},'../../productie/ProductionNavigation':navigation,'../../productie/navigation':load('app/productie/navigation.ts',{'./planning':planning}),'../../productie/dayRhythm':load('app/productie/dayRhythm.ts',{'./planning':planning}),'next/dynamic':()=>()=>null,'../../productie/WeddingWeekLane':{__esModule:true,default:()=>null},'../../productie/useProductionUpdates':{__esModule:true,default:()=>false},'../../productie/usePhysicalKeyboard':{__esModule:true,default:()=>({physicalKeyboard:false,setPhysicalKeyboard(){},storageError:false})},'../../productie/useTaskDrag':{__esModule:true,default:()=>({getHandleProps:()=>({onClick(){}}),cancelDrag(){}})},'../../productie/productionUpdates':{},'../../productie/useScreenLayout':{__esModule:true,default:()=>({frameRef:{current:null},workspaceRef:{current:null}})},'../../productie/TaskWorkPanel':{__esModule:true,default:function TaskWorkPanel(){},WorkClock:function WorkClock(){},PreparationControl:function PreparationControl(){},RecipeWorkHistory:function RecipeWorkHistory(){}},'../../productie/workCommands':workCommands,'../../productie/QuickRecipeForm':{__esModule:true,default:()=>null},'../../productie/ProductionRequests':{__esModule:true,default:()=>null},'../../productie/ProductionWeekOffer':offerWidget,'../../productie/ProductionItemPicker':pickerWidget,'../../productie/SearchableChoice':{__esModule:true,default:function SearchableChoice(){}},'../../productie/recipeGroups':recipeGrouping,'../../productie/taskOperations':taskOperations,'../../productie/CleaningWeekLane':{__esModule:true,default:()=>null},'../../productie/weddingPlanning':weddingPlanning,'../../productie/planning':planning,'./sampleData':sample,'./production.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})},'../../productie/workspaceData':{},'../../productie/recipePlanning':recipePlanning},{fetch:fetchImpl||(()=>assert.fail('Unexpected live request in the UI harness')),...timerApi});
  const render=(fn,props={},value)=>{if(!records.has(fn))records.set(fn,[]);current=records.get(fn);index=0;context=value;return fn(props);};
  return{render,Component:component.default,navigation,offerWidget:offerWidget.default,pickerWidget:pickerWidget.default};
 }
@@ -36,6 +37,126 @@ function text(tree){if(typeof tree==='string' || typeof tree==='number')return S
 function find(tree,predicate){const node=nodes(tree).find(predicate);assert(node,'Expected rendered control');return node;}
 function button(tree,label){return find(tree,n=>n.type==='button' && (text(n)===label || n.props['aria-label']===label));}
 function xl(h,props={}) {let tree=h.render(h.Component,props);button(tree,'XL weergave').props.onClick();return h.render(h.Component,props);}
+
+function movingTaskHarness(state=sample.initialPreviewState()){
+ const requests=[],timers=new Map();let timerId=0;
+ const timerApi={setTimeout:(callback,delay)=>{timers.set(++timerId,{callback,delay});return timerId;},clearTimeout:id=>timers.delete(id)};
+ const h=harness({timerApi,fetchImpl:(url,init)=>new Promise((resolve,reject)=>{requests.push({url,init,resolve,reject});init.signal?.addEventListener('abort',()=>reject(Error('Request aborted')));})});
+ const live={state,today:sample.DEMO_TODAY,recipes:sample.demoRecipes,ingredients:[],canManage:true,departments:planning.DEPARTMENTS.map(department=>department.id),revision:7};
+ let refreshes=0;
+ const props={live,onRefresh:async()=>{refreshes++;}};
+ const render=()=>h.render(h.Component,props);
+ const cell=(tree,label)=>find(tree,node=>node.props?.onDrop&&node.props['aria-label']===label);
+ const card=(tree)=>find(tree,node=>node.type==='article'&&node.key==='f5');
+ const located=(tree,label)=>nodes(cell(tree,label)).some(node=>node.type==='article'&&node.key==='f5');
+ const drag=()=>{const tree=render();card(tree).props.onDragStart({dataTransfer:{setData(){}}});return render();};
+ return{h,props,live,state,requests,render,cell,card,located,drag,timers,expireSaves:()=>[...timers.values()].forEach(timer=>timer.callback()),get refreshes(){return refreshes;},flush:()=>new Promise(resolve=>setImmediate(resolve))};
+}
+
+test('a live task moves immediately while one save retains its identity and blocks a competing stale drop',async()=>{
+ const m=movingTaskHarness(),before=JSON.stringify(m.state),original=m.state.tasks.find(task=>task.id==='f5');
+ const dragged=m.drag(),destination=m.cell(dragged,'Luxe gebak · vr 30 okt'),competing=m.cell(dragged,'Desserttaart & fruit · za 31 okt');
+ destination.props.onDrop({preventDefault(){}});
+ assert.equal(m.requests.length,1);
+ let tree=m.render();assert(m.located(tree,'Luxe gebak · vr 30 okt'),'The card reaches the destination before the server answers');assert(!m.located(tree,'Desserttaart & fruit · do 29 okt'));
+ assert.equal(m.card(tree).props['data-task-saving'],true);assert.equal(m.card(tree).props.draggable,false);
+ assert.equal(find(tree,node=>node.props?.['data-task-date']==='2026-10-30'&&node.props['aria-pressed']!==undefined).props['aria-pressed'],true);
+ const request=m.requests[0],body=JSON.parse(request.init.body),moved=body.state.tasks.find(task=>task.id===original.id);
+ assert.equal(request.url,'/api/productie');assert.equal(request.init.method,'PUT');assert.equal(body.revision,7);
+ assert.equal(m.timers.size,1);assert.equal([...m.timers.values()][0].delay,15000);assert.equal(request.init.signal.aborted,false);
+ assert.deepEqual(moved,{...original,date:'2026-10-30',departmentId:'luxe'});
+ assert.equal(JSON.stringify(body.state.items),JSON.stringify(m.state.items));assert.equal(JSON.stringify(body.state.tasks.filter(task=>task.id!==original.id)),JSON.stringify(m.state.tasks.filter(task=>task.id!==original.id)));
+ assert.equal(JSON.stringify(m.state),before,'The supplied workspace remains immutable');
+ competing.props.onDrop({preventDefault(){}});tree=m.render();assert.equal(m.requests.length,1);assert(m.located(tree,'Luxe gebak · vr 30 okt'),'A stale second handler cannot roll back or replace the pending move');
+ request.resolve({ok:true,json:async()=>({state:body.state,revision:8,updatedAt:'2026-11-10T09:00:00.000Z'})});await m.flush();
+ tree=m.render();assert(m.located(tree,'Luxe gebak · vr 30 okt'));assert.equal(m.card(tree).props.draggable,true);assert.equal(m.card(tree).props['data-task-saving'],undefined);assert.equal(m.refreshes,0);assert.equal(m.timers.size,0,'Successful saves clear their timeout');
+ m.cell(m.drag(),'Desserttaart & fruit · vr 30 okt').props.onDrop({preventDefault(){}});
+ assert.equal(m.requests.length,2);assert.equal(JSON.parse(m.requests[1].init.body).revision,8,'The next move uses the confirmed revision even while parent polling still has revision 7');
+ m.requests[1].resolve({ok:true,json:async()=>({state:JSON.parse(m.requests[1].init.body).state,revision:9,updatedAt:'2026-11-10T09:01:00.000Z'})});await m.flush();
+});
+
+test('a rejected or unconfirmed live move rolls back once, refreshes read-only and never resends the write',async()=>{
+ for(const failure of ['conflict','forbidden','network']){
+  const m=movingTaskHarness(),before=JSON.stringify(m.state),dragged=m.drag();
+  m.cell(dragged,'Luxe gebak · vr 30 okt').props.onDrop({preventDefault(){}});
+  assert(m.located(m.render(),'Luxe gebak · vr 30 okt'));
+  const request=m.requests[0];
+  if(failure==='network')request.reject(Error('Verbinding verbroken'));
+  else request.resolve({ok:false,status:failure==='conflict'?409:403,json:async()=>({message:failure==='conflict'?'Intussen gewijzigd':'Geen rechten'})});
+  await m.flush();const tree=m.render();
+  assert(m.located(tree,'Desserttaart & fruit · do 29 okt'));assert(!m.located(tree,'Luxe gebak · vr 30 okt'));
+  assert.equal(m.refreshes,1);assert.equal(m.requests.length,1);assert.equal(JSON.stringify(m.state),before);assert.equal(m.card(tree).props.draggable,true);assert.equal(m.card(tree).props['data-task-saving'],undefined);
+  assert.equal(find(tree,node=>node.props?.['data-task-date']===sample.DEMO_TODAY&&node.props['aria-pressed']!==undefined).props['aria-pressed'],true,'A failed move restores the selected mobile day');
+  assert(text(tree).includes(failure==='network'?'Verbinding verbroken':failure==='conflict'?'Intussen gewijzigd':'Geen rechten'));
+ }
+});
+
+test('a stalled optimistic move aborts after fifteen seconds and restores an idle, refreshable board without retrying',async()=>{
+ const m=movingTaskHarness(),before=JSON.stringify(m.state);
+ m.cell(m.drag(),'Luxe gebak · vr 30 okt').props.onDrop({preventDefault(){}});
+ assert(m.located(m.render(),'Luxe gebak · vr 30 okt'));assert.equal(m.requests.length,1);assert.equal(m.timers.size,1);
+ const request=m.requests[0];assert.equal(request.init.signal.aborted,false);
+ m.expireSaves();await m.flush();
+ const tree=m.render();assert.equal(request.init.signal.aborted,true);assert.equal(m.timers.size,0);
+ assert(m.located(tree,'Desserttaart & fruit · do 29 okt'));assert(!m.located(tree,'Luxe gebak · vr 30 okt'));
+ assert.equal(m.card(tree).props.draggable,true);assert.equal(m.card(tree).props['data-task-saving'],undefined);assert.equal(m.refreshes,1);assert.equal(m.requests.length,1);assert.equal(JSON.stringify(m.state),before);
+ assert(text(tree).includes('Opslaan duurt te lang. De planning wordt opnieuw opgehaald.'));
+ m.expireSaves();await m.flush();assert.equal(m.refreshes,1);assert.equal(m.requests.length,1,'Timeout recovery only refreshes and never resends the move');
+});
+
+test('cleaning moves immediately through its dedicated endpoint and a failed save restores the original checklist',async()=>{
+ for(const succeeds of [true,false]){
+  const state=sample.initialPreviewState();
+  state.cleaning=planning.applyCleaningCommand([],{kind:'plan',date:'2026-10-29',main:'Koeling reinigen',daily:['Werkbank schoon'],repeatDates:[]},'test-baker','2026-10-28T09:00:00.000Z',(()=>{let id=0;return()=>`clean-test-${++id}`;})());
+  const before=JSON.stringify(state),m=movingTaskHarness(state),lane=tree=>find(tree,node=>typeof node.type==='function'&&Array.isArray(node.props.rows)&&!!node.props.onCommand);
+  const command={kind:'move',date:'2026-10-29',to:'2026-10-30'};
+  const result=lane(m.render()).props.onCommand(command);
+  assert.equal(m.requests.length,1);const request=m.requests[0];
+  assert.equal(request.url,'/api/productie/schoonmaak');assert.equal(request.init.method,'POST');assert.deepEqual(JSON.parse(request.init.body),{command,revision:7});assert.equal(m.timers.size,1);
+  let tree=m.render();assert.equal(lane(tree).props.saving,true);assert.equal(lane(tree).props.rows[0].date,'2026-10-30');assert.equal(lane(tree).props.rows[0].id,'cleaning:2026-10-30');
+  assert.equal(lane(tree).props.rows[0].main.id,state.cleaning[0].main.id);assert.equal(lane(tree).props.rows[0].daily[0].id,state.cleaning[0].daily[0].id);
+  assert.equal(JSON.stringify(state),before);
+  const saved={...state,cleaning:planning.applyCleaningCommand(state.cleaning,command,'server','2026-10-28T10:00:00.000Z',()=>assert.fail('Moving must preserve check identities'))};
+  request.resolve({ok:succeeds,status:succeeds?200:409,json:async()=>succeeds?{state:saved,revision:8,updatedAt:'2026-10-28T10:00:00.000Z'}:{message:'Schoonmaak intussen gewijzigd'}});
+  assert.equal(await result,succeeds?undefined:'Schoonmaak intussen gewijzigd');await m.flush();tree=m.render();
+  assert.equal(lane(tree).props.saving,false);assert.equal(lane(tree).props.rows[0].date,succeeds?'2026-10-30':'2026-10-29');assert.equal(m.refreshes,succeeds?0:1);assert.equal(m.requests.length,1);assert.equal(m.timers.size,0);
+  assert.equal(find(tree,node=>node.props?.['data-task-date']===(succeeds?'2026-10-30':sample.DEMO_TODAY)&&node.props['aria-pressed']!==undefined).props['aria-pressed'],true);
+ }
+});
+
+test('wedding moves immediately through its dedicated endpoint and rejection restores the same linked production task',async()=>{
+ const order={code:'DEMO-OPT-MOVE',name:'Voorbeeld bruidspaar',date:'2026-10-31',updatedAt:'2026-10-28T09:00:00.000Z',size:'Voorbeeldformaat',time:'12:00',lines:[],config:{}};
+ for(const succeeds of [true,false]){
+  const state=weddingPlanning.scheduleWedding(sample.initialPreviewState(),order,'2026-10-29','planned'),before=JSON.stringify(state),original=state.tasks.find(task=>task.weddingCode===order.code);
+  const m=movingTaskHarness(state),lane=tree=>find(tree,node=>typeof node.type==='function'&&!!node.props.onUpdate&&!!node.props.state);
+  const result=lane(m.render()).props.onUpdate(order,'2026-10-30','planned');
+  assert.equal(m.requests.length,1);const request=m.requests[0];
+  assert.equal(request.url,'/api/productie/weddings');assert.equal(request.init.method,'POST');assert.deepEqual(JSON.parse(request.init.body),{code:order.code,date:'2026-10-30',status:'planned',revision:7});assert.equal(m.timers.size,1);
+  let tree=m.render(),task=lane(tree).props.state.tasks.find(task=>task.id===original.id);
+  assert.equal(lane(tree).props.saving,true);assert.equal(task.date,'2026-10-30');assert.equal(task.itemId,original.itemId);assert.equal(task.batchId,original.batchId);assert.equal(task.weddingCode,original.weddingCode);assert.equal(task.weddingDeliveryDate,original.weddingDeliveryDate);assert.equal(JSON.stringify(state),before);
+  request.resolve({ok:succeeds,status:succeeds?200:403,json:async()=>succeeds?{state:weddingPlanning.scheduleWedding(state,order,'2026-10-30','planned'),revision:8,updatedAt:'2026-10-28T10:00:00.000Z'}:{message:'Bruidstaart verplaatsen geweigerd'}});
+  assert.equal(await result,succeeds?undefined:'Bruidstaart verplaatsen geweigerd');await m.flush();tree=m.render();task=lane(tree).props.state.tasks.find(task=>task.id===original.id);
+  assert.equal(lane(tree).props.saving,false);assert.equal(task.date,succeeds?'2026-10-30':'2026-10-29');assert.equal(task.id,original.id);assert.equal(m.refreshes,succeeds?0:1);assert.equal(m.requests.length,1);assert.equal(m.timers.size,0);
+  assert.equal(find(tree,node=>node.props?.['data-task-date']===(succeeds?'2026-10-30':sample.DEMO_TODAY)&&node.props['aria-pressed']!==undefined).props['aria-pressed'],true);
+ }
+});
+
+test('dropping in the original cell or after the required date never changes state or sends a write',async()=>{
+ const same=movingTaskHarness(),before=JSON.stringify(same.state);
+ same.cell(same.drag(),'Desserttaart & fruit · do 29 okt').props.onDrop({preventDefault(){}});await same.flush();
+ assert.equal(same.requests.length,0);assert.equal(same.refreshes,0);assert(same.located(same.render(),'Desserttaart & fruit · do 29 okt'));assert.equal(JSON.stringify(same.state),before);
+ const late=movingTaskHarness(),initial=late.render();
+ find(initial,node=>node.type==='article'&&node.key==='f6').props.onDragStart({dataTransfer:{setData(){}}});
+ late.cell(late.render(),'Desserttaart & fruit · za 31 okt').props.onDrop({preventDefault(){}});await late.flush();
+ assert.equal(late.requests.length,0);assert.equal(late.refreshes,0);assert.equal(JSON.stringify(late.state),before);assert(text(late.render()).includes('benodigde datum'));
+});
+
+test('live synchronization respects the synchronous save lock and the newest confirmed revision',()=>{
+ const source=fs.readFileSync('app/preview/productie/ProductionPreview.tsx','utf8');
+ const guard=source.indexOf('live.revision>=revisionRef.current');assert(guard>0);
+ const effect=source.slice(source.lastIndexOf('useEffect',guard),source.indexOf('},[',guard));
+ assert.match(effect,/!savingRef\.current/);assert.match(effect,/!saving\b/);assert.match(effect,/!dragged\b/);assert.match(effect,/live\.revision>=revisionRef\.current/);
+});
 
 test('a day-cell plus uses its date and department without asking for either again',async()=>{
  const h=harness();

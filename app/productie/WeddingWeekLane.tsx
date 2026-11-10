@@ -1,21 +1,26 @@
 "use client";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ComponentType, type ReactNode, type RefObject } from "react";
 import { addDays, dateLabel, STATUS_LABELS, type PreviewState, type TaskStatus } from "./planning";
 import { weddingOrders, type WeddingProductionOrder } from "./weddingPlanning";
 import { initialWeddingCakeConfig, cakeSizes } from "../bruidstaart-studio/data";
+import Icon from "./ProductionIcon";
+import useTaskDrag from "./useTaskDrag";
 import s from "../preview/productie/production.module.css";
 const CakeVisualizer=dynamic(()=>import("../bruidstaart-studio/BruidstaartStudioConfigurator").then(m=>m.CakeVisualizer),{loading:()=> <p>Taartontwerp laden…</p>});
-type Props={week:string;days:string[];day:string;today:string;state:PreviewState;canManage:boolean;saving:boolean;demo:boolean;statusFilter:string;Dialog:ComponentType<{title:string;subtitle?:string;wide?:boolean;children:ReactNode;onClose:()=>void}>;onUpdate:(order:WeddingProductionOrder,date:string,status:TaskStatus)=>Promise<string|undefined>};
-export default function WeddingWeekLane({week,days,day,today,state,canManage,saving,demo,statusFilter,Dialog,onUpdate}:Props){
+type Props={week:string;days:string[];day:string;today:string;state:PreviewState;canManage:boolean;saving:boolean;demo:boolean;statusFilter:string;dragFrameRef?:RefObject<HTMLElement|null>;onDragChange?:(id:string|null)=>void;Dialog:ComponentType<{title:string;subtitle?:string;wide?:boolean;children:ReactNode;onClose:()=>void}>;onUpdate:(order:WeddingProductionOrder,date:string,status:TaskStatus)=>Promise<string|undefined>};
+export default function WeddingWeekLane({week,days,day,today,state,canManage,saving,demo,statusFilter,dragFrameRef,onDragChange,Dialog,onUpdate}:Props){
  const [orders,setOrders]=useState<WeddingProductionOrder[]>([]),[error,setError]=useState(""),[loading,setLoading]=useState(true),[selected,setSelected]=useState<string|null>(null),[dragged,setDragged]=useState<string|null>(null),[zoom,setZoom]=useState(false);
- const detailsRef=useRef<HTMLDivElement>(null),loadSerial=useRef(0);
+ const detailsRef=useRef<HTMLDivElement>(null),laneRef=useRef<HTMLDivElement>(null),loadSerial=useRef(0);
+ const interacting=useRef(false);
+ useLayoutEffect(()=>{interacting.current=!!dragged||saving||!!selected;},[dragged,saving,selected]);
  const invalidateLoad=useCallback(()=>{loadSerial.current++;},[]);
  const load=useCallback(async()=>{
+  if(interacting.current)return;
   const serial=++loadSerial.current;
   if(demo){setOrders(weddingOrders([{id:"demo-bruidstaart",code:"VOORBEELD",names:"Voorbeeld bruidspaar",surname:"",createdAt:"",updatedAt:"",config:{...initialWeddingCakeConfig,sizeId:cakeSizes[0].id,styleId:"klassiek",completed:true,contact:{...initialWeddingCakeConfig.contact,names:"Voorbeeld bruidspaar",deliveryDate:addDays(week,4)}}}]));setLoading(false);return;}
-  try{const response=await fetch(`/api/productie/weddings?week=${week}`,{cache:"no-store"}),data=await response.json();if(!response.ok)throw Error(data.message || "Bruidstaarten laden is mislukt.");if(serial!==loadSerial.current)return;setOrders(data.orders);setError("");}
-  catch(e){if(serial===loadSerial.current)setError((e as Error).message);}finally{if(serial===loadSerial.current)setLoading(false);}
+  try{const response=await fetch(`/api/productie/weddings?week=${week}`,{cache:"no-store"}),data=await response.json();if(!response.ok)throw Error(data.message || "Bruidstaarten laden is mislukt.");if(serial!==loadSerial.current||interacting.current)return;setOrders(data.orders);setError("");}
+  catch(e){if(serial===loadSerial.current&&!interacting.current)setError((e as Error).message);}finally{if(serial===loadSerial.current&&!interacting.current)setLoading(false);}
  },[week,demo]);
  useEffect(()=>{let active=true;setLoading(true);setOrders([]);void load();const timer=setInterval(()=>{if(active && !document.hidden)void load();},60000);return()=>{active=false;invalidateLoad();clearInterval(timer);};},[load,invalidateLoad]);
  const saved=state.tasks.filter(t=>t.weddingCode),findTask=(code:string)=>saved.find(t=>t.weddingCode?.toLowerCase()===code.toLowerCase());
@@ -23,14 +28,20 @@ export default function WeddingWeekLane({week,days,day,today,state,canManage,sav
  const selectedCard=cards.find(c=>c.code===selected),order=selectedCard?.order,task=selectedCard?.task;
  const total=cards.length,done=cards.filter(c=>c.task?.status==="done").length;
  async function update(o:WeddingProductionOrder,date:string,status:TaskStatus){const message=await onUpdate(o,date,status);if(message)setError(message);else setError("");setDragged(null);}
+ const {getHandleProps}=useTaskDrag({frameRef:dragFrameRef||laneRef,enabled:canManage&&!saving&&!selected,onDragChange:id=>{interacting.current=!!id||saving||!!selected;setDragged(id?.startsWith("wedding:")?id.slice(8):null);onDragChange?.(id);},onMove:(id,date,departmentId)=>{
+  if(departmentId!=="bruidstaarten"||!id.startsWith("wedding:"))return;
+  const card=cards.find(card=>card.code===id.slice(8));
+  if(card?.order&&card.task?.status!=="done")return update(card.order,date,card.task?.status||"planned");
+ }});
  function print(){if(!order)return;const win=window.open("","_blank","width=1000,height=800");if(!win)return;const escape=(v:string)=>v.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");const svg=detailsRef.current?.querySelector("svg")?.outerHTML || "";win.document.write(`<!doctype html><html lang="nl"><head><base href="${window.location.origin}/"><title>Bruidstaart ${escape(order.code)}</title><style>@page{size:A4;margin:12mm}body{font:12px/1.5 Arial;color:#213c2e}h1{font-size:24px}.cake{float:right;width:42%;margin-left:20px}.cake svg{width:100%;height:auto}p{break-inside:avoid}button{padding:10px}@media print{button{display:none}}</style></head><body><button onclick="window.print()">Afdrukken</button><h1>${escape(order.name)}</h1><p>${escape(order.code)} · Levering ${escape(dateLabel(order.date,true))} · ${escape(order.time)}</p><div class="cake">${svg}</div>${order.lines.map(l=>`<p><b>${escape(l.label)}:</b> ${escape(l.value)}</p>`).join("")}</body></html>`);win.document.close();win.focus();}
- return <div className={`${s.departmentRow} ${s.tone_rose}`} data-department="bruidstaarten">
+ return <div ref={laneRef} className={`${s.departmentRow} ${s.tone_rose}`} data-department="bruidstaarten">
   <div className={s.departmentLabel} title="Bruidstaarten · definitieve taarten uit de Studio"><span className={s.departmentMark}/><h2>Bruidstaarten</h2><span>{loading?"Laden…":`${done}/${total} klaar`}</span><small>Definitieve taarten uit de Studio</small>{error && <div className={s.weddingLoadError} role="alert">{error}<button onClick={()=>void load()}>Opnieuw laden</button></div>}</div>
-  {days.map(date=><div key={date} className={`${s.dayCell} ${day===date?s.mobileSelectedDay:""} ${today===date?s.todayCell:""} ${dragged?s.dropTarget:""}`} aria-label={`Bruidstaarten · ${dateLabel(date,true)}`} onDragOver={e=>{if(canManage && dragged && !saving){e.preventDefault();e.dataTransfer.dropEffect="move";}}} onDrop={e=>{e.preventDefault();const o=orders.find(o=>o.code===dragged);if(o && canManage && !saving)void update(o,date,findTask(o.code)?.status || "planned");}}>
-   {cards.filter(c=>(c.task?.date || c.order?.date)===date && (statusFilter==="all" || (statusFilter==="open"?c.task?.status!=="done":statusFilter==="attention"?!!error || (!!c.task && c.task.weddingDeliveryDate!==c.order?.date):(c.task?.status || "planned")===statusFilter))).map(c=><article key={c.code} className={`${s.taskCard} ${s[`task_${c.task?.status || "planned"}`]}`} draggable={canManage && !saving && !!c.order && c.task?.status!=="done"} onDragStart={e=>{e.dataTransfer.setData("text/plain",c.code);setDragged(c.code);}} onDragEnd={()=>setDragged(null)}>
+  {days.map(date=><div key={date} data-task-date={date} data-task-department="bruidstaarten" data-task-drag-kind="wedding" className={`${s.dayCell} ${day===date?s.mobileSelectedDay:""} ${today===date?s.todayCell:""} ${dragged?s.dropTarget:""}`} aria-label={`Bruidstaarten · ${dateLabel(date,true)}`} onDragOver={e=>{if(canManage && dragged && !saving){e.preventDefault();e.dataTransfer.dropEffect="move";}}} onDrop={e=>{e.preventDefault();const o=orders.find(o=>o.code===dragged);if(o && canManage && !saving)void update(o,date,findTask(o.code)?.status || "planned");}}>
+   {cards.filter(c=>(c.task?.date || c.order?.date)===date && (statusFilter==="all" || (statusFilter==="open"?c.task?.status!=="done":statusFilter==="attention"?!!error || (!!c.task && c.task.weddingDeliveryDate!==c.order?.date):(c.task?.status || "planned")===statusFilter))).map(c=>{const handle=getHandleProps(`wedding:${c.code}`);return <article key={c.code} data-task-id={`wedding:${c.code}`} data-task-department="bruidstaarten" data-task-drag-kind="wedding" className={`${s.taskCard} ${s[`task_${c.task?.status || "planned"}`]}`} draggable={canManage && !saving && !!c.order && c.task?.status!=="done"} onDragStart={e=>{e.dataTransfer.setData("text/plain",c.code);setDragged(c.code);}} onDragEnd={()=>setDragged(null)}>
     <button disabled={saving || !c.order} className={s.taskCheck} aria-label={`${c.task?.status==="done"?"Heropen":"Afronden"}: bruidstaart ${c.order?.name || c.code}`} aria-pressed={c.task?.status==="done"} onClick={()=>c.order && void update(c.order,date,c.task?.status==="done"?"planned":"done")}>{c.task?.status==="done"?"✓":null}</button>
     <button className={s.taskOpen} onClick={()=>{setSelected(c.code);setZoom(false);}}><strong>{c.order?.name || c.code}</strong><span>{c.order?.size || "Brongegevens laden"}</span><small>{c.order?.time || "Tijd niet opgegeven"} · {c.code}</small>{c.task && c.order && c.task.weddingDeliveryDate!==c.order.date && <small>Leverdatum gewijzigd · controleren</small>}</button>
-   </article>)}
+    {canManage&&c.order&&c.task?.status!=="done"&&<button {...handle} type="button" draggable={false} disabled={saving} className={s.taskDragHandle} aria-label={`Verplaats bruidstaart ${c.order.name}`} onClick={event=>{handle.onClick(event);if(!event.defaultPrevented){setSelected(c.code);setZoom(false);}}}><Icon name="move" size={17}/></button>}
+   </article>;})}
   </div>)}
   {selectedCard && <Dialog wide title={order?.name || selectedCard.code} subtitle={`Bruidstaart · ${selectedCard.code}${order?` · levering ${dateLabel(order.date,true)}`:""}`} onClose={()=>setSelected(null)}><div className={s.dialogBody}>
    {order?<><div className={s.weddingActions}><button className={s.secondaryButton} onClick={()=>setZoom(!zoom)}>{zoom?"Terug naar productiekaart":"Taartontwerp vergroten"}</button><button className={s.secondaryButton} onClick={print}>Productiekaart afdrukken</button></div><div ref={detailsRef} className={zoom?s.weddingZoom:s.weddingDetail}><div className={s.weddingVisual}><CakeVisualizer config={order.config} compact={!zoom} showDownload={false} fitCake/></div>{!zoom && <dl className={s.weddingFacts}>{order.lines.map(l=><div key={l.label}><dt>{l.label}</dt><dd>{l.value}</dd></div>)}</dl>}</div>

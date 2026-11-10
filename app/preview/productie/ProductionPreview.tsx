@@ -6,6 +6,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import useScreenLayout from "../../productie/useScreenLayout";
 import usePhysicalKeyboard from "../../productie/usePhysicalKeyboard";
+import useTaskDrag from "../../productie/useTaskDrag";
 import useProductionUpdates from "../../productie/useProductionUpdates";
 import {decodeReloadView,RELOAD_VIEW_KEY} from "../../productie/productionUpdates";
 import TaskWorkPanel,{WorkClock,PreparationControl,RecipeWorkHistory} from "../../productie/TaskWorkPanel";
@@ -108,6 +109,8 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
   const [storageError, setStorageError] = useState(false);
   const [kindFilter, setKindFilter] = useState("all");
   const [dragged, setDragged] = useState<string | null>(null);
+  const [movingTask,setMovingTask]=useState<string|null>(null);
+  const touchDrag=useTaskDrag({frameRef,enabled:view==="planning"&&canManage&&!saving&&!modal&&!quickRecipeItem,onMove:move,onDragChange:setDragged});
   const updatePending=useProductionUpdates({enabled:!demo&&view==="planning",clientVersion:releaseVersion,serverVersion:live?.appVersion,blocked:saving||!!modal||!!quickRecipeItem||!!dragged||!connectionHealthy,view:{week,day,board,department,statusFilter,wall,weekend}});
   useEffect(()=>{
     if(demo)return;
@@ -143,10 +146,10 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
     catch { setStorageError(true); }
   }, [state, hydrated, demo]);
   useEffect(()=>{
-    if (live && !saving && (!modal || modal.type === "task") && !quickRecipeItem && live.revision>=revisionRef.current) {
+    if (live && !saving && !savingRef.current && !dragged && (!modal || modal.type === "task") && !quickRecipeItem && live.revision>=revisionRef.current) {
       setState(live.state); revisionRef.current=live.revision; setSyncedAt(live.updatedAt);
     }
-  },[live,saving,modal,quickRecipeItem]);
+  },[live,saving,modal,quickRecipeItem,dragged]);
   useEffect(() => {
     if (!message) return;
     const timer = setTimeout(() => setMessage(""), 6000);
@@ -174,17 +177,25 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
   function navigate(next: View) { setView(next); setQuery(""); setDepartment("all"); setKindFilter("all"); }
   function chooseBoard(id: BoardId) { setBoard(canonicalBoardId(id)); setDepartment("all"); }
   function shiftWeek(direction: number) { const next = addDays(week, direction * 7); setWeek(next); setDay(next); }
-  async function persist(next:PreviewState, success:string,command?:PlanCommand,replaceTaskId?:string):Promise<string|undefined> {
+  async function persist(next:PreviewState, success:string,command?:PlanCommand,replaceTaskId?:string,options?:{optimistic?:boolean;request?:{url:string;body:Record<string,unknown>}}):Promise<string|undefined> {
     if (savingRef.current) return "Wacht tot de vorige wijziging is opgeslagen.";
     if (demo) { setState(next); notify(success); return; }
+    const before=state;
+    let refreshAfterFailure=false;
+    const controller=options?.optimistic?new AbortController():undefined;
+    const timeout=controller?setTimeout(()=>controller.abort(),15000):undefined;
     savingRef.current=true; setSaving(true);
+    if(options?.optimistic)setState(next);
     try {
-      const response=await fetch(command?"/api/productie/plan":"/api/productie",{method:command?"POST":"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(command?{revision:revisionRef.current,recipeRevision:live?.recipeRevision,command,...(replaceTaskId?{replaceTaskId}:{})}:{revision:revisionRef.current,state:next})});
+      const response=await fetch(options?.request?.url || (command?"/api/productie/plan":"/api/productie"),{method:options?.request||command?"POST":"PUT",headers:{"Content-Type":"application/json"},signal:controller?.signal,body:JSON.stringify(options?.request?{...options.request.body,revision:revisionRef.current}:command?{revision:revisionRef.current,recipeRevision:live?.recipeRevision,command,...(replaceTaskId?{replaceTaskId}:{})}:{revision:revisionRef.current,state:next})});
       const data=await response.json();
       if (!response.ok) throw Error(data.message || "Opslaan is mislukt; je wijziging is niet opgeslagen.");
       revisionRef.current=data.revision; setState(data.state); setSyncedAt(data.updatedAt); notify(success);
-    } catch(e) { const error=(e as Error).message; notify(error,true); return error; }
-    finally { savingRef.current=false; setSaving(false); }
+    } catch(e) {
+      if(options?.optimistic){setState(before);refreshAfterFailure=true;}
+      const error=controller?.signal.aborted?"Opslaan duurt te lang. De planning wordt opnieuw opgehaald.":(e as Error).message; notify(error,true); return error;
+    }
+    finally { clearTimeout(timeout); savingRef.current=false; setSaving(false); if(refreshAfterFailure)void onRefresh?.(); }
   }
   async function work(command:WorkCommand):Promise<string|undefined> {
     if(savingRef.current)return "Wacht tot de vorige wijziging is opgeslagen.";
@@ -203,9 +214,20 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
   }
   async function fullscreen(){try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen();}catch{notify("Volledig scherm is niet beschikbaar in deze browser.",true);}}
   async function move(id:string,date:string,departmentId:DepartmentId) {
-    try { return await persist({...state,tasks:moveTask(state.tasks,id,date,departmentId)},`Taak verplaatst naar ${dateLabel(date,true)}.`); }
+    if(savingRef.current)return "Wacht tot de vorige wijziging is opgeslagen.";
+    const task=state.tasks.find(task=>task.id===id);
+    if(task?.date===date&&task.departmentId===departmentId){setDragged(null);return;}
+    const previousDay=day;
+    try {
+      if(departmentId==="bruidstaarten")throw Error("Kies een productieafdeling voor deze taak.");
+      const next={...state,tasks:moveTask(state.tasks,id,date,departmentId)};
+      setMovingTask(id);setDay(date);
+      const error=await persist(next,`Taak verplaatst naar ${dateLabel(date,true)}.`,undefined,undefined,{optimistic:true});
+      if(error)setDay(current=>current===date?previousDay:current);
+      return error;
+    }
     catch(e) { const error=(e as Error).message; notify(error,true); return error; }
-    finally { setDragged(null); }
+    finally { setDragged(null);setMovingTask(null); }
   }
   async function remove(id:string,wholeProduction=false) {
     try {
@@ -219,10 +241,14 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
   async function clean(command:CleaningCommand):Promise<string|undefined> {
     if(savingRef.current)return "Wacht tot de vorige wijziging is opgeslagen.";
     const message=command.kind==="check"?(command.done?"Schoonmaaktaak afgevinkt.":"Schoonmaaktaak heropend."):"Schoonmaakplanning opgeslagen.";
-    if(demo){try{return await persist({...state,cleaning:applyCleaningCommand(state.cleaning || [],command,"preview",new Date().toISOString(),()=>newId("cleaning-check"))},message);}catch(e){return (e as Error).message;}}
-    savingRef.current=true;setSaving(true);
-    try{const response=await fetch("/api/productie/schoonmaak",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({revision:revisionRef.current,command})}),data=await response.json();if(!response.ok)throw Error(data.message || "De schoonmaakwijziging kon niet worden opgeslagen.");revisionRef.current=data.revision;setState(data.state);setSyncedAt(data.updatedAt);notify(message);}
-    catch(e){const message=(e as Error).message;notify(message,true);return message;}finally{savingRef.current=false;setSaving(false);}
+    const moving=command.kind==="move",previousDay=day;
+    try {
+      const next=moving||demo?{...state,cleaning:applyCleaningCommand(state.cleaning || [],command,"preview",new Date().toISOString(),()=>newId("cleaning-check"))}:state;
+      if(moving)setDay(command.to);
+      const error=await persist(next,message,undefined,undefined,{optimistic:moving,request:{url:"/api/productie/schoonmaak",body:{command}}});
+      if(error&&moving)setDay(current=>current===command.to?previousDay:current);
+      return error;
+    } catch(e) { const error=(e as Error).message;notify(error,true);return error; }
   }
   async function restore(id:string) {
     try {
@@ -248,10 +274,15 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
   }
   async function updateWedding(order:WeddingProductionOrder,date:string,status:TaskStatus) {
     if(savingRef.current)return "Wacht tot de vorige wijziging is opgeslagen.";
-    if(demo){try{return await persist(scheduleWedding(state,order,date,status),"Bruidstaartplanning opgeslagen.");}catch(e){return (e as Error).message;}}
-    savingRef.current=true;setSaving(true);
-    try{const response=await fetch("/api/productie/weddings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:order.code,date,status,revision:revisionRef.current})}),data=await response.json();if(!response.ok)throw Error(data.message || "Opslaan is mislukt.");revisionRef.current=data.revision;setState(data.state);setSyncedAt(data.updatedAt);notify("Bruidstaartplanning opgeslagen.");}
-    catch(e){const message=(e as Error).message;notify(message,true);return message;}finally{savingRef.current=false;setSaving(false);}
+    const current=state.tasks.find(task=>task.weddingCode?.toLowerCase()===order.code.toLowerCase());
+    const moving=(current?.date || order.date)!==date,previousDay=day;
+    try {
+      const next=moving||demo?scheduleWedding(state,order,date,status):state;
+      if(moving)setDay(date);
+      const error=await persist(next,"Bruidstaartplanning opgeslagen.",undefined,undefined,{optimistic:moving,request:{url:"/api/productie/weddings",body:{code:order.code,date,status}}});
+      if(error&&moving)setDay(current=>current===date?previousDay:current);
+      return error;
+    } catch(e) { const error=(e as Error).message;notify(error,true);return error; }
   }
   const offerWeek = mondayOf(today);
   const canBakery=!live || live.departments.length>0;
@@ -288,7 +319,8 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
     const finishing=preparationRoots.has(task.id);
     const step=finishing&&item.kind==="product"&&/^(Maken|Produceren|Decoreren \/ afmaken|Afmaken)$/i.test(task.operation)?"Afwerken":task.operation;
     const displayName=finishing?`${item.name} · ${step.toLocaleLowerCase("nl-NL")}`:item.name;
-    return <article key={task.id} className={`${s.taskCard} ${s[`task_${task.status}`]}`} draggable={canManage && !saving && task.status !== "done"} onDragStart={e => { e.dataTransfer.setData("text/plain", task.id); e.dataTransfer.effectAllowed = "move"; setDragged(task.id); }} onDragEnd={() => setDragged(null)}>
+    return <article key={task.id} data-task-id={task.id} data-task-department={task.departmentId} data-task-drag-kind="production" data-task-saving={movingTask===task.id||undefined} className={`${s.taskCard} ${s[`task_${task.status}`]}`} draggable={canManage && !saving && task.status !== "done"} onDragStart={e => { e.dataTransfer.setData("text/plain", task.id); e.dataTransfer.effectAllowed = "move"; setDragged(task.id); }} onDragEnd={() => setDragged(null)}>
+      {canManage&&task.status!=="done"&&<button type="button" data-task-drag-handle draggable={false} disabled={saving} className={s.taskDragHandle} aria-label={`Versleep ${item.name}`} title="Sleep naar een andere dag of afdeling" {...touchDrag.getHandleProps(task.id)} onClick={event=>{touchDrag.getHandleProps(task.id).onClick(event);if(!event.defaultPrevented)setModal({type:"detail",id:task.id});}}><Icon name="move" size={16}/></button>}
       <button disabled={saving || !!task.stockFulfillmentId} className={s.taskCheck} aria-label={`${task.stockFulfillmentId ? "Uit voorraad" : task.status === "done" ? "Heropen" : "Afronden"}: ${item.name} · ${task.operation}`} aria-pressed={task.status === "done"} onClick={() => changeStatus(task.id, task.status === "done" ? "planned" : "done")}>{task.status === "done" ? <Icon name="check" size={12} /> : task.status === "active" ? <Icon name="play" size={12} /> : null}</button>
       <div className={s.taskBody}>
         <button className={s.taskOpen} onClick={()=>setModal({type:"detail",id:task.id})} aria-label={`Open ${quantity(task.quantity)} ${item.unit} ${item.name} · ${task.operation}`}>
@@ -328,25 +360,25 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
             <details className={s.syncDetails}><summary title="Opslag en verversen"><span className={s.liveDot}/><span role="status">{demo?(storageError?"Opslagfout":"Preview"):saving?"Opslaan…":"Opgeslagen"}</span></summary><div>{demo?<><p>{storageError?"Bewaren niet mogelijk · wijzigingen vervallen bij herladen":"Voorbeeldgegevens · wijzigingen blijven alleen in deze browser"}</p><button onClick={()=>setModal({type:"reset"})}>Herstel voorbeeld</button></>:<><p>Opgeslagen in Supabase{syncedAt?` · bijgewerkt ${new Intl.DateTimeFormat("nl-NL",{timeZone:"Europe/Amsterdam",hour:"2-digit",minute:"2-digit"}).format(new Date(syncedAt))}`:""}</p><button disabled={saving} onClick={()=>void onRefresh?.()}>Verversen</button></>}</div></details>
           </div>
         </section>
-        <div className={s.mobileDays} role="group" aria-label="Kies dag">{days.map(d => <button key={d} data-today={d===today || undefined} aria-pressed={day === d} onClick={() => setDay(d)}>{dateLabel(d)}</button>)}</div>
+        <div className={s.mobileDays} role="group" aria-label="Kies dag">{days.map(d => <button key={d} data-task-date={d} data-today={d===today || undefined} aria-pressed={day === d} onClick={() => setDay(d)}>{dateLabel(d)}</button>)}</div>
         <div className={s.mobileRhythm}><DayRhythm board={board} date={day}/></div>
         <div className={s.plannerWithRequests}><div className={s.plannerBoardColumn}>
         <section className={s.board} aria-label="Weekbord">
           <div className={s.boardHeader}><div className={s.departmentColumn}/>{days.map(d => <div key={d} className={`${s.dayHeading} ${d === today ? s.today : ""}`}><div><strong>{dateLabel(d)}</strong>{d===today&&<span>Vandaag</span>}</div><DayRhythm board={board} date={d}/></div>)}</div>
           {visibleDepartments.map(dep => {
-            if(dep.id==="bruidstaarten")return <WeddingWeekLane key={dep.id} week={week} days={days} day={day} today={today} state={state} canManage={canManage} saving={saving} demo={demo} statusFilter={statusFilter} Dialog={ModalFrame} onUpdate={updateWedding}/>;
+            if(dep.id==="bruidstaarten")return <WeddingWeekLane dragFrameRef={frameRef} onDragChange={setDragged} key={dep.id} week={week} days={days} day={day} today={today} state={state} canManage={canManage} saving={saving} demo={demo} statusFilter={statusFilter} Dialog={ModalFrame} onUpdate={updateWedding}/>;
             const tasks = filtered.filter(t => t.departmentId === dep.id);
             const total = tasks.reduce((sum, t) => sum + (t.minutes || 0), 0);
             return <div className={`${s.departmentRow} ${s[`tone_${dep.tone}`]}`} data-department={dep.id} key={dep.id}>
               <div className={s.departmentLabel} title={`${dep.name} · ${tasks.filter(t=>t.status==="done").length}/${tasks.length} klaar · ${durationLabel(total)} gepland`}><span className={s.departmentMark} /><h2>{dep.name}</h2><span>{tasks.filter(t => t.status === "done").length}/{tasks.length} klaar</span><small><Icon name="clock" size={12} />{durationLabel(total)} gepland</small></div>
-              {days.map(d => <div key={d} className={`${s.dayCell} ${d === day ? s.mobileSelectedDay : ""} ${d === today ? s.todayCell : ""} ${dragged ? s.dropTarget : ""}`} onDragOver={e => { if (canManage && !saving && dragged) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }} onDrop={e => { e.preventDefault(); if (canManage && !saving && dragged) move(dragged, d, dep.id); }} aria-label={`${dep.name} · ${dateLabel(d, true)}`}>
+              {days.map(d => <div key={d} data-task-date={d} data-task-department={dep.id} data-task-drag-kind="production" className={`${s.dayCell} ${d === day ? s.mobileSelectedDay : ""} ${d === today ? s.todayCell : ""} ${dragged ? s.dropTarget : ""}`} onDragOver={e => { if (canManage && !saving && dragged) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }} onDrop={e => { e.preventDefault(); if (canManage && !saving && dragged) move(dragged, d, dep.id); }} aria-label={`${dep.name} · ${dateLabel(d, true)}`}>
                 {tasks.filter(t => t.date === d).map(taskCard)}
                 {canManage && <button className={s.cellAdd} aria-label={`Taak toevoegen · ${dep.name} · ${dateLabel(d, true)}`} onClick={() => setModal({ type: "task", date: d, departmentId: dep.id, fromCell: true })}><Icon name="plus" size={14} /><span>Toevoegen</span></button>}
                 {wall && !canManage && !tasks.some(t => t.date === d) && <span className={s.emptyCell}>—</span>}
               </div>)}
             </div>;
           })}
-          {board==="patisserie" && department==="all" && <CleaningWeekLane days={days} day={day} today={today} rows={state.cleaning || []} canManage={canManage} canCheck={!live || live.departments.some(id=>departmentsFor("patisserie").some(d=>d.id===id))} saving={saving} statusFilter={statusFilter} selected={modal?.type==="cleaning"?modal:null} Dialog={ModalFrame} onOpen={selection=>setModal(selection?{type:"cleaning",...selection}:null)} onCommand={clean}/>}
+          {board==="patisserie" && department==="all" && <CleaningWeekLane dragFrameRef={frameRef} onDragChange={setDragged} days={days} day={day} today={today} rows={state.cleaning || []} canManage={canManage} canCheck={!live || live.departments.some(id=>departmentsFor("patisserie").some(d=>d.id===id))} saving={saving} statusFilter={statusFilter} selected={modal?.type==="cleaning"?modal:null} Dialog={ModalFrame} onOpen={selection=>setModal(selection?{type:"cleaning",...selection}:null)} onCommand={clean}/>}
         </section>
         <footer className={s.boardFooter}><span><i />Gepland <i className={s.activeLegend} />Bezig <i className={s.doneLegend} />Klaar <i className={s.blockedLegend} />Geblokkeerd</span><span>{canManage ? "Sleep om te verplaatsen · open een taak om te wijzigen" : "Open een taak voor details en status"}</span>{!weekend && (weekTasks.some(t => t.date === end) || (board==="patisserie" && state.cleaning?.some(d=>d.date===end))) && <button onClick={() => setWeekend(true)}>Zondag heeft taken · toon zondag</button>}</footer>
         </div><aside className={s.planningRail}>{live?<ProductionRequests compact board={board} week={week} onPlanned={onRefresh}/>:<div className={s.demoRequests}>Productieverzoeken<button aria-label="Nieuw productieverzoek" onClick={()=>setModal({type:"item"})}><Icon name="plus"/></button></div>}{canBakery && <ProductionWeekOffer key={offerWeek} offers={live?.weeklyOffers} week={offerWeek} paused={!!modal || !!quickRecipeItem} onOpen={(selectedWeek, offer) => setModal({type:"offer",week:selectedWeek,imageUrl:offer.imageUrl,label:offer.label})} onManage={canManageData ? selectedWeek => setModal({type:"offer-manage",week:selectedWeek}) : undefined}/>}</aside></div>
