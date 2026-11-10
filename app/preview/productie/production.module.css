@@ -1,4 +1,4 @@
-.root { --ink:#1b3344; --green:#1b3344; --muted:#63736c; --paper:#f4f6ef; --line:#d3decf; --sage:#c3d3bb; --brand-red:#d75a4c; --brand-navy:#1b3344; --brand-green:#c3d3bb; font-family:"Overpass",Arial,sans-serif; font-size:13px; line-height:1.4; color:var(--ink); background:var(--paper); min-height:100dvh; display:grid; grid-template-columns:214px minmax(0,1fr); }
+.root { --ink:#1b3344; --green:#1b3344; --muted:#63736c; --paper:#f4f6ef; --line:#d3decf; --sage:#c3d3bb; --brand-red:#d75a4c; --brand-navy:#1b3344; --brand-green:#c3d3bb; font-family:"Overpass",Arial,sans-serif; font-size:13px; line-height:1.4; color:var(--ink); background:var(--paper); min-height:100dvh; display:grid; grid-template-columns:184px minmax(0,1fr); }
 .root *, .dialog * { box-sizing:border-box; }
 .root :is(h1,h2,h3,p), .dialog :is(h1,h2,h3,p) { margin:0; }
 .root button, .dialog button { font:inherit; cursor:pointer; touch-action:manipulation; }
@@ -8,19 +8,19 @@
 .root :is(input,select,textarea), .dialog :is(input,select,textarea) { font:inherit; color:inherit; background:#fff; border:1px solid #d9dfd3; border-radius:6px; min-height:38px; padding:8px 10px; min-width:0; }
 .root select, .dialog select { padding-right:25px; }
 .root :is(a,button), .dialog button { -webkit-tap-highlight-color:transparent; }
-.sidebar { display:flex; flex-direction:column; padding:25px 14px 18px; background:#dce5d5; border-right:1px solid #cbd8c3; min-height:100dvh; }
-.brand { display:grid; justify-items:center; padding:0 8px 20px; text-decoration:none; }
-.brand .wordmark { display:block; width:142px; height:auto; max-width:100%; }
+.sidebar { display:flex; flex-direction:column; padding:18px 10px 14px; background:#dce5d5; border-right:1px solid #cbd8c3; min-height:100dvh; }
+.brand { display:grid; justify-items:center; padding:0 8px 14px; text-decoration:none; }
+.brand .wordmark { display:block; width:120px; height:auto; max-width:100%; }
 .sidebarCaption { font-size:9px; font-weight:700; letter-spacing:1.8px; padding:0 12px; color:#75836b; }
 .sidebar nav { display:grid; gap:3px; margin-top:12px; }
-.sidebar nav :is(button,a) { display:flex; align-items:center; gap:10px; text-align:left; min-height:43px; padding:9px 12px; border-radius:6px; font-size:14px; color:#56634e; }
+.sidebar nav :is(button,a) { display:flex; align-items:center; gap:10px; text-align:left; min-height:43px; padding:9px 12px; border-radius:6px; font-size:12px; color:#56634e; }
 .sidebar nav :is(button,a) > span:nth-child(2) { flex:1; }
 .sidebar nav :is(button,a)[aria-current=page] { background:#1b3344; color:white; box-shadow:0 2px 5px #1b334414; }
 .sidebar nav :is(button,a):hover:not([aria-current=page]) { background:#ffffff50; }
 .navDot { width:5px; height:5px; border-radius:50%; background:#d0bd8b; }
 .sidebarBoards { display:grid; margin-top:29px; gap:2px; }
 .sidebarBoards > span { margin-bottom:9px; }
-.sidebarBoards :is(button,a) { display:flex; align-items:center; gap:10px; padding:9px 13px; min-height:34px; text-align:left; font-size:14px; color:#68755e; }
+.sidebarBoards :is(button,a) { display:flex; align-items:center; gap:10px; padding:9px 13px; min-height:34px; text-align:left; font-size:12px; color:#68755e; }
 .sidebarBoards :is(button,a) > svg { margin-left:auto; }
 .sidebarBoards :is(button,a)[aria-current=true] { color:#1b3344; font-weight:700; }
 .boardDot { width:7px; height:7px; border-radius:2px; background:#799466; }
@@ -282,7 +282,7 @@
 @media(max-width:760px) { .resourceTabs { flex-wrap:nowrap; overflow-x:auto; padding-bottom:4px; }.resourceTabs a { flex-shrink:0; white-space:nowrap; }.embeddedData { height:calc(100dvh - 280px); min-height:500px; }.resourceTabs { gap:5px; }.resourceTabs a { font-size:11px; padding:8px 10px; } }
 
 .sidebar { position:sticky; top:0; align-self:start; height:100dvh; min-height:0; overflow-y:auto; }
-.sidebar nav :is(button,a) { min-height:44px; font-size:14px; }
+.sidebar nav :is(button,a) { min-height:36px; padding:7px 9px; font-size:12px; }
 .sidebarBoards { margin-top:20px; }.sidebarBoards :is(button,a) { min-height:30px; padding-top:6px; padding-bottom:6px; }
 .sidebarBottom { padding-top:20px; }
 
@@ -471,7 +471,7 @@
 /* STRAK gepland — colors sampled from the supplied vector artwork.
    Green stays the canvas; navy provides readable contrast and red marks actions. */
 .sidebar { background:var(--brand-green); border-color:#b6c9ae; scrollbar-width:thin; scrollbar-color:#9fb396 transparent; }
-.sidebar nav :is(button,a) { color:var(--brand-navy); min-height:44px; }
+.sidebar nav :is(button,a) { color:var(--brand-navy); min-height:36px; }
 .sidebar nav :is(button,a)[aria-current=page] { background:var(--brand-navy); color:white; box-shadow:inset 3px 0 var(--brand-red); }
 .sidebar nav :is(button,a):hover:not([aria-current=page]) { background:#ffffff70; }
 .sidebarCaption { color:#556b5c; }.sidebarBoards :is(button,a),.sidebarBottom > :is(button,a) { color:#405a4d; }
@@ -637,7 +637,7 @@
 
 /* Shared live worksheet: the approved screen design, with real planning data. */
 .screenFrame{width:100%;min-width:0;background:#f4f6ef}
-.worksheetRoot{--sage:#c3d3bc;--brand-green:#c3d3bc;--line:#aabbaa;background:#fff;min-height:0;height:auto!important;overflow:visible!important;transform-origin:top left;grid-template-columns:214px minmax(0,1fr);font-size:14px}
+.worksheetRoot{--sage:#c3d3bc;--brand-green:#c3d3bc;--line:#aabbaa;background:#fff;min-height:0;height:auto!important;overflow:visible!important;transform-origin:top left;grid-template-columns:184px minmax(0,1fr);font-size:14px}
 .worksheetRoot.wall{grid-template-columns:minmax(0,1fr)}
 .worksheetRoot .main{height:auto;min-height:0;overflow:visible;padding:10px 20px 5px}
 .worksheetRoot .fitCanvas{width:auto!important;transform:none!important;min-width:0}
@@ -892,19 +892,62 @@
 @media(max-width:800px){.periodToggle button{min-height:32px;padding:5px 12px}.dayView .weekPicker strong{text-transform:capitalize}}
 @media print{.worksheetRoot.screenFit{min-height:0}}
 
-/* Native desktop/tablet sizing stays independent of the fitted XL canvas. */
+/* Compact native controls retain their size when the planning gets busier. */
 @media(min-width:801px){
- .worksheetRoot:not(.screenFit) .planningActions{flex-wrap:wrap}
- .worksheetRoot:not(.screenFit) .plannerFilters select{min-height:40px;font-size:13px}
+ .worksheetRoot:not(.screenFit) .main{padding:8px 12px 5px}
+ .worksheetRoot:not(.screenFit) .planningActions{flex-wrap:wrap;min-height:38px;padding-bottom:5px;gap:6px}
+ .worksheetRoot:not(.screenFit) .planningActions :is(.primaryButton,.secondaryButton){min-height:32px;font-size:12px!important;padding:5px 8px}
+ .worksheetRoot:not(.screenFit) .screenActions{gap:5px}
+ .worksheetRoot:not(.screenFit) .periodToggle button{min-height:26px;font-size:12px;padding:3px 10px}
+ .worksheetRoot:not(.screenFit) .plannerToolbar{padding:5px 0;gap:6px}
+ .worksheetRoot:not(.screenFit) .plannerFilters select{min-height:32px;font-size:12px;padding:5px 22px 5px 7px}
+ .worksheetRoot:not(.screenFit) .weekPicker strong{font-size:17px}
+ .worksheetRoot:not(.screenFit) .plannerWithRequests{grid-template-columns:minmax(0,1fr) 240px!important;gap:8px}
  .worksheetRoot:not(.screenFit) .plannerBoardColumn{overflow-x:auto;overscroll-behavior-x:contain}
- .worksheetRoot:not(.screenFit) .board{min-width:calc(56px + var(--days) * 250px)}
- .worksheetRoot:not(.screenFit):not(.dayView) .taskOpen strong{font-size:16px}
- .worksheetRoot:not(.screenFit).dayView .board{min-width:0;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))}
+ .worksheetRoot:not(.screenFit) .board{min-width:calc(40px + var(--days) * 150px)}
+ .worksheetRoot:not(.screenFit) :is(.boardHeader,.departmentRow){grid-template-columns:40px repeat(var(--days),minmax(0,1fr))}
+ .worksheetRoot:not(.screenFit) .dayHeading{min-height:44px;padding:5px;gap:4px;flex-wrap:wrap}
+ .worksheetRoot:not(.screenFit) .dayHeading strong{font-size:13px}
+ .worksheetRoot:not(.screenFit) .dayRhythm{gap:1px}
+ .worksheetRoot:not(.screenFit) .dayRhythm :is(b,small){font-size:8px}
+ .worksheetRoot:not(.screenFit) .departmentLabel{min-height:48px;padding:5px 3px}
+ .worksheetRoot:not(.screenFit) .departmentLabel h2{font-size:11px}
+ .worksheetRoot:not(.screenFit) .dayCell{padding:3px;gap:3px}
+ .worksheetRoot:not(.screenFit) .taskCard{padding:4px 5px;gap:4px;min-height:34px}
+ .worksheetRoot:not(.screenFit) .taskCheck{width:18px;min-width:18px;height:18px;min-height:18px}
+ .worksheetRoot:not(.screenFit):not(.dayView) .taskOpen strong{font-size:13px;line-height:1.2}
+ .worksheetRoot:not(.screenFit) .taskMeta{margin-top:2px;gap:1px 4px}
+ .worksheetRoot:not(.screenFit) .taskStep{font-size:10px;line-height:1.2}
+ .worksheetRoot:not(.screenFit) .taskMeta .recipeGroup{font-size:9px!important;padding:1px 3px}
+ .worksheetRoot:not(.screenFit) :is(.cellWorkTotals,.taskWorkBadge){font-size:10px;gap:2px}
+ .worksheetRoot:not(.screenFit) .taskWorkBadge{padding:1px 3px}
+ .worksheetRoot:not(.screenFit) .taskWorkBadge svg{width:11px;height:11px}
+ .worksheetRoot:not(.screenFit) .dayCellFooter{min-height:20px;gap:3px}
+ .worksheetRoot:not(.screenFit) .planningRail>aside>header{padding:6px 8px}
+ .worksheetRoot:not(.screenFit) .planningRail>aside h2{font-size:14px}
+ .worksheetRoot:not(.screenFit) .planningRail>aside article{padding:6px 7px}
+ .worksheetRoot:not(.screenFit) .planningRail>aside article strong{font-size:13px;line-height:1.25}
+ .worksheetRoot:not(.screenFit) .planningRail>aside article strong small{font-size:11px}
+ .worksheetRoot:not(.screenFit) .planningRail>aside article time{font-size:11px;line-height:1.25;padding:2px 4px;margin-top:3px;gap:4px}
+ .worksheetRoot:not(.screenFit) .planningRail>aside article time svg{width:12px;height:12px}
+ .worksheetRoot:not(.screenFit) .planningRail>aside article p{font-size:11px;line-height:1.25;margin-top:3px}
+ .worksheetRoot:not(.screenFit) .planningRail>aside article button{width:24px;min-width:24px;min-height:26px;padding:2px}
+ .worksheetRoot:not(.screenFit).dayView .board{min-width:0;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr))}
+ .worksheetRoot:not(.screenFit).dayView :is(.taskCard,.dayCell){padding:7px;gap:6px}
+ .worksheetRoot:not(.screenFit).dayView .departmentLabel{min-height:32px}
+ .worksheetRoot:not(.screenFit).dayView .departmentLabel h2{font-size:16px}
+ .worksheetRoot:not(.screenFit).dayView .dayCell{min-height:96px!important}
+ .worksheetRoot:not(.screenFit).dayView .taskOpen strong{font-size:calc(var(--day-title-size) - 8px)}
+ .worksheetRoot:not(.screenFit).dayView .taskStep{font-size:12px}
 }
 @media(min-width:801px) and (max-width:1399px){
  .worksheetRoot:not(.screenFit) .plannerWithRequests{grid-template-columns:minmax(0,1fr)!important}
- .worksheetRoot:not(.screenFit) .planningRail{display:grid;grid-template-columns:minmax(0,1fr) 180px;align-items:start}
+ .worksheetRoot:not(.screenFit) .planningRail{display:grid;grid-template-columns:minmax(0,1fr) 140px;align-items:start}
  .worksheetRoot:not(.screenFit) .offerWrap{margin-top:0}
+}
+@media(pointer:coarse){
+ .sidebar nav :is(button,a){min-height:44px}
+ .worksheetRoot:not(.screenFit) .planningRail>aside article button{min-width:40px;min-height:44px}
 }
 @media(max-width:800px){
  .mobileNav select{font-size:16px;min-height:44px}

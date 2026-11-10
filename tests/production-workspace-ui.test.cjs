@@ -240,6 +240,7 @@ test('ordinary planning keeps native navigation sizing and only explicit XL enab
  assert(!root().props.className.includes('screenFit'));
  assert(nodes(tree).some(node=>node.type===h.navigation.default));
  assert.equal(h.screenLayouts.at(-1)[1],false);
+ assert.equal(h.screenLayouts.at(-1)[3],true,'Native planning still fits individual long names');
  button(tree,'XL weergave').props.onClick();tree=h.render(h.Component);
  assert(root().props.className.includes('screenFit'));
  assert(!nodes(tree).some(node=>node.type===h.navigation.default));

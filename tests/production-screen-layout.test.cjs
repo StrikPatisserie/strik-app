@@ -2,7 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
 
-function harness({width=1920,height=1080,contentHeight=1800,xl=false,wordWidth=320,labelWidth=150,paddingLeft=0,paddingRight=0,reflow=false,pixelRatio=1}={}){
+function harness({width=1920,height=1080,contentHeight=1800,xl=false,wordWidth=320,labelWidth=150,paddingLeft=0,paddingRight=0,reflow=false,pixelRatio=1,enabled=true,fitNativeText=false}={}){
  const frames=new Map(),events=new Map(),observed=[];
  const metrics={wordReads:0,fontReads:0,heightReads:0,widthReads:0,styleWrites:0};
  let cleanup,mutation,resize,id=0,currentHeight=contentHeight,currentWordWidth=wordWidth;
@@ -28,7 +28,7 @@ function harness({width=1920,height=1080,contentHeight=1800,xl=false,wordWidth=3
   ResizeObserver:class{constructor(fn){resize=fn;}observe(target){observed.push(target);}disconnect(){resize=null;}},
   requestAnimationFrame:fn=>{frames.set(++id,fn);return id;},cancelAnimationFrame:id=>frames.delete(id),
  });
- exports.default(xl);
+ exports.default(xl,enabled,'week',fitNativeText);
  function flush(){for(const [i,fn]of [...frames]){frames.delete(i);fn();}}
  return {frame,workspace,label,events,metrics,observed,flush,
   mutate(records){mutation?.(records);},
@@ -55,6 +55,24 @@ test('the complete workspace fits Full HD, 4K and reduced desktop heights in bot
   h.close();
  }
 });
+test('native planning fits long names without scaling navigation or forcing the page into a screen height',()=>{
+ for(const width of [1495,1024,768]){
+  const h=harness({width,contentHeight:5000,enabled:false,fitNativeText:true,paddingRight:17,wordWidth:180,labelWidth:140});
+  assert.equal(h.workspace.style.transform,undefined);
+  assert.equal(h.workspace.style.width,undefined);
+  assert.equal(h.workspace.dataset.screenDensity,undefined);
+  assert.equal(h.workspace.style['--screen-fit-height'],undefined);
+  assert.equal(h.workspace.scrollHeight,5000);
+  assert(Math.abs(parseFloat(h.label.style.fontSize)-15*122/180)<.001);
+  h.changeContent(9000);assert.equal(h.workspace.style.transform,undefined);
+  h.changeText('Andere productnaam',240);
+  assert(Math.abs(parseFloat(h.label.style.fontSize)-15*122/240)<.001);
+  h.resize(width,600);assert.equal(h.workspace.style.transform,undefined);
+  h.close();assert.equal(h.label.style.fontSize,'');
+ }
+ const disabled=harness({enabled:false});assert.equal(disabled.metrics.wordReads,0);disabled.close();
+});
+
 test('whole-word fitting reserves title padding and does not compound font shrinking under an existing transform',()=>{
  const h=harness({labelWidth:140,paddingRight:34,wordWidth:480,contentHeight:700});
  const wordWidth=()=>h.label.querySelectorAll()[0].getBoundingClientRect().width;

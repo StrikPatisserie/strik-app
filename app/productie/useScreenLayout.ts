@@ -7,10 +7,10 @@ type WordMeasurement={text:string;base:number;widest:number};
 /** Fit the complete workspace once, then retain its layout until real overflow
  * or a viewport resize requires another fit. Browser zoom keeps native scrolling.
  */
-export default function useScreenLayout(xl:boolean,enabled=true,layoutKey='week'){
+export default function useScreenLayout(xl:boolean,enabled=true,layoutKey='week',fitNativeText=false){
   const frameRef=useRef<HTMLDivElement>(null),workspaceRef=useRef<HTMLDivElement>(null);
   useLayoutEffect(()=>{
-    if(!enabled)return;
+    if(!enabled&&!fitNativeText)return;
     const frame=frameRef.current,workspace=workspaceRef.current;
     if(!frame||!workspace)return;
     const originalFrame={height:frame.style.height,overflow:frame.style.overflow};
@@ -50,6 +50,13 @@ export default function useScreenLayout(xl:boolean,enabled=true,layoutKey='week'
     function fit(resized=false,fontsChanged=false){
       if(disposed)return;
       if((window.visualViewport?.scale||1)!==1)return;
+      if(!enabled){
+        lastWidth=frame!.clientWidth;lastHeight=window.innerHeight;lastTop=frame!.getBoundingClientRect().top;
+        if(resized||fontsChanged||!initialized)fitWords(true);
+        else if(dirtyWords.size)fitWords(false,dirtyWords);
+        dirtyWords.clear();initialized=true;
+        return;
+      }
       const outer=window.outerWidth||window.innerWidth;
       // A different display can change DPR without any browser zoom. Only the
       // difference between browser and layout width should enable native zoom.
@@ -146,6 +153,6 @@ export default function useScreenLayout(xl:boolean,enabled=true,layoutKey='week'
       workspace.removeEventListener("load",onContent,true);document.fonts?.removeEventListener("loadingdone",onFonts);
       reset();restoreFrame();
     };
-  },[xl,enabled,layoutKey]);
+  },[xl,enabled,layoutKey,fitNativeText]);
   return {frameRef,workspaceRef};
 }

@@ -109,7 +109,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
   const [wall, setWall] = useState(false);
   const screenFit=view==="planning"&&wall;
   const layoutKey = `${period}:${period === "day" ? day : week}:${board}:${department}:${statusFilter}`;
-  const {frameRef,workspaceRef}=useScreenLayout(wall,screenFit,layoutKey);
+  const {frameRef,workspaceRef}=useScreenLayout(wall,screenFit,layoutKey,view==="planning");
   const {physicalKeyboard,setPhysicalKeyboard,storageError:keyboardStorageError}=usePhysicalKeyboard(frameRef);
   const [largeText, setLargeText] = useState(false);
   const [weekend, setWeekend] = useState(false);
