@@ -77,6 +77,26 @@ test('existing B2B statuses and completion labels remain unchanged', () => {
   assert.match(source, /\["delivered", "Geleverd", true\]/);
   assert.match(source, /"Overig geproduceerd" : "Geproduceerd"/);
 });
+test('delivered B2B rows are visibly completed while production-only and cancelled orders retain their own presentation', () => {
+  const { B2BOrderRow } = load('app/sinterklaas/b2b/SinterklaasB2BClient.tsx');
+  function row(input) {
+    return renderToStaticMarkup(require('react').createElement(B2BOrderRow, {
+      order: order(input), updatingId: '', onToggle() {}, onEdit() {}, onDelete() {},
+      onRetryConfirmation() {}, onCustomerConfirmation() {}, onQuotation() {}, onApprove() {}, onLogoCount() {},
+    }));
+  }
+  for (const season of ['sint', 'kerst']) {
+    const completed = row({ season, delivered: true });
+    assert.match(completed, /<article class="[^"]*completedOrder/);
+    assert.match(completed, /completionStatus">✓ Geleverd/);
+    assert.match(completed, /aria-label="Details Klant A"/);
+    assert.match(completed, />Wijzig<\/button>/);
+  }
+  for (const input of [{}, { productionDone: true }, { productionChecklistReady: true }, { packed: true }, { delivered: true, cancelled: true }]) {
+    const pending = row(input);
+    assert.doesNotMatch(pending, /completedOrder|completionStatus/);
+  }
+});
 test('production button permission is resolved on the server for both seasons', async () => {
   const access = load('app/lib/auth/access.ts');
   for (const file of ['app/sinterklaas/b2b/page.tsx', 'app/kerst/b2b/page.tsx']) for (const role of ['manager', 'logistiek', 'winkel']) {

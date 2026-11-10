@@ -82,6 +82,20 @@
 .orderMain .warning { margin-top: 3px !important; font-size: 10px; line-height: 1.3; }
 .orderMain .rowButton { min-height: 28px; padding: 3px 8px; }
 .archived { opacity: .75; }
+.order.completedOrder {
+  --b2b-ink: #414141;
+  --b2b-muted: #494949;
+  --b2b-border: #cdcdcd;
+  background: #ececec;
+  border-color: #cdcdcd;
+  filter: grayscale(1);
+}
+.completedOrder .orderMain { opacity: .88; }
+.order.completedOrder:hover, .order.completedOrder:focus-within { background: #e5e5e5; }
+.completedOrder:hover .orderMain, .completedOrder:focus-within .orderMain, .completedOrder .orderMain[data-expanded] { opacity: 1; }
+.completedOrder .detail { background: #f1f1f1; }
+.completedOrder .status { background: #dcdcdc; color: #454545; }
+.completedOrder .completionStatus { background: #d1d1d1; color: #383838; font-weight: 600; }
 .date { font-size: 11px; font-weight: 500; line-height: 1.35; }
 .date small { display: block; color: var(--b2b-muted); font-size: 10px; font-weight: 400; margin-top: 2px; }
 .customer { min-width: 0; }

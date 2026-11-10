@@ -29,6 +29,7 @@ export default function HolidayProduction({season,initialYear}:{season:"sint"|"k
  const batches=data?.batches || [],totals=batches.flatMap(b=>b.rows).reduce((sum,r)=>({ordered:sum.ordered+r.orders+r.stock,made:sum.made+r.produced}),{ordered:0,made:0});
  return <div className={wall?s.holidayWall:""} aria-busy={saving}>
   <div className={s.holidayToolbar}>
+   <Link href="/bakkerij/productie/feestdagen" className={s.textLink}><Icon name="back" size={16}/>Feestdagen</Link>
    <nav className={s.resourceTabs} aria-label="Feestdag"><Link href={`/bakkerij/productie/feestdagen/sint?year=${year}`} aria-current={season==="sint"?"page":undefined}>Sinterklaas</Link><Link href={`/bakkerij/productie/feestdagen/kerst?year=${year}`} aria-current={season==="kerst"?"page":undefined}>Kerst</Link></nav>
    <div className={s.holidayTabs}><button aria-pressed={tab==="orders"} onClick={()=>setTab("orders")}>B2B · {data?.orders.length || 0}</button>{season==="sint" && <button aria-pressed={tab==="letters"} onClick={()=>setTab("letters")}>Letters · {count(totals.made)} / {count(totals.ordered)}</button>}</div>
    <div className={s.holidayTools}>

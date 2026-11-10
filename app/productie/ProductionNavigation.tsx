@@ -10,7 +10,7 @@ import s from "../preview/productie/production.module.css";
 
 const sections: { id: string; label: string; icon: IconName; href: string; manager?: boolean }[] = [
   { id: "planning", label: "Weekplanning", icon: "grid", href: PRODUCTION_HOME },
-  { id: "holidays", label: "Feestdagen", icon: "gift", href: `${PRODUCTION_HOME}/feestdagen/sint` },
+  { id: "holidays", label: "Feestdagen", icon: "gift", href: `${PRODUCTION_HOME}/feestdagen` },
   { id: "roster", label: "Personeelsrooster", icon: "users", href: `${PRODUCTION_HOME}/rooster` },
   { id: "recipes", label: "Recepten", icon: "book", href: `${PRODUCTION_HOME}?view=recipes` },
   { id: "ingredients", label: "Grondstoffen", icon: "leaf", href: `${PRODUCTION_HOME}?view=ingredients` },
@@ -22,7 +22,8 @@ const sections: { id: string; label: string; icon: IconName; href: string; manag
 type Props = { active: string; canManage: boolean; canManageData?: boolean; canBakery?: boolean; demo?: boolean; onNavigate?: (view: ProductionView) => void };
 
 function availableSections(canManage: boolean, demo: boolean, canBakery: boolean) {
-  return sections.filter(section => (!section.manager || canManage) && (section.id !== "weddings" || canBakery) && (!demo || !["packaging", "haccp", "data", "weddings", "orders"].includes(section.id)));
+  return sections.filter(section => (!section.manager || canManage) && (section.id !== "weddings" || canBakery) && (!demo || !["packaging", "haccp", "data", "weddings", "orders"].includes(section.id)))
+    .map(section => demo && section.id === "holidays" ? { ...section, href: "/preview/productie?view=feestdagen" } : section);
 }
 
 export default function ProductionNavigation({ active, canManage, canManageData = canManage, canBakery = true, demo = false, boards, activeBoard, onNavigate, onBoard }: Props & {

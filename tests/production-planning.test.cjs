@@ -126,6 +126,29 @@ test('production preview is noindex and unavailable outside development at both 
   }
 });
 
+test('the holiday submenu retains the existing B2B destination and only offers the explicitly supplied forecast', () => {
+  const menu = load('app/productie/HolidayMenu.tsx', {
+    'react/jsx-runtime': require('react/jsx-runtime'), 'next/link': 'a',
+    './ProductionIcon': { __esModule: true, default: 'svg' },
+    './navigation': { PRODUCTION_HOME: '/bakkerij/productie' },
+    './holidayMenu.module.css': { __esModule: true, default: {} },
+  }).default;
+  const links = menu({}).props.children.flat().filter(Boolean);
+  assert.equal(links.length, 1);
+  assert.equal(links[0].props.href, '/bakkerij/productie/feestdagen/sint');
+  const previewLinks = menu({ forecastHref: '/preview/productie?view=kerstvoorraad' }).props.children.flat().filter(Boolean);
+  assert.equal(previewLinks.length, 2);
+  assert.equal(previewLinks[1].props.href, '/preview/productie?view=kerstvoorraad');
+});
+
+test('the holiday forecast route rejects production before reading the local Excel', async () => {
+  const page = load('app/bakkerij/productie/feestdagen/kerstvoorraad/page.tsx', {
+    'next/navigation': { notFound: () => { throw Error('not-found'); } },
+    '@/app/preview/productie/kerstvoorraad/source.server': { christmasForecastSource: () => assert.fail('Local Excel must not be read in production') },
+  }, '', 'production');
+  await assert.rejects(() => page.default(), /not-found/);
+});
+
 
 test('the fixed day rhythm applies only to Patisserie Monday through Friday, including clock-change weeks',()=>{
  const rhythm=load('app/productie/dayRhythm.ts',{'./planning':m});

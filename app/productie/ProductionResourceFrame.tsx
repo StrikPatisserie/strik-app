@@ -3,15 +3,15 @@ import ProductionNavigation, { ProductionMobileNavigation } from "./ProductionNa
 import { BOARDS, departmentsFor, type DepartmentId } from "./planning";
 import s from "../preview/productie/production.module.css";
 
-export default function ProductionResourceFrame({ title, active, departments, canManage, canManageData = canManage, children }: {
-  title: string; active: string; departments: DepartmentId[]; canManage: boolean; canManageData?: boolean; children: ReactNode;
+export default function ProductionResourceFrame({ title, active, departments, canManage, canManageData = canManage, demo = false, children }: {
+  title: string; active: string; departments: DepartmentId[]; canManage: boolean; canManageData?: boolean; demo?: boolean; children: ReactNode;
 }) {
   const boards = BOARDS.filter(board => departmentsFor(board.id).some(department => departments.includes(department.id)));
   const canBakery = departments.some(department => department !== "ijs" && department !== "chocolade");
-  return <div className={`${s.root} ${active==="holidays"?s.holidayResource:""}`}><ProductionNavigation active={active} boards={boards} canManage={canManage} canManageData={canManageData} canBakery={canBakery} /><main className={s.main}>
+  return <div className={`${s.root} ${active==="holidays"?s.holidayResource:""}`}><ProductionNavigation active={active} boards={boards} canManage={canManage} canManageData={canManageData} canBakery={canBakery} demo={demo} /><main className={s.main}>
     <div className={s.previewBar}><span><i />STRAK gepland</span></div>
     <header className={s.header}><div className={s.heading}><span className={s.eyebrow}>STRAK gepland</span><h1>{title}</h1></div></header>
-    <ProductionMobileNavigation active={active} canManage={canManage} canManageData={canManageData} canBakery={canBakery} />
+    <ProductionMobileNavigation active={active} canManage={canManage} canManageData={canManageData} canBakery={canBakery} demo={demo} />
     <div className={s.resourceSurface} data-production-content>{children}</div>
   </main></div>;
 }

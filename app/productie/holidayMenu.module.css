@@ -1,0 +1,14 @@
+.menu { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; max-width: 1100px; }
+.card { display: flex; align-items: center; gap: 18px; min-height: 112px; padding: 24px; color: #1b3343; background: white; border: 1px solid #b7c7b3; border-radius: 10px; text-decoration: none; }
+.card:hover { background: #f6f8f3; border-color: #49684c; }
+.card:focus-visible { outline: 3px solid #dd5947; outline-offset: 4px; }
+.card > span:nth-child(2) { flex: 1; min-width: 0; }
+.card strong { display: block; font-size: 19px; line-height: 1.25; }
+.card small { display: block; margin-top: 5px; color: #5c6f5d; font-size: 13px; }
+.icon { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 54px; height: 54px; background: #e8eef2; border-radius: 8px; }
+.forecastIcon { background: #c3d3bc; }
+.card > svg { flex-shrink: 0; }
+@media (max-width: 850px) {
+  .menu { grid-template-columns: 1fr; }
+  .card { padding: 20px; min-height: 100px; }
+}

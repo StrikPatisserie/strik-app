@@ -1746,6 +1746,7 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
   const priceBreakdowns = linePriceBreakdowns(parsedOrder.productLines);
   const orderTotal = effectiveOrderTotal(order);
   const archived = order.id.startsWith("historie-");
+  const completed = order.delivered && !order.cancelled;
   const deliveryDateHint = !parseBusinessDate(order.deliveryDate)
     ? order.sourceDeliveryDate ? "Historische notatie" : order.deliveryDate ? "Datum controleren" : "Nog af te spreken"
     : order.deliveryWindowType === "date" ? "Vaste datum" : order.deliveryWindowType === "week" ? "Leverweek" : "Gewenste periode";
@@ -1764,7 +1765,7 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
     order.priceAgreement && `Prijsafspraak: ${order.priceAgreement}`, order.deliveryAddress && `Bezorgadres: ${order.deliveryAddress}`,
   ].filter(Boolean);
 
-  return <article className={`${styles.order} ${order.cancelled ? styles.archived : ""}`}>
+  return <article className={`${styles.order} ${order.cancelled ? styles.archived : ""} ${completed ? styles.completedOrder : ""}`}>
     <div className={styles.orderMain} data-expanded={expanded||undefined}>
       <div className={styles.date}>{compactDeliveryWindow(order)}<small>{deliveryDateHint}</small>{dueSoon(order) && <small className={styles.warning}>Binnen 2 dagen</small>}</div>
       <div className={styles.customer}>
@@ -1777,6 +1778,7 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
         {(warnings.length > 0 || confirmationNeedsAttention) && <p className={styles.warning}>! {confirmationNeedsAttention ? "Controleer interne back-up" : warnings[0]}{warnings.length > 1 ? ` · +${warnings.length - 1}` : ""}</p>}
       </div>
       <div className={styles.rowStatus}>
+        {completed && <span className={`${styles.status} ${styles.completionStatus}`}>✓ Geleverd</span>}
         {order.productionChecklistReady && !order.cancelled && <span className={styles.status} style={{background:"#dcebd8",color:"#24551d"}}>✓ Letters klaar</span>}
         <span className={styles.status} data-status={order.cancelled ? "geannuleerd" : order.status}>{statusLabel}</span>
         {!archived && !order.cancelled && (order.status === "aanvraag" || order.status === "offerte") && <button type="button" className={styles.approveLink} aria-label={`Aanvraag goedkeuren van ${order.customerName}`} onClick={() => onApprove(order)}>Goedkeuren →</button>}

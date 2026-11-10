@@ -18,10 +18,11 @@ function harness({fetchImpl,timerApi={}}={}) {
  const records=new Map(),screenLayouts=[];let current,index,context;
  const slot=initial=>{const i=index++;if(!(i in current))current[i]=typeof initial==='function'?initial():initial;return i;};
  const react={Fragment:jsx.Fragment,createContext:value=>({Provider:'workspace-provider',defaultValue:value}),useContext:c=>context || c.defaultValue,useEffect:()=>{},useMemo:fn=>fn(),useRef:value=>current[slot(()=>({current:value}))],useState:initial=>{const i=slot(initial),store=current;return[store[i],next=>{store[i]=typeof next==='function'?next(store[i]):next;}];}};
+ const quickCompletion=load('app/productie/QuickTaskCompletion.tsx',{'react':react,'react/jsx-runtime':jsx,'./productionWork':productionWork,'./work.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})}});
  const navigation={__esModule:true,default:function Navigation(){},ProductionMobileNavigation:function MobileNavigation(){}};
  const offerWidget={__esModule:true,default:function ProductionWeekOffer(){}};
  const pickerWidget={__esModule:true,default:function ProductionItemPicker(){}};
- const component=load('app/preview/productie/ProductionPreview.tsx',{'react':react,'react/jsx-runtime':jsx,'next/link':'a','../../productie/ProductionIcon':{__esModule:true,default:()=>null},'../../productie/ProductionNavigation':navigation,'../../productie/navigation':load('app/productie/navigation.ts',{'./planning':planning}),'../../productie/dayRhythm':load('app/productie/dayRhythm.ts',{'./planning':planning}),'next/dynamic':()=>()=>null,'../../productie/WeddingWeekLane':{__esModule:true,default:()=>null},'../../productie/useProductionUpdates':{__esModule:true,default:()=>false},'../../productie/usePhysicalKeyboard':{__esModule:true,default:()=>({physicalKeyboard:false,setPhysicalKeyboard(){},storageError:false})},'../../productie/useTaskDrag':{__esModule:true,default:()=>({getHandleProps:()=>({onClick(){}}),cancelDrag(){}})},'../../productie/productionUpdates':{},'../../productie/useScreenLayout':{__esModule:true,default:(...args)=>{screenLayouts.push(args);return{frameRef:{current:null},workspaceRef:{current:null}};}},'../../productie/TaskWorkPanel':{__esModule:true,default:function TaskWorkPanel(){},WorkClock:function WorkClock(){},PreparationControl:function PreparationControl(){},RecipeWorkHistory:function RecipeWorkHistory(){}},'../../productie/workCommands':workCommands,'../../productie/workSummary':workSummary,'../../productie/QuickRecipeForm':{__esModule:true,default:()=>null},'../../productie/ProductionRequests':{__esModule:true,default:()=>null},'../../productie/ProductionWeekOffer':offerWidget,'../../productie/ProductionItemPicker':pickerWidget,'../../productie/SearchableChoice':{__esModule:true,default:function SearchableChoice(){}},'../../productie/recipeGroups':recipeGrouping,'../../productie/taskOperations':taskOperations,'../../productie/CleaningWeekLane':{__esModule:true,default:()=>null},'../../productie/weddingPlanning':weddingPlanning,'../../productie/planning':planning,'./sampleData':sample,'./production.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})},'../../productie/workspaceData':{},'../../productie/recipePlanning':recipePlanning},{fetch:fetchImpl||(()=>assert.fail('Unexpected live request in the UI harness')),...timerApi});
+ const component=load('app/preview/productie/ProductionPreview.tsx',{'react':react,'react/jsx-runtime':jsx,'next/link':'a','../../productie/ProductionIcon':{__esModule:true,default:()=>null},'../../productie/ProductionNavigation':navigation,'../../productie/navigation':load('app/productie/navigation.ts',{'./planning':planning}),'../../productie/dayRhythm':load('app/productie/dayRhythm.ts',{'./planning':planning}),'next/dynamic':()=>()=>null,'../../productie/WeddingWeekLane':{__esModule:true,default:()=>null},'../../productie/useProductionUpdates':{__esModule:true,default:()=>false},'../../productie/usePhysicalKeyboard':{__esModule:true,default:()=>({physicalKeyboard:false,setPhysicalKeyboard(){},storageError:false})},'../../productie/useTaskDrag':{__esModule:true,default:()=>({getHandleProps:()=>({onClick(){}}),cancelDrag(){}})},'../../productie/productionUpdates':{},'../../productie/useScreenLayout':{__esModule:true,default:(...args)=>{screenLayouts.push(args);return{frameRef:{current:null},workspaceRef:{current:null}};}},'../../productie/QuickTaskCompletion':quickCompletion,'../../productie/TaskWorkPanel':{__esModule:true,default:function TaskWorkPanel(){},WorkClock:function WorkClock(){},PreparationControl:function PreparationControl(){},RecipeWorkHistory:function RecipeWorkHistory(){}},'../../productie/workCommands':workCommands,'../../productie/workSummary':workSummary,'../../productie/QuickRecipeForm':{__esModule:true,default:()=>null},'../../productie/ProductionRequests':{__esModule:true,default:()=>null},'../../productie/ProductionWeekOffer':offerWidget,'../../productie/ProductionItemPicker':pickerWidget,'../../productie/SearchableChoice':{__esModule:true,default:function SearchableChoice(){}},'../../productie/recipeGroups':recipeGrouping,'../../productie/taskOperations':taskOperations,'../../productie/CleaningWeekLane':{__esModule:true,default:()=>null},'../../productie/weddingPlanning':weddingPlanning,'../../productie/planning':planning,'./sampleData':sample,'./production.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})},'../../productie/workspaceData':{},'../../productie/recipePlanning':recipePlanning},{fetch:fetchImpl||(()=>assert.fail('Unexpected live request in the UI harness')),...timerApi});
  const render=(fn,props={},value)=>{if(!records.has(fn))records.set(fn,[]);current=records.get(fn);index=0;context=value;return fn(props);};
  return{render,Component:component.default,navigation,screenLayouts,offerWidget:offerWidget.default,pickerWidget:pickerWidget.default};
 }
@@ -941,4 +942,34 @@ test('a selected bridal source survives a week change and reloads immediately af
   }finally{h.close();}
   assert.equal(h.intervals.size,0);
  }
+});
+
+
+test('the completion square opens only the fast name, time and crew form and saves through the shared work command',async()=>{
+ const h=harness();let tree=h.render(h.Component);
+ const state=sample.initialPreviewState();
+ const task=state.tasks.find(task=>task.status==='planned'&&!task.dependsOn&&!task.requires?.length&&!task.weddingCode);
+ const card=find(tree,node=>node.type==='article'&&node.props['data-task-id']===task.id);
+ await find(card,node=>node.props.className==='taskCheck').props.onClick();
+ tree=h.render(h.Component);
+ assert(!nodes(tree).some(node=>typeof node.type==='function'&&node.props.onMove));
+ const quick=find(tree,node=>typeof node.type==='function'&&node.type.name==='QuickTaskCompletion');
+ let form=h.render(quick.type,quick.props);
+ assert.equal(nodes(form).filter(node=>node.type==='input').length,3);
+ assert.equal(nodes(form).filter(node=>node.type==='details').length,0);
+ const inputs=nodes(form).filter(node=>node.type==='input');
+ inputs[0].props.onChange({target:{value:'Bakker test'}});
+ inputs[1].props.onChange({target:{value:'12,5'}});
+ inputs[2].props.onChange({target:{value:'2'}});
+ form=h.render(quick.type,quick.props);
+ await form.props.onSubmit({preventDefault(){}});
+ tree=h.render(h.Component);
+ const completedCard=find(tree,node=>node.type==='article'&&node.props['data-task-id']===task.id);
+ find(completedCard,node=>node.props.className==='taskOpen').props.onClick();
+ tree=h.render(h.Component);
+ const detail=find(tree,node=>typeof node.type==='function'&&node.props.onWork&&node.props.task);
+ const completion=detail.props.state.productionWork.completions[task.id];
+ assert.equal(completion.who,'Bakker test');assert.equal(completion.minutes,12.5);assert.equal(completion.crewSize,2);
+ assert.equal(completion.quantity,task.quantity);assert.equal(completion.laborMinutes,25);
+ assert(!nodes(tree).some(node=>typeof node.type==='function'&&node.type.name==='QuickTaskCompletion'));
 });

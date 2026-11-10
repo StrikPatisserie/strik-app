@@ -9,6 +9,7 @@ import usePhysicalKeyboard from "../../productie/usePhysicalKeyboard";
 import useTaskDrag from "../../productie/useTaskDrag";
 import useProductionUpdates from "../../productie/useProductionUpdates";
 import {decodeReloadView,RELOAD_VIEW_KEY} from "../../productie/productionUpdates";
+import QuickTaskCompletion from "../../productie/QuickTaskCompletion";
 import TaskWorkPanel,{WorkClock,PreparationControl,RecipeWorkHistory} from "../../productie/TaskWorkPanel";
 import {applyWorkCommand} from "../../productie/workCommands";
 import type {WorkCommand} from "../../productie/productionWork";
@@ -47,7 +48,7 @@ const ProductionInventory=dynamic(()=>import("../../productie/ProductionInventor
 const WorkspaceContext = createContext({ demo:true, recipes:demoRecipes, canManage:true, saving:false });
 
 type View = ProductionView;
-type Modal = { type: "task"; date?: string; departmentId?: DepartmentId; fromCell?: boolean; itemId?: string; priorId?: string; refreshId?: string } | { type: "item"; returnTo?:{date?:string;departmentId?:DepartmentId;fromCell?:boolean} } | { type: "detail"; id: string } | { type: "item-detail"; id: string } | { type: "attention" } | { type: "reset" } | {type:"offer";week:string;imageUrl:string;label:string} | {type:"offer-manage";week:string} | {type:"cleaning";date:string;edit?:boolean} | null;
+type Modal = { type: "task"; date?: string; departmentId?: DepartmentId; fromCell?: boolean; itemId?: string; priorId?: string; refreshId?: string } | { type: "item"; returnTo?:{date?:string;departmentId?:DepartmentId;fromCell?:boolean} } | { type: "complete"; id: string } | { type: "detail"; id: string } | { type: "item-detail"; id: string } | { type: "attention" } | { type: "reset" } | {type:"offer";week:string;imageUrl:string;label:string} | {type:"offer-manage";week:string} | {type:"cleaning";date:string;edit?:boolean} | null;
 const NAV: { id: View; label: string; icon: IconName }[] = [
   { id: "planning", label: "Weekplanning", icon: "grid" },
   { id: "catalog", label: "Producten & onderdelen", icon: "box" },
@@ -229,7 +230,11 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
     }catch(e){const error=(e as Error).message;notify(error,true);return error;}finally{savingRef.current=false;setSaving(false);}
   }
   async function changeStatus(id:string,status:TaskStatus){
-    if(status==="done"||status==="active"){setModal({type:"detail",id});return;}
+    if(status==="done"){
+      if(state.productionWork?.timers?.[id]?.runningSince){const error=await work({kind:"pause",taskId:id});if(error)return error;}
+      setModal({type:"complete",id});return;
+    }
+    if(status==="active"){setModal({type:"detail",id});return;}
     if(state.productionWork?.timers?.[id]||state.productionWork?.completions?.[id])return work({kind:"reopen",taskId:id});
     try{return await persist({...state,tasks:transitionTask(state.tasks,id,status,state.items)},"Status opgeslagen.");}catch(e){return (e as Error).message;}
   }
@@ -308,6 +313,8 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
   const offerWeek = mondayOf(today);
   const canBakery=!live || live.departments.length>0;
   const availableBoards=BOARDS.filter(b=>!live || departmentsFor(b.id).some(d=>live.departments.includes(d.id)));
+  const completionTask=modal?.type==="complete" ? state.tasks.find(task=>task.id===modal.id) : undefined;
+  const completionItem=completionTask ? state.items.find(item=>item.id===completionTask.itemId) : undefined;
   const selectedTask=modal?.type==="detail" ? state.tasks.find(t=>t.id===modal.id) : undefined;
   const selectedTaskItem=selectedTask ? state.items.find(i=>i.id===selectedTask.itemId) : undefined;
   const selectedItem=modal?.type==="item-detail" ? state.items.find(i=>i.id===modal.id) : undefined;
@@ -471,6 +478,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
     {modal?.type==="offer-manage" && canManageData && <ModalFrame wide title="Weekaanbieding beheren" onClose={()=>{setModal(null);void onRefresh?.();}}><div className={`${s.dialogBody} ${s.resourceSurface}`}><OfferManager embedded hideTopNav initialTab="beheer" lockedTab="beheer" initialBeheerView="voorpagina" initialOfferWeek={modal.week}/></div><footer className={s.dialogFooter}><button className={s.primaryButton} onClick={()=>{setModal(null);void onRefresh?.();}}>Terug naar het bord</button></footer></ModalFrame>}
     {modal?.type === "task" && <TaskForm onRecipe={itemId=>{setQuickRecipeTask(undefined);setQuickRecipeItem(itemId);}} onNewItem={()=>setModal({type:"item",returnTo:{date:modal.date,departmentId:modal.departmentId,fromCell:modal.fromCell}})} state={state} initial={modal} today={today} onClose={() => setModal(null)} onPlan={command=>plan(command,modal.refreshId)} />}
     {modal?.type === "item" && <ItemForm state={state} onClose={() => setModal(null)} onSave={async next => { const error=await persist(next,"Onderdeel toegevoegd. Je kunt het direct inplannen."); if (!error) setModal(modal.returnTo?{type:"task",...modal.returnTo,itemId:next.items.at(-1)?.id}:null); return error; }} />}
+    {completionTask && completionItem && <ModalFrame title={completionItem.name} subtitle="Snel afronden" onClose={()=>{if(!saving)setModal(null);}}><QuickTaskCompletion key={completionTask.id} state={state} task={completionTask} item={completionItem} busy={saving} onCommand={work} onClose={()=>setModal(null)}/></ModalFrame>}
     {selectedTask && selectedTaskItem && <TaskDetail onItem={()=>setModal({type:"item-detail",id:selectedTaskItem.id})} onRecipe={()=>{setModal(null);setQuickRecipeTask(selectedTask.id);setQuickRecipeItem(selectedTaskItem.id);}} onWork={work} key={selectedTask.id} task={selectedTask} item={selectedTaskItem} state={state} onClose={() => setModal(null)} onStatus={status => changeStatus(selectedTask.id, status)} onMove={move} onRemove={whole=>remove(selectedTask.id,whole)} onRefreshPlan={()=>setModal({type:"task",refreshId:selectedTask.id,itemId:selectedTask.itemId,date:selectedTask.date,departmentId:selectedTask.departmentId})} onOpenTask={id=>setModal({type:"detail",id})} onNext={() => setModal({ type: "task", date: selectedTask.date, departmentId: selectedTask.departmentId, itemId: selectedTask.itemId, priorId: selectedTask.id })} />}
     {selectedItem && <ItemDetail onRecipe={()=>{setModal(null);setQuickRecipeTask(undefined);setQuickRecipeItem(selectedItem.id);}} key={`${selectedItem.id}:${selectedItem.recipeId || "loose"}`} item={selectedItem} state={state} onClose={()=>setModal(null)} onPlan={()=>setModal({type:"task",itemId:selectedItem.id,departmentId:selectedItem.departmentId,date:day})} onLink={recipeId=>connectRecipe(selectedItem.id,recipeId)} onUpdate={changes=>updateItem(selectedItem.id,changes)}/>}
     {modal?.type === "attention" && <ModalFrame title="Aandacht deze week" subtitle={`${BOARDS.find(b => b.id === board)?.name} · week ${weekNumber(week)}`} onClose={() => setModal(null)}><div className={s.dialogBody}>{attention.length ? attention.map(t => <button className={s.attentionRow} key={t.id} onClick={() => setModal({ type: "detail", id: t.id })}><Icon name="warning" /><span><strong>{state.items.find(i => i.id === t.itemId)?.name}</strong><small>{dateLabel(t.date, true)} · {[...(recipeUpdates.has(t.id)?["Recept gewijzigd · controleer de planning."]:[]),...taskIssues(t, state.tasks,state.items)].join(" ")}</small></span><Icon name="chevron" size={16} /></button>) : <Empty title="Geen aandachtspunten" text="Alle taken in deze voorbeeldweek kunnen volgens de huidige planning doorlopen." />}</div></ModalFrame>}
