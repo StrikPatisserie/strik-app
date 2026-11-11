@@ -94,13 +94,13 @@
   gap: 2px;
   max-width: 100%;
   color: inherit;
-  font-size: 11px;
+  font-size: var(--task-detail-size, 11px);
   font-weight: 650;
   line-height: 1.15;
   font-variant-numeric: tabular-nums;
 }
 .quantity > span { white-space: nowrap; }
-.quantity small { font-size: 10px; font-weight: 400; }
+.quantity small { font-size: .9em; font-weight: 400; }
 .openTask {
   grid-column: 1 / -1;
   grid-row: 1;
@@ -114,18 +114,18 @@
   background: none;
   text-align: left;
 }
-.openTask strong { font-size: 14px; line-height: 1.2; font-weight: 700; overflow-wrap: normal; word-break: normal; hyphens: none; }
+.openTask strong { font-size: var(--task-title-size, 14px); line-height: 1.2; font-weight: 700; overflow-wrap: normal; word-break: normal; hyphens: none; }
 .taskStatus { font-size: 11px; line-height: 1.3; }
 .card:has(.warning) .openTask { padding-right: 20px; }
 .warning { grid-column: 3; grid-row: 1; color: #a64e3a; }
 .drag { grid-column: 3; grid-row: 2; width: 17px; height: 20px; padding: 0; border: 0; background: none; opacity: 0; }
 .card:hover .drag, .drag:focus-visible { opacity: 1; }
 .cardMeta { grid-column: 2; grid-row: 2; display: flex; align-items: center; gap: 4px; min-width: 0; flex-wrap: wrap; }
-.card .cardMeta > button { display: flex; align-items: center; gap: 4px; max-width: 100%; padding: 2px 4px; border: 0; border-radius: 4px; background: #ffffff66; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .cardMeta > button { display: flex; align-items: center; gap: 4px; max-width: 100%; padding: 2px 4px; border: 0; border-radius: 4px; background: #ffffff66; font-size: var(--task-detail-size, 10px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cardMeta > time { font-size: 11px; }
 .cardMeta > button svg { flex-shrink: 0; }
 .day .card { min-height: 44px; padding: 3px 8px; box-shadow: none; border-radius: 6px; border-width: 0 0 1px; }
-.day .openTask strong { font-size: 16px; }
+.day .openTask strong { font-size: var(--task-title-size, 18px); }
 .previewNotice { flex-shrink:0; font-size:10px; color:#596d60; padding:3px 5px; border:1px solid #d2ddcd; border-radius:5px; white-space:nowrap; }
 @media (pointer: coarse) {
   .drag { opacity: .75; min-width: 28px; min-height: 28px; touch-action: none; }

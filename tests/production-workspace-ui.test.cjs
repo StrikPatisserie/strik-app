@@ -1377,3 +1377,26 @@ test('return to the current period is highlighted only while another week or day
   assert.equal(button(tree,'Vandaag').props['data-current-period'],true);
  }
 });
+
+
+test('new planner exposes a dated add action and progressively larger focused task titles',()=>{
+ const h=harness(),props={initialLayout:'new'};
+ let tree=h.render(h.Component,props);
+ const root=()=>find(tree,node=>node.props?.['data-planning-period']);
+ assert.equal(root().props.style['--task-title-size'],'13px');
+ button(tree,'Productie toevoegen · do 29 okt').props.onClick();
+ tree=h.render(h.Component,props);
+ const form=find(tree,node=>typeof node.type==='function'&&!!node.props.onPlan);
+ assert.equal(form.props.initial.date,'2026-10-29');
+ assert.equal(form.props.initial.fromCell,true);
+ form.props.onClose();
+ tree=h.render(h.Component,props);
+ const filter=find(tree,node=>node.type==='label'&&text(node).startsWith('Afdeling'));
+ find(filter,node=>node.type==='select').props.onChange({target:{value:'luxe'}});
+ tree=h.render(h.Component,props);
+ assert.equal(root().props.style['--task-title-size'],'16px');
+ button(tree,'Per dag').props.onClick();
+ tree=h.render(h.Component,props);
+ assert.equal(root().props.style['--task-title-size'],'22px');
+ assert.equal(root().props['data-planning-focus'],'department');
+});

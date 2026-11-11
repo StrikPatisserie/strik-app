@@ -8,8 +8,11 @@ import s from "./OrderPrint.module.css";
 export default function OrderPrintMenu({ data }: { data: OrderPrintData }) {
   const [open, setOpen] = useState(false);
   return <>
-    <button type="button" className={s.icon} title="Bestelling printen" aria-label={`Print bestelling ${data.customer}`} onClick={() => setOpen(true)}>
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="M6 9V3h12v6M6 17H3V9h18v8h-3M6 14h12v7H6zM17 11h1"/></svg>
+    <button type="button" className={s.icon} title="Verdeelvel of etiket printen" aria-haspopup="dialog" aria-label={`Print bestelling ${data.customer}`} onClick={() => setOpen(true)}>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M3 3h8l10 10a2 2 0 0 1 0 2.8l-5.2 5.2a2 2 0 0 1-2.8 0L3 11V3Z"/>
+        <circle cx="7.5" cy="7.5" r="1"/>
+      </svg>
     </button>
     {open && createPortal(<PrintDialog data={data} onClose={() => setOpen(false)}/>, document.body)}
   </>;

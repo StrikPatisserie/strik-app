@@ -1802,8 +1802,8 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
       <div className={styles.rowActions}>
         <OrderPrintMenu data={{customer:order.customerName,reference:order.id,delivery:compactDeliveryWindow(order),
           lines:[...parsedOrder.productLines.filter(line=>!order.letterLines.length||!["chocoladeletter","chocolade-vormletter"].includes(line.productId)).map(line=>({quantity:line.quantity,description:lineDescription(line)})),
-            ...order.letterLines.map(line=>({quantity:line.quantity,description:b2bLetterLineLabel(line)})),
-            ...(group&&groupMatches?group.rows.map(row=>({description:`${row.company} · ${row.melk} melk Q · ${row.wit} wit Q · ${row.puur} puur Q${row.withLogo?" · LOGO":""}`})):[]),
+            ...order.letterLines.map(line=>({quantity:line.quantity,description:b2bLetterLineLabel({...line,withLogo:b2bLetterHasLogo(order,line)}).replace(/^\d+× /, ""),attention:line.exceptions})),
+            ...(group&&groupMatches?group.rows.map(row=>({description:`${row.company} · ${row.melk} melk Q · ${row.wit} wit Q · ${row.puur} puur Q${row.withLogo?" · LOGO":""}`,attention:row.withLogo?["EIGEN LOGO"]:[]})):[]),
             ...(!parsedOrder.productLines.length&&!order.letterLines.length?[{description:order.orderText}]:[])],
           notes:[group&&!groupMatches?"Controleer de verdeling per bedrijf bij deze bestelling.":"",parsedOrder.productLines.length?parsedOrder.otherText:order.letterLines.length?order.orderText:"",order.packaging,order.logo,order.textInstructions].filter(Boolean)}}/>
         {!archived && <button type="button" onClick={() => onEdit(order)} className={styles.rowButton}>Wijzig</button>}

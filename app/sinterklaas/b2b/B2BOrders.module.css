@@ -62,7 +62,7 @@
 .tools select { width: auto; }
 .spacer { flex: 1; }
 .list { border: 1px solid var(--b2b-border); border-radius: 12px; background: #fff; }
-.columns, .orderMain { display: grid; grid-template-columns: 94px minmax(0,1fr) 150px 94px 77px; gap: 12px; align-items: center; }
+.columns, .orderMain { display: grid; grid-template-columns: 94px minmax(0,1fr) 150px 94px 128px; gap: 12px; align-items: center; }
 .columns { padding: 8px 14px; border-bottom: 1px solid var(--b2b-border); color: var(--b2b-muted); font-size: 11px; }
 .columns span:nth-child(4) { text-align: right; }
 .month { display: flex; gap: 10px; align-items: center; padding: 6px 14px; background: #f4f6f1; border-bottom: 1px solid var(--b2b-border); }
@@ -113,7 +113,7 @@
 .sent { color: #52725c; }
 .amount { text-align: right; white-space: nowrap; font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
 .amount small { display: block; margin-top: 3px; color: var(--b2b-muted); font-size: 10px; font-weight: 400; }
-.rowActions { display: flex; justify-content: flex-end; align-items: center; gap: 4px; }
+.rowActions { display: flex; justify-content: flex-end; align-items: center; gap: 6px; }
 .approveLink { display: block; margin-top: 8px; padding: 3px 0; border: 0; background: transparent; color: var(--b2b-accent); font-size: 11px; font-weight: 600; text-align: left; }
 .approveLink:hover { text-decoration: underline; text-underline-offset: 3px; }
 .mailLink { display: block; margin-top: 8px; padding: 3px 0; background: transparent; color: #31543d; font-size: 11px; font-weight: 600; text-align: left; }
@@ -232,7 +232,7 @@
 .reviewNote { margin-top: 22px !important; padding: 14px; background: #f4f6f1; border-radius: 7px; font-size: 12px; color: var(--b2b-muted); }
 @media(min-width: 1050px) { .summary { position: sticky; top: 20px; } }
 @media(max-width: 1100px) {
-  .columns, .orderMain { grid-template-columns: 82px minmax(0,1fr) 128px 85px 75px; gap: 8px; }
+  .columns, .orderMain { grid-template-columns: 82px minmax(0,1fr) 128px 85px 128px; gap: 8px; }
   .formGrid { grid-template-columns: minmax(0,1fr) 210px; gap: 14px; }
   .formPanel, .summary { padding: 18px; }
   .line { grid-template-columns: minmax(0,1fr) 55px 75px 75px 24px; gap: 7px; }

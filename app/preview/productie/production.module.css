@@ -1057,9 +1057,9 @@
 .newPlanning .todayCell{background:#f9fbf5!important}
 .newPlanning .dayCellFooter{margin-top:0;min-height:20px;justify-content:flex-end}
 .newPlanning .cellWorkTotals{display:none}
-.newPlanning .cellAdd{margin:0;min-height:20px;opacity:.7;background:transparent}
+.newPlanning .dayCellFooter .cellAdd{display:grid;place-items:center;flex:0 0 30px;width:30px;min-height:26px;margin:0;border:1px solid #d2ddcd;border-radius:5px;color:#1b3344;opacity:1;background:#f2f6ee}
 .newPlanning .cellAdd:hover{opacity:1;background:#edf3e7}
-.newPlanning .departmentRow[data-collapsed=true] .dayCell>*{display:none}
+.newPlanning .departmentRow[data-collapsed=true] .dayCell>:not(.dayCellFooter){display:none}
 .newPlanning .departmentRow[data-collapsed=true] .dayCell{min-height:42px!important}
 .newPlanning .planningRail{top:12px;max-height:calc(100dvh - 100px);height:auto;min-height:0;gap:12px;position:sticky}
 .newPlanning .planningRail>aside{max-height:65dvh}
@@ -1134,7 +1134,7 @@
 }
 .newPlanning .planningActions>.plannerToolbar {
   display:flex;
-  flex:1 1 720px;
+  flex:1 1 auto;
   flex-wrap:wrap;
   min-width:0;
   gap:6px;
@@ -1236,7 +1236,7 @@
   padding:6px 0;
   border-top:1px solid #b5c3b0
 }
-@media(min-width:1600px) {
+@media(min-width:1001px) {
   .newPlanning .planningActions {
     flex-wrap:nowrap
   }
@@ -1246,11 +1246,27 @@
   .newPlanning .plannerToolbar>.plannerFilters {
     margin-left:auto
   }
-  .newPlanning .plannerToolbar>.weekPicker {
-    margin-right:8px
-  }
+  .newPlanning .plannerToolbar>.weekPicker { margin-right:0 }
+  .newPlanning .planningActions>.plannerToolbar,
+  .newPlanning .plannerToolbar>.plannerFilters,
+  .newPlanning .screenActions { flex-wrap:nowrap }
+  .newPlanning .plannerFilters label:first-child { width:112px;flex-shrink:1 }
+  .newPlanning .plannerFilters .extraFilter { width:132px;flex-shrink:1 }
+  .newPlanning .weekPicker>div { min-width:0 }
 }
-@media(max-width:1200px) {
+@media(min-width:1001px) and (max-width:1450px) {
+  .newPlanning .planningActions { gap:4px }
+  .newPlanning .staffPeek>.secondaryButton { font-size:0!important;gap:2px;padding:4px }
+  .newPlanning .screenActions>.primaryButton { padding:4px 7px }
+  .newPlanning .screenActions>.primaryButton>span { display:none }
+  .newPlanning .screenActions select { width:108px }
+  .newPlanning .weekPicker strong { font-size:14px }
+  .newPlanning .weekPicker span { font-size:11px }
+  .newPlanning .plannerToolbar>.plannerFilters { flex:1 1 200px }
+  .newPlanning .plannerFilters label:first-child { width:96px }
+  .newPlanning .plannerFilters .extraFilter { width:116px }
+}
+@media(max-width:1000px) {
   .newPlanning .planningActions>.plannerToolbar {
     order:1;
     flex-basis:100%
@@ -1292,7 +1308,7 @@
   }
 }
 @media(pointer:coarse) {
-  .newPlanning .planningActions :is(button,select),.newPlanning .plannerFilters select {
+  .newPlanning .planningActions :is(button,select,.primaryButton,.secondaryButton),.newPlanning .plannerFilters select {
     min-height:40px
   }
   .newPlanning .periodToggle button {
@@ -1367,4 +1383,28 @@
     min-width:40px;
     min-height:40px;
   }
+}
+
+/* Day actions remain reachable even with a collapsed department. */
+.newPlanning .dayHeading { position:relative;padding-right:30px }
+.newPlanning .dayAdd { position:absolute;right:3px;top:50%;transform:translateY(-50%);display:grid;place-items:center;width:26px;min-height:28px;padding:2px;border:0;border-radius:4px;background:#ffffff18;color:white;cursor:pointer }
+.newPlanning .dayAdd:hover { background:#ffffff30 }
+.newPlanning .dayAdd:focus-visible { outline:2px solid white;outline-offset:1px }
+@media(pointer:coarse) {
+  .newPlanning .dayHeading { min-height:40px;padding-right:36px }
+  .newPlanning .dayAdd { width:32px;min-height:36px }
+  .newPlanning .dayCellFooter .cellAdd { flex-basis:36px;width:36px;min-height:36px }
+}
+/* Fullscreen has a reserved browser strip and a separate control row. Busy
+   production scrolls inside its board, leaving the offer and controls in view. */
+@media(min-width:901px) {
+  .newPlanning[data-fullscreen=true] { height:100dvh!important;min-height:0;overflow:hidden!important }
+  .newPlanning[data-fullscreen=true] .main { height:100%;min-height:0;overflow:hidden;padding-bottom:0 }
+  .newPlanning[data-fullscreen=true] .fitCanvas { flex:1;min-height:0 }
+  .newPlanning[data-fullscreen=true] .planningActions { position:relative;bottom:auto;flex:0 0 auto;margin:0;padding:4px 0;order:1 }
+  .newPlanning[data-fullscreen=true] .plannerWithRequests { min-height:0;flex:1;padding-bottom:6px;align-items:stretch }
+  .newPlanning[data-fullscreen=true] .plannerBoardColumn { min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin }
+  .newPlanning[data-fullscreen=true] .planningRail { position:static;align-self:stretch;min-height:0;height:auto;max-height:none;gap:6px;overflow:hidden }
+  .newPlanning[data-fullscreen=true] .planningRail>aside { flex:1;min-height:0;max-height:none }
+  .newPlanning[data-fullscreen=true] .offerWrap { flex:0 0 auto;margin-top:auto }
 }
