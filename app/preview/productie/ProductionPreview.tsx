@@ -664,7 +664,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
     {modal?.type==="offer-manage" && canManageData && <ModalFrame wide title="Weekaanbieding beheren" onClose={()=>{setModal(null);void onRefresh?.();}}><div className={`${s.dialogBody} ${s.resourceSurface}`}><OfferManager embedded hideTopNav initialTab="beheer" lockedTab="beheer" initialBeheerView="voorpagina" initialOfferWeek={modal.week}/></div><footer className={s.dialogFooter}><button className={s.primaryButton} onClick={()=>{setModal(null);void onRefresh?.();}}>Terug naar het bord</button></footer></ModalFrame>}
     {modal?.type === "task" && <TaskForm combineDefault={newLayout} onRecipe={itemId=>{setQuickRecipeTask(undefined);setQuickRecipeItem(itemId);}} onNewItem={()=>setModal({type:"item",returnTo:{date:modal.date,departmentId:modal.departmentId,fromCell:modal.fromCell}})} state={state} initial={modal} today={today} onClose={() => setModal(null)} onPlan={command=>plan(command,modal.refreshId)} />}
     {modal?.type === "item" && <ItemForm state={state} onClose={() => setModal(null)} onSave={async next => { const error=await persist(next,"Onderdeel toegevoegd. Je kunt het direct inplannen."); if (!error) setModal(modal.returnTo?{type:"task",...modal.returnTo,itemId:next.items.at(-1)?.id}:null); return error; }} />}
-    {correctionTask && correctionItem && <ModalFrame title={correctionItem.name} subtitle="Gemaakt aantal corrigeren" onClose={()=>{if(!saving)setModal(null);}}><CompletedQuantityForm readOnly={live?.readOnlyPreview} key={correctionTask.id} task={correctionTask} item={correctionItem} busy={saving} onCommand={work} onClose={()=>setModal(null)}/></ModalFrame>}
+    {correctionTask && correctionItem && <ModalFrame title={correctionItem.name} subtitle="Gemaakt aantal corrigeren" onClose={()=>{if(!saving)setModal(null);}}><CompletedQuantityForm readOnly={live?.readOnlyPreview} key={correctionTask.id} task={correctionTask} item={correctionItem} recipe={state.productionWork?.overrides?.[correctionTask.id] || recipeList.find(recipe=>recipe.id===correctionItem.recipeId)} busy={saving} onCommand={work} onClose={()=>setModal(null)}/></ModalFrame>}
     {completionTask && completionItem && <ModalFrame title={completionItem.name} subtitle="Snel afronden" onClose={()=>{if(!saving)setModal(null);}}><QuickTaskCompletion readOnly={live?.readOnlyPreview} key={completionTask.id} state={state} task={completionTask} item={completionItem} recipes={recipeList} busy={saving} onCommand={work} onClose={()=>setModal(null)}/></ModalFrame>}
     {selectedTask && selectedTaskItem && (!newLayout || modal?.type==="detail"&&modal.advanced) && <TaskDetail onItem={()=>setModal({type:"item-detail",id:selectedTaskItem.id})} onRecipe={()=>{setModal(null);setQuickRecipeTask(selectedTask.id);setQuickRecipeItem(selectedTaskItem.id);}} onWork={work} key={selectedTask.id} task={selectedTask} item={selectedTaskItem} state={state} onClose={() => setModal(null)} onStatus={status => changeStatus(selectedTask.id, status)} onMove={move} onRemove={whole=>remove(selectedTask.id,whole)} onRefreshPlan={()=>setModal({type:"task",refreshId:selectedTask.id,itemId:selectedTask.itemId,date:selectedTask.date,departmentId:selectedTask.departmentId})} onOpenTask={id=>setModal({type:"detail",id})} onNext={() => setModal({ type: "task", date: selectedTask.date, departmentId: selectedTask.departmentId, itemId: selectedTask.itemId, priorId: selectedTask.id })} />}
     {selectedItem && <ItemDetail onRecipe={()=>{setModal(null);setQuickRecipeTask(undefined);setQuickRecipeItem(selectedItem.id);}} key={`${selectedItem.id}:${selectedItem.recipeId || "loose"}`} item={selectedItem} state={state} onClose={()=>setModal(null)} onPlan={()=>setModal({type:"task",itemId:selectedItem.id,departmentId:selectedItem.departmentId,date:day})} onLink={recipeId=>connectRecipe(selectedItem.id,recipeId)} onUpdate={changes=>updateItem(selectedItem.id,changes)}/>}
@@ -681,11 +681,14 @@ function TaskForm({ combineDefault=false, state, initial, today, onClose, onPlan
   const {recipes:recipeList,saving}=useContext(WorkspaceContext);
   const refreshing=state.tasks.find(t=>t.id===initial.refreshId);
   const settings=refreshing?currentPlanCommand(state,refreshing):undefined;
+  const prior=state.tasks.find(task=>task.id===initial.priorId);
+  const initialItem=state.items.find(item=>item.id===initial.itemId);
+  const initialRecipe=recipeList.find(recipe=>recipe.id===initialItem?.recipeId);
   const [error,setError]=useState("");
   const [itemId,setItemId]=useState(initial.itemId || "");
   const [filter,setFilter]=useState("all");
-  const [amount,setAmount]=useState(String(settings?.amount || state.tasks.find(t=>t.id===initial.priorId)?.quantity || 1));
-  const [amountMode,setAmountMode]=useState<"quantity"|"batches">(settings?.amountMode || "quantity");
+  const [amount,setAmount]=useState(String(settings?.amount || prior?.quantity || 1));
+  const [amountMode,setAmountMode]=useState<"quantity"|"batches">(settings?.amountMode || (!prior && initialItem?.kind!=="activity" && initialRecipe && initialRecipe.yield>0 ? "batches" : "quantity"));
   const [date,setDate]=useState(initial.date || today);
   const [departmentId,setDepartmentId]=useState<DepartmentId>(initial.departmentId || "dessert");
   const [includePreparation,setIncludePreparation]=useState(()=>{
@@ -722,7 +725,6 @@ function TaskForm({ combineDefault=false, state, initial, today, onClose, onPlan
       ? seen.has(candidate.recipeId)
       : candidate.id.startsWith("recipe:") && seen.has(candidate.id.slice(7)) && recipeList.some(recipe => recipe.id === candidate.id.slice(7)));
   }, [item, recipeList, state.items]);
-  const prior=state.tasks.find(t=>t.id===initial.priorId);
   const hasPreparation=!!recipe?.semiFinishedItems?.length && !prior;
   const baseOperation=customOperation ?? plannedOperation(item?.kind,hasPreparation,!!prior);
   const operation=combineTaskOperation(baseOperation,extraOperations);
@@ -735,8 +737,11 @@ function TaskForm({ combineDefault=false, state, initial, today, onClose, onPlan
   const existingOutput=prior && state.tasks.some(t=>t.batchId===prior.batchId && t.recordsOutput);
   const updateChoice=(id:string,change:PreparationChoice)=>{setError("");setChoices(current=>({...current,[id]:{...current[id],...change}}));};
   function chooseItem(id:string) {
-    setItemId(id);setAmount("1");setAmountMode("quantity");setCustomOperation(null);setExtraOperations([]);setEstimatedMinutes("");setChoices({});setError("");
     const selected=state.items.find(i=>i.id===id),recipe=recipeList.find(r=>r.id===selected?.recipeId);
+    setItemId(id);
+    setAmount("1");
+    setAmountMode(!prior && selected?.kind!=="activity" && recipe && recipe.yield>0 ? "batches" : "quantity");
+    setCustomOperation(null);setExtraOperations([]);setEstimatedMinutes("");setChoices({});setError("");
     setIncludePreparation(!initial.priorId && !!recipe?.semiFinishedItems?.length && !!recipe && recipe.yield>0);
     if(!initial.departmentId && selected)setDepartmentId(selected.departmentId);
   }
@@ -760,14 +765,14 @@ function TaskForm({ combineDefault=false, state, initial, today, onClose, onPlan
           {!prior&&!refreshing&&<button type="button" className={s.textLink} onClick={onNewItem}><Icon name="plus" size={14}/>Zonder recept toevoegen</button>}
         </div>
         {recipe && <div className={s.amountChoice}>
-          <label className={s.field}>Invoer<select value={amountMode} onChange={e=>{setAmountMode(e.target.value as "quantity"|"batches");setAmount("1");}}><option value="quantity">Aantal {item?.unit}</option><option value="batches" disabled={!(recipe.yield>0)}>Recept ×</option></select></label>
-          {recipe.yield>0 && <button type="button" className={s.textLink} onClick={()=>{setError("");setAmountMode("batches");setAmount("1");}}>1 recept = {quantity(recipe.yield)} {recipe.unit}</button>}
+          <label className={s.field}>Invoer<select value={amountMode} onChange={e=>{setAmountMode(e.target.value as "quantity"|"batches");setAmount("1");}}><option value="quantity">Aantal {item?.unit}</option><option value="batches" disabled={!(recipe.yield>0)}>Basisrecept ×</option></select></label>
+          {recipe.yield>0 && amountMode==="quantity" && <button type="button" className={s.textLink} onClick={()=>{setError("");setAmountMode("batches");setAmount("1");}}>1× basisrecept · {quantity(recipe.yield)} {recipe.unit}</button>}
         </div>}
         <div className={s.formGrid}>
           <label className={s.field}>{amountMode==="batches"?"Aantal basisrecepten":`Aantal (${item?.unit || "eenheid"})`}<input type="number" min="0.000001" max="1000000" step="any" required value={amount} onChange={e=>setAmount(e.target.value)}/></label>
           {!fromCell&&dateField}
         </div>
-        {item && amountMode==="batches" && proposal.quantity>0 && !proposal.errors.length && <p className={s.calculatedAmount}><strong>{quantity(proposal.quantity)} {item.unit}</strong></p>}
+        {item && amountMode==="batches" && proposal.quantity>0 && !proposal.errors.length && <p className={s.calculatedAmount} role="status">{quantity(Number(amount))}× basisrecept = <strong>{quantity(proposal.quantity)} {item.unit}</strong></p>}
         {hasPreparation && <section className={s.preparationSection}>
           <label className={s.checkboxRow}><input type="checkbox" checked={includePreparation} disabled={!(recipe!.yield>0)} onChange={e=>setIncludePreparation(e.target.checked)}/><span>Onderdelen meeplannen</span></label>
           {includePreparation && <>

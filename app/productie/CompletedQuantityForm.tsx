@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import type { Item, Task } from "./planning";
+import { convertRecipeQuantity, type DemoRecipe, type Item, type Task } from "./planning";
 import type { WorkCommand } from "./productionWork";
 import styles from "./work.module.css";
 
-export default function CompletedQuantityForm({ task, item, busy, readOnly = false, onCommand, onClose }: {
+export default function CompletedQuantityForm({ task, item, recipe, busy, readOnly = false, onCommand, onClose }: {
   task: Task;
   item: Item;
+  recipe?: DemoRecipe;
   busy: boolean;
   readOnly?: boolean;
   onCommand: (command: WorkCommand) => Promise<string | undefined>;
@@ -18,6 +19,11 @@ export default function CompletedQuantityForm({ task, item, busy, readOnly = fal
   const [who, setWho] = useState("");
   const [error, setError] = useState("");
   const amount = Number(quantity.replace(",", "."));
+  let baseQuantity: number | undefined;
+  if (recipe && recipe.yield > 0) {
+    try { baseQuantity = convertRecipeQuantity(recipe.yield, recipe.unit, item.unit); }
+    catch { /* A recipe with an incompatible unit cannot supply a batch quantity. */ }
+  }
   const valid = who.trim().length >= 2 && Number.isFinite(amount)
     && amount > 0 && amount <= 1000000 && amount !== expectedQuantity;
 
@@ -29,6 +35,9 @@ export default function CompletedQuantityForm({ task, item, busy, readOnly = fal
     else onClose();
   }}>
     <p>{expectedQuantity.toLocaleString("nl-NL", { maximumFractionDigits: 6 })} {item.unit} geregistreerd</p>
+    {baseQuantity !== undefined && <button type="button" disabled={busy || readOnly} onClick={() => setQuantity(String(baseQuantity))}>
+      1× basisrecept · {baseQuantity.toLocaleString("nl-NL", { maximumFractionDigits: 6 })} {item.unit}
+    </button>}
     <div className={styles.numbers}>
       <label>Werkelijk gemaakt ({item.unit})<input autoFocus required inputMode="decimal" disabled={busy} value={quantity} onChange={event => setQuantity(event.target.value)} /></label>
       <label>Jouw naam<input required minLength={2} maxLength={80} disabled={busy} value={who} onChange={event => setWho(event.target.value)} /></label>

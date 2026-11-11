@@ -19,7 +19,7 @@ function harness({fetchImpl,timerApi={}}={}) {
  const slot=initial=>{const i=index++;if(!(i in current))current[i]=typeof initial==='function'?initial():initial;return i;};
  const react={Fragment:jsx.Fragment,createContext:value=>({Provider:'workspace-provider',defaultValue:value}),useContext:c=>context || c.defaultValue,useEffect:()=>{},useMemo:fn=>fn(),useRef:value=>current[slot(()=>({current:value}))],useState:initial=>{const i=slot(initial),store=current;return[store[i],next=>{store[i]=typeof next==='function'?next(store[i]):next;}];}};
  const quickCompletion=load('app/productie/QuickTaskCompletion.tsx',{'./ProductionIcon':{__esModule:true,default:()=>null},'react':react,'react/jsx-runtime':jsx,'./productionWork':productionWork,'./work.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})}});
- const quantityCorrection=load('app/productie/CompletedQuantityForm.tsx',{'react':react,'react/jsx-runtime':jsx,'./work.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})}});
+ const quantityCorrection=load('app/productie/CompletedQuantityForm.tsx',{'./planning':planning,'react':react,'react/jsx-runtime':jsx,'./work.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})}});
  const navigation={__esModule:true,default:function Navigation(){},ProductionMobileNavigation:function MobileNavigation(){}};
  const offerWidget={__esModule:true,default:function ProductionWeekOffer(){}};
  const pickerWidget={__esModule:true,default:function ProductionItemPicker(){}};
@@ -369,6 +369,7 @@ test('adding through a department keeps that department and preserves the draft 
  picker.props.onChange('fruit');
  view=render();
  assert.equal(field(view,'Afdeling','select').props.value,'luxe');
+ find(view,node=>node.type==='select'&&node.props.value==='batches').props.onChange({target:{value:'quantity'}});view=render();
  field(view,'Aantal (','input').props.onChange({target:{value:'100'}});
  field(view,'Productiedatum','input').props.onChange({target:{value:'2026-11-05'}});
  find(view,n=>n.type==='input'&&n.props.name==='minutes').props.onChange({target:{value:'45'}});
@@ -440,7 +441,7 @@ test('the compact planning form foregrounds product, quantity and day while opti
   const field=find(more,node=>node.props?.name===name);
   assert(!visible.includes(field),`${name} is optional and stays outside the initial compact form`);
  }
- assert(visible.some(node=>node.type==='select'&&node.props.value==='quantity'),'The explicit Recept × choice remains available');
+ assert(visible.some(node=>node.type==='select'&&node.props.value==='batches'),'New recipe production starts with an explicit base-recipe multiplier');
  assert(visible.some(node=>node.type==='label'&&text(node)==='Onderdelen meeplannen'));
  const outline=find(view,node=>node.props?.['aria-label']==='Productiestappen Fruitdesserttaart');
  assert(visible.includes(outline));assert(text(outline).includes('Vanillecrème'));assert(text(outline).includes(sample.demoRecipes.find(recipe=>recipe.id==='demo-kapsel').name));assert(text(outline).includes('Fruitdesserttaart afwerken'));
@@ -1399,4 +1400,85 @@ test('new planner exposes a dated add action and progressively larger focused ta
  tree=h.render(h.Component,props);
  assert.equal(root().props.style['--task-title-size'],'22px');
  assert.equal(root().props['data-planning-focus'],'department');
+});
+
+test('a new production uses one actual base recipe and shows its piece yield before saving', async () => {
+ for (const preselected of [false, true]) {
+  const h = harness(), state = sample.initialPreviewState();
+  const recipe = {...sample.demoRecipes.find(row => row.id === 'demo-fruit'), name:'Woudvruchten slof', yield:84, semiFinishedItems:[]};
+  state.items.find(row => row.id === 'fruit').name = recipe.name;
+  const live = {state, today:sample.DEMO_TODAY, recipes:[recipe], ingredients:[], canManage:true, departments:['dessert'], revision:1};
+  let tree = h.render(h.Component, {live});
+  button(tree, 'Inplannen').props.onClick();
+  tree = h.render(h.Component, {live});
+  const form = find(tree, node => typeof node.type === 'function' && !!node.props.onPlan), commands = [];
+  const props = {...form.props, initial:{...form.props.initial, ...(preselected ? {itemId:'fruit'} : {})}, onPlan:async command => {commands.push(command);}};
+  const render = () => h.render(form.type, props, tree.props.value);
+  let view = render();
+  if (!preselected) {
+   find(view, node => node.type === h.pickerWidget).props.onChange('fruit');
+   view = render();
+  }
+  const mode = () => find(view, node => node.type === 'select' && ['quantity','batches'].includes(node.props.value));
+  assert.equal(mode().props.value, 'batches');
+  assert(text(view).includes('1× basisrecept = 84 stuks'));
+  await find(view, node => node.type === 'form').props.onSubmit({preventDefault(){}, currentTarget:{output:'on'}});
+  const planned = recipePlanning.buildRecipePlan(state, [recipe], commands[0]).tasks.find(row => row.id === commands[0].task.id);
+  assert.equal(planned.quantity, 84);
+  assert.equal(planned.recipePlan.amount, 1);
+  assert.equal(planned.recipePlan.amountMode, 'batches');
+  mode().props.onChange({target:{value:'quantity'}});view = render();
+  assert(text(view).includes('Aantal (stuks)'));
+  await find(view, node => node.type === 'form').props.onSubmit({preventDefault(){}, currentTarget:{output:'on'}});
+  assert.equal(recipePlanning.buildRecipePlan(state, [recipe], commands[1]).tasks.find(row => row.id === commands[1].task.id).quantity, 1);
+  button(view, '1× basisrecept · 84 stuks').props.onClick();view = render();
+  find(view, node => node.type === 'input' && node.props.type === 'number' && node.props.value === '1').props.onChange({target:{value:'1.5'}});
+  view = render();assert(text(view).includes('1,5× basisrecept = 126 stuks'));
+ }
+});
+
+test('following steps, existing quantity plans and products without yield keep their physical quantities', () => {
+ for (const scenario of ['prior', 'refresh', 'unknown', 'loose']) {
+  const h = harness(), state = sample.initialPreviewState();
+  const recipe = {...sample.demoRecipes.find(row => row.id === 'demo-fruit'), yield:scenario === 'unknown' ? 0 : 84, semiFinishedItems:[]};
+  const existing = state.tasks.find(row => row.id === 'f1');
+  existing.quantity = scenario === 'prior' ? 84 : 1;
+  existing.recipePlan = {amount:existing.quantity, amountMode:'quantity'};
+  const live = {state, today:sample.DEMO_TODAY, recipes:[recipe], ingredients:[], canManage:true, departments:['dessert'], revision:1};
+  let tree = h.render(h.Component, {live});
+  button(tree, 'Inplannen').props.onClick();tree = h.render(h.Component, {live});
+  const form = find(tree, node => typeof node.type === 'function' && !!node.props.onPlan);
+  const initial = {...form.props.initial, itemId:scenario === 'loose' ? 'citroen' : 'fruit', ...(scenario === 'prior' ? {priorId:existing.id} : {}), ...(scenario === 'refresh' ? {refreshId:existing.id} : {})};
+  const view = h.render(form.type, {...form.props, initial}, tree.props.value);
+  const amount = find(view, node => node.type === 'label' && text(node) === 'Aantal (stuks)');
+  assert.equal(find(amount, node => node.type === 'input').props.value, scenario === 'prior' ? '84' : '1');
+  assert(!text(view).includes('1× basisrecept = 84 stuks'));
+ }
+});
+
+test('a completed recipe can explicitly correct one piece to one base recipe with a named audited save', async () => {
+ const h = harness(), state = sample.initialPreviewState();
+ const recipe = {...sample.demoRecipes.find(row => row.id === 'demo-fruit'), yield:84};
+ const task = state.tasks.find(row => row.id === 'f1');task.quantity = 1;task.completedQuantity = 1;
+ const live = {state, today:sample.DEMO_TODAY, recipes:[recipe], ingredients:[], canManage:true, departments:['dessert'], revision:1};
+ const props = {live, initialLayout:'new'};
+ let tree = h.render(h.Component, props);
+ button(tree, 'Aantal corrigeren: Fruitdesserttaart').props.onClick();tree = h.render(h.Component, props);
+ const correction = find(tree, node => typeof node.type === 'function' && node.type.name === 'CompletedQuantityForm');
+ const commands = [], correctionProps = {...correction.props, onCommand:async command => {commands.push(command);}};
+ const render = () => h.render(correction.type, correctionProps);
+ let form = render();
+ assert.equal(correction.props.recipe.yield, 84);
+ button(form, '1× basisrecept · 84 stuks').props.onClick();form = render();
+ assert.equal(nodes(form).filter(node => node.type === 'input')[0].props.value, '84');
+ assert.equal(button(form, 'Bewaar correctie').props.disabled, true, 'A name is still required');
+ nodes(form).filter(node => node.type === 'input')[1].props.onChange({target:{value:'Bakker test'}});form = render();
+ await form.props.onSubmit({preventDefault(){}});
+ assert.equal(commands.length, 1);assert.equal(commands[0].quantity, 84);assert.equal(commands[0].expectedQuantity, 1);
+ const saved = workCommands.applyWorkCommand(state, [recipe], commands[0], ['dessert'], 'test-actor', 'batch-correction', '2026-11-11T14:00:00.000Z');
+ const updated = saved.tasks.find(row => row.id === task.id);
+ assert.equal(updated.completedQuantity, 84);assert.equal(updated.status, 'done');assert.equal(updated.quantity, 1);
+ assert.equal(saved.productionWork.history.at(-1).quantityBefore, 1);
+ assert.equal(saved.productionWork.history.at(-1).quantityAfter, 84);
+ assert.equal(task.completedQuantity, 1, 'An explicit save is required to change the supplied workspace');
 });
