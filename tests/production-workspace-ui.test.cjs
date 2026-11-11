@@ -22,7 +22,7 @@ function harness({fetchImpl,timerApi={}}={}) {
  const navigation={__esModule:true,default:function Navigation(){},ProductionMobileNavigation:function MobileNavigation(){}};
  const offerWidget={__esModule:true,default:function ProductionWeekOffer(){}};
  const pickerWidget={__esModule:true,default:function ProductionItemPicker(){}};
- const component=load('app/preview/productie/ProductionPreview.tsx',{'react':react,'react/jsx-runtime':jsx,'next/link':'a','../../productie/ProductionIcon':{__esModule:true,default:()=>null},'../../productie/ProductionNavigation':navigation,'../../productie/navigation':load('app/productie/navigation.ts',{'./planning':planning}),'../../productie/dayRhythm':load('app/productie/dayRhythm.ts',{'./planning':planning}),'next/dynamic':()=>()=>null,'../../productie/WeddingWeekLane':{__esModule:true,default:()=>null},'../../productie/useProductionUpdates':{__esModule:true,default:()=>false},'../../productie/usePhysicalKeyboard':{__esModule:true,default:()=>({physicalKeyboard:false,setPhysicalKeyboard(){},storageError:false})},'../../productie/useTaskDrag':{__esModule:true,default:()=>({getHandleProps:()=>({onClick(){}}),cancelDrag(){}})},'../../productie/productionUpdates':{},'../../productie/useScreenLayout':{__esModule:true,default:(...args)=>{screenLayouts.push(args);return{frameRef:{current:null},workspaceRef:{current:null}};}},'../../productie/QuickTaskCompletion':quickCompletion,'../../productie/TaskWorkPanel':{__esModule:true,default:function TaskWorkPanel(){},WorkClock:function WorkClock(){},PreparationControl:function PreparationControl(){},RecipeWorkHistory:function RecipeWorkHistory(){}},'../../productie/workCommands':workCommands,'../../productie/workSummary':workSummary,'../../productie/QuickRecipeForm':{__esModule:true,default:()=>null},'../../productie/ProductionRequests':{__esModule:true,default:()=>null},'../../productie/ProductionWeekOffer':offerWidget,'../../productie/ProductionItemPicker':pickerWidget,'../../productie/SearchableChoice':{__esModule:true,default:function SearchableChoice(){}},'../../productie/recipeGroups':recipeGrouping,'../../productie/taskOperations':taskOperations,'../../productie/CleaningWeekLane':{__esModule:true,default:()=>null},'../../productie/weddingPlanning':weddingPlanning,'../../productie/planning':planning,'./sampleData':sample,'./production.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})},'../../productie/workspaceData':{},'../../productie/recipePlanning':recipePlanning},{fetch:fetchImpl||(()=>assert.fail('Unexpected live request in the UI harness')),...timerApi});
+ const component=load('app/preview/productie/ProductionPreview.tsx',{'react':react,'react/jsx-runtime':jsx,'next/link':'a','../../productie/ProductionIcon':{__esModule:true,default:()=>null},'../../productie/ProductionNavigation':navigation,'../../productie/navigation':load('app/productie/navigation.ts',{'./planning':planning}),'../../productie/dayRhythm':load('app/productie/dayRhythm.ts',{'./planning':planning}),'next/dynamic':()=>()=>null,'../../productie/WeddingWeekLane':{__esModule:true,default:()=>null},'../../productie/useProductionUpdates':{__esModule:true,default:()=>false},'../../productie/usePhysicalKeyboard':{__esModule:true,default:()=>({physicalKeyboard:false,setPhysicalKeyboard(){},storageError:false})},'../../productie/useTaskDrag':{__esModule:true,default:()=>({getHandleProps:()=>({onClick(){}}),cancelDrag(){}})},'../../productie/productionUpdates':{},'../../productie/useScreenLayout':{__esModule:true,default:(...args)=>{screenLayouts.push(args);return{frameRef:{current:null},workspaceRef:{current:null}};}},'../../productie/QuickTaskCompletion':quickCompletion,'../../productie/TaskWorkPanel':{__esModule:true,default:function TaskWorkPanel(){},WorkClock:function WorkClock(){},PreparationControl:function PreparationControl(){},RecipeWorkHistory:function RecipeWorkHistory(){}},'../../productie/workCommands':workCommands,'../../productie/workSummary':workSummary,'../../productie/QuickRecipeForm':{__esModule:true,default:()=>null},'../../productie/ProductionRequests':{__esModule:true,default:()=>null},'../../productie/OperationalDialog':{__esModule:true,default:()=>null},'../../productie/ProductionWeekOffer':offerWidget,'../../productie/ProductionItemPicker':pickerWidget,'../../productie/SearchableChoice':{__esModule:true,default:function SearchableChoice(){}},'../../productie/recipeGroups':recipeGrouping,'../../productie/taskOperations':taskOperations,'../../productie/CleaningWeekLane':{__esModule:true,default:()=>null},'../../productie/weddingPlanning':weddingPlanning,'../../productie/planning':planning,'./sampleData':sample,'./production.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})},'../../productie/workspaceData':{},'../../productie/recipePlanning':recipePlanning,'../../productie/requestPlanning':load('app/productie/requestPlanning.ts',{'./planning':planning,'./recipePlanning':recipePlanning,'./taskOperations':taskOperations})},{fetch:fetchImpl||(()=>assert.fail('Unexpected live request in the UI harness')),...timerApi});
  const render=(fn,props={},value)=>{if(!records.has(fn))records.set(fn,[]);current=records.get(fn);index=0;context=value;return fn(props);};
  return{render,Component:component.default,navigation,screenLayouts,offerWidget:offerWidget.default,pickerWidget:pickerWidget.default};
 }
@@ -38,7 +38,7 @@ function visibleNodes(tree) {
 function text(tree){if(typeof tree==='string' || typeof tree==='number')return String(tree);if(Array.isArray(tree))return tree.map(text).join('');return tree?.props?text(tree.props.children):'';}
 function find(tree,predicate){const node=nodes(tree).find(predicate);assert(node,'Expected rendered control');return node;}
 function button(tree,label){return find(tree,n=>n.type==='button' && (text(n)===label || n.props['aria-label']===label));}
-function xl(h,props={}) {let tree=h.render(h.Component,props);button(tree,'XL weergave').props.onClick();return h.render(h.Component,props);}
+function xl(h,props={}) {return h.render(h.Component,props);}
 
 function movingTaskHarness(state=sample.initialPreviewState()){
  const requests=[],timers=new Map();let timerId=0;
@@ -204,7 +204,7 @@ test('the current calendar offer stays independent of the selected board week an
  let tree=xl(h,props);
  const actions=find(tree,n=>n.type==='header' && n.props['aria-label']==='Planningacties');
  const labels=nodes(actions).filter(n=>n.type==='button').map(n=>n.props['aria-label'] || text(n));
- assert.deepEqual(labels,['Per week','Per dag','XL weergave','Volledig scherm','Inplannen']);
+ assert.deepEqual(labels,['Menu openen','Per week','Per dag','Volledig scherm','Inplannen']);
  let offer=find(tree,n=>n.type===h.offerWidget);
  assert.equal(offer.props.week,calendarWeek);
  assert.equal(offer.props.paused,false);
@@ -220,7 +220,7 @@ test('the current calendar offer stays independent of the selected board week an
  const nextWeek=planning.addDays(calendarWeek,7);
  offer.props.onManage(nextWeek);tree=h.render(h.Component,props);
  assert(find(tree,n=>typeof n.type==='function' && n.props.initialOfferWeek===nextWeek));
- assert(button(tree,'XL weergave'));assert(button(tree,'Inplannen'));
+ assert(button(tree,'Menu openen'));assert(button(tree,'Inplannen'));
 });
 
 test('delegated plan management retains XL add/delete and work-recipe editing without management data links',()=>{
@@ -233,23 +233,46 @@ test('delegated plan management retains XL add/delete and work-recipe editing wi
  const list=harness(),recipeTree=list.render(list.Component,{live,initialView:'recipes'});assert(button(recipeTree,'Los onderdeel toevoegen'));assert(!nodes(recipeTree).some(n=>n.props?.href?.startsWith('/bakkerij/productie/beheer/')));
 });
 
-test('ordinary planning keeps native navigation sizing and only explicit XL enables automatic screen fitting',()=>{
- const h=harness();
- let tree=h.render(h.Component);
+test('planning has one native-size view and an overlay menu that never enables whole-screen fitting',()=>{
+ const h=harness();let tree=h.render(h.Component);
  const root=()=>find(tree,node=>node.props?.['data-planning-period']);
- assert(root().props.className.includes('worksheetRoot'));
+ assert(root().props.className.includes('readablePlanning'));
  assert(!root().props.className.includes('screenFit'));
- assert(nodes(tree).some(node=>node.type===h.navigation.default));
- assert.equal(h.screenLayouts.at(-1)[1],false);
- assert.equal(h.screenLayouts.at(-1)[3],true,'Native planning still fits individual long names');
- button(tree,'XL weergave').props.onClick();tree=h.render(h.Component);
- assert(root().props.className.includes('screenFit'));
  assert(!nodes(tree).some(node=>node.type===h.navigation.default));
- assert.equal(h.screenLayouts.at(-1)[1],true);
- button(tree,'XL weergave').props.onClick();tree=h.render(h.Component);
- assert(!root().props.className.includes('screenFit'));
- assert(nodes(tree).some(node=>node.type===h.navigation.default));
  assert.equal(h.screenLayouts.at(-1)[1],false);
+ assert.equal(h.screenLayouts.at(-1)[3],true);
+ button(tree,'Menu openen').props.onClick();tree=h.render(h.Component);
+ assert(nodes(tree).some(node=>node.type===h.navigation.default));
+ const menu=find(tree,node=>node.props?.labelledBy==='production-menu-heading');
+ assert.equal(menu.props.closeOnBackdrop,true);
+ assert.equal(menu.props.focusPanel,true);
+ const navigation=find(tree,node=>node.type===h.navigation.default);
+ assert.equal(typeof navigation.props.onCollapse,'function');
+ assert(root().props.className.includes('readablePlanning'));
+ assert.equal(h.screenLayouts.at(-1)[1],false);
+ navigation.props.onCollapse();tree=h.render(h.Component);
+ assert(!nodes(tree).some(node=>node.type===h.navigation.default));
+ assert.equal(h.screenLayouts.at(-1)[1],false);
+ assert(!nodes(tree).some(node=>text(node)==='XL weergave'));
+});
+
+test('the menu backdrop closes on an outside click while content, dragging and busy dialogs stay open',()=>{
+ let closes=0;
+ const Dialog=load('app/productie/OperationalDialog.tsx',{
+  react:{useEffect(){},useRef:current=>({current})},'react/jsx-runtime':jsx,
+ }).default;
+ const dialog={getBoundingClientRect:()=>({left:0,top:0,right:240,bottom:700})};
+ const event=(x,target=dialog)=>({currentTarget:dialog,target,clientX:x,clientY:100});
+ for(const [closeOnBackdrop,busy,expected] of [[false,false,0],[true,true,0],[true,false,1]]){
+  const tree=Dialog({children:null,className:'menu',labelledBy:'menu-heading',closeOnBackdrop,busy,onClose:()=>closes++});
+  tree.props.onPointerDown(event(100));tree.props.onClick(event(100));assert.equal(closes,0,'clicking the dialog content keeps it open');
+  tree.props.onPointerDown(event(100));tree.props.onClick(event(500));assert.equal(closes,0,'a drag starting in the menu cannot dismiss it');
+  tree.props.onPointerDown(event(500));tree.props.onClick(event(500));assert.equal(closes,expected);
+ }
+ let prevented=false;
+ const menu=Dialog({children:null,className:'menu',labelledBy:'menu-heading',closeOnBackdrop:true,busy:false,onClose:()=>closes++});
+ menu.props.onCancel({preventDefault:()=>{prevented=true;}});
+ assert(prevented);assert.equal(closes,2);
 });
 
 test('XL keeps planning controls, drag/drop and task editing while hiding the navigation',async()=>{

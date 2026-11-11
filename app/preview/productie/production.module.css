@@ -681,8 +681,8 @@
 .worksheetRoot .task_done{background:#c3d3bc;border-color:#9bb28e;border-left-color:#c3d3bc}
 .worksheetRoot .task_blocked{border-color:#d75a4c;background:#f9eee8}
 .worksheetRoot .taskCheck{display:grid;place-items:center;width:22px;height:22px;min-width:22px;min-height:22px;margin-top:1px;border:1.5px solid #6c827b;border-radius:3px;background:white;padding:0;color:#1b3344}
-.worksheetRoot .task_active .taskCheck{background:#d75a4c;border-color:#d75a4c;color:#fff}
-.worksheetRoot .task_done .taskCheck{background:#1b3344;border-color:#1b3344;color:#fff}
+.worksheetRoot .task_active .taskCheck{background:#f6ded7;border-color:#c58274;color:#923c32}
+.worksheetRoot .task_done .taskCheck{background:#dce5d7;border-color:#7e9872;color:#3f5838}
 .worksheetRoot .taskOpen{flex:1;min-width:0;padding:0;width:auto!important;color:#1b3344}
 .worksheetRoot .taskOpen strong{display:block;font-size:16px;font-weight:750;line-height:1.23;overflow-wrap:normal;word-break:normal;hyphens:none;color:#1b3344}
 .worksheetRoot .taskOpen strong b{font-size:1em}
@@ -708,6 +708,8 @@
 .worksheetRoot .taskOpen{display:block;width:100%!important}
 .worksheetRoot .taskMeta{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:2px 8px;margin-top:3px}
 .worksheetRoot .taskStep{display:flex;align-items:center;flex-wrap:wrap;gap:4px;padding:0;color:#1b3344;font-size:12px;text-align:left}
+.worksheetRoot .task_done :is(.taskOpen,.taskOpen strong,.taskStep,.taskWorkBadge){color:#3f5838}
+.worksheetRoot .task_active :is(.taskOpen,.taskOpen strong,.taskStep,.taskStep small){color:#923c32}
 .worksheetRoot .taskStep small{display:inline-flex;align-items:center;gap:4px;margin:0;font-size:10px;color:#8b392e}.worksheetRoot .taskStep small:empty{display:none}
 .worksheetRoot .taskCard:has([data-warning-only]) .taskOpen strong{padding-right:17px}
 .worksheetRoot .taskStep small[data-warning-only]{position:absolute;top:5px;right:5px;margin:0}
@@ -892,67 +894,97 @@
 @media(max-width:800px){.periodToggle button{min-height:32px;padding:5px 12px}.dayView .weekPicker strong{text-transform:capitalize}}
 @media print{.worksheetRoot.screenFit{min-height:0}}
 
-/* Compact native controls retain their size when the planning gets busier. */
-@media(min-width:801px){
- .worksheetRoot:not(.screenFit) .main{padding:8px 12px 5px}
- .worksheetRoot:not(.screenFit) .planningActions{flex-wrap:wrap;min-height:38px;padding-bottom:5px;gap:6px}
- .worksheetRoot:not(.screenFit) .planningActions :is(.primaryButton,.secondaryButton){min-height:32px;font-size:12px!important;padding:5px 8px}
- .worksheetRoot:not(.screenFit) .screenActions{gap:5px}
- .worksheetRoot:not(.screenFit) .periodToggle button{min-height:26px;font-size:12px;padding:3px 10px}
- .worksheetRoot:not(.screenFit) .plannerToolbar{padding:5px 0;gap:6px}
- .worksheetRoot:not(.screenFit) .plannerFilters select{min-height:32px;font-size:12px;padding:5px 22px 5px 7px}
- .worksheetRoot:not(.screenFit) .weekPicker strong{font-size:17px}
- .worksheetRoot:not(.screenFit) .plannerWithRequests{grid-template-columns:minmax(0,1fr) 240px!important;gap:8px}
- .worksheetRoot:not(.screenFit) .plannerBoardColumn{overflow-x:auto;overscroll-behavior-x:contain}
- .worksheetRoot:not(.screenFit) .board{min-width:calc(40px + var(--days) * 150px)}
- .worksheetRoot:not(.screenFit) :is(.boardHeader,.departmentRow){grid-template-columns:40px repeat(var(--days),minmax(0,1fr))}
- .worksheetRoot:not(.screenFit) .dayHeading{min-height:44px;padding:5px;gap:4px;flex-wrap:wrap}
- .worksheetRoot:not(.screenFit) .dayHeading strong{font-size:13px}
- .worksheetRoot:not(.screenFit) .dayRhythm{gap:1px}
- .worksheetRoot:not(.screenFit) .dayRhythm :is(b,small){font-size:8px}
- .worksheetRoot:not(.screenFit) .departmentLabel{min-height:48px;padding:5px 3px}
- .worksheetRoot:not(.screenFit) .departmentLabel h2{font-size:11px}
- .worksheetRoot:not(.screenFit) .dayCell{padding:3px;gap:3px}
- .worksheetRoot:not(.screenFit) .taskCard{padding:4px 5px;gap:4px;min-height:34px}
- .worksheetRoot:not(.screenFit) .taskCheck{width:18px;min-width:18px;height:18px;min-height:18px}
- .worksheetRoot:not(.screenFit):not(.dayView) .taskOpen strong{font-size:13px;line-height:1.2}
- .worksheetRoot:not(.screenFit) .taskMeta{margin-top:2px;gap:1px 4px}
- .worksheetRoot:not(.screenFit) .taskStep{font-size:10px;line-height:1.2}
- .worksheetRoot:not(.screenFit) .taskMeta .recipeGroup{font-size:9px!important;padding:1px 3px}
- .worksheetRoot:not(.screenFit):not(.dayView) .taskMeta .recipeGroup{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
- .worksheetRoot:not(.screenFit):not(.dayView) .taskMeta .recipeGroup svg{display:inline-block;vertical-align:middle;margin-right:3px}
- .worksheetRoot:not(.screenFit) :is(.cellWorkTotals,.taskWorkBadge){font-size:10px;gap:2px}
- .worksheetRoot:not(.screenFit) .taskWorkBadge{padding:1px 3px}
- .worksheetRoot:not(.screenFit) .taskWorkBadge svg{width:11px;height:11px}
- .worksheetRoot:not(.screenFit) .dayCellFooter{min-height:20px;gap:3px}
- .worksheetRoot:not(.screenFit) .planningRail>aside>header{padding:6px 8px}
- .worksheetRoot:not(.screenFit) .planningRail>aside h2{font-size:14px}
- .worksheetRoot:not(.screenFit) .planningRail>aside article{padding:6px 7px}
- .worksheetRoot:not(.screenFit) .planningRail>aside article strong{font-size:13px;line-height:1.25}
- .worksheetRoot:not(.screenFit) .planningRail>aside article strong small{font-size:11px}
- .worksheetRoot:not(.screenFit) .planningRail>aside article time{font-size:11px;line-height:1.25;padding:2px 4px;margin-top:3px;gap:4px}
- .worksheetRoot:not(.screenFit) .planningRail>aside article time svg{width:12px;height:12px}
- .worksheetRoot:not(.screenFit) .planningRail>aside article p{font-size:11px;line-height:1.25;margin-top:3px}
- .worksheetRoot:not(.screenFit) .planningRail>aside article button{width:24px;min-width:24px;min-height:26px;padding:2px}
- .worksheetRoot:not(.screenFit).dayView .board{min-width:0;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr))}
- .worksheetRoot:not(.screenFit).dayView :is(.taskCard,.dayCell){padding:7px;gap:6px}
- .worksheetRoot:not(.screenFit).dayView .departmentLabel{min-height:32px}
- .worksheetRoot:not(.screenFit).dayView .departmentLabel h2{font-size:16px}
- .worksheetRoot:not(.screenFit).dayView .dayCell{min-height:96px!important}
- .worksheetRoot:not(.screenFit).dayView .taskOpen strong{font-size:calc(var(--day-title-size) - 8px)}
- .worksheetRoot:not(.screenFit).dayView .taskStep{font-size:12px}
+/* One native-size planning view. The menu opens over the board. */
+.readablePlanning.worksheetRoot{grid-template-columns:minmax(0,1fr);min-height:100dvh}
+.readablePlanning .main{padding:10px 14px 8px}
+.readablePlanning .mobileNav{display:none}
+.menuToggle{display:grid;place-items:center;flex-shrink:0;width:38px;min-height:38px;border:1px solid #aabbaa;border-radius:6px;background:#fff;color:#1b3344}
+.planningNavigation{position:fixed;inset:0 auto 0 0;width:240px;max-width:90vw;height:100dvh;max-height:100dvh;margin:0;padding:0;border:0;color:inherit;font:inherit;overflow-y:auto;background:#c3d3bc;box-shadow:6px 0 24px #1b334422}
+.planningNavigation::backdrop{background:#1b334433}
+.planningNavigation .sidebar{display:flex;position:static;height:auto;min-height:100dvh;overflow:visible;padding-top:8px}
+.planningNavigation .sidebar nav :is(button,a){font-size:14px;min-height:42px}
+.planningNavigation .sidebarBoards :is(button,a){font-size:14px}
+.sidebarTop{display:flex;align-items:center;gap:6px;margin-bottom:18px}
+.sidebarTop .returnToTeam{flex:1;min-width:0;margin:0}
+.planningNavigation .sidebarTop{position:sticky;top:0;z-index:2;padding:6px 0;background:#c3d3bc}
+.navigationClose{display:grid;place-items:center;flex-shrink:0;width:32px;min-height:36px;padding:0;border:0;border-left:1px solid #91a68a;background:transparent;color:#1b3344}
+.navigationClose svg{transform:rotate(180deg)}
+.navigationClose:hover{background:#ffffff55}
+.planningNavigation .navigationClose:focus-visible{outline:2px solid #1b3344;outline-offset:-2px;border-radius:4px}
+.readablePlanning .planningActions{flex-wrap:wrap;min-height:44px;padding:0 0 7px;gap:8px}
+.readablePlanning .planningActions :is(.primaryButton,.secondaryButton){min-height:36px;font-size:14px!important;padding:6px 10px}
+.readablePlanning .screenActions{gap:6px}
+.readablePlanning .periodToggle button{min-height:30px;font-size:14px;padding:4px 12px}
+.readablePlanning .plannerToolbar{padding:7px 0;gap:8px}
+.readablePlanning .plannerFilters select{min-height:36px;font-size:13px;padding:6px 24px 6px 8px}
+.readablePlanning .weekPicker strong{font-size:20px}
+.readablePlanning .plannerWithRequests{grid-template-columns:minmax(0,1fr) clamp(230px,17vw,330px)!important;gap:12px}
+.readablePlanning .plannerBoardColumn{overflow-x:auto;overscroll-behavior-x:contain}
+.readablePlanning .board{min-width:calc(44px + var(--days) * 170px)}
+.readablePlanning :is(.boardHeader,.departmentRow){grid-template-columns:44px repeat(var(--days),minmax(0,1fr))}
+.readablePlanning .dayHeading{min-height:52px;padding:7px;gap:6px;flex-wrap:wrap}
+.readablePlanning .dayHeading strong{font-size:clamp(16px,1vw,26px)}
+.readablePlanning .dayRhythm{gap:2px}
+.readablePlanning .dayRhythm :is(b,small){font-size:10px}
+.readablePlanning .departmentLabel{min-height:64px;padding:6px 3px}
+.readablePlanning .departmentLabel h2{font-size:13px}
+.readablePlanning .dayCell{padding:4px;gap:4px}
+.readablePlanning .taskCard{padding:7px;gap:6px;min-height:46px}
+.readablePlanning .taskCheck{width:24px;min-width:24px;height:24px;min-height:24px}
+.readablePlanning:not(.dayView) .taskOpen strong{font-size:clamp(16px,.85vw,26px);line-height:1.23}
+.readablePlanning .taskMeta{margin-top:3px;gap:3px 6px}
+.readablePlanning .taskStep{font-size:clamp(12px,.65vw,18px);line-height:1.25}
+.readablePlanning .taskMeta .recipeGroup{font-size:11px!important;padding:2px 4px}
+.readablePlanning:not(.dayView) .taskMeta .recipeGroup{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.readablePlanning:not(.dayView) .taskMeta .recipeGroup svg{display:inline-block;vertical-align:middle;margin-right:3px}
+.readablePlanning :is(.cellWorkTotals,.taskWorkBadge){font-size:12px;gap:3px}
+.readablePlanning .taskWorkBadge{padding:2px 4px}
+.readablePlanning .taskWorkBadge svg{width:13px;height:13px}
+.readablePlanning .dayCellFooter{min-height:24px;gap:4px}
+.readablePlanning .planningRail{position:sticky;top:12px;align-self:start;height:calc(100dvh - 138px);min-height:300px;gap:12px}
+.readablePlanning .planningRail>aside{display:flex;flex-direction:column;min-height:0;max-height:65%;overflow:auto}
+.readablePlanning .offerWrap{margin-top:auto}
+.readablePlanning .offerTile{max-height:240px;min-height:100px;aspect-ratio:auto}
+.readablePlanning .offerTile img{max-height:240px;object-fit:contain}
+.readablePlanning.dayView .board{min-width:0;grid-template-columns:repeat(var(--day-columns),minmax(0,1fr))}
+.readablePlanning.dayView :is(.taskCard,.dayCell){padding:9px;gap:7px}
+.readablePlanning.dayView .departmentLabel{min-height:38px}
+.readablePlanning.dayView .departmentLabel h2{font-size:19px}
+.readablePlanning.dayView .dayCell{min-height:120px!important}
+.readablePlanning.dayView .taskOpen strong{font-size:clamp(21px,var(--day-title-scale),var(--day-title-size));line-height:1.25}
+.readablePlanning.dayView .taskStep{font-size:clamp(14px,.85vw,20px)}
+.readablePlanning.largeText .taskOpen strong{font-size:clamp(20px,1.1vw,32px)}
+.readablePlanning.largeText.dayView .taskOpen strong{font-size:clamp(26px,var(--day-title-scale),var(--day-title-size))}
+.readablePlanning[data-bakery-screen=true] .main::before{content:"";display:block;flex:0 0 60px}
+.readablePlanning[data-bakery-screen=true] .planningActions{order:1;position:sticky;bottom:0;margin-top:auto;padding:8px 0;background:#fff;border-top:2px solid #1b3344;border-bottom:0;z-index:4}
+.readablePlanning[data-bakery-screen=true] .planningRail{top:60px;height:calc(100dvh - 190px)}
+@media(min-width:2200px){
+ .readablePlanning .planningActions :is(.primaryButton,.secondaryButton),.readablePlanning .plannerFilters select{font-size:16px!important;min-height:40px}
+ .readablePlanning .weekPicker strong{font-size:26px}
+ .readablePlanning .dayRhythm :is(b,small){font-size:13px}
+ .readablePlanning :is(.cellWorkTotals,.taskWorkBadge){font-size:16px}
+ .readablePlanning .taskMeta .recipeGroup{font-size:14px!important}
 }
-@media(min-width:801px) and (max-width:1399px){
- .worksheetRoot:not(.screenFit) .plannerWithRequests{grid-template-columns:minmax(0,1fr)!important}
- .worksheetRoot:not(.screenFit) .planningRail{display:grid;grid-template-columns:minmax(0,1fr) 140px;align-items:start}
- .worksheetRoot:not(.screenFit) .offerWrap{margin-top:0}
-}
+@media(max-width:1100px) and (min-width:801px){.readablePlanning.dayView .board{grid-template-columns:repeat(min(var(--day-columns),2),minmax(0,1fr))}}
 @media(pointer:coarse){
  .sidebar nav :is(button,a){min-height:44px}
- .worksheetRoot:not(.screenFit) .planningRail>aside article button{min-width:40px;min-height:44px}
+ .readablePlanning :is(.menuToggle,.navigationClose,.taskCheck){min-width:40px;min-height:40px}
 }
+@media(any-pointer:coarse) and (min-width:801px){.readablePlanning:not(.dayView) .board{min-width:calc(44px + var(--days) * 260px)}}
 @media(max-width:800px){
- .mobileNav select{font-size:16px;min-height:44px}
- .worksheetRoot:not(.screenFit) :is(.primaryButton,.secondaryButton){font-size:14px!important;min-height:44px}
- .worksheetRoot:not(.screenFit) .periodToggle button{font-size:14px;min-height:38px}
+ .readablePlanning .plannerWithRequests{grid-template-columns:minmax(0,1fr)!important}
+ .readablePlanning .planningRail{position:static;display:grid;grid-template-columns:minmax(0,1fr) 100px;height:auto;min-height:0;align-items:start}
+ .readablePlanning .planningRail>aside{max-height:320px}
+ .readablePlanning .offerWrap{margin-top:0}
+ .readablePlanning .board{min-width:0}
+ .readablePlanning.dayView .board{display:block}
+ .readablePlanning .planningActions{gap:6px}
+ .readablePlanning .staffingCompact{display:none}
+ .readablePlanning .screenActions{gap:4px}
+ .readablePlanning .planningActions :is(.primaryButton,.secondaryButton){min-height:40px;font-size:13px!important}
+ .readablePlanning .periodToggle button{min-height:36px}
+ .readablePlanning .taskOpen strong{font-size:17px!important}
+ .readablePlanning .plannerFilters select{font-size:16px;min-height:40px}
+ .readablePlanning[data-bakery-screen=true] .main::before{flex-basis:40px}
 }
+@media print{.menuToggle,.planningNavigation,.readablePlanning .planningActions{display:none}}

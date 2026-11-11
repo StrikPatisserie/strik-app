@@ -155,8 +155,13 @@ test('production navigation separates operational recipes from management and ke
  const jsx=require('react/jsx-runtime'),nav=load('app/productie/ProductionNavigation.tsx',{'react/jsx-runtime':jsx,'next/link':{default:'a'},'next/navigation':{},'../StrikUI':{ProductionWordmark:'wordmark'},'./ProductionIcon':{default:'icon'},'./navigation':load('app/productie/navigation.ts',{'./planning':planning}),'../preview/productie/production.module.css':{default:{}}});
  const nodes=tree=>!tree || typeof tree!=='object'?[]:Array.isArray(tree)?tree.flatMap(nodes):[tree,...nodes(tree.props?.children)];
  const text=tree=>typeof tree==='string'?tree:Array.isArray(tree)?tree.map(text).join(''):tree?.props?text(tree.props.children):'';
- for(const canManage of [false,true]){const tree=nav.default({active:'planning',canManage,canBakery:true,boards:[],demo:false});assert(text(tree).includes('Strik-app · hoofdmenu'));assert(text(tree).includes('Recepten'));assert.equal(text(tree).includes('Receptuurbeheer'),canManage);assert(!text(tree).includes('Producten & onderdelen'));assert(!text(tree).includes('Verpakkingen'));assert(nodes(tree).some(n=>n.props?.href==='/'));}
+ for(const canManage of [false,true]){const tree=nav.default({active:'planning',canManage,canBakery:true,boards:[],demo:false});assert(text(tree).includes('Hoofdmenu'));assert(!text(tree).includes('WERKPLEK'));assert(!text(tree).includes('PLANNINGEN'));assert(!text(tree).includes('voor Strik'));assert(text(tree).includes('Recepten'));assert.equal(text(tree).includes('Receptuurbeheer'),canManage);assert(!text(tree).includes('Producten & onderdelen'));assert(!text(tree).includes('Verpakkingen'));assert(nodes(tree).some(n=>n.props?.href==='/'));}
  const menu=nodes(nav.default({active:'planning',canManage:true,boards:[]})).find(n=>n.type==='nav');assert.equal(text(menu.props.children[0]),'Weekplanning');assert.equal(text(menu.props.children[1]),'Feestdagen');
+ let collapsed=0;
+ const drawer=nav.default({active:'planning',canManage:true,boards:[],onCollapse:()=>collapsed++});
+ const close=nodes(drawer).find(node=>node.type==='button'&&node.props['aria-label']==='Menu sluiten');
+ assert(close);assert.equal(text(close),'');assert.equal(close.props.children.props.name,'chevron');
+ close.props.onClick();assert.equal(collapsed,1);
 });
 test('the loading screen retains the role-specific production frame and a local status indicator',()=>{
  const jsx=require('react/jsx-runtime');

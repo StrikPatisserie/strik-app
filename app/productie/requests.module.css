@@ -30,3 +30,42 @@
 .compact .deadline{font-size:16px;font-weight:800;line-height:1.25;margin-top:7px;padding:4px 7px}
 .compact .list article p{font-size:14px;line-height:1.35;margin:6px 0 0;color:#354a3f}
 @media(max-width:800px){.compact .row strong{font-size:17px}.compact .deadline{font-size:14px}.compact .list article p{font-size:13px}}
+
+.headerActions{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.compact .list{overflow-y:auto;overscroll-behavior:contain;min-height:0;scrollbar-width:thin}
+.compact header{flex-shrink:0;gap:6px}
+.compact h2{font-size:16px;line-height:1.2}
+.compact .row strong{font-size:16px;line-height:1.25}
+.compact .row .requestQuantity{font-size:12px}
+.compact .rowActions button{width:32px;min-width:32px;min-height:34px}
+.compact .deadline{font-size:13px;margin-top:5px;padding:3px 5px}
+.compact .deadline svg{width:14px;height:14px}
+.compact .list article p{font-size:12px;line-height:1.3}
+.panel.expanded{width:min(900px,calc(100vw - 32px));max-height:86dvh;margin:auto;padding:0;border:1px solid #aabbaa;border-radius:12px;background:#fff;font:16px/1.4 "Overpass",Arial,sans-serif;color:#1b3344;overflow:auto;overscroll-behavior:contain}
+.expanded::backdrop{background:#1b334466}
+.panel.expanded>header{position:sticky;top:0;z-index:2;align-items:center;padding:16px 20px;background:#1b3344;color:white}
+.panel.expanded h2{font-size:24px;color:inherit;margin:0}
+.panel.expanded h2 span{font-size:16px;color:inherit}
+.panel.expanded>header button{width:42px;min-height:42px;padding:8px;background:#fff;color:#1b3344}
+.panel.expanded .list article{padding:14px 20px;border-top:1px solid #aabbaa}
+.panel.expanded .row strong{font-size:22px;line-height:1.3}
+.panel.expanded .row .requestQuantity{font-size:15px}
+.panel.expanded .rowActions button{width:40px;min-width:40px;min-height:42px}
+.panel.expanded .deadline{font-size:16px;padding:4px 8px}
+.panel.expanded .list article p{font-size:15px;line-height:1.4}
+.panel.expanded .form{padding:0 20px 12px}
+.panel.expanded .list .form{padding:0;margin:14px 0 0}
+.panel.expanded .form label{font-size:14px}
+.panel.expanded .form :is(input,select,textarea){font-size:16px;min-height:42px}
+.panel.expanded>details,.panel.expanded>.error,.panel.expanded>.empty{margin:12px 20px}
+.quickDays{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.panel .quickDays button{display:grid;justify-items:center;gap:2px;min-height:58px;padding:8px 4px;border-color:#aabbaa;background:#edf2e9;font-weight:750}
+.quickDays button small{color:inherit;font-size:12px;font-weight:400}
+.panel .quickDays button[data-selected=true]{border:2px solid #1b3344}
+.panel .quickDays button:hover:not(:disabled){background:#c3d3bc}
+.planOptions{padding-top:8px}
+.planOptions>summary{font-size:13px;color:#63736c;min-height:32px}
+.planOptions label,.planOptions>button{margin-top:10px}
+@media(min-width:2200px){.compact h2{font-size:20px}.compact .row strong{font-size:21px}.compact .deadline{font-size:16px}.compact .list article p{font-size:15px}}
+@media(pointer:coarse){.compact header button,.compact .rowActions button{width:40px;min-width:40px;min-height:44px}}
+@media(max-width:550px){.panel.expanded{width:calc(100vw - 16px);max-height:92dvh}.panel.expanded>header{padding:12px}.panel.expanded h2{font-size:20px}.panel.expanded .list article{padding:12px}.panel.expanded .row strong{font-size:18px}.quickDays{grid-template-columns:repeat(4,minmax(0,1fr))}}

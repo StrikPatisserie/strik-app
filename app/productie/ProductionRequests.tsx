@@ -1,41 +1,83 @@
 "use client";
 import {useCallback,useEffect,useRef,useState,type FormEvent} from 'react';
-import {DEPARTMENTS,addDays,dateLabel,departmentsFor,type BoardId,type DepartmentId,type Item,type Task} from './planning';
-import {requestDepartmentId,requestsForBoard,type ProductionRequest,type RequestCommand} from './requestPlanning';
+import {DEPARTMENTS,addDays,dateLabel,departmentsFor,mondayOf,type BoardId,type DepartmentId,type Item,type Task,type PreviewState} from './planning';
+import {canEditProductionRequest,requestDepartmentId,requestPlanningTask,requestsForBoard,type ProductionRequest,type RequestCommand} from './requestPlanning';
 import Icon from './ProductionIcon';
+import OperationalDialog from './OperationalDialog';
 import SearchableChoice from './SearchableChoice';
 import s from './requests.module.css';
 type Data={revision:number;canCreate:boolean;departments:DepartmentId[];items:Pick<Item,'id'|'name'|'unit'|'departmentId'|'productionBlocked'>[];requests:(ProductionRequest&{plannedTask?:Task;canEdit?:boolean;planningUrl?:string})[]};
-export default function ProductionRequests({board,week,today,onPlanned,logistics=false,compact=false}:{compact?:boolean;board?:BoardId;week?:string;today?:string;onPlanned?:()=>Promise<void>;logistics?:boolean}){
- const [data,setData]=useState<Data|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[adding,setAdding]=useState(false),[planning,setPlanning]=useState(''),[showPlanned,setShowPlanned]=useState(false),[newItem,setNewItem]=useState(false);
+type Props={
+ board?:BoardId;week?:string;today?:string;selectedDay?:string;selectedDepartment?:DepartmentId;
+ onPlanned?:()=>Promise<void>;logistics?:boolean;compact?:boolean;
+ preview?:{state:PreviewState;onCommand:(command:RequestCommand)=>Promise<void>};
+};
+export default function ProductionRequests({board,week,today,selectedDay,selectedDepartment,onPlanned,logistics=false,compact=false,preview}:Props){
+ const [remoteData,setData]=useState<Data|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[adding,setAdding]=useState(false),[planning,setPlanning]=useState(''),[showPlanned,setShowPlanned]=useState(false),[newItem,setNewItem]=useState(false);
+ const [expanded,setExpanded]=useState(false),[planningDepartment,setPlanningDepartment]=useState<DepartmentId|''>('');
  const [editing,setEditing]=useState<ProductionRequest|null>(null),[selectedItem,setSelectedItem]=useState('');
+ const data:Data|null=preview?{
+  revision:0,canCreate:true,departments:DEPARTMENTS.map(department=>department.id),items:preview.state.items,
+  requests:(preview.state.productionRequests||[]).map(request=>({...request,plannedTask:requestPlanningTask(preview.state,request),canEdit:canEditProductionRequest(preview.state,request)})),
+ }:remoteData;
+ const previewMode=!!preview;
  const lock=useRef(false),serial=useRef(0),formRevision=useRef<number|null>(null);
  const load=useCallback(async()=>{
+  if(previewMode)return;
   const current=++serial.current;
   try{const response=await fetch('/api/productie/verzoeken',{cache:'no-store'}),result=await response.json();if(!response.ok)throw Error(result.message||'Verzoeken laden mislukt.');if(current===serial.current){setData(result);setError('');}}
   catch(e){if(current===serial.current)setError((e as Error).message);}
- },[]);
- useEffect(()=>{void load();const timer=setInterval(()=>{if(!document.hidden&&!lock.current&&formRevision.current===null)void load();},15000);const sequence=serial;return()=>{clearInterval(timer);sequence.current++;};},[load]);
+ },[previewMode]);
+ useEffect(()=>{
+  if(previewMode)return;
+  void load();
+  const timer=setInterval(()=>{if(!document.hidden&&!lock.current&&formRevision.current===null)void load();},15000);
+  const sequence=serial;
+  return()=>{clearInterval(timer);sequence.current++;};
+ },[load,previewMode]);
  function closeEditor(){setAdding(false);setEditing(null);setNewItem(false);setSelectedItem('');formRevision.current=null;}
  function openEditor(request?:ProductionRequest){
   if(!data)return;
-  serial.current++;setAdding(!request);setEditing(request||null);setSelectedItem(request?.itemId||'');setNewItem(false);setPlanning('');setError('');formRevision.current=data.revision;
+  serial.current++;if(compact)setExpanded(true);setAdding(!request);setEditing(request||null);setSelectedItem(request?.itemId||'');setNewItem(false);setPlanning('');setError('');formRevision.current=data.revision;
  }
- function openPlanning(id:string){
-  closeEditor();setPlanning(planning===id?'':id);formRevision.current=planning===id?null:data?.revision??null;
+ function closePanel(){
+  if(busy)return;
+  setExpanded(false);closeEditor();setPlanning('');
  }
+ function openPlanning(request:ProductionRequest,allowed:DepartmentId[]){
+  closeEditor();setError('');setPlanning(request.id);formRevision.current=data?.revision??null;
+  const inherited=requestDepartmentId(request,data?.items.find(item=>item.id===request.itemId));
+  setPlanningDepartment(inherited&&allowed.includes(inherited)?inherited:selectedDepartment&&allowed.includes(selectedDepartment)?selectedDepartment:'');
+  if(compact)setExpanded(true);
+ }
+
  async function act(command:RequestCommand,revision=data?.revision){
   if(!data||lock.current)return;lock.current=true;serial.current++;setBusy(true);setError('');
-  try{const response=await fetch('/api/productie/verzoeken',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision,command})}),result=await response.json();if(!response.ok)throw Error(response.status===409&&command.kind==='edit'?'De planning is intussen gewijzigd. Sluit bewerken en open het verzoek opnieuw.':result.message||'Opslaan mislukt.');closeEditor();setPlanning('');await load();if(command.kind==='plan')await onPlanned?.();}
+  try{
+   if(preview){await preview.onCommand(command);closeEditor();setPlanning('');return;}
+   const response=await fetch('/api/productie/verzoeken',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision,command})}),result=await response.json();if(!response.ok)throw Error(response.status===409&&command.kind==='edit'?'De planning is intussen gewijzigd. Sluit bewerken en open het verzoek opnieuw.':result.message||'Opslaan mislukt.');closeEditor();setPlanning('');await load();if(command.kind==='plan')await onPlanned?.();}
   catch(e){setError((e as Error).message);}finally{lock.current=false;setBusy(false);}
  }
  function saveRequest(event:FormEvent<HTMLFormElement>){event.preventDefault();const form=new FormData(event.currentTarget);void act({...(editing?{kind:'edit' as const,id:editing.id}:{kind:'create' as const}),itemId:String(form.get('itemId')),quantity:Number(form.get('quantity')),departmentId:(String(form.get('departmentId'))||null) as DepartmentId|null,neededBy:String(form.get('neededBy'))||undefined,note:String(form.get('note')),...(newItem?{newItem:{name:String(form.get('name')),kind:String(form.get('kind')) as 'product'|'component',unit:String(form.get('unit')) as Item['unit']}}:{})},formRevision.current??undefined);}
+ function planRequest(element:HTMLFormElement,id:string,date?:string){
+  const form=new FormData(element),minutes=String(form.get('minutes')??'').trim();
+  void act({
+   kind:'plan',id,date:date||String(form.get('date')),departmentId:planningDepartment as DepartmentId,
+   ...(minutes!==''?{minutes:Number(minutes)}:{}),...(form.get('pour')==='on'?{pour:true}:{}),
+  },formRevision.current??undefined);
+ }
  const referenceDay=today||new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Amsterdam',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
  const items=data?.items||[];
  const requests=requestsForBoard(data?.requests||[],items,board);
  const open=requests.filter(r=>!r.plannedTask&&r.canEdit!==false),planned=requests.filter(r=>r.plannedTask||r.canEdit===false);
- return <aside className={`${s.panel} ${compact?s.compact:""}`} aria-label="Productieverzoeken" aria-busy={busy} data-production-update-block={adding||!!editing||!!planning||busy||undefined}>
-  <header><div>{!compact&&<small>Van logistiek naar bakkerij</small>}<h2>Productieverzoeken {!!open.length&&<span>{open.length}</span>}</h2></div>{data?.canCreate&&<button type="button" disabled={busy} onClick={()=>adding?closeEditor():openEditor()} aria-label="Productieverzoek toevoegen" aria-expanded={adding}><Icon name="plus" size={18}/></button>}</header>
+ const title=<h2 id="production-requests-heading">Productieverzoeken {!!open.length&&<span>{open.length}</span>}</h2>;
+ const content=<>
+
+  <header><div>{!compact&&<small>Van logistiek naar bakkerij</small>}{title}</div><div className={s.headerActions}>
+   {compact&&!expanded&&<button type="button" disabled={busy} onClick={()=>setExpanded(true)} aria-label="Productieverzoeken vergroten" title="Vergroten"><Icon name="search" size={19}/></button>}
+   {data?.canCreate&&<button type="button" disabled={busy} onClick={()=>adding?closeEditor():openEditor()} aria-label="Productieverzoek toevoegen" aria-expanded={adding}><Icon name="plus" size={18}/></button>}
+   {expanded&&<button type="button" disabled={busy} onClick={closePanel} aria-label="Productieverzoeken sluiten" title="Sluiten"><Icon name="close" size={22}/></button>}
+  </div></header>
   {!compact&&<p className={s.intro}>{logistics?'Zet klaar wat de bakkers nog moeten inplannen.':'Nog in te plannen · kies met + een productiedag.'}</p>}
   {error&&<div role="alert" className={s.error}>{error} <button type="button" disabled={busy} onClick={()=>void load()}>Verversen</button></div>}
   {!data&&!error&&<p role="status">Verzoeken laden…</p>}
@@ -55,21 +97,35 @@ export default function ProductionRequests({board,week,today,onPlanned,logistics
    return <article key={r.id} data-deadline-urgency={deadline?.urgency}><div className={s.row}>
     <div className={s.requestName}><strong>{item?.name||'Product niet meer beschikbaar'} <small className={s.requestQuantity}>{r.quantity.toLocaleString('nl-NL')}{item?.unit&&item.unit!=='stuks'?` ${item.unit}`:''}</small></strong>{departmentId===null&&<span>Nog geen afdeling</span>}</div>
     <div className={s.rowActions}>
-     {data?.canCreate&&<><button disabled={busy} type="button" onClick={()=>openEditor(r)} aria-label={`Bewerk verzoek: ${item?.name}`} title="Verzoek bewerken"><Icon name="edit" size={14}/></button><button className={s.withdraw} disabled={busy} type="button" onClick={()=>void act({kind:'cancel',id:r.id})} aria-label={`Verzoek intrekken: ${item?.name}`} title="Verzoek intrekken"><Icon name="trash" size={14}/></button></>}
-     {!logistics&&allowed.length>0&&<button className={s.plan} type="button" disabled={busy||!item||item.productionBlocked} onClick={()=>openPlanning(r.id)} aria-label={`Inplannen: ${item?.name}`} title="Inplannen" aria-expanded={planning===r.id}><Icon name="plus" size={17}/></button>}
+     {(!compact||expanded||logistics)&&data?.canCreate&&<><button disabled={busy} type="button" onClick={()=>openEditor(r)} aria-label={`Bewerk verzoek: ${item?.name}`} title="Verzoek bewerken"><Icon name="edit" size={14}/></button><button className={s.withdraw} disabled={busy} type="button" onClick={()=>void act({kind:'cancel',id:r.id})} aria-label={`Verzoek intrekken: ${item?.name}`} title="Verzoek intrekken"><Icon name="trash" size={14}/></button></>}
+     {!logistics&&allowed.length>0&&<button className={s.plan} type="button" disabled={busy||!item||item.productionBlocked} onClick={()=>openPlanning(r,allowed)} aria-label={`Inplannen: ${item?.name}`} title="Inplannen" aria-expanded={planning===r.id}><Icon name="plus" size={17}/></button>}
     </div>
    </div>{deadline&&<time className={s.deadline} dateTime={r.neededBy} data-urgency={deadline.urgency} title={`Uiterlijk ${dateLabel(r.neededBy!,true)}`}><Icon name={deadline.urgency==='overdue'?'warning':'grid'} size={16}/>{deadline.label}</time>}{r.note&&<p>{r.note}</p>}
-   {planning===r.id&&<form className={s.form} onSubmit={event=>{event.preventDefault();const form=new FormData(event.currentTarget),minutes=String(form.get('minutes')??'').trim();void act({kind:'plan',id:r.id,date:String(form.get('date')),departmentId:String(form.get('departmentId')) as DepartmentId,...(minutes!==''?{minutes:Number(minutes)}:{}),...(form.get('pour')==='on'?{pour:true}:{})},formRevision.current??undefined);}}>
-    <label>Productiedag<input name="date" type="date" defaultValue={week||r.neededBy} max={r.neededBy} required disabled={busy}/></label>
-    <label>Afdeling<select name="departmentId" required defaultValue={departmentId&&allowed.includes(departmentId)?departmentId:''} disabled={busy}><option value="">Kies afdeling</option>{DEPARTMENTS.filter(d=>allowed.includes(d.id)).map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
-    <label>Geschatte tijd (min, optioneel)<input name="minutes" type="number" min="0" max="1440" step="any" placeholder="Bijv. 45" disabled={busy}/></label>
-    <label className={s.checkbox}><input name="pour" type="checkbox" disabled={busy}/>Storten</label>
-    <small>De volledige hoeveelheid wordt één keer ingepland. Halffabricaten kun je daarna bij de productietaak meeplannen.</small><button disabled={busy} type="submit">{busy?'Inplannen…':'In weekplanning zetten'}</button>
+   {planning===r.id&&<form className={s.form} onSubmit={event=>{
+    event.preventDefault();planRequest(event.currentTarget,r.id);
+   }}>
+    <label>Afdeling<select name="departmentId" required value={planningDepartment} onChange={event=>setPlanningDepartment(event.target.value as DepartmentId)} disabled={busy}><option value="">Kies afdeling</option>{DEPARTMENTS.filter(d=>allowed.includes(d.id)).map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
+    <div className={s.quickDays} role="group" aria-label="Kies productiedag">{Array.from({length:7},(_,index)=>addDays(week||mondayOf(referenceDay),index)).map(date=><button
+     key={date} type="button" disabled={busy||!planningDepartment||!!r.neededBy&&date>r.neededBy}
+     data-selected={date===(selectedDay||referenceDay)||undefined} aria-label={`Inplannen op ${dateLabel(date,true)}`}
+     onClick={event=>{const form=event.currentTarget.form;if(form)planRequest(form,r.id,date);}}
+    >{date===referenceDay?'Vandaag':dateLabel(date)}<small>{date.slice(8)}-{date.slice(5,7)}</small></button>)}</div>
+    <details className={s.planOptions}><summary>Andere datum of opties</summary>
+     <label>Productiedag<input name="date" type="date" defaultValue={selectedDay||week||r.neededBy||referenceDay} max={r.neededBy} required disabled={busy}/></label>
+     <label>Geschatte tijd (min, optioneel)<input name="minutes" type="number" min="0" max="1440" step="any" placeholder="Bijv. 45" disabled={busy}/></label>
+     <label className={s.checkbox}><input name="pour" type="checkbox" disabled={busy}/>Storten</label>
+     <button disabled={busy||!planningDepartment} type="submit">{busy?'Inplannen…':'Inplannen'}</button>
+    </details>
    </form>}
    </article>;
   })}</div>
-  {!compact&&data&&!open.length&&<p className={s.empty}>Geen open productieverzoeken.</p>}
+  {data&&!open.length&&<p className={s.empty}>Geen open productieverzoeken.</p>}
   {!!planned.length&&<details open={showPlanned} onToggle={event=>setShowPlanned(event.currentTarget.open)}><summary>Ingepland ({planned.length})</summary>{planned.map(r=><div key={r.id} className={s.planned}><span>{data?.items.find(i=>i.id===r.itemId)?.name} · {r.quantity.toLocaleString('nl-NL')}{r.plannedTask?` · ${r.plannedTask.date.split('-').reverse().join('-')}`:''}{r.plannedTask?.status==='done'?' · klaar':''}</span>{r.planningUrl&&!!data?.departments.length?<a href={r.planningUrl}>Open in weekplanning <Icon name="arrow" size={13}/></a>:<small>{r.plannedTask?'Wijzigen via de bakkerijplanning.':'Dit verzoek heeft al productieregistraties.'}</small>}</div>)}</details>}
+ </>;
+ return <aside className={`${s.panel} ${compact?s.compact:""}`} aria-label="Productieverzoeken" aria-busy={busy} data-production-update-block={expanded||adding||!!editing||!!planning||busy||undefined}>
+  {expanded?<><header><h2>Productieverzoeken <span>{open.length}</span></h2><button type="button" onClick={closePanel} aria-label="Productieverzoeken sluiten"><Icon name="close"/></button></header>
+   <OperationalDialog className={`${s.panel} ${s.expanded}`} labelledBy="production-requests-heading" busy={busy} onClose={closePanel}>{content}</OperationalDialog>
+  </>:content}
  </aside>;
 }
 

@@ -26,24 +26,26 @@ function availableSections(canManage: boolean, demo: boolean, canBakery: boolean
     .map(section => demo && section.id === "holidays" ? { ...section, href: "/preview/productie?view=feestdagen" } : section);
 }
 
-export default function ProductionNavigation({ active, canManage, canManageData = canManage, canBakery = true, demo = false, boards, activeBoard, onNavigate, onBoard }: Props & {
-  boards: { id: BoardId; name: string }[]; activeBoard?: BoardId; onBoard?: (board: BoardId) => void;
+export default function ProductionNavigation({ active, canManage, canManageData = canManage, canBakery = true, demo = false, boards, activeBoard, onNavigate, onBoard, onCollapse }: Props & {
+  boards: { id: BoardId; name: string }[]; activeBoard?: BoardId; onBoard?: (board: BoardId) => void; onCollapse?: () => void;
 }) {
   return <aside className={s.sidebar}>
-    <Link href="/" className={s.returnToTeam}><Icon name="back" size={17}/><span>Strik-app · hoofdmenu</span></Link>
+    <div className={s.sidebarTop}>
+      <Link href="/" className={s.returnToTeam}><Icon name="back" size={17}/><span>Hoofdmenu</span></Link>
+      {onCollapse&&<button type="button" className={s.navigationClose} aria-label="Menu sluiten" title="Menu inklappen" onClick={onCollapse}><Icon name="chevron" size={18}/></button>}
+    </div>
     <Link href={demo ? "/preview/productie" : PRODUCTION_HOME} className={s.brand} aria-label="STRAK gepland"><ProductionWordmark className={s.wordmark}/></Link>
-    <span className={s.sidebarCaption}>WERKPLEK</span>
     <nav aria-label="Productiemenu">{availableSections(canManageData, demo, canBakery).map(section => {
       const content = <><Icon name={section.icon} /><span>{section.label}</span></>;
       return onNavigate && ["planning", "catalog", "recipes", "ingredients", "stock"].includes(section.id)
         ? <button key={section.id} onClick={() => onNavigate(section.id as ProductionView)} aria-current={active === section.id ? "page" : undefined}>{content}</button>
         : <Link key={section.id} href={section.href} aria-current={active === section.id ? "page" : undefined}>{content}</Link>;
     })}</nav>
-    <div className={s.sidebarBoards}><span className={s.sidebarCaption}>PLANNINGEN</span>{boards.map(board => {
+    <div className={s.sidebarBoards}>{boards.map(board => {
       const content = <><span className={`${s.boardDot} ${s[`board_${board.id}`]}`} />{board.name}{active === "planning" && activeBoard === board.id && <Icon name="chevron" size={12} />}</>;
       return onBoard ? <button key={board.id} onClick={() => onBoard(board.id)} aria-current={active === "planning" && activeBoard === board.id ? "true" : undefined}>{content}</button> : <Link key={board.id} href={`${PRODUCTION_HOME}?board=${board.id}`}>{content}</Link>;
     })}</div>
-    <div className={s.sidebarBottom}>{onNavigate ? <button onClick={() => onNavigate("settings")} aria-current={active === "settings" ? "page" : undefined}><Icon name="settings" />Instellingen</button> : <Link href={`${PRODUCTION_HOME}?view=settings`}><Icon name="settings" />Instellingen</Link>}<span>STRAK gepland · voor Strik</span></div>
+    <div className={s.sidebarBottom}>{onNavigate ? <button onClick={() => onNavigate("settings")} aria-current={active === "settings" ? "page" : undefined}><Icon name="settings" />Instellingen</button> : <Link href={`${PRODUCTION_HOME}?view=settings`}><Icon name="settings" />Instellingen</Link>}</div>
   </aside>;
 }
 

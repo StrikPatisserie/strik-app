@@ -232,7 +232,7 @@ test('the request form explicitly supports no department and asks the baker to a
  const component=load('app/productie/ProductionRequests.tsx',{
   react,'react/jsx-runtime':require('react/jsx-runtime'),'./planning':planning,'./requestPlanning':requests,
   './ProductionIcon':{__esModule:true,default:()=>null},
-  './SearchableChoice':{__esModule:true,default:()=>null},
+  './SearchableChoice':{__esModule:true,default:()=>null},'./OperationalDialog':{__esModule:true,default:()=>null},
   './requests.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})},
  },{
   FormData:class {constructor(form){this.form=form;}get(name){return this.form[name]??null;}},
@@ -245,7 +245,7 @@ test('the request form explicitly supports no department and asks the baker to a
  find(tree,node=>node.props?.['aria-label']==='Inplannen: Testtaart').props.onClick();tree=render();
  const planningDepartment=find(tree,node=>node.type==='select'&&node.props.name==='departmentId');
  assert.equal(planningDepartment.props.required,true);
- assert.equal(planningDepartment.props.defaultValue,'');
+ assert.equal(planningDepartment.props.value,'');
  const time=find(tree,node=>node.type==='input'&&node.props.name==='minutes');
  assert.equal(time.props.min,'0');assert.equal(time.props.max,'1440');assert.equal(time.props.required,undefined);
  assert.equal(find(tree,node=>node.type==='input'&&node.props.name==='pour').props.type,'checkbox');
@@ -264,6 +264,7 @@ test('the request form explicitly supports no department and asks the baker to a
  assert.equal(posted[0].newItem.departmentId,undefined);
  for(const [index,fields] of [{minutes:'45',pour:'on'},{minutes:''}].entries()){
   tree=render();find(tree,node=>node.props?.['aria-label']==='Inplannen: Testtaart').props.onClick();tree=render();
+  find(tree,node=>node.type==='select'&&node.props.name==='departmentId').props.onChange({target:{value:'dessert'}});tree=render();
   const planForm=find(tree,node=>node.type==='form'&&nodes(node).some(child=>child.props?.name==='date'));
   planForm.props.onSubmit({preventDefault:()=>{},currentTarget:{date:'2026-11-05',departmentId:'dessert',...fields}});
   await new Promise(setImmediate);
@@ -272,23 +273,82 @@ test('the request form explicitly supports no department and asks the baker to a
  assert.equal(posted[1].minutes,45);assert.equal(posted[1].pour,true);
  assert.equal(Object.hasOwn(posted[2],'minutes'),false);assert.equal(Object.hasOwn(posted[2],'pour'),false);
 });
-function requestUi(initial){
+function requestUi(initial,{fetchImpl}={}){
  const slots=[initial],posted=[];let index=0,remote=initial,refresh;
  const useState=value=>{const position=index++;if(!(position in slots))slots[position]=typeof value==='function'?value():value;return[slots[position],next=>{slots[position]=typeof next==='function'?next(slots[position]):next;}];};
  const component=load('app/productie/ProductionRequests.tsx',{
   react:{useState,useCallback:callback=>{refresh=callback;return callback;},useEffect:()=>{},useRef:initial=>useState(()=>({current:initial}))[0]},
   'react/jsx-runtime':require('react/jsx-runtime'),'./planning':planning,'./requestPlanning':requests,
-  './ProductionIcon':{__esModule:true,default:()=>null},'./SearchableChoice':{__esModule:true,default:()=>null},
+  './ProductionIcon':{__esModule:true,default:()=>null},'./SearchableChoice':{__esModule:true,default:()=>null},'./OperationalDialog':{__esModule:true,default:()=>null},
   './requests.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})},
  },{
   FormData:class{constructor(form){this.form=form;}get(name){return this.form[name]??null;}},
-  fetch:async(url,options)=>{if(options?.method==='POST')posted.push(JSON.parse(options.body));return Response.json(options?.method==='POST'?{revision:remote.revision+1}:remote);},
+  fetch:async(url,options)=>{if(options?.method==='POST')posted.push(JSON.parse(options.body));if(fetchImpl)return fetchImpl(url,options);return Response.json(options?.method==='POST'?{revision:remote.revision+1}:remote);},
  }).default;
  const nodes=tree=>!tree||typeof tree!=='object'?[]:Array.isArray(tree)?tree.flatMap(nodes):[tree,...nodes(tree.props?.children)];
  const render=props=>{index=0;return component(props||{});};
  const find=(tree,predicate)=>{const found=nodes(tree).find(predicate);assert(found,'Expected request control');return found;};
  return{render,nodes,find,posted,refresh:async next=>{remote=next;await refresh();}};
 }
+test('enlarged requests plan with one date click, respect deadlines and ignore duplicate clicks during the save',async()=>{
+ const source=apply(state(),{...create,departmentId:'dessert'});
+ const data={revision:3,canCreate:true,departments:['dessert','luxe'],items:source.items,requests:source.productionRequests};
+ let refreshed=0;
+ const props={compact:true,board:'patisserie',week:'2026-11-02',today:'2026-11-03',selectedDay:'2026-11-04',selectedDepartment:'luxe',onPlanned:async()=>{refreshed++;}};
+ const ui=requestUi(data);let tree=ui.render(props);
+ ui.find(tree,node=>node.props?.['aria-label']==='Productieverzoeken vergroten').props.onClick();tree=ui.render(props);
+ assert.equal(ui.posted.length,0,'opening the list only reads the existing requests');
+ ui.find(tree,node=>node.props?.['aria-label']==='Inplannen: Testtaart').props.onClick();tree=ui.render(props);
+ assert.equal(ui.find(tree,node=>node.props?.name==='departmentId').props.value,'dessert','an assigned request keeps its department when another planning lane is selected');
+ const days=ui.find(tree,node=>node.props?.['aria-label']==='Kies productiedag');
+ const buttons=ui.nodes(days).filter(node=>node.type==='button');
+ assert.equal(buttons.length,7);
+ assert.deepEqual(buttons.map(node=>!!node.props.disabled),[false,false,false,false,false,true,true]);
+ const date=buttons[2];assert.equal(date.props['data-selected'],true);
+ const event={currentTarget:{form:{minutes:'45',pour:'on'}}};
+ date.props.onClick(event);date.props.onClick(event);
+ assert.equal(ui.posted.length,1,'the request is submitted once while its save is pending');
+ assert.equal(ui.render(props).props['aria-busy'],true);
+ await new Promise(setImmediate);
+ assert.equal(refreshed,1);
+ assert.equal(ui.posted[0].revision,3);
+ assert.deepEqual(ui.posted[0].command,{kind:'plan',id:'request-1',date:'2026-11-04',departmentId:'dessert',minutes:45,pour:true});
+ const planned=apply(source,ui.posted[0].command,'quick-task');
+ assert.equal(planned.tasks[0].quantity,20);
+ assert.equal(planned.tasks[0].operation,'Produceren + storten');
+});
+test('a conflicted quick plan keeps the selected department and form visible for recovery',async()=>{
+ const source=apply(state(),{...create,departmentId:'dessert'});
+ const data={revision:3,canCreate:true,departments:['dessert'],items:source.items,requests:source.productionRequests};
+ let calls=0;
+ const ui=requestUi(data,{fetchImpl:async()=>{calls++;return Response.json({message:'De planning is intussen gewijzigd.'},{status:409});}});
+ const props={compact:true,week:'2026-11-02'};let tree=ui.render(props);
+ ui.find(tree,node=>node.props?.['aria-label']==='Inplannen: Testtaart').props.onClick();tree=ui.render(props);
+ ui.find(tree,node=>node.props?.['aria-label']==='Inplannen op wo 4 nov').props.onClick({currentTarget:{form:{}}});
+ await new Promise(setImmediate);tree=ui.render(props);
+ assert.equal(calls,1);
+ assert.equal(tree.props['aria-busy'],false);
+ assert.equal(tree.props['data-production-update-block'],true);
+ assert.equal(ui.find(tree,node=>node.props?.name==='departmentId').props.value,'dessert');
+ assert(requestText(ui.find(tree,node=>node.props?.role==='alert')).includes('intussen gewijzigd'));
+ assert(ui.find(tree,node=>node.props?.['aria-label']==='Kies productiedag'));
+});
+test('the local request preview uses the normal domain command without writing to the live request endpoint',async()=>{
+ let previewState=apply(state(),{...create,departmentId:'dessert'});
+ const ui=requestUi(null,{fetchImpl:async()=>assert.fail('No live request in the preview')});
+ const props=()=>({compact:true,week:'2026-11-02',preview:{state:previewState,onCommand:async command=>{previewState=apply(previewState,command,'preview-task');}}});
+ let tree=ui.render(props());
+ ui.find(tree,node=>node.props?.['aria-label']==='Inplannen: Testtaart').props.onClick();tree=ui.render(props());
+ ui.find(tree,node=>node.props?.['aria-label']==='Inplannen op wo 4 nov').props.onClick({currentTarget:{form:{}}});
+ await new Promise(setImmediate);tree=ui.render(props());
+ assert.equal(ui.posted.length,0);
+ assert.equal(previewState.tasks[0].date,'2026-11-04');
+ assert.equal(previewState.tasks[0].quantity,20);
+ assert(!ui.nodes(tree).some(node=>node.props?.['aria-label']==='Inplannen: Testtaart'));
+ assert(requestText(tree).includes('Ingepland (1)'));
+ ui.find(tree,node=>node.props?.['aria-label']==='Productieverzoeken sluiten').props.onClick();tree=ui.render(props());
+ assert.equal(tree.props['data-production-update-block'],undefined);
+});
 test('both combined chocolate/ice board aliases offer both allowed request planning rows',()=>{
  const initial=state(),items=[{...initial.items[0],id:'ice',name:'Vanille-ijs',departmentId:'ijs'},{...initial.items[0],id:'chocolate',name:'Bonbons',departmentId:'chocolade'}];
  const source=apply({...initial,items},{...create,itemId:'ice',departmentId:'ijs'});
@@ -297,13 +357,13 @@ test('both combined chocolate/ice board aliases offer both allowed request plann
   const ui=requestUi(data);let tree=ui.render({board,compact:true});
   ui.find(tree,node=>node.props?.['aria-label']==='Inplannen: Vanille-ijs').props.onClick();tree=ui.render({board,compact:true});
   const department=ui.find(tree,node=>node.type==='select'&&node.props.name==='departmentId');
-  assert.equal(department.props.defaultValue,'ijs');
+  assert.equal(department.props.value,'ijs');
   assert.deepEqual(ui.nodes(department).filter(node=>node.type==='option').map(node=>node.props.value),['','ijs','chocolade']);
  }
  const scoped=requestUi({...data,departments:['chocolade']});let tree=scoped.render({board:'chocolade'});
  scoped.find(tree,node=>node.props?.['aria-label']==='Inplannen: Vanille-ijs').props.onClick();tree=scoped.render({board:'chocolade'});
  const department=scoped.find(tree,node=>node.type==='select'&&node.props.name==='departmentId');
- assert.equal(department.props.defaultValue,'');
+ assert.equal(department.props.value,'');
  assert.deepEqual(scoped.nodes(department).filter(node=>node.type==='option').map(node=>node.props.value),['','chocolade']);
 });
 test('request editing pre-fills the shared searchable picker and all fields, then keeps its original revision across refreshes',async()=>{
@@ -361,8 +421,8 @@ test('compact requests keep quantities beside the product name, omit stuks and r
   assert(!/\bstuks\b/i.test(requestText(article)));
   const row=ui.find(article,node=>node.props?.className==='row');
   const buttons=ui.nodes(row).filter(node=>node.type==='button');
-  assert.equal(buttons.length,3,'edit, cancel and plan stay together on the request row');
-  assert.deepEqual(buttons.map(button=>button.props['aria-label']),[`Bewerk verzoek: ${items[index].name}`,`Verzoek intrekken: ${items[index].name}`,`Inplannen: ${items[index].name}`]);
+  assert.equal(buttons.length,1,'only the planning action occupies the compact request row');
+  assert.deepEqual(buttons.map(button=>button.props['aria-label']),[`Inplannen: ${items[index].name}`]);
   for(const button of buttons){assert.equal(requestText(button),'','row actions stay icon-only');assert(button.props.title);assert.equal(button.props.type,'button');}
  }
 });
@@ -370,6 +430,7 @@ test('compact edit/cancel/plan icons still execute their actions and planning re
  const source=apply(state(),create),data={revision:3,canCreate:true,departments:['dessert'],items:source.items,requests:source.productionRequests};
  const props={compact:true,board:'patisserie'};
  const editUi=requestUi(data);let tree=editUi.render(props);
+ editUi.find(tree,node=>node.props?.['aria-label']==='Productieverzoeken vergroten').props.onClick();tree=editUi.render(props);
  editUi.find(tree,node=>node.props?.['aria-label']==='Bewerk verzoek: Testtaart').props.onClick();tree=editUi.render(props);
  assert.equal(editUi.find(tree,node=>node.props?.name==='quantity').props.defaultValue,20);
  const editForm=editUi.find(tree,node=>node.type==='form'&&editUi.nodes(node).some(child=>child.props?.name==='itemId'));
@@ -377,6 +438,7 @@ test('compact edit/cancel/plan icons still execute their actions and planning re
  await new Promise(setImmediate);
  assert.equal(editUi.posted[0].command.kind,'edit');assert.equal(editUi.posted[0].command.id,'request-1');assert.equal(editUi.posted[0].command.quantity,25);
  const cancelUi=requestUi(data);tree=cancelUi.render(props);
+ cancelUi.find(tree,node=>node.props?.['aria-label']==='Productieverzoeken vergroten').props.onClick();tree=cancelUi.render(props);
  cancelUi.find(tree,node=>node.props?.['aria-label']==='Verzoek intrekken: Testtaart').props.onClick();await new Promise(setImmediate);
  assert.equal(cancelUi.posted[0].command.kind,'cancel');assert.equal(cancelUi.posted[0].command.id,'request-1');
  let refreshed=0;
@@ -384,6 +446,7 @@ test('compact edit/cancel/plan icons still execute their actions and planning re
  planUi.find(tree,node=>node.props?.['aria-label']==='Inplannen: Testtaart').props.onClick();tree=planUi.render(planProps);
  const article=planUi.find(tree,node=>node.type==='article');
  assert.equal(requestText(planUi.find(article,node=>node.props?.className==='requestQuantity')),'20');
+ planUi.find(tree,node=>node.props?.name==='departmentId').props.onChange({target:{value:'dessert'}});tree=planUi.render(planProps);
  const planForm=planUi.find(tree,node=>node.type==='form'&&planUi.nodes(node).some(child=>child.props?.name==='date'));
  assert(!planUi.nodes(planForm).some(node=>node.props?.name==='quantity'),'planning uses the full request amount through its ID');
  planForm.props.onSubmit({preventDefault:()=>{},currentTarget:{date:'2026-11-05',departmentId:'dessert',minutes:'45',pour:'on'}});

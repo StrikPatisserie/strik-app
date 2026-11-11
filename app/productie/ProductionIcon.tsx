@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
-export type IconName = "cleaning" | "edit" | "refresh" | "trash" | "users" | "gift" | "grid" | "book" | "box" | "leaf" | "stock" | "settings" | "arrow" | "plus" | "chevron" | "check" | "clock" | "screen" | "keyboard" | "close" | "search" | "warning" | "link" | "back" | "move" | "play";
+export type IconName = "menu" | "cleaning" | "edit" | "refresh" | "trash" | "users" | "gift" | "grid" | "book" | "box" | "leaf" | "stock" | "settings" | "arrow" | "plus" | "chevron" | "check" | "clock" | "screen" | "keyboard" | "close" | "search" | "warning" | "link" | "back" | "move" | "play";
 
 export default function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, ReactNode> = {
+    menu: <path d="M3 6h18M3 12h18M3 18h18" />,
     cleaning: <><path d="m14 3 7 7M17.5 6.5 10 14M5 12l7 7M3 21l2-9 7 7-9 2ZM7 16l-2 5M10 18l-1 3"/></>,
     edit: <><path d="m16 3 5 5L8 21H3v-5L16 3ZM13 6l5 5"/></>,
     refresh: <><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-2l2 3M18 17a7 7 0 0 1-12 2l-2-3"/></>,
