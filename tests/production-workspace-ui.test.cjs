@@ -1482,3 +1482,47 @@ test('a completed recipe can explicitly correct one piece to one base recipe wit
  assert.equal(saved.productionWork.history.at(-1).quantityAfter, 84);
  assert.equal(task.completedQuantity, 1, 'An explicit save is required to change the supplied workspace');
 });
+
+test('new planning offers one add button per day and category while task cells stay compact', () => {
+ const h=harness(),props={initialLayout:'new'};
+ let tree=h.render(h.Component,props);
+ const headers=find(tree,node=>node.props?.className==='boardHeader');
+ assert.equal(nodes(headers).filter(node=>node.type==='button'&&node.props.className==='dayAdd').length,6);
+ const rows=nodes(tree).filter(node=>node.props?.className?.startsWith('departmentRow ')&&node.props['data-department']);
+ assert(rows.length>0);
+ for(const row of rows){
+  assert.equal(nodes(row).filter(node=>node.type==='button'&&node.props.className==='categoryAdd').length,1);
+  for(const cell of nodes(row).filter(node=>node.props?.onDrop)){
+   assert(!nodes(cell).some(node=>node.props?.className==='cellAdd'));
+   assert(!nodes(cell).some(node=>node.props?.className==='dayCellFooter'));
+  }
+ }
+ button(tree,'Luxe gebak').props.onClick();tree=h.render(h.Component,props);
+ assert(button(tree,'Productie toevoegen · Luxe gebak'));
+ const cleaning=find(tree,node=>typeof node.type==='function'&&'canCheck' in node.props&&'onCommand' in node.props);
+ assert.equal(cleaning.props.categoryActionsOnly,true);
+});
+
+test('day and category add buttons prefill only their selected context and submit the chosen date and category',async()=>{
+ for(const fromDay of [true,false]){
+  const h=harness(),props={initialLayout:'new'};
+  let tree=h.render(h.Component,props);
+  button(tree,fromDay?'Productie toevoegen · do 29 okt':'Productie toevoegen · Luxe gebak').props.onClick();
+  tree=h.render(h.Component,props);
+  const form=find(tree,node=>typeof node.type==='function'&&!!node.props.onPlan),commands=[];
+  assert.equal(form.props.initial.date,fromDay?'2026-10-29':sample.DEMO_TODAY);
+  assert.equal(form.props.initial.departmentId,fromDay?undefined:'luxe');
+  assert.equal(!!form.props.initial.fromCell,fromDay);
+  const formProps={...form.props,onPlan:async command=>{commands.push(command);}};
+  const render=()=>h.render(form.type,formProps,tree.props.value);
+  let view=render();
+  assert.equal(view.props.subtitle,fromDay?'do 29 okt':'Luxe gebak');
+  find(view,node=>node.type===h.pickerWidget).props.onChange('creme');view=render();
+  const date=find(find(view,node=>node.type==='label'&&text(node)==='Productiedatum'),node=>node.type==='input');
+  assert.equal(visibleNodes(view).includes(date),!fromDay);
+  if(!fromDay){date.props.onChange({target:{value:'2026-10-30'}});view=render();}
+  await find(view,node=>node.type==='form').props.onSubmit({preventDefault(){},currentTarget:{output:'on'}});
+  assert.equal(commands[0].task.date,fromDay?'2026-10-29':'2026-10-30');
+  assert.equal(commands[0].task.departmentId,fromDay?'dessert':'luxe');
+ }
+});

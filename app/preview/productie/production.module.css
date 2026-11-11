@@ -1408,3 +1408,23 @@
   .newPlanning[data-fullscreen=true] .planningRail>aside { flex:1;min-height:0;max-height:none }
   .newPlanning[data-fullscreen=true] .offerWrap { flex:0 0 auto;margin-top:auto }
 }
+
+/* Add production from its day or category, without repeating cell actions. */
+.newPlanning .categoryAdd {
+ display:grid;
+ place-items:center;
+ flex:0 0 auto;
+ width:24px;
+ min-height:24px;
+ padding:2px;
+ border:1px solid #d2ddcd;
+ border-radius:5px;
+ color:#1b3344;
+ background:#f2f6ee;
+ cursor:pointer;
+}
+.newPlanning .categoryAdd:hover { background:#e4eddd }
+.newPlanning .categoryAdd:focus-visible { outline:2px solid #1b3344;outline-offset:1px }
+@media(pointer:coarse) {
+ .newPlanning .categoryAdd { width:32px;min-height:32px }
+}
