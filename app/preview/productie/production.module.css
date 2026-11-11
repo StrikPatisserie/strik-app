@@ -949,8 +949,8 @@
 .readablePlanning .taskWorkBadge svg{width:13px;height:13px}
 .readablePlanning .dayCellFooter{min-height:24px;gap:4px}
 .readablePlanning .planningRail{position:sticky;top:12px;align-self:start;height:calc(100dvh - 138px);min-height:300px;gap:12px}
-.readablePlanning .planningRail>aside{display:flex;flex-direction:column;min-height:0;max-height:65%;overflow:auto}
-.readablePlanning .offerWrap{margin-top:auto}
+.readablePlanning .planningRail>aside{display:flex;flex:1;flex-direction:column;min-height:0;max-height:none;overflow:hidden}
+.readablePlanning .offerWrap{flex:0 0 auto;margin-top:0}
 .readablePlanning .offerTile{max-height:240px;min-height:100px;aspect-ratio:auto}
 .readablePlanning .offerTile img{max-height:240px;object-fit:contain}
 .readablePlanning.dayView .board{min-width:0;grid-template-columns:repeat(var(--day-columns),minmax(0,1fr))}
@@ -1061,8 +1061,8 @@
 .newPlanning .cellAdd:hover{opacity:1;background:#edf3e7}
 .newPlanning .departmentRow[data-collapsed=true] .dayCell>:not(.dayCellFooter){display:none}
 .newPlanning .departmentRow[data-collapsed=true] .dayCell{min-height:42px!important}
-.newPlanning .planningRail{top:12px;max-height:calc(100dvh - 100px);height:auto;min-height:0;gap:12px;position:sticky}
-.newPlanning .planningRail>aside{max-height:65dvh}
+.newPlanning .planningRail{top:12px;max-height:calc(100dvh - 100px);height:calc(100dvh - 100px);min-height:0;gap:12px;position:sticky}
+.newPlanning .planningRail>aside{max-height:none}
 .newPlanning[data-fullscreen=true] .planningRail{top:60px;max-height:calc(100dvh - 140px);height:auto}
 .newPlanning.dayView .board{display:block;min-width:0}
 .newPlanning.dayView .boardHeader{display:flex;min-height:0}
@@ -1076,7 +1076,7 @@
 .newPlanning.dayView .dayCellFooter{min-height:20px}
 .newPlanning .boardFooter{display:flex;padding:6px 10px;font-size:11px}
 @media(max-width:1100px){.newPlanning .plannerWithRequests{grid-template-columns:minmax(0,1fr) 230px!important}.newPlanning :is(.boardHeader,.departmentRow){grid-template-columns:48px repeat(var(--days),minmax(0,1fr))}.newPlanning .board{min-width:0}}
-@media(max-width:900px){.newPlanning .plannerWithRequests{grid-template-columns:minmax(0,1fr)!important}.newPlanning .planningRail{position:static;max-height:none}.newPlanning .planningRail>aside{max-height:none}.newPlanning .board{min-width:calc(48px + var(--days) * 140px)}.newPlanning .mobileDays{display:none}.newPlanning .boardHeader>.dayHeading,.newPlanning .dayCell{display:flex!important}.newPlanning.dayView .board{min-width:0}.newPlanning.dayView .boardHeader{display:flex!important}.newPlanning.dayView .departmentLabel{display:flex}.newPlanning .plannerFilters{display:flex!important;flex:1;gap:6px}.newPlanning .extraFilter{display:block}.newPlanning .planningActions{gap:6px}}
+@media(max-width:900px){.newPlanning .plannerWithRequests{grid-template-columns:minmax(0,1fr)!important}.newPlanning .planningRail{position:static;height:auto;max-height:none}.newPlanning .planningRail>aside{max-height:none}.newPlanning .board{min-width:calc(48px + var(--days) * 140px)}.newPlanning .mobileDays{display:none}.newPlanning .boardHeader>.dayHeading,.newPlanning .dayCell{display:flex!important}.newPlanning.dayView .board{min-width:0}.newPlanning.dayView .boardHeader{display:flex!important}.newPlanning.dayView .departmentLabel{display:flex}.newPlanning .plannerFilters{display:flex!important;flex:1;gap:6px}.newPlanning .extraFilter{display:block}.newPlanning .planningActions{gap:6px}}
 
 .newPlanning .dayHeading :is(strong,span,small,b){color:#fff!important}.newPlanning .emptyCell{display:none}.newPlanning .dayCellFooter{flex:0 0 auto}.newPlanning .planningRail>section{width:100%}
 
@@ -1406,7 +1406,7 @@
   .newPlanning[data-fullscreen=true] .plannerBoardColumn { min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin }
   .newPlanning[data-fullscreen=true] .planningRail { position:static;align-self:stretch;min-height:0;height:auto;max-height:none;gap:6px;overflow:hidden }
   .newPlanning[data-fullscreen=true] .planningRail>aside { flex:1;min-height:0;max-height:none }
-  .newPlanning[data-fullscreen=true] .offerWrap { flex:0 0 auto;margin-top:auto }
+  .newPlanning[data-fullscreen=true] .offerWrap { flex:0 0 auto;margin-top:0 }
 }
 
 /* Add production from its day or category, without repeating cell actions. */

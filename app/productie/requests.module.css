@@ -32,7 +32,8 @@
 @media(max-width:800px){.compact .row strong{font-size:17px}.compact .deadline{font-size:14px}.compact .list article p{font-size:13px}}
 
 .headerActions{display:flex;align-items:center;gap:6px;flex-shrink:0}
-.compact .list{overflow-y:auto;overscroll-behavior:contain;min-height:0;scrollbar-width:thin}
+.compact>.list{flex:1;overflow-y:auto;overscroll-behavior:contain;min-height:0;scrollbar-width:thin}
+.compact>header,.compact>details,.compact>.error,.compact>.empty{flex-shrink:0}
 .compact header{flex-shrink:0;gap:6px}
 .compact h2{font-size:16px;line-height:1.2}
 .compact .row strong{font-size:16px;line-height:1.25}
