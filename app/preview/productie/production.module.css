@@ -1041,7 +1041,7 @@
 
 /* The optional live preview changes presentation, using the same tasks and writes. */
 .newPlanning.readablePlanning{background:#fbfcfa;color:#1b3342}
-.newPlanning .plannerWithRequests{grid-template-columns:minmax(0,1fr) clamp(230px,18vw,280px)!important;gap:12px}
+.newPlanning .plannerWithRequests{grid-template-columns:minmax(0,1fr) clamp(220px,16vw,250px)!important;gap:12px}
 .newPlanning .plannerFilters{flex-wrap:wrap}
 .newPlanning .board{border:1px solid #dce4d6;border-radius:12px;min-width:0;background:#fff;overflow:hidden}
 .newPlanning :is(.boardHeader,.departmentRow){grid-template-columns:48px repeat(var(--days),minmax(0,1fr))}
@@ -1075,7 +1075,7 @@
 .newPlanning.dayView .departmentRow[data-collapsed=true] .dayCell{display:none}
 .newPlanning.dayView .dayCellFooter{min-height:20px}
 .newPlanning .boardFooter{display:flex;padding:6px 10px;font-size:11px}
-@media(max-width:1100px){.newPlanning .plannerWithRequests{grid-template-columns:minmax(0,1fr) 230px!important}.newPlanning :is(.boardHeader,.departmentRow){grid-template-columns:48px repeat(var(--days),minmax(0,1fr))}.newPlanning .board{min-width:0}}
+@media(max-width:1100px){.newPlanning .plannerWithRequests{grid-template-columns:minmax(0,1fr) 220px!important}.newPlanning :is(.boardHeader,.departmentRow){grid-template-columns:48px repeat(var(--days),minmax(0,1fr))}.newPlanning .board{min-width:0}}
 @media(max-width:900px){.newPlanning .plannerWithRequests{grid-template-columns:minmax(0,1fr)!important}.newPlanning .planningRail{position:static;height:auto;max-height:none}.newPlanning .planningRail>aside{max-height:none}.newPlanning .board{min-width:calc(48px + var(--days) * 140px)}.newPlanning .mobileDays{display:none}.newPlanning .boardHeader>.dayHeading,.newPlanning .dayCell{display:flex!important}.newPlanning.dayView .board{min-width:0}.newPlanning.dayView .boardHeader{display:flex!important}.newPlanning.dayView .departmentLabel{display:flex}.newPlanning .plannerFilters{display:flex!important;flex:1;gap:6px}.newPlanning .extraFilter{display:block}.newPlanning .planningActions{gap:6px}}
 
 .newPlanning .dayHeading :is(strong,span,small,b){color:#fff!important}.newPlanning .emptyCell{display:none}.newPlanning .dayCellFooter{flex:0 0 auto}.newPlanning .planningRail>section{width:100%}
@@ -1359,16 +1359,16 @@
   padding:3px;
 }
 .newPlanning .offerTile {
-  height:clamp(80px,10dvh,120px);
+  height:clamp(110px,15dvh,180px);
   min-height:0;
-  max-height:120px;
+  max-height:180px;
   padding:6px;
   aspect-ratio:auto;
 }
 .newPlanning .offerTile img {
   width:100%;
   height:100%;
-  max-height:120px;
+  max-height:180px;
   object-fit:contain;
 }
 .newPlanning .plannerMeta .syncDetails {
