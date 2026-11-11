@@ -7,7 +7,7 @@ import { materialBatchGroups, materialConsumers, recipeMaterialNeeds } from "./m
 import { taskWorkSummary } from "./workSummary";
 import type { WorkCommand } from "./productionWork";
 import s from "./PlanningInspector.module.css";
-const number = (value: number) => value.toLocaleString("nl-NL", { maximumFractionDigits: 6 });
+const number = (value: number) => value.toLocaleString("nl-NL", { maximumFractionDigits: 2 });
 type Selection = { taskId?: string; recipeId?: string; amount: number };
 type Stock = { itemId: string; balance: number; known: boolean; count?: { date: string; quantity: number } | null };
 export default function PlanningInspector({ state, recipes, task, canManage, busy, revision, live, onClose, onWork, onComplete, onCorrect, onAdvanced, onRecipe, onCombine }: {
