@@ -171,3 +171,35 @@ test('the operational workspace exposes only the selected safe offer fields, nev
  const a=route(bakery);a.store.recipes.data.bakeryHome={offers:[{id:'offer',weekStart:'2026-10-26',weekEnd:'2026-11-01',label:'Voorbeeld',imageUrl:'/api/recepturen/media/test',managerSecret:'never-export'}],notes:[]};
  const response=await a.api.GET(),result=await response.json();assert.equal(result.weeklyOffers[0].label,'Voorbeeld');assert(!JSON.stringify(result).includes('never-export'));
 });
+
+
+test('the live planning entry opens the new layout by default and allows explicitly returning to the previous layout', async () => {
+  const Client = () => null;
+  for (const profile of [manager, bakery]) {
+    const page = load('app/bakkerij/productie/page.tsx', {
+      'react/jsx-runtime': require('react/jsx-runtime'),
+      'next/navigation': { notFound() { throw Error('Not found'); } },
+      '../../lib/auth/session': { requireCurrentProfile: async () => profile },
+      '../../lib/auth/access': access,
+      '../../productie/access': rights,
+      '../../productie/ProductionClient': { default: Client },
+      '../../productie/planning': planning,
+      '../../productie/navigation': load('app/productie/navigation.ts', { './planning': planning }),
+      '../../productie/release.server': { productionRelease: () => 'release-test' },
+    }).default;
+    const views = [];
+    for (const [query, layout] of [[{}, 'new'], [{ weergave: 'nieuw' }, 'new'], [{ weergave: 'huidig' }, 'current'], [{ weergave: 'unknown' }, 'new']]) {
+      const view = await page({ searchParams: Promise.resolve({ ...query, board: 'patisserie', department: 'dessert', date: '2026-11-11', task: 'existing-task' }) });
+      assert.equal(view.type, Client);
+      assert.equal(view.props.initialLayout, layout);
+      assert.equal(view.props.initialBoard, 'patisserie');
+      assert.equal(view.props.initialDepartment, 'dessert');
+      assert.equal(view.props.initialWeek, '2026-11-09');
+      assert.equal(view.props.initialTask, 'existing-task');
+      assert.equal(view.props.canManage, true);
+      assert.equal(view.props.appVersion, 'release-test');
+      views.push(view);
+    }
+    assert.notEqual(views[0].key, views[2].key, 'switching through the URL must remount the selected layout');
+  }
+});
