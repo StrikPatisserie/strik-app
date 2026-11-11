@@ -1281,6 +1281,54 @@ test('new planning places navigation, search, filters and view controls in a sin
  assert(!nodes(header).some(node=>node.props?.['aria-label']==='Tekstgrootte'));
 });
 
+test('new planning keeps search behind an icon beside warnings and retains a clearable query',()=>{
+ const h=harness(),props={initialLayout:'new'};
+ let tree=h.render(h.Component,props);
+ const header=find(tree,node=>node.type==='header'&&node.props['aria-label']==='Planningacties');
+ assert(!nodes(header).some(node=>node.type==='input'));
+ assert(!nodes(tree).some(node=>node.type==='option'&&node.props.value==='attention'));
+ const meta=find(header,node=>node.props?.className==='plannerMeta');
+ const controls=nodes(meta).filter(node=>node.type==='button');
+ assert.equal(controls[0].props['aria-label'],'Zoek in planning');
+ assert.match(controls[1].props['aria-label'],/aandachtspunt/);
+ button(tree,'Zoek in planning').props.onClick();tree=h.render(h.Component,props);
+ let input=find(tree,node=>node.type==='input'&&node.props['aria-label']==='Zoek product');
+ assert.equal(input.props.autoFocus,true);
+ input.props.onChange({target:{value:'Confetti'}});tree=h.render(h.Component,props);
+ const cards=nodes(tree).filter(node=>node.type==='article'&&node.props['data-task-id']);
+ assert(cards.length>0);assert(cards.every(card=>text(card).includes('Confetti')));
+ input=find(tree,node=>node.type==='input'&&node.props['aria-label']==='Zoek product');
+ input.props.onKeyDown({key:'Enter'});tree=h.render(h.Component,props);
+ assert(!nodes(tree).some(node=>node.type==='input'&&node.props['aria-label']==='Zoek product'));
+ assert.equal(button(tree,'Zoek in planning').props['data-active'],true);
+ button(tree,'Zoek in planning').props.onClick();tree=h.render(h.Component,props);
+ button(tree,'Zoekfilter wissen').props.onClick();tree=h.render(h.Component,props);
+ assert.equal(button(tree,'Zoek in planning').props['data-active'],undefined);
+ assert(nodes(tree).filter(node=>node.type==='article'&&node.props['data-task-id']).length>cards.length);
+});
+
+test('switching to the new planner cannot carry an invisible task status filter',()=>{
+ const h=harness();let tree=h.render(h.Component);
+ const initialCount=nodes(tree).filter(node=>node.type==='article'&&node.props['data-task-id']).length;
+ find(tree,node=>node.type==='select'&&nodes(node).some(option=>option.type==='option'&&text(option)==='Alle taken')).props.onChange({target:{value:'done'}});
+ tree=h.render(h.Component);
+ assert(nodes(tree).filter(node=>node.type==='article'&&node.props['data-task-id']).length<initialCount);
+ find(tree,node=>node.type==='select'&&node.props['aria-label']==='Planningsversie').props.onChange({target:{value:'new'}});
+ tree=h.render(h.Component);
+ const visible=nodes(tree).filter(node=>node.type==='article'&&node.props['data-task-id']);
+ assert.equal(visible.length,initialCount);
+ assert(visible.some(node=>node.props.className.split(' ').includes('planned')));
+ assert(visible.some(node=>node.props.className.split(' ').includes('done')));
+ assert(!nodes(tree).some(node=>node.type==='option'&&text(node)==='Alle taken'));
+});
+
+test('compact week ranges omit repeated months and years while preserving full labels for existing callers',()=>{
+ assert.equal(planning.weekLabel('2026-11-09',true),'9–15 nov');
+ assert.equal(planning.weekLabel('2026-11-30',true),'30 nov–6 dec');
+ assert.equal(planning.weekLabel('2026-12-28',true),'28 dec–3 jan');
+ assert.match(planning.weekLabel('2026-11-09'),/2026$/);
+});
+
 test('real-data request trials update only the local preview and preserve the source, revisions and work restrictions',async()=>{
  const h=harness(),state=sample.initialPreviewState();
  state.items.push({id:'local-request-item',name:'Proefverzoek',kind:'product',departmentId:'dessert',unit:'stuks',note:'',stock:0});
@@ -1308,4 +1356,24 @@ test('real-data request trials update only the local preview and preserve the so
  const fresh=harness(),reloaded=fresh.render(fresh.Component,props);
  assert.equal(requests(reloaded).props.preview.state.tasks.length,state.tasks.length);
  assert.equal(requests(reloaded).props.preview.state.productionRequests[0].plannedTaskId,undefined);
+});
+
+
+test('return to the current period is highlighted only while another week or day is shown',()=>{
+ for(const initialLayout of ['current','new']){
+  const h=harness(),props={initialLayout};
+  const render=()=>h.render(h.Component,props);
+  let tree=render();
+  assert.equal(button(tree,'Voorbeeldweek').props['data-current-period'],true);
+  button(tree,'Volgende week').props.onClick();tree=render();
+  assert.equal(button(tree,'Voorbeeldweek').props['data-current-period'],false);
+  button(tree,'Voorbeeldweek').props.onClick();tree=render();
+  assert.equal(button(tree,'Voorbeeldweek').props['data-current-period'],true);
+  button(tree,'Per dag').props.onClick();tree=render();
+  assert.equal(button(tree,'Vandaag').props['data-current-period'],true);
+  button(tree,'Volgende dag').props.onClick();tree=render();
+  assert.equal(button(tree,'Vandaag').props['data-current-period'],false);
+  button(tree,'Vandaag').props.onClick();tree=render();
+  assert.equal(button(tree,'Vandaag').props['data-current-period'],true);
+ }
 });

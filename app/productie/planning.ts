@@ -181,9 +181,13 @@ export function weekNumber(value: string) {
 export function dateLabel(value: string, long = false) {
   return new Intl.DateTimeFormat("nl-NL", { timeZone: "UTC", weekday: "short", day: "numeric", ...(long ? { month: "short" } : {}) }).format(calendarDate(value)).replaceAll(".", "");
 }
-export function weekLabel(value: string) {
+export function weekLabel(value: string, compact = false) {
   const end = addDays(value, 6);
   const fmt = new Intl.DateTimeFormat("nl-NL", { timeZone: "UTC", day: "numeric", month: "short" });
+  if (compact) {
+    const startLabel = value.slice(0, 7) === end.slice(0, 7) ? String(calendarDate(value).getUTCDate()) : fmt.format(calendarDate(value));
+    return `${startLabel}–${fmt.format(calendarDate(end))}`.replaceAll(".", "");
+  }
   return `${fmt.format(calendarDate(value))} – ${fmt.format(calendarDate(end))} ${calendarDate(end).getUTCFullYear()}`;
 }
 export function durationLabel(minutes: number) {

@@ -29,10 +29,9 @@ function availableSections(canManage: boolean, demo: boolean, canBakery: boolean
 export default function ProductionNavigation({ active, canManage, canManageData = canManage, canBakery = true, demo = false, boards, activeBoard, onNavigate, onBoard, onCollapse }: Props & {
   boards: { id: BoardId; name: string }[]; activeBoard?: BoardId; onBoard?: (board: BoardId) => void; onCollapse?: () => void;
 }) {
-  return <aside className={s.sidebar}>
+  return <><aside className={s.sidebar}>
     <div className={s.sidebarTop}>
       <Link href="/" className={s.returnToTeam}><Icon name="back" size={17}/><span>Hoofdmenu</span></Link>
-      {onCollapse&&<button type="button" className={s.navigationClose} aria-label="Menu sluiten" title="Menu inklappen" onClick={onCollapse}><Icon name="chevron" size={18}/></button>}
     </div>
     <Link href={demo ? "/preview/productie" : PRODUCTION_HOME} className={s.brand} aria-label="STRAK gepland"><ProductionWordmark className={s.wordmark}/></Link>
     <nav aria-label="Productiemenu">{availableSections(canManageData, demo, canBakery).map(section => {
@@ -46,7 +45,9 @@ export default function ProductionNavigation({ active, canManage, canManageData 
       return onBoard ? <button key={board.id} onClick={() => onBoard(board.id)} aria-current={active === "planning" && activeBoard === board.id ? "true" : undefined}>{content}</button> : <Link key={board.id} href={`${PRODUCTION_HOME}?board=${board.id}`}>{content}</Link>;
     })}</div>
     <div className={s.sidebarBottom}>{onNavigate ? <button onClick={() => onNavigate("settings")} aria-current={active === "settings" ? "page" : undefined}><Icon name="settings" />Instellingen</button> : <Link href={`${PRODUCTION_HOME}?view=settings`}><Icon name="settings" />Instellingen</Link>}</div>
-  </aside>;
+  </aside>
+    {onCollapse && <button type="button" className={s.navigationClose} aria-label="Menu sluiten" title="Menu inklappen" onClick={onCollapse}><Icon name="chevron" size={18}/></button>}
+  </>;
 }
 
 export function ProductionMobileNavigation({ active, canManage, canManageData = canManage, canBakery = true, demo = false, onNavigate }: Props) {

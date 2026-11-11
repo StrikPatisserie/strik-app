@@ -906,15 +906,15 @@
 .readablePlanning .main{padding:10px 14px 8px}
 .readablePlanning .mobileNav{display:none}
 .menuToggle{display:grid;place-items:center;flex-shrink:0;width:38px;min-height:38px;border:1px solid #aabbaa;border-radius:6px;background:#fff;color:#1b3344}
-.planningNavigation{position:fixed;inset:0 auto 0 0;width:240px;max-width:90vw;height:100dvh;max-height:100dvh;margin:0;padding:0;border:0;color:inherit;font:inherit;overflow-y:auto;background:#c3d3bc;box-shadow:6px 0 24px #1b334422}
+.planningNavigation{position:fixed;inset:0 auto 0 0;width:240px;max-width:90vw;height:100dvh;max-height:100dvh;margin:0;padding:0;border:0;color:inherit;font:inherit;overflow:hidden;background:#c3d3bc;box-shadow:6px 0 24px #1b334422}
 .planningNavigation::backdrop{background:#1b334433}
-.planningNavigation .sidebar{display:flex;position:static;height:auto;min-height:100dvh;overflow:visible;padding-top:8px}
+.planningNavigation .sidebar{display:flex;position:static;height:100dvh;min-height:0;overflow-y:auto;padding:8px 30px 14px 10px}
 .planningNavigation .sidebar nav :is(button,a){font-size:14px;min-height:42px}
 .planningNavigation .sidebarBoards :is(button,a){font-size:14px}
 .sidebarTop{display:flex;align-items:center;gap:6px;margin-bottom:18px}
 .sidebarTop .returnToTeam{flex:1;min-width:0;margin:0}
 .planningNavigation .sidebarTop{position:sticky;top:0;z-index:2;padding:6px 0;background:#c3d3bc}
-.navigationClose{display:grid;place-items:center;flex-shrink:0;width:32px;min-height:36px;padding:0;border:0;border-left:1px solid #91a68a;background:transparent;color:#1b3344}
+.navigationClose{position:absolute;top:50%;right:0;transform:translateY(-50%);z-index:3;display:grid;place-items:center;width:24px;min-height:56px;padding:0;border:1px solid #a5b79d;border-right:0;border-radius:8px 0 0 8px;background:#e8eedf;color:#1b3344}
 .navigationClose svg{transform:rotate(180deg)}
 .navigationClose:hover{background:#ffffff55}
 .planningNavigation .navigationClose:focus-visible{outline:2px solid #1b3344;outline-offset:-2px;border-radius:4px}
@@ -926,8 +926,8 @@
 .readablePlanning .plannerFilters select{min-height:36px;font-size:13px;padding:6px 24px 6px 8px}
 .readablePlanning .weekPicker strong{font-size:20px}
 .readablePlanning .plannerWithRequests{grid-template-columns:minmax(0,1fr) clamp(230px,17vw,330px)!important;gap:12px}
-.readablePlanning .plannerBoardColumn{overflow-x:auto;overscroll-behavior-x:contain}
-.readablePlanning .board{min-width:calc(44px + var(--days) * 170px)}
+.readablePlanning .plannerBoardColumn{min-width:0;container-type:inline-size;container-name:production-board;overflow-x:auto;overscroll-behavior-x:contain}
+.readablePlanning .board{width:100%;min-width:0;box-sizing:border-box}
 .readablePlanning :is(.boardHeader,.departmentRow){grid-template-columns:44px repeat(var(--days),minmax(0,1fr))}
 .readablePlanning .dayHeading{min-height:52px;padding:7px;gap:6px;flex-wrap:wrap}
 .readablePlanning .dayHeading strong{font-size:clamp(16px,1vw,26px)}
@@ -965,9 +965,9 @@
 .readablePlanning.dayView .taskStep{font-size:clamp(14px,.85vw,20px)}
 .readablePlanning.largeText .taskOpen strong{font-size:clamp(20px,1.1vw,32px)}
 .readablePlanning.largeText.dayView .taskOpen strong{font-size:clamp(26px,var(--day-title-scale),var(--day-title-size))}
-.readablePlanning[data-bakery-screen=true] .main::before{content:"";display:block;flex:0 0 60px}
-.readablePlanning[data-bakery-screen=true] .planningActions{order:1;position:sticky;bottom:0;margin-top:auto;padding:8px 0;background:#fff;border-top:2px solid #1b3344;border-bottom:0;z-index:4}
-.readablePlanning[data-bakery-screen=true] .planningRail{top:60px;height:calc(100dvh - 190px)}
+.readablePlanning[data-fullscreen=true] .main::before{content:"";display:block;flex:0 0 60px}
+.readablePlanning[data-fullscreen=true] .planningActions{order:1;position:sticky;bottom:0;margin-top:auto;padding:8px 0;background:#fff;border-top:2px solid #1b3344;border-bottom:0;z-index:4}
+.readablePlanning[data-fullscreen=true] .planningRail{top:60px;height:calc(100dvh - 190px)}
 @media(min-width:2200px){
  .readablePlanning .planningActions :is(.primaryButton,.secondaryButton),.readablePlanning .plannerFilters select{font-size:16px!important;min-height:40px}
  .readablePlanning .weekPicker strong{font-size:26px}
@@ -978,9 +978,49 @@
 @media(max-width:1100px) and (min-width:801px){.readablePlanning.dayView .board{grid-template-columns:repeat(min(var(--day-columns),2),minmax(0,1fr))}}
 @media(pointer:coarse){
  .sidebar nav :is(button,a){min-height:44px}
- .readablePlanning :is(.menuToggle,.navigationClose,.taskCheck){min-width:40px;min-height:40px}
+ .readablePlanning :is(.menuToggle,.taskCheck){min-width:40px;min-height:40px}
+ .planningNavigation .navigationClose{width:30px;min-height:64px}
 }
-@media(any-pointer:coarse) and (min-width:801px){.readablePlanning:not(.dayView) .board{min-width:calc(44px + var(--days) * 260px)}}
+/* Keep titles and touch controls usable when six days share a narrower board. */
+@media(min-width:801px){
+ @container production-board (max-width:1200px){
+  .readablePlanning:not(.newPlanning):not(.dayView) .taskCard{
+   flex-direction:column;
+   align-items:stretch;
+   padding:7px;
+  }
+  .readablePlanning:not(.newPlanning):not(.dayView) .taskBody{order:-1;flex:0 0 auto}
+  .readablePlanning:not(.newPlanning):not(.dayView) .taskControls{
+   flex:0 0 auto;
+   flex-direction:row;
+   flex-wrap:wrap;
+   justify-content:flex-start;
+   gap:6px;
+   min-height:24px;
+  }
+  .readablePlanning:not(.newPlanning):not(.dayView) .taskQuantity{
+   position:static;
+   width:auto;
+   height:auto;
+   padding:3px 5px;
+   border-radius:4px;
+   align-items:baseline;
+  }
+  .readablePlanning:not(.newPlanning):not(.dayView) .taskDragHandle{
+   top:auto;
+   bottom:4px;
+   right:4px;
+   height:40px;
+  }
+  .readablePlanning:not(.newPlanning):not(.dayView) .taskCard:has(.taskDragHandle) .taskControls{
+   min-height:40px;
+   padding-right:42px;
+  }
+  .readablePlanning:not(.newPlanning):not(.dayView) .taskCard:has(.taskDragHandle) .taskStep small[data-warning-only]{right:5px}
+  .readablePlanning:not(.newPlanning):not(.dayView) .taskCard:has(.taskDragHandle):has(.recipeNudge) .taskStep small[data-warning-only]{right:25px}
+  .readablePlanning:not(.newPlanning):not(.dayView) .taskCard:has(.taskDragHandle) .recipeNudge{right:0}
+ }
+}
 @media(max-width:800px){
  .readablePlanning .plannerWithRequests{grid-template-columns:minmax(0,1fr)!important}
  .readablePlanning .planningRail{position:static;display:grid;grid-template-columns:minmax(0,1fr) 100px;height:auto;min-height:0;align-items:start}
@@ -995,7 +1035,7 @@
  .readablePlanning .periodToggle button{min-height:36px}
  .readablePlanning .taskOpen strong{font-size:17px!important}
  .readablePlanning .plannerFilters select{font-size:16px;min-height:40px}
- .readablePlanning[data-bakery-screen=true] .main::before{flex-basis:40px}
+ .readablePlanning[data-fullscreen=true] .main::before{flex-basis:40px}
 }
 @media print{.menuToggle,.planningNavigation,.readablePlanning .planningActions{display:none}}
 
@@ -1003,7 +1043,7 @@
 .newPlanning.readablePlanning{background:#fbfcfa;color:#1b3342}
 .newPlanning .plannerWithRequests{grid-template-columns:minmax(0,1fr) clamp(230px,18vw,280px)!important;gap:12px}
 .newPlanning .plannerFilters{flex-wrap:wrap}
-.newPlanning .board{border:1px solid #dce4d6;border-radius:12px;min-width:calc(48px + var(--days) * 140px);background:#fff;overflow:hidden}
+.newPlanning .board{border:1px solid #dce4d6;border-radius:12px;min-width:0;background:#fff;overflow:hidden}
 .newPlanning :is(.boardHeader,.departmentRow){grid-template-columns:48px repeat(var(--days),minmax(0,1fr))}
 .newPlanning .boardHeader{display:grid;border-bottom:1px solid #dce4d6;position:sticky;top:0;z-index:2;background:#1b3344}
 .newPlanning .dayHeading{background:#1b3344!important;color:#fff!important;border-right:1px solid #526b78;min-height:36px;padding:6px 10px;align-items:center;justify-content:center;flex-direction:row;flex-wrap:nowrap;gap:6px;line-height:1.2;border-top:2px solid transparent}
@@ -1023,7 +1063,7 @@
 .newPlanning .departmentRow[data-collapsed=true] .dayCell{min-height:42px!important}
 .newPlanning .planningRail{top:12px;max-height:calc(100dvh - 100px);height:auto;min-height:0;gap:12px;position:sticky}
 .newPlanning .planningRail>aside{max-height:65dvh}
-.newPlanning[data-bakery-screen=true] .planningRail{top:60px;max-height:calc(100dvh - 140px);height:auto}
+.newPlanning[data-fullscreen=true] .planningRail{top:60px;max-height:calc(100dvh - 140px);height:auto}
 .newPlanning.dayView .board{display:block;min-width:0}
 .newPlanning.dayView .boardHeader{display:flex;min-height:0}
 .newPlanning.dayView .boardHeader>.departmentColumn{display:none}
@@ -1035,7 +1075,7 @@
 .newPlanning.dayView .departmentRow[data-collapsed=true] .dayCell{display:none}
 .newPlanning.dayView .dayCellFooter{min-height:20px}
 .newPlanning .boardFooter{display:flex;padding:6px 10px;font-size:11px}
-@media(max-width:1100px){.newPlanning .plannerWithRequests{grid-template-columns:minmax(0,1fr) 230px!important}.newPlanning :is(.boardHeader,.departmentRow){grid-template-columns:48px repeat(var(--days),minmax(0,1fr))}.newPlanning .board{min-width:calc(48px + var(--days) * 140px)}}
+@media(max-width:1100px){.newPlanning .plannerWithRequests{grid-template-columns:minmax(0,1fr) 230px!important}.newPlanning :is(.boardHeader,.departmentRow){grid-template-columns:48px repeat(var(--days),minmax(0,1fr))}.newPlanning .board{min-width:0}}
 @media(max-width:900px){.newPlanning .plannerWithRequests{grid-template-columns:minmax(0,1fr)!important}.newPlanning .planningRail{position:static;max-height:none}.newPlanning .planningRail>aside{max-height:none}.newPlanning .board{min-width:calc(48px + var(--days) * 140px)}.newPlanning .mobileDays{display:none}.newPlanning .boardHeader>.dayHeading,.newPlanning .dayCell{display:flex!important}.newPlanning.dayView .board{min-width:0}.newPlanning.dayView .boardHeader{display:flex!important}.newPlanning.dayView .departmentLabel{display:flex}.newPlanning .plannerFilters{display:flex!important;flex:1;gap:6px}.newPlanning .extraFilter{display:block}.newPlanning .planningActions{gap:6px}}
 
 .newPlanning .dayHeading :is(strong,span,small,b){color:#fff!important}.newPlanning .emptyCell{display:none}.newPlanning .dayCellFooter{flex:0 0 auto}.newPlanning .planningRail>section{width:100%}
@@ -1127,11 +1167,22 @@
   padding:3px
 }
 .newPlanning .weekPicker .thisWeek {
-  width:auto;
-  padding:4px 6px;
-  font-size:12px;
-  white-space:nowrap
+  display:grid;
+  place-items:center;
+  width:26px;
+  min-height:26px;
+  margin:0 3px;
+  padding:4px;
+  border:0;
+  border-radius:50%;
+  background:#315d7c;
+  color:white
 }
+.newPlanning .weekPicker .thisWeek[data-current-period=true] {
+  background:transparent;
+  color:#315d7c;
+}
+.newPlanning .weekPicker .thisWeek svg { transform:rotate(90deg) }
 .newPlanning .plannerToolbar>.plannerFilters {
   display:flex;
   flex:1 1 auto;
@@ -1181,7 +1232,7 @@
   font-size:12px!important;
   padding:4px 6px
 }
-.newPlanning[data-bakery-screen=true] .planningActions {
+.newPlanning[data-fullscreen=true] .planningActions {
   padding:6px 0;
   border-top:1px solid #b5c3b0
 }
@@ -1214,7 +1265,7 @@
     display:flex
   }
   .newPlanning .weekPicker .thisWeek {
-    display:none
+    display:grid
   }
   .newPlanning .plannerFilters .mobileFilterToggle {
     display:none
@@ -1275,5 +1326,45 @@
   }
   .newPlanning .plannerFilters select {
     max-width:none
+  }
+}
+
+.newPlanning .planningRail {
+  gap:8px;
+}
+.newPlanning .offerHeading {
+  min-height:22px;
+  margin-bottom:3px;
+  font-size:11px;
+}
+.newPlanning .offerHeading .offerEdit {
+  width:24px;
+  min-height:22px;
+  padding:3px;
+}
+.newPlanning .offerTile {
+  height:clamp(80px,10dvh,120px);
+  min-height:0;
+  max-height:120px;
+  padding:6px;
+  aspect-ratio:auto;
+}
+.newPlanning .offerTile img {
+  width:100%;
+  height:100%;
+  max-height:120px;
+  object-fit:contain;
+}
+.newPlanning .plannerMeta .syncDetails {
+  flex-shrink:0;
+}
+@media(pointer:coarse) {
+  .newPlanning .weekPicker .thisWeek {
+    width:40px;
+    min-height:40px;
+  }
+  .newPlanning .offerHeading .offerEdit {
+    min-width:40px;
+    min-height:40px;
   }
 }

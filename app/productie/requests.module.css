@@ -41,23 +41,59 @@
 .compact .deadline{font-size:13px;margin-top:5px;padding:3px 5px}
 .compact .deadline svg{width:14px;height:14px}
 .compact .list article p{font-size:12px;line-height:1.3}
-.panel.expanded{width:min(900px,calc(100vw - 32px));max-height:86dvh;margin:auto;padding:0;border:1px solid #d9c987;border-radius:12px;background:#fff8df;font:16px/1.4 "Overpass",Arial,sans-serif;color:#1b3344;overflow:auto;overscroll-behavior:contain}
-.expanded::backdrop{background:#1b334466}
-.panel.expanded>header{position:sticky;top:0;z-index:2;align-items:center;padding:16px 20px;background:#f2dfa2;color:#1b3344}
-.panel.expanded h2{font-size:24px;color:inherit;margin:0}
-.panel.expanded h2 span{font-size:16px;color:inherit}
-.panel.expanded>header button{width:42px;min-height:42px;padding:8px;background:#fff;color:#1b3344}
-.panel.expanded .list article{padding:14px 20px;border-top:1px solid #e0d4a4}
-.panel.expanded .row strong{font-size:22px;line-height:1.3}
-.panel.expanded .row .requestQuantity{font-size:15px}
-.panel.expanded .rowActions button{width:40px;min-width:40px;min-height:42px}
-.panel.expanded .deadline{font-size:16px;padding:4px 8px}
-.panel.expanded .list article p{font-size:15px;line-height:1.4}
-.panel.expanded .form{padding:0 20px 12px}
-.panel.expanded .list .form{padding:0;margin:14px 0 0}
-.panel.expanded .form label{font-size:14px}
-.panel.expanded .form :is(input,select,textarea){font-size:16px;min-height:42px}
-.panel.expanded>details,.panel.expanded>.error,.panel.expanded>.empty{margin:12px 20px}
+.panel.expanded {
+  width:min(720px,calc(100vw - 32px));
+  max-height:82dvh;
+  margin:auto;
+  padding:0;
+  border:1px solid #d9c987;
+  border-radius:10px;
+  background:#fff8df;
+  font:14px/1.35 "Overpass",Arial,sans-serif;
+  color:#1b3344;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+}
+.expanded::backdrop { background:#1b334466 }
+.panel.expanded>header {
+  position:sticky;
+  top:0;
+  z-index:2;
+  align-items:center;
+  padding:9px 14px;
+  background:#f2dfa2;
+  color:#1b3344;
+}
+.panel.expanded h2 { font-size:18px; color:inherit; margin:0 }
+.panel.expanded h2 span { font-size:13px; color:inherit }
+.panel.expanded>header button { width:32px; min-height:32px; padding:5px; background:#fff; color:#1b3344 }
+/* The dialog owns vertical scrolling. A non-scrolling nested list must let
+   wheel and touch gestures reach that dialog. */
+.panel.expanded .list { overflow:visible; overscroll-behavior:auto }
+.panel.expanded .list article {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) max-content;
+  gap:2px 8px;
+  padding:8px 14px;
+  border-top:1px solid #e0d4a4;
+}
+.panel.expanded .row { display:contents }
+.panel.expanded .requestName { grid-column:1; grid-row:1 }
+.panel.expanded .rowActions { grid-column:2; grid-row:1 / span 2; align-self:center }
+.panel.expanded .list article>:is(time,p) { grid-column:1 }
+.panel.expanded .list article>.form { grid-column:1 / -1 }
+.panel.expanded .row strong { font-size:16px; line-height:1.25 }
+.panel.expanded .row .requestQuantity { font-size:12px }
+.panel.expanded .rowActions button { width:32px; min-width:32px; min-height:34px }
+.panel.expanded .deadline { margin-top:3px; font-size:12px; padding:2px 5px }
+.panel.expanded .deadline svg { width:13px; height:13px }
+.panel.expanded .list article p { margin:4px 0 0; font-size:12px; line-height:1.35; white-space:pre-wrap; overflow:visible }
+.panel.expanded .form { padding:0 14px 8px; gap:8px }
+.panel.expanded .list .form { padding:0; margin:8px 0 0 }
+.panel.expanded .form label { font-size:12px }
+.panel.expanded .form :is(input,select,textarea) { font-size:16px; min-height:40px }
+.panel.expanded>details,.panel.expanded>.error,.panel.expanded>.empty { margin:8px 14px }
 .quickDays{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
 .panel .quickDays button{display:grid;justify-items:center;gap:2px;min-height:58px;padding:8px 4px;border-color:#aabbaa;background:#edf2e9;font-weight:750}
 .quickDays button small{color:inherit;font-size:12px;font-weight:400}
@@ -68,7 +104,17 @@
 .planOptions label,.planOptions>button{margin-top:10px}
 @media(min-width:2200px){.compact h2{font-size:20px}.compact .row strong{font-size:21px}.compact .deadline{font-size:16px}.compact .list article p{font-size:15px}}
 @media(pointer:coarse){.compact header button,.compact .rowActions button{width:40px;min-width:40px;min-height:44px}}
-@media(max-width:550px){.panel.expanded{width:calc(100vw - 16px);max-height:92dvh}.panel.expanded>header{padding:12px}.panel.expanded h2{font-size:20px}.panel.expanded .list article{padding:12px}.panel.expanded .row strong{font-size:18px}.quickDays{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:550px) {
+  .panel.expanded { width:calc(100vw - 16px); max-height:90dvh }
+  .panel.expanded>header { padding:8px 10px }
+  .panel.expanded h2 { font-size:17px }
+  .panel.expanded .list article { padding:7px 10px }
+  .panel.expanded .row strong { font-size:15px }
+  .quickDays { grid-template-columns:repeat(4,minmax(0,1fr)) }
+}
+@media(pointer:coarse) {
+  .panel.expanded>header button,.panel.expanded .rowActions button { width:40px; min-width:40px; min-height:44px }
+}
 
 .compact>details,.panel.expanded>details { border-color:#e0d4a4; }
 :is(.compact,.expanded) .deadline:not([data-urgency=overdue]) { background:#fff3c7; border-color:#d5b76a; color:#704918; }
@@ -76,3 +122,75 @@
 :is(.compact,.expanded) .rowActions .plan:hover { background:#304f5f; }
 :is(.compact,.expanded) .quickDays button { background:#fff3c7; border-color:#d9c987; }
 :is(.compact,.expanded) .quickDays button:hover:not(:disabled) { background:#f2dfa2; }
+
+/* Keep the rail concise; the enlarged view retains the full request. */
+.compact header {
+  padding:6px 8px;
+}
+.compact h2 {
+  font-size:14px;
+}
+.compact .list article {
+  padding:6px 8px;
+}
+.compact .row {
+  align-items:center;
+  gap:5px;
+}
+.compact .row strong {
+  font-size:14px;
+  line-height:1.25;
+}
+.compact .row .requestQuantity {
+  font-size:11px;
+}
+.compact .rowActions button {
+  width:28px;
+  min-width:28px;
+  min-height:30px;
+}
+.compact .deadline {
+  margin-top:2px;
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:transparent!important;
+  font-size:12px;
+  line-height:1.3;
+}
+.compact .deadline svg {
+  display:none;
+}
+.compact .list article p {
+  margin:3px 0 0;
+  font-size:11px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.compact>details {
+  margin:0;
+  padding:7px 8px;
+  font-size:11px;
+}
+@media(min-width:2200px) {
+  .compact h2 {
+    font-size:17px;
+  }
+  .compact .row strong {
+    font-size:18px;
+  }
+  .compact .deadline {
+    font-size:14px;
+  }
+  .compact .list article p {
+    font-size:13px;
+  }
+}
+@media(pointer:coarse) {
+  .compact header button,.compact .rowActions button {
+    width:40px;
+    min-width:40px;
+    min-height:44px;
+  }
+}

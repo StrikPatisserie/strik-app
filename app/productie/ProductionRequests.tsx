@@ -74,7 +74,7 @@ export default function ProductionRequests({board,week,today,selectedDay,selecte
  const content=<>
 
   <header><div>{!compact&&<small>Van logistiek naar bakkerij</small>}{title}</div><div className={s.headerActions}>
-   {compact&&!expanded&&<button type="button" disabled={busy} onClick={()=>setExpanded(true)} aria-label="Productieverzoeken vergroten" title="Vergroten"><Icon name="search" size={19}/></button>}
+   {compact&&!expanded&&<button type="button" disabled={busy} onClick={()=>setExpanded(true)} aria-label="Productieverzoeken vergroten" title="Uitklappen" aria-haspopup="dialog" aria-expanded={expanded}><Icon name="expand" size={19}/></button>}
    {data?.canCreate&&<button type="button" disabled={busy} onClick={()=>adding?closeEditor():openEditor()} aria-label="Productieverzoek toevoegen" aria-expanded={adding}><Icon name="plus" size={18}/></button>}
    {expanded&&<button type="button" disabled={busy} onClick={closePanel} aria-label="Productieverzoeken sluiten" title="Sluiten"><Icon name="close" size={22}/></button>}
   </div></header>
@@ -100,7 +100,7 @@ export default function ProductionRequests({board,week,today,selectedDay,selecte
      {(!compact||expanded||logistics)&&data?.canCreate&&<><button disabled={busy} type="button" onClick={()=>openEditor(r)} aria-label={`Bewerk verzoek: ${item?.name}`} title="Verzoek bewerken"><Icon name="edit" size={14}/></button><button className={s.withdraw} disabled={busy} type="button" onClick={()=>void act({kind:'cancel',id:r.id})} aria-label={`Verzoek intrekken: ${item?.name}`} title="Verzoek intrekken"><Icon name="trash" size={14}/></button></>}
      {!logistics&&allowed.length>0&&<button className={s.plan} type="button" disabled={busy||!item||item.productionBlocked} onClick={()=>openPlanning(r,allowed)} aria-label={`Inplannen: ${item?.name}`} title="Inplannen" aria-expanded={planning===r.id}><Icon name="plus" size={17}/></button>}
     </div>
-   </div>{deadline&&<time className={s.deadline} dateTime={r.neededBy} data-urgency={deadline.urgency} title={`Uiterlijk ${dateLabel(r.neededBy!,true)}`}><Icon name={deadline.urgency==='overdue'?'warning':'grid'} size={16}/>{deadline.label}</time>}{r.note&&<p>{r.note}</p>}
+   </div>{deadline&&<time className={s.deadline} dateTime={r.neededBy} data-urgency={deadline.urgency} title={`Uiterlijk ${dateLabel(r.neededBy!,true)}`}><Icon name={deadline.urgency==='overdue'?'warning':'grid'} size={16}/>{deadline.label}</time>}{r.note&&<p title={r.note}>{r.note}</p>}
    {planning===r.id&&<form className={s.form} onSubmit={event=>{
     event.preventDefault();planRequest(event.currentTarget,r.id);
    }}>

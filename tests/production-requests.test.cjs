@@ -296,7 +296,11 @@ test('enlarged requests plan with one date click, respect deadlines and ignore d
  let refreshed=0;
  const props={compact:true,board:'patisserie',week:'2026-11-02',today:'2026-11-03',selectedDay:'2026-11-04',selectedDepartment:'luxe',onPlanned:async()=>{refreshed++;}};
  const ui=requestUi(data);let tree=ui.render(props);
- ui.find(tree,node=>node.props?.['aria-label']==='Productieverzoeken vergroten').props.onClick();tree=ui.render(props);
+ const expand=ui.find(tree,node=>node.props?.['aria-label']==='Productieverzoeken vergroten');
+ assert.equal(expand.props.children.props.name,'expand');
+ assert.equal(expand.props['aria-haspopup'],'dialog');
+ assert.equal(expand.props.title,'Uitklappen');
+ expand.props.onClick();tree=ui.render(props);
  assert.equal(ui.posted.length,0,'opening the list only reads the existing requests');
  ui.find(tree,node=>node.props?.['aria-label']==='Inplannen: Testtaart').props.onClick();tree=ui.render(props);
  assert.equal(ui.find(tree,node=>node.props?.name==='departmentId').props.value,'dessert','an assigned request keeps its department when another planning lane is selected');

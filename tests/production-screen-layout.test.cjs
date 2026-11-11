@@ -205,3 +205,15 @@ test('compact work summaries reuse the day footer and task metadata without abso
  assert(!/position\s*:\s*absolute/.test(badge),'Work metadata must not cover warnings, recipe groups or the touch handle');
  assert.match(css,/\.worksheetRoot\s+\.dayCellFooter\s+\.cellAdd\s*\{[^}]*margin\s*:\s*0/);
 });
+
+
+test('desktop week columns fit their available board width on touchscreens',()=>{
+ const css=fs.readFileSync('app/preview/productie/production.module.css','utf8');
+ assert.match(css,/\.readablePlanning\s+\.board\s*\{[^}]*width:100%;min-width:0;box-sizing:border-box/);
+ assert.match(css,/\.newPlanning\s+\.board\s*\{[^}]*min-width:0/);
+ assert(!css.includes('var(--days) * 260px'),'Touch input must not force the week to become wider than the display');
+ assert(!css.includes('var(--days) * 170px'),'Desktop day columns must be able to share the available board width');
+ assert.match(css,/@container production-board \(max-width:1200px\)/);
+ assert.match(css,/\.readablePlanning:not\(\.newPlanning\):not\(\.dayView\) \.taskBody\{order:-1/);
+ assert.match(css,/\.readablePlanning:not\(\.newPlanning\):not\(\.dayView\) \.taskQuantity\{\s*position:static/);
+});

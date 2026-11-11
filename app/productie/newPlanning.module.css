@@ -12,7 +12,7 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  max-width: 140px;
+  width: 100%;
   padding: 0 8px;
   border: 1px solid #d2ddcd;
   border-radius: 7px;
@@ -166,4 +166,86 @@
   .day .cardMeta { grid-column: 3; grid-row: 1; }
   .day .warning { grid-column: 4; grid-row: 1; }
   .day .drag { grid-column: 5; grid-row: 1; }
+}
+
+.searchToggle {
+  position:relative;
+  display:grid;
+  place-items:center;
+  background:transparent;
+  color:#1b3344;
+  border:1px solid transparent;
+  border-radius:6px;
+}
+.searchToggle[data-active=true] {
+  background:#e8eef2;
+  border-color:#96adbc;
+}
+.searchToggle[data-active=true]::after {
+  content:"";
+  position:absolute;
+  top:3px;
+  right:3px;
+  width:5px;
+  height:5px;
+  border-radius:50%;
+  background:#315d7c;
+}
+.searchDialog {
+  position:fixed;
+  inset:68px 20px auto auto;
+  width:min(360px,calc(100vw - 32px));
+  max-width:calc(100vw - 32px);
+  margin:0;
+  padding:16px;
+  border:1px solid #c6d6bd;
+  border-radius:12px;
+  background:#fff;
+  color:#1b3344;
+  box-shadow:0 12px 36px #1b334422;
+  font:16px/1.4 "Overpass",Arial,sans-serif;
+}
+.searchDialog::backdrop {
+  background:#1b334422;
+}
+.searchDialog header {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:12px;
+}
+.searchDialog h2 {
+  margin:0;
+  font-size:16px;
+}
+.searchDialog button {
+  cursor:pointer;
+  color:inherit;
+  font:inherit;
+}
+.searchDialog header button {
+  display:grid;
+  place-items:center;
+  width:36px;
+  min-height:36px;
+  border:0;
+  border-radius:6px;
+  background:#edf2e9;
+}
+.searchDialog .search {
+  box-sizing:border-box;
+  min-height:44px;
+}
+.searchDialog input {
+  font-size:16px;
+}
+.searchDialog .clearSearch {
+  margin-top:12px;
+  padding:4px 0;
+  border:0;
+  background:transparent;
+  color:#526b50;
+  font-size:13px;
+  text-decoration:underline;
 }

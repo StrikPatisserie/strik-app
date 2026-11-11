@@ -1,6 +1,6 @@
 import { b2bLetterHasLogo } from "../../b2bLetterLines";
 import { b2bProductionLetters } from "../../b2bCombinationLetters";
-import { b2bProductionPlan, eligibleB2BLetterOrder, type B2BProductionAssignment } from "./b2bProductionPlanning";
+import { b2bProductionPlan, eligibleB2BLetterOrder, type B2BProductionAssignment, type B2BProductionPlan } from "./b2bProductionPlanning";
 import type { ChocolateLetterLine, ChocolateLetterOrder, SinterklaasB2BOrder } from "../../types";
 import type { ProductionBatchSeed } from "./ProductionPlanningClient";
 import { addProductionOrderQuantity, productionOrderSource, productionRecipientVersion, type ProductionOrderSource, type ProductionRecipient, type ProductionSeedRow } from "./productionSources";
@@ -62,6 +62,7 @@ export function productionDeadlinePassed(batch: Pick<ProductionBatchSeed, "deadl
 export function combineProductionOrders(batches: ProductionBatchSeed[], legacyOrders: ChocolateLetterOrder[], b2bOrders: SinterklaasB2BOrder[], assignments: B2BProductionAssignment[] = []) {
   const rowsByDate = new Map(batches.map(batch => [batch.date, new Map(batch.rows.map(row => [row.key, {...row, orderSources: {...row.orderSources}} as ProductionSeedRow]))]));
   const unplanned: string[] = [];
+  const b2bPlanning: B2BProductionPlan[] = [];
   const addOrderLine = (date: string, key: string, label: string, quantity: number, source: ProductionOrderSource, recipient: Omit<ProductionRecipient,"source"|"quantity">) => {
     const rows = rowsByDate.get(date);
     if (!rows) return;
@@ -69,12 +70,15 @@ export function combineProductionOrders(batches: ProductionBatchSeed[], legacyOr
     rows.set(key, addProductionOrderQuantity(current, source, quantity, recipient));
   };
 
+  // Fulfillment does not remove an order from its production history.
   legacyOrders
-    .filter((order) => !order.productionDone && !order.pickedUp && order.status !== "opgehaald" && order.status !== "geannuleerd")
+    .filter((order) => order.status !== "geannuleerd")
     .forEach((order) => {
       const date = findProductionDate(batches, order.pickupDate);
       if (!date) {
-        unplanned.push(`${order.code} · ${order.customerName}`);
+        if (!order.productionDone && !order.pickedUp && order.status !== "opgehaald") {
+          unplanned.push(`${order.code} · ${order.customerName}`);
+        }
         return;
       }
       order.lines.forEach((line) => {
@@ -84,13 +88,18 @@ export function combineProductionOrders(batches: ProductionBatchSeed[], legacyOr
     });
 
   b2bOrders
-    .filter(eligibleB2BLetterOrder)
+    .filter((order) => order.status === "akkoord" && !order.cancelled)
     .forEach((order) => {
-      const plan = b2bProductionPlan(order,batches,assignments);
-      if(plan.issues?.length) unplanned.push(`B2B · ${order.customerName} · combinatieletters controleren`);
-      const date = batches.find(batch=>batch.id===plan.batchId)?.date || "";
+      const plan = b2bProductionPlan(order, batches, assignments);
+      if (plan.quantity <= 0) return;
+      const needsPlanning = eligibleB2BLetterOrder(order);
+      if (needsPlanning) b2bPlanning.push(plan);
+      if (needsPlanning && plan.issues?.length) {
+        unplanned.push(`B2B · ${order.customerName} · combinatieletters controleren`);
+      }
+      const date = batches.find(batch => batch.id === plan.batchId)?.date || "";
       if (!date) {
-        if(!plan.issues?.length)unplanned.push(`B2B · ${order.customerName}`);
+        if (needsPlanning && !plan.issues?.length) unplanned.push(`B2B · ${order.customerName}`);
         return;
       }
       b2bProductionLetters(order).lines.forEach((line) => {
@@ -107,7 +116,7 @@ export function combineProductionOrders(batches: ProductionBatchSeed[], legacyOr
     rows: [...(rowsByDate.get(batch.date)?.values() || [])],
   }));
 
-  return { batches: batchViews, unplanned, b2bPlanning: b2bOrders.filter(eligibleB2BLetterOrder).map(order=>b2bProductionPlan(order,batches,assignments)) };
+  return { batches: batchViews, unplanned, b2bPlanning };
 }
 
 export type ProductionChange = { key: string; label: string; before: number; after: number; detail: string };

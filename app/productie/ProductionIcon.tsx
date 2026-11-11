@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
-export type IconName = "menu" | "cleaning" | "edit" | "refresh" | "trash" | "users" | "gift" | "grid" | "book" | "box" | "leaf" | "stock" | "settings" | "arrow" | "plus" | "chevron" | "check" | "clock" | "screen" | "keyboard" | "close" | "search" | "warning" | "link" | "back" | "move" | "play" | "fruit" | "pastry" | "cake" | "cream" | "wedding" | "oven" | "bread" | "icecream" | "chocolate";
+export type IconName = "menu" | "expand" | "cleaning" | "edit" | "refresh" | "trash" | "users" | "gift" | "grid" | "book" | "box" | "leaf" | "stock" | "settings" | "arrow" | "plus" | "chevron" | "check" | "clock" | "screen" | "keyboard" | "close" | "search" | "warning" | "link" | "back" | "move" | "play" | "fruit" | "pastry" | "cake" | "cream" | "wedding" | "oven" | "bread" | "icecream" | "chocolate";
 
 export default function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, ReactNode> = {
+    expand: <path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5"/>,
     menu: <path d="M3 6h18M3 12h18M3 18h18" />,
     cleaning: <><path d="m14 3 7 7M17.5 6.5 10 14M5 12l7 7M3 21l2-9 7 7-9 2ZM7 16l-2 5M10 18l-1 3"/></>,
     edit: <><path d="m16 3 5 5L8 21H3v-5L16 3ZM13 6l5 5"/></>,

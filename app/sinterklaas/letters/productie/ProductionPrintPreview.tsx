@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import type { ProductionBatchSeed } from "./ProductionPlanningClient";
 import { productionRemaining, productionTotals } from "./productionChecklist";
 import { productionRowIsComplete, productionSections, productionVariant } from "./productionPresentation";
-import { productionSourceBreakdown } from "./productionSources";
+import { productionRecipientsFor, productionSourceBreakdown } from "./productionSources";
 import styles from "./ProductionPrint.module.css";
 
 const PRINT_CRATES = [
@@ -77,6 +77,9 @@ export function ProductionPrintSheet({ batch }: Readonly<{ batch: ProductionBatc
           const complete = productionRowIsComplete(row);
           const sources = new Map(productionSourceBreakdown(row).map(source => [source.id, source.quantity]));
           const unknown = sources.get("onbekend") || 0;
+          const logoRecipients = variant.extras.some(extra => extra.toLowerCase() === "logo")
+            ? productionSourceBreakdown(row).flatMap(source => productionRecipientsFor(row, source.id))
+            : [];
           return <tr key={row.key} className={styles.row} data-special={variant.extras.length > 0 || unknown > 0}>
             <th scope="row" className={styles.letter}>{variant.letter}</th>
             {PRINT_CRATES.map(crate => <td key={crate.id} className={styles.quantity} data-source={crate.id} aria-label={`${crate.label}: ${sources.get(crate.id) || 0}`}>{sources.get(crate.id) || "—"}</td>)}
@@ -86,7 +89,18 @@ export function ProductionPrintSheet({ batch }: Readonly<{ batch: ProductionBatc
               {row.produced > 0 && <small>{row.produced}/{total} gemaakt</small>}
             </td>
             <td className={styles.notes}>
-              {variant.extras.length > 0 && <div className={styles.extras}><span className={styles.attention}>LET OP</span><strong>{variant.extras.join(" · ")}</strong></div>}
+              {variant.extras.length > 0 && <div className={styles.extras}>
+                <span className={styles.attention}>LET OP</span>
+                <div className={styles.extraDetails}>
+                  <strong>{variant.extras.join(" · ")}</strong>
+                  {logoRecipients.length > 0 && <ul className={styles.logoRecipients} aria-label="Logo per klant of bedrijf">
+                    {logoRecipients.map((recipient, index) => <li key={`${recipient.source}:${recipient.id}:${index}`}>
+                      <strong>{recipient.quantity}×</strong>{" "}
+                      {recipient.unresolved || !recipient.customerName.trim() ? "Bedrijf controleren" : recipient.customerName}
+                    </li>)}
+                  </ul>}
+                </div>
+              </div>}
               {unknown > 0 && <div className={styles.extras}><span className={styles.attention}>CONTROLE</span><strong>Herkomst onbekend: {printQuantity(unknown)}. Eerst controleren, daarna over de kratten verdelen.</strong></div>}
               {total === 0 && row.produced > 0 && <strong className={styles.cancelled}>Vervallen bestelling · {row.produced} al gemaakt</strong>}
               <span className={styles.writingLine} aria-hidden="true" />

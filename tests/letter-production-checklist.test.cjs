@@ -17,6 +17,26 @@ const id='d8c0af2e-a725-4ef0-a435-6b5f2838784a';
 const batch=(more={})=>({id,startDate:'2026-11-02',date:'2026-11-03',deadlineAt:'2026-11-01T20:00:00+01:00',status:'OPEN',minimumLeadDays:2,storeOrders:[],rows:[row()],...more});
 const plain=value=>JSON.parse(JSON.stringify(value));
 
+const b2bLetterOrder = (more = {}) => ({
+ id: 'b2b-history', customerName: 'Testbedrijf', status: 'akkoord',
+ department: 'chocolade', deliveryDate: '2026-11-06', productionDate: '',
+ orderText: '', logo: '', packaging: '', importantNotes: '',
+ letterLines: [{letter: 'S', chocolate: 'melk', size: 'groot', style: 'spuit', quantity: 20, exceptions: [], withLogo: true}],
+ ...more,
+});
+const historicalB2BOrders = () => [
+ b2bLetterOrder({letterLines: ['melk', 'puur', 'wit'].map((chocolate) => ({
+  letter: 'S', chocolate, size: 'groot', style: 'spuit',
+  quantity: chocolate === 'melk' ? 20 : 10, exceptions: [], withLogo: true,
+ }))}),
+ b2bLetterOrder({id: 'b2b-history-second', customerName: 'Tweede testbedrijf',
+  letterLines: ['R', 'L', 'N', 'D'].map((letter) => ({
+   letter, chocolate: 'melk', size: 'groot', style: 'spuit',
+   quantity: 1, exceptions: [], withLogo: true,
+  })),
+ }),
+];
+
 test('a round is complete only when every required letter is finished and no order changes await review',()=>{
  const finished=row({produced:28});
  assert.equal(presentation.productionRoundIsComplete([finished]),true);
@@ -66,21 +86,95 @@ test('a later increase reopens only the extra quantity, while cancelled already-
  assert.equal(helper.productionRemaining(revised),15); // cancelled surplus must not hide the 5 + 10 still needed
  assert.equal(helper.productionChanges(revised,current).length,0);
 });
-test('all actual order channels are included, completed/cancelled orders excluded, and special variants stay separate',()=>{
+test('all actual order channels retain completed orders, exclude cancellations and separate special variants',()=>{
  const base=batch({rows:[row({orders:2,stock:8,orderSources:{online:2}})]});
  const letter=(more={})=>({id:'1',code:'CL1',customerName:'Test',pickupDate:'2026-11-06',source:'winkel',status:'besteld',lines:[{letter:'S',chocolate:'melk',size:'groot',style:'spuit',quantity:3,logo:false,notes:'',specialRequests:[]}],...more});
  const b2b={id:'b',customerName:'Bedrijf',status:'akkoord',department:'banket',deliveryDate:'2026-11-06',productionDate:'',letterLines:[{letter:'S',chocolate:'melk',size:'groot',style:'spuit',quantity:5,exceptions:['notenvrij']}],logo:false};
- const result=helper.combineProductionOrders([base],[letter(),letter({productionDone:true}),letter({status:'geannuleerd'})],[b2b]);
+ const result=helper.combineProductionOrders([base],[letter(),letter({id:'2',productionDone:true}),letter({id:'3',status:'geannuleerd'})],[b2b]);
  assert.equal(result.batches[0].rows.length,2);
  const regular=result.batches[0].rows.find(r=>r.key==='s|melk|groot|spuit');
- assert.equal(regular.orders,5);assert.equal(regular.stock,8);
- assert.deepEqual(plain(regular.orderSources),{online:2,winkel:3});
+ assert.equal(regular.orders,8);assert.equal(regular.stock,8);
+ assert.deepEqual(plain(regular.orderSources),{online:2,winkel:6});
  assert.equal(result.batches[0].rows.find(r=>r.key.endsWith('notenvrij')).orderSources.b2b,5);
  assert.equal(base.rows[0].orders,2);
 });
 
+
+test('fulfillment keeps B2B quantities and customers on their original production day', () => {
+ const early = batch({rows: []});
+ const later = batch({id: 'later-round', date: '2026-11-17', startDate: '2026-11-16', rows: []});
+ const orders = historicalB2BOrders();
+ const assignments = orders.map((order) => ({order_id: order.id, season: 2026, batch_id: id, revision: 1}));
+ const initial = helper.combineProductionOrders([early, later], [], orders, assignments);
+ const rows = initial.batches[0].rows;
+ assert.equal(rows.length, 7);
+ assert.equal(helper.productionTotals(rows).orders, 44);
+ for (const department of ['chocolade', 'beide', 'bakkerij']) {
+  for (const flags of [
+   department === 'chocolade' ? {productionDone: true} : {letterProductionDone: true},
+   {packed: true}, {delivered: true},
+   {productionDone: true, letterProductionDone: true, packed: true, delivered: true},
+  ]) {
+   const fulfilled = orders.map((order) => ({...order, department, ...flags}));
+   const result = helper.combineProductionOrders([early, later], [], fulfilled, assignments);
+   assert.deepEqual(plain(result.batches[0].rows), plain(rows));
+   assert.equal(result.batches[1].rows.length, 0);
+   assert.equal(result.b2bPlanning.length, 0);
+   assert.equal(result.unplanned.length, 0);
+   assert.equal(helper.productionChanges(rows, result.batches[0].rows).length, 0);
+   assert.equal(helper.productionPlanVersion(result.batches[0].rows), helper.productionPlanVersion(rows));
+  }
+ }
+});
+
+test('shop and legacy online fulfillment also preserves production history', () => {
+ const order = {
+  id: 'legacy-history', code: 'CL1', customerName: 'Testklant',
+  pickupDate: '2026-11-06', status: 'besteld', notes: '',
+  lines: [{letter: 'S', chocolate: 'melk', size: 'groot', style: 'spuit', quantity: 3, logo: false, notes: '', specialRequests: []}],
+ };
+ for (const source of ['winkel', 'online']) {
+  const initial = helper.combineProductionOrders([batch({rows: []})], [{...order, source}], []).batches[0].rows;
+  for (const flags of [{productionDone: true}, {pickedUp: true}, {status: 'opgehaald'}]) {
+   const result = helper.combineProductionOrders([batch({rows: []})], [{...order, source, ...flags}], []);
+   assert.deepEqual(plain(result.batches[0].rows), plain(initial));
+   assert.equal(helper.productionChanges(initial, result.batches[0].rows).length, 0);
+   assert.equal(result.unplanned.length, 0);
+  }
+ }
+});
+
+test('completed orders without a matching round stay out of the unfinished queue', () => {
+ const b2b = historicalB2BOrders().map((order) => ({...order, delivered: true}));
+ const result = helper.combineProductionOrders([], [], b2b);
+ assert.equal(result.unplanned.length, 0);
+ assert.equal(result.b2bPlanning.length, 0);
+ const pending = helper.combineProductionOrders([], [], historicalB2BOrders());
+ assert.equal(pending.unplanned.length, 2);
+ assert.equal(pending.b2bPlanning.length, 2);
+ const unknownPackage = b2bLetterOrder({letterLines: [], department: 'beide',
+  delivered: true, orderText: 'PRODUCTEN EN PRIJS\n30 × Speculaasbrok met letter · Speculaasbrok zonder amandel · kleine spuitletter · letter M',
+ });
+ assert.equal(helper.combineProductionOrders([], [], [unknownPackage]).unplanned.length, 0);
+});
+
+test('actual cancellations and quantity changes still require review after fulfillment', () => {
+ const original = b2bLetterOrder({delivered: true});
+ const rows = helper.combineProductionOrders([batch({rows: []})], [], [original]).batches[0].rows;
+ const changed = {...original, letterLines: [{...original.letterLines[0], quantity: 22}]};
+ const changedRows = helper.combineProductionOrders([batch({rows: []})], [], [changed]).batches[0].rows;
+ assert.deepEqual(plain(helper.productionChanges(rows, changedRows)).map(({before, after}) => [before, after]), [[20, 22]]);
+ const cancelled = helper.combineProductionOrders([batch({rows: []})], [], [{...original, cancelled: true}]);
+ assert.equal(cancelled.batches[0].rows.length, 0);
+ assert.deepEqual(plain(helper.productionChanges(rows, cancelled.batches[0].rows)).map(({before, after, detail}) => [before, after, detail]), [[20, 0, 'Vervallen']]);
+ for (const status of ['aanvraag', 'offerte', 'afgewezen']) {
+  assert.equal(helper.combineProductionOrders([batch({rows: []})], [], [{...original, status}]).batches[0].rows.length, 0);
+ }
+});
+
 function endpointFixture({allowed=true,locked=true,existing=true,wpFailure=false,race=false,cron=false}={}) {
  let current=batch({status:locked?'IN_PRODUCTION':'OPEN',deadlineAt:locked?'2020-01-01T19:00:00Z':'2099-01-01T19:00:00Z'});
+ let wordpress={letters:[],b2b:[]};
  let saved=existing?{batch_id:id,rows:[row()],revision:1,plan_revision:1,locked_at:'2020-01-01T19:00:00Z',updated_at:'2020-01-01T19:00:00Z'}:null;
  const writes=[];
  const db={from(table){let action='read',values,filters={};const q={select(){return q},eq(k,v){filters[k]=v;return q},in(){return q},maybeSingle(){return q},single(){return q},insert(v){action='insert';values=v;return q},update(v){action='update';values=v;return q},then(resolve){let data,error=null;
@@ -97,12 +191,12 @@ function endpointFixture({allowed=true,locked=true,existing=true,wpFailure=false
   '@/app/lib/auth/cron':{hasCronAuthorization:()=>cron},
   '@/app/lib/auth/session':{getCurrentProfile:async()=>({id:null})},
   '@/app/lib/supabase/admin':{createAdminClient:()=>db},
-  '@/app/sinterklaas/sinterklaasServerApi':{loadProductionWordPressOrders:async()=>{if(wpFailure)throw Error('Source unavailable');return{letters:[],b2b:[]}}},
+  '@/app/sinterklaas/sinterklaasServerApi':{loadProductionWordPressOrders:async()=>{if(wpFailure)throw Error('Source unavailable');return wordpress}},
   '@/app/sinterklaas/letters/productie/productionData.server':{loadCentralProduction:async()=>({batches:[current],centralUnplannedCount:0})},
   '@/app/sinterklaas/letters/productie/productionChecklist':helper,
  });
  const request=body=>new Request('https://app.strik-patisserie.nl/api/sinterklaas-letter-production',{method:'POST',headers:{'content-type':'application/json',origin:'https://app.strik-patisserie.nl'},body:JSON.stringify(body)});
- return {api,writes,request,get saved(){return saved},setCurrent(value){current=value}};
+ return {api,writes,request,get saved(){return saved},setCurrent(value){current=value},setWordPressOrders(value){wordpress=value}};
 }
 test('unauthorized or shop-only accounts cannot read or mark the global production list',async()=>{
  const f=endpointFixture({allowed:false});assert.equal((await f.api.GET(new Request('https://app.strik-patisserie.nl/api/sinterklaas-letter-production'))).status,403);
@@ -134,6 +228,72 @@ test('revising requires the exact reviewed live plan and keeps progress while ad
  assert.equal((await f.api.POST(f.request(payload))).status,409);assert.equal(f.writes.length,0);
  payload.planVersion=helper.productionPlanVersion([row({orders:30})]);
  assert.equal((await f.api.POST(f.request(payload))).status,200);assert.equal(f.saved.rows[0].orders,30);assert.equal(f.saved.plan_revision,2);
+});
+
+test('frozen historical lists retain delivered letters and their checkmarks through GET and reviewed revisions', async () => {
+ const fixture = endpointFixture({existing: false});
+ const central = batch({status: 'IN_PRODUCTION', rows: [row({orders: 2, stock: 8, orderSources: {online: 2}})]});
+ const orders = historicalB2BOrders();
+ fixture.setCurrent(central);
+ fixture.setWordPressOrders({letters: [], b2b: orders});
+ const get = () => fixture.api.GET(new Request('https://app.strik-patisserie.nl/api/sinterklaas-letter-production?season=2026'));
+ const initialResponse = await get();
+ assert.equal(initialResponse.status, 200);
+ const initial = (await initialResponse.json()).batches[0];
+ assert.equal(helper.productionTotals(initial.rows).orders, 46);
+ assert.equal(initial.checklist.changes.length, 0);
+ for (const row of initial.rows) {
+  const response = await fixture.api.POST(fixture.request({
+   batchId: id, revision: fixture.saved.revision, action: 'quantity',
+   key: row.key, quantity: row.orders + row.stock,
+  }));
+  assert.equal(response.status, 200);
+ }
+ const frozen = plain(fixture.saved);
+ const writesBeforeRead = fixture.writes.length;
+ fixture.setWordPressOrders({letters: [], b2b: orders.map((order) => ({...order, delivered: true}))});
+ for (let read = 0; read < 2; read++) {
+  const response = await get();
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.deepEqual(result.batches[0].rows, frozen.rows);
+  assert.equal(result.batches[0].checklist.planVersion, initial.checklist.planVersion);
+  assert.equal(result.batches[0].checklist.changes.length, 0);
+  assert.equal(result.b2bPlanning.length, 0);
+  assert.equal(result.unplanned.length, 0);
+  assert.equal(fixture.writes.length, writesBeforeRead);
+ }
+ assert.deepEqual(plain(fixture.saved), frozen);
+ const obsoleteRemoval = await fixture.api.POST(fixture.request({
+  batchId: id, revision: fixture.saved.revision, action: 'revise',
+  planVersion: helper.productionPlanVersion(central.rows),
+ }));
+ assert.equal(obsoleteRemoval.status, 409);
+ assert.deepEqual(plain(fixture.saved), frozen);
+ assert.equal(fixture.writes.length, writesBeforeRead);
+ const additional = b2bLetterOrder({id: 'new-order', letterLines: [{
+  letter: 'S', chocolate: 'melk', size: 'groot', style: 'spuit',
+  quantity: 2, exceptions: [], withLogo: false,
+ }]});
+ fixture.setWordPressOrders({letters: [], b2b: [...orders.map((order) => ({...order, delivered: true})), additional]});
+ const review = (await (await get()).json()).batches[0];
+ assert.equal(review.checklist.changes.length, 1);
+ assert.equal(review.checklist.changes[0].before, 10);
+ assert.equal(review.checklist.changes[0].after, 12);
+ const revised = await fixture.api.POST(fixture.request({
+  batchId: id, revision: fixture.saved.revision, action: 'revise',
+  planVersion: review.checklist.planVersion,
+ }));
+ assert.equal(revised.status, 200);
+ assert.equal(helper.productionTotals(fixture.saved.rows).orders, 48);
+ assert.equal(helper.productionTotals(fixture.saved.rows).produced, 54);
+ assert.equal(helper.productionRemaining(fixture.saved.rows), 2);
+ for (const row of frozen.rows.filter((row) => row.key.endsWith('|logo'))) {
+  assert.deepEqual(plain(fixture.saved.rows.find((next) => next.key === row.key)), row);
+ }
+ const final = (await (await get()).json()).batches[0];
+ assert.equal(final.checklist.changes.length, 0);
+ assert.equal(final.checklist.planRevision, 2);
 });
 
 test('deadline automation requires the exact existing cron secret; missing or malformed credentials are rejected',()=>{
