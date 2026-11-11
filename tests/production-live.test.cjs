@@ -4,7 +4,7 @@ function load(file,imports={},extra=''){
  const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText+extra,{exports,require:name=>{if(!(name in imports))throw Error(`Unmocked ${name}`);return imports[name];},Response,Request,URL,Buffer,Date,Intl,structuredClone,AbortSignal});return exports;
 }
 const access=load('app/lib/auth/access.ts'),planning=load('app/productie/planning.ts');
-const recipePlanning=load('app/productie/recipePlanning.ts',{'./planning':planning}),productionWork=load('app/productie/productionWork.ts',{'./planning':planning,'./recipePlanning':recipePlanning}),commands=load('app/productie/workCommands.ts',{'./productionWork':productionWork});
+const recipePlanning=load('app/productie/recipePlanning.ts',{'./planning':planning,'./materialPlanning':load('app/productie/materialPlanning.ts',{'./planning':planning})}),productionWork=load('app/productie/productionWork.ts',{'./planning':planning,'./recipePlanning':recipePlanning}),commands=load('app/productie/workCommands.ts',{'./productionWork':productionWork});
 const workspace=load('app/productie/workspaceData.ts',{'./planning':planning});
 const rights=load('app/productie/access.ts',{'../lib/auth/access':access,'./planning':planning});
 const migration=load('app/productie/recipeMigration.ts');

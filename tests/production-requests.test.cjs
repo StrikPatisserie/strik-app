@@ -1,6 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
 function load(file,imports={},globals={}){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{exports,require:name=>{assert(name in imports,`Unmocked ${name}`);return imports[name];},Date,Intl,Set,Map,structuredClone,Request,Response,URL,URLSearchParams,crypto:require('node:crypto').webcrypto,...globals});return exports;}
-const planning=load('app/productie/planning.ts'),recipe=load('app/productie/recipePlanning.ts',{'./planning':planning}),requests=load('app/productie/requestPlanning.ts',{'./planning':planning,'./recipePlanning':recipe,'./taskOperations':load('app/productie/taskOperations.ts')}),access=load('app/lib/auth/access.ts'),rights=load('app/productie/access.ts',{'../lib/auth/access':access,'./planning':planning});
+const planning=load('app/productie/planning.ts'),recipe=load('app/productie/recipePlanning.ts',{'./planning':planning,'./materialPlanning':load('app/productie/materialPlanning.ts',{'./planning':planning})}),requests=load('app/productie/requestPlanning.ts',{'./planning':planning,'./recipePlanning':recipe,'./taskOperations':load('app/productie/taskOperations.ts')}),access=load('app/lib/auth/access.ts'),rights=load('app/productie/access.ts',{'../lib/auth/access':access,'./planning':planning});
 const state=()=>({version:1,items:[{id:'cake',name:'Testtaart',kind:'product',departmentId:'dessert',unit:'stuks',note:'',stock:0}],tasks:[]});
 const now='2026-11-01T12:00:00.000Z',create={kind:'create',itemId:'cake',quantity:20,neededBy:'2026-11-06',note:'Voor de winkels'};
 const apply=(s,c,id='request-1')=>requests.applyProductionRequest(s,[],c,'actor',now,id);
@@ -500,9 +500,31 @@ test('quick recipes reject missing/duplicate ingredients, invalid amounts and em
  for(const changes of [{yield:0},{instructions:''},{ingredients:[]},{ingredients:[{ingredientId:'missing',quantity:1,unit:'gram'}]},{ingredients:[quickInput.ingredients[0],quickInput.ingredients[0]]}])assert.throws(()=>quick.quickRecipe(state(),recipeData(),{...quickInput,...changes},'r',now));
 });
 test('quick-recipe endpoint checks both revisions and department rights before the atomic save',async()=>{
- function endpoint(profile){let saves=0;return {get saves(){return saves;},route:load('app/api/productie/snel-recept/route.ts',{'@/app/lib/auth/session':{getCurrentProfile:async()=>profile},'@/app/productie/access':rights,'@/app/productie/documents.server':{ProductionStoreError:StoreError,readDocument:async key=>({revision:3,data:key==='planner'?state():recipeData()}),saveQuickRecipeDocument:async()=>{saves++;}},'@/app/productie/quickRecipe':quick,'@/app/productie/workRecipe':load('app/productie/workRecipe.ts'),'@/app/productie/productionWork':load('app/productie/productionWork.ts',{'./planning':planning,'./recipePlanning':load('app/productie/recipePlanning.ts',{'./planning':planning})}),'@/app/lib/auth/access':access,'@/app/productie/workspaceData':workspace})};}
+ function endpoint(profile){let saves=0;return {get saves(){return saves;},route:load('app/api/productie/snel-recept/route.ts',{'@/app/lib/auth/session':{getCurrentProfile:async()=>profile},'@/app/productie/access':rights,'@/app/productie/documents.server':{ProductionStoreError:StoreError,readDocument:async key=>({revision:3,data:key==='planner'?state():recipeData()}),saveQuickRecipeDocument:async()=>{saves++;}},'@/app/productie/quickRecipe':quick,'@/app/productie/workRecipe':load('app/productie/workRecipe.ts'),'@/app/productie/productionWork':load('app/productie/productionWork.ts',{'./planning':planning,'./recipePlanning':load('app/productie/recipePlanning.ts',{'./planning':planning,'./materialPlanning':load('app/productie/materialPlanning.ts',{'./planning':planning})})}),'@/app/lib/auth/access':access,'@/app/productie/workspaceData':workspace})};}
  function req(revision=3){return new Request('https://app.invalid/api/productie/snel-recept',{method:'POST',headers:{Origin:'https://app.invalid','Content-Type':'application/json'},body:JSON.stringify({who:"Proefbakker",revision,recipeRevision:3,command:quickInput})});}
  const denied=endpoint(logistics);assert.equal((await denied.route.POST(req())).status,403);assert.equal(denied.saves,0);
  const good=endpoint(baker);assert.equal((await good.route.POST(req())).status,200);assert.equal(good.saves,1);
  const stale=endpoint(baker);assert.equal((await stale.route.POST(req(2))).status,409);assert.equal(stale.saves,0);
+});
+
+
+test('a read-only source preview enables local planning explicitly while keeping request editing hidden',async()=>{
+ let previewState=apply(state(),{...create,departmentId:'dessert'});
+ const ui=requestUi(null,{fetchImpl:async()=>assert.fail('Local planning must not write to the live request endpoint')});
+ const props=canPlan=>({compact:true,week:'2026-11-02',preview:{state:previewState,readOnly:true,canPlan,onCommand:async command=>{previewState=apply(previewState,command,'local-task');}}});
+ let tree=ui.render(props(false));
+ assert(!ui.nodes(tree).some(node=>node.props?.['aria-label']==='Inplannen: Testtaart'));
+ tree=ui.render(props(true));
+ assert(!ui.nodes(tree).some(node=>node.props?.['aria-label']==='Productieverzoek toevoegen'));
+ ui.find(tree,node=>node.props?.['aria-label']==='Inplannen: Testtaart').props.onClick();
+ tree=ui.render(props(true));
+ assert(!ui.nodes(tree).some(node=>node.props?.['aria-label']?.startsWith('Bewerk verzoek:')));
+ assert(!ui.nodes(tree).some(node=>node.props?.['aria-label']?.startsWith('Verzoek intrekken:')));
+ ui.find(tree,node=>node.props?.['aria-label']==='Inplannen op wo 4 nov').props.onClick({currentTarget:{form:{}}});
+ await new Promise(setImmediate);
+ tree=ui.render(props(true));
+ assert.equal(previewState.tasks[0].date,'2026-11-04');
+ assert.equal(previewState.tasks[0].quantity,20);
+ assert.equal(ui.posted.length,0);
+ assert(requestText(tree).includes('Ingepland (1)'));
 });

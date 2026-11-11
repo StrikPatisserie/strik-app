@@ -9,7 +9,7 @@ function load(file,imports={}){
  return exports;
 }
 const planning=load('app/productie/planning.ts');
-const recipePlanning=load('app/productie/recipePlanning.ts',{'./planning':planning});
+const recipePlanning=load('app/productie/recipePlanning.ts',{'./planning':planning,'./materialPlanning':load('app/productie/materialPlanning.ts',{'./planning':planning})});
 const productionWork=load('app/productie/productionWork.ts',{'./planning':planning,'./recipePlanning':recipePlanning});
 const {taskWorkSummary,departmentDayWork}=load('app/productie/workSummary.ts',{'./productionWork':productionWork});
 const task=(id,changes={})=>({id,itemId:'mousse',departmentId:'dessert',date:'2026-11-10',quantity:10,operation:'Maken',status:'planned',note:'',source:'manual',batchId:id,recordsOutput:true,...changes});

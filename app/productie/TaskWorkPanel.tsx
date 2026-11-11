@@ -3,6 +3,7 @@ import {useEffect,useState} from 'react';
 import type {DemoRecipe,Item,PreviewState,Task} from './planning';
 import {elapsedMilliseconds,learnedWorkEstimate,timerLabel,workView,type WorkCommand} from './productionWork';
 import Icon from './ProductionIcon';
+import CompletedQuantityForm from './CompletedQuantityForm';
 import s from './work.module.css';
 const number=(value:number)=>value.toLocaleString('nl-NL',{maximumFractionDigits:1});
 const stockNumber=(value:number)=>value.toLocaleString('nl-NL',{maximumFractionDigits:6});
@@ -15,7 +16,8 @@ export default function TaskWorkPanel({state,task,item,recipes,busy,onCommand}:{
  const timer=state.productionWork?.timers?.[task.id],completion=state.productionWork?.completions?.[task.id];
  const stock=state.productionWork?.stockFulfillments?.[task.id];
  const [who,setWho]=useState(timer?.who||''),[crew,setCrew]=useState(String(timer?.crewSize??1));
- const [checking,setChecking]=useState(false),[minutes,setMinutes]=useState(''),[quantity,setQuantity]=useState(String(task.quantity)),[error,setError]=useState('');
+ const [checking,setChecking]=useState(false),[enteredMinutes,setMinutes]=useState<string|null>(null),[quantity,setQuantity]=useState(String(task.quantity)),[error,setError]=useState('');
+ const [correctingQuantity,setCorrectingQuantity]=useState(false);
  const [countingStock,setCountingStock]=useState(false),[stockCount,setStockCount]=useState('');
  const [stockConfirmed,setStockConfirmed]=useState(false);
  const countedStock=Number(stockCount.replace(',','.'));
@@ -23,9 +25,14 @@ export default function TaskWorkPanel({state,task,item,recipes,busy,onCommand}:{
  const stockRemaining=Math.round((countedStock-task.quantity)*1000000)/1000000;
  const crewSize=Number(crew),validCrew=Number.isInteger(crewSize)&&crewSize>=1&&crewSize<=20;
  const history=(state.productionWork?.history||[]).filter(row=>row.taskId===task.id||row.itemId===item.id&&!row.taskId).slice(-8).reverse();
- const estimate=state.productionWork?.overrides?.[task.id]?null:learnedWorkEstimate(workView(state,recipes),item.id,task.operation,task.quantity,crewSize);
+ const estimate=state.productionWork?.overrides?.[task.id]?null:learnedWorkEstimate(workView(state,recipes),item.id,task.operation,checking?Number(quantity.replace(',','.')):task.quantity,crewSize);
  const plannedMinutes=Number.isFinite(task.minutes)&&task.minutes!>0?task.minutes:undefined;
- const confirmedLabor=Number(minutes.replace(',','.'))*crewSize;
+ const minutes=enteredMinutes??String(estimate?.minutes??plannedMinutes??'');
+ const workedMinutes=Number(minutes.replace(',','.')),madeQuantity=Number(quantity.replace(',','.'));
+ const validCompletion=who.trim().length>=2&&who.trim().length<=80&&validCrew
+  &&Number.isFinite(workedMinutes)&&workedMinutes>0&&workedMinutes<=1440
+  &&Number.isFinite(madeQuantity)&&madeQuantity>0&&madeQuantity<=1000000;
+ const confirmedLabor=workedMinutes*crewSize;
  async function act(command:WorkCommand){
   const result=await onCommand(command);
   if(result&&command.kind==='stock'){setStockCount('');setStockConfirmed(false);}
@@ -34,7 +41,7 @@ export default function TaskWorkPanel({state,task,item,recipes,busy,onCommand}:{
  async function finish(){
   const error=timer?.runningSince?await act({kind:'pause',taskId:task.id}):undefined;
   if(error)return;
-  setMinutes(String(Math.max(1,Math.round(elapsedMilliseconds(timer,Date.now())/60000))));
+  setMinutes(timer?String(Math.max(1,Math.round(elapsedMilliseconds(timer,Date.now())/60000))):null);
   setQuantity(String(task.quantity));setWho(timer?.who||who);setCrew(String(timer?.crewSize??crewSize));setChecking(true);
  }
  const crewField=<label className={s.crew}>Medewerkers<input type="number" min="1" max="20" step="1" required disabled={busy} value={crew} onChange={event=>setCrew(event.target.value)}/></label>;
@@ -42,8 +49,9 @@ export default function TaskWorkPanel({state,task,item,recipes,busy,onCommand}:{
   {task.status!=='done'&&!checking&&estimate&&<p className={s.estimate}>Richttijd: ca. <strong>{number(estimate.minutes)} min met {crewSize} {crewSize===1?'persoon':'personen'}</strong> · {number(estimate.laborMinutes)} arbeidsmin · {estimate.measurements} {estimate.measurements===1?'meting':'metingen'}</p>}
   {task.status!=='done'&&!checking&&!estimate&&plannedMinutes!==undefined&&<p className={`${s.estimate} ${s.plannedEstimate}`}>Geschatte tijd <strong>{number(plannedMinutes)} min</strong><small>{task.operation} · voor {stockNumber(task.quantity)} {item.unit}</small></p>}
   {task.status==='done'?<div className={s.done}>
-   <Icon name="check"/>Klaar{stock?<span> · uit voorraad · {stockNumber(stock.quantity)} {stock.unit} · {stock.who}<small>{stockNumber(stock.countedQuantity)} geteld − {stockNumber(stock.quantity)} gebruikt = {stockNumber(stock.remainingQuantity)} over</small></span>:completion&&<span> · {number(completion.quantity)} {item.unit} · {number(completion.minutes)} min{completion.crewSize!==undefined&&<> × {completion.crewSize} pers. = {number(completion.laborMinutes!)} arbeidsmin</>} · {completion.who}</span>}
-   {!stock&&<button disabled={busy} onClick={()=>void act({kind:'reopen',taskId:task.id})}>Heropen</button>}
+   <Icon name="check"/>Klaar{stock?<span> · uit voorraad · {stockNumber(stock.quantity)} {stock.unit} · {stock.who}<small>{stockNumber(stock.countedQuantity)} geteld − {stockNumber(stock.quantity)} gebruikt = {stockNumber(stock.remainingQuantity)} over</small></span>:<span> · {stockNumber(task.completedQuantity??completion?.quantity??task.quantity)} {item.unit}{completion&&<> · {number(completion.minutes)} min{completion.crewSize!==undefined&&<> × {completion.crewSize} pers. = {number(completion.laborMinutes!)} arbeidsmin</>} · {completion.who}</>}</span>}
+   {!stock&&<><button disabled={busy} onClick={()=>setCorrectingQuantity(true)}>Aantal corrigeren</button><button disabled={busy} onClick={()=>void act({kind:'reopen',taskId:task.id})}>Heropen</button></>}
+   {correctingQuantity&&!stock&&<CompletedQuantityForm key={task.id} task={task} item={item} busy={busy} onCommand={onCommand} onClose={()=>setCorrectingQuantity(false)}/>}
   </div>:countingStock?<form className={s.confirm} onSubmit={async event=>{
    event.preventDefault();
    if(stockConfirmed&&!await act({kind:'stock',taskId:task.id,who,countedQuantity:countedStock,confirmed:true}))setCountingStock(false);
@@ -53,11 +61,13 @@ export default function TaskWorkPanel({state,task,item,recipes,busy,onCommand}:{
    <p className={s.stockBalance}>{validStock?<>{stockNumber(countedStock)} geteld − <strong>{stockNumber(task.quantity)} {item.unit} nodig</strong> = {stockNumber(stockRemaining)} over</>:<>Voor deze taak is <strong>{stockNumber(task.quantity)} {item.unit}</strong> nodig.</>}</p>
    <label className={s.stockCheck}><input type="checkbox" required disabled={busy} checked={stockConfirmed} onChange={event=>setStockConfirmed(event.target.checked)}/>Ik heb de totaalvoorraad geteld en neem de benodigde hoeveelheid eruit.</label>
    <div className={s.buttons}><button type="button" disabled={busy} onClick={()=>setCountingStock(false)}>Terug</button><button className={s.primary} disabled={busy||!validStock||who.trim().length<2||!stockConfirmed} type="submit">Gebruik & klaar</button></div>
-  </form>:checking?<form className={s.confirm} onSubmit={async event=>{
+  </form>:checking?<form className={`${s.confirm} ${s.completionForm}`} aria-label="Productie afronden" onSubmit={async event=>{
    event.preventDefault();
-   if(!await act({kind:'complete',taskId:task.id,who,crewSize,minutes:Number(minutes.replace(',','.')),quantity:Number(quantity.replace(',','.')),timerId:timer?.id}))setChecking(false);
+   if(busy||!validCompletion)return;
+   if(!await act({kind:'complete',taskId:task.id,who,crewSize,minutes:workedMinutes,quantity:madeQuantity,timerId:timer?.id}))setChecking(false);
   }}>
    <strong>Klopt dit?</strong>
+   {!timer&&estimate&&<p className={s.estimate}>Advies ± {number(estimate.minutes)} min · {crewSize} {crewSize===1?'persoon':'personen'} · {estimate.measurements} eerdere {estimate.measurements===1?'productie':'producties'}</p>}
    <div className={s.numbers}>
     <label>Werktijd (minuten)<input required disabled={busy} inputMode="decimal" value={minutes} onChange={event=>setMinutes(event.target.value)}/></label>
     <label>Gemaakt ({item.unit})<input required disabled={busy} inputMode="decimal" value={quantity} onChange={event=>setQuantity(event.target.value)}/></label>
@@ -65,12 +75,12 @@ export default function TaskWorkPanel({state,task,item,recipes,busy,onCommand}:{
    <div className={s.people}><label>Jouw naam<input required disabled={busy} minLength={2} maxLength={80} value={who} onChange={event=>setWho(event.target.value)}/></label>{crewField}</div>
    {validCrew&&Number.isFinite(confirmedLabor)&&confirmedLabor>0&&<p className={s.labor}>{number(Number(minutes.replace(',','.')))} min × {crewSize} {crewSize===1?'persoon':'personen'} = <strong>{number(confirmedLabor)} arbeidsminuten</strong></p>}
    <small>Gepland: {number(task.quantity)} {item.unit}{timer&&<> · gemeten <WorkClock state={state} taskId={task.id}/></>}</small>
-   <div className={s.buttons}><button type="button" disabled={busy} onClick={()=>setChecking(false)}>Terug</button><button className={s.primary} disabled={busy||!validCrew} type="submit">Bevestig & klaar</button></div>
+   <div className={`${s.buttons} ${s.completionActions}`}><button className={s.adjust} type="button" disabled={busy} onClick={()=>setChecking(false)}>Nog aanpassen</button><button className={s.primary} disabled={busy||!validCompletion} type="submit"><Icon name="check" size={16}/>{busy?'Opslaan…':'Opslaan & klaar'}</button></div>
   </form>:timer?<div className={s.running}>
    <div><WorkClock state={state} taskId={task.id}/><small>{timer.who}{timer.crewSize!==undefined&&<> · {timer.crewSize} {timer.crewSize===1?'persoon':'personen'}</>}{!timer.runningSince?' · gepauzeerd':''}</small></div>
    <div className={s.buttons}>
     <button disabled={busy} onClick={()=>void act(timer.runningSince?{kind:'pause',taskId:task.id}:{kind:'start',taskId:task.id,who:timer.who,crewSize:timer.crewSize})}>{timer.runningSince?'Pauze':'Hervat'}</button>
-    <button className={s.primary} disabled={busy} onClick={()=>void finish()}>Af</button>
+    <button className={s.primary} disabled={busy} onClick={()=>void finish()}>Klaar</button>
    </div>
   </div>:<div className={s.start}>
    <label>Jouw naam<input value={who} disabled={busy} minLength={2} maxLength={80} placeholder="Naam bakker" onChange={event=>setWho(event.target.value)}/></label>{crewField}

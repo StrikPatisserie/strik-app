@@ -8,7 +8,7 @@ function loader(overrides = {}, globals = {}) {
     file = path.resolve(file); if (cache[file]) return cache[file];
     const exports = cache[file] = {};
     let source = fs.readFileSync(file, 'utf8');
-    if (file.endsWith('SinterklaasB2BClient.tsx')) source += '\nexport { B2BOrderRow };';
+    if (file.endsWith('SinterklaasB2BClient.tsx')) source += '\nexport { B2BOrderRow, orderMade };';
     const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
     vm.runInNewContext(code, { exports, Date, Intl, URL, URLSearchParams, Map, Set, process: { env: {} }, ...globals, require(name) {
       if (name in overrides) return overrides[name];
@@ -69,13 +69,24 @@ test('delivery ranges and missing dates remain explicit; unreadable rows also ap
   assert.equal(totals.productionTotalDate(missing.products[0].allocations[0]), 'Datum nog afspreken');
   assert.equal(missing.issues.length, 1); assert.match(totals.productionTotalsText(missing), /Nog controleren:\nKlant A/);
 });
-test('existing B2B statuses and completion labels remain unchanged', () => {
+test('B2B handling shows only entered, made and delivered controls', () => {
   const { B2BOrderRow } = load('app/sinterklaas/b2b/SinterklaasB2BClient.tsx');
   const markup = renderToStaticMarkup(require('react').createElement(B2BOrderRow, { order: order({ delivered: true }), updatingId: '', onToggle() {}, onEdit() {}, onDelete() {}, onRetryConfirmation() {}, onCustomerConfirmation() {}, onQuotation() {}, onApprove() {}, onLogoCount() {} }));
   assert.match(markup, /data-status="akkoord">Definitief/); assert(!markup.includes("✓ Klaar"));
   const source = fs.readFileSync('app/sinterklaas/b2b/SinterklaasB2BClient.tsx', 'utf8');
-  assert.match(source, /\["delivered", "Geleverd", true\]/);
-  assert.match(source, /"Overig geproduceerd" : "Geproduceerd"/);
+  assert.match(source, /\["delivered", "Geleverd"\]/);
+  assert.match(source, /\["productionDone", "Gemaakt"\]/);
+  let stateIndex = 0;
+  const expanded = loader({ react: { ...require('react'), useState(initial) {
+    return [stateIndex++ === 0 ? true : typeof initial === 'function' ? initial() : initial, () => {}];
+  } } })('app/sinterklaas/b2b/SinterklaasB2BClient.tsx').B2BOrderRow;
+  const detail = renderToStaticMarkup(require('react').createElement(expanded, {
+    order: order({ department: 'beide', logo: 'Logo', packaging: 'Apart verpakken', textInstructions: 'Tekst' }),
+    updatingId: '', onToggle() {}, onEdit() {}, onDelete() {}, onRetryConfirmation() {}, onCustomerConfirmation() {}, onQuotation() {}, onApprove() {}, onLogoCount() {},
+  }));
+  assert.equal((detail.match(/type="checkbox"/g) || []).length, 3);
+  for (const label of ['In Bake-it ingevoerd', 'Gemaakt', 'Geleverd']) assert(detail.includes(label));
+  for (const removed of ['Overig geproduceerd', 'Geproduceerd', 'Letters geproduceerd', 'Ingepakt', 'Logo gecontroleerd', 'Tekst gecontroleerd', 'Verpakking gecontroleerd', 'Tekst nog niet gecontroleerd', 'Verpakking nog niet gecontroleerd']) assert(!detail.includes(removed), removed);
 });
 test('delivered B2B rows are visibly completed while production-only and cancelled orders retain their own presentation', () => {
   const { B2BOrderRow } = load('app/sinterklaas/b2b/SinterklaasB2BClient.tsx');
@@ -120,8 +131,79 @@ test('the existing B2B button opens current totals and the existing production c
   assert.equal(tree.find(n => n.props?.totals).props.totals.products[0].quantity, 30);
   const row = tree.find(n => n.props?.order?.id === 'a'); await row.props.onToggle(row.props.order, 'productionDone'); tree = render();
   assert.equal(tree.find(n => n.props?.totals).props.totals.products.length, 0);
-  assert.equal(writes.length, 1); assert.equal(writes[0].patch.productionDone, true); assert(writes[0].patch.productionDoneAt); assert.deepEqual(Object.keys(writes[0].patch).sort(), ['productionDone', 'productionDoneAt']);
+  assert.equal(writes.length, 1); assert.equal(writes[0].patch.productionDone, true); assert(writes[0].patch.productionDoneAt); assert.equal(writes[0].patch.letterProductionDone, true); assert.deepEqual(Object.keys(writes[0].patch).sort(), ['letterProductionDone', 'productionDone', 'productionDoneAt']);
   assert(!render(false).some(n => n.type === 'button' && text(n) === 'Productie opteller'));
   assert(!render(false).some(n => n.props?.totals));
   effects.forEach(effect => effect.cleanup?.());
+});
+
+test('made marks precede customer names while partial letter/package completion stays distinct', () => {
+  const { B2BOrderRow, orderMade } = load('app/sinterklaas/b2b/SinterklaasB2BClient.tsx');
+  const loose = order({ department: 'chocolade', orderText: 'PRODUCTEN EN PRIJS\n3 × Chocolade spuitletters · Groot · € 12,00 p.s. ex btw · € 36,00', letterLines: [{ id: 'l', letter: 'S', quantity: 3, size: 'groot', style: 'spuit', chocolate: 'melk' }] });
+  const bakery = order({ department: 'bakkerij', orderText: 'PRODUCTEN EN PRIJS\n30 × Speculaasplak (met gedicht) · Met amandel · € 7,00 p.s. ex btw · € 210,00' });
+  const combined = order({ department: 'beide' });
+  for (const [candidate, expected] of [
+    [{ ...loose, productionDone: true }, true],
+    [{ ...bakery, productionDone: true }, true],
+    [{ ...combined, productionDone: true, letterProductionDone: true }, true],
+    [{ ...combined, productionDone: true, letterProductionDone: false, productionChecklistReady: true }, true],
+    [{ ...combined, productionDone: false, letterProductionDone: true }, false],
+    [{ ...combined, productionDone: true, letterProductionDone: false }, false],
+    [{ ...combined, productionChecklistReady: true }, false],
+  ]) {
+    assert.equal(orderMade(candidate), expected);
+    const markup = renderToStaticMarkup(require('react').createElement(B2BOrderRow, {
+      order: candidate, updatingId: '', onToggle() {}, onEdit() {}, onDelete() {}, onRetryConfirmation() {}, onCustomerConfirmation() {}, onQuotation() {}, onApprove() {}, onLogoCount() {},
+    }));
+    assert.equal(markup.includes('aria-label="Gemaakt"'), expected);
+    assert(!markup.includes('completedOrder'));
+    if (expected) assert(markup.indexOf('aria-label="Gemaakt"') < markup.indexOf('>Klant A</span>'));
+  }
+});
+
+test('one made action updates all required production parts and reopening releases legacy packed demand', async () => {
+  const candidates = [
+    { input: { department: 'beide', productionDone: true, letterProductionDone: false }, expected: { productionDone: true, letterProductionDone: true } },
+    { input: { department: 'beide', productionDone: true, letterProductionDone: true, packed: true }, expected: { productionDone: false, letterProductionDone: false, packed: false, packedAt: '' } },
+    { input: { department: 'bakkerij', orderText: 'PRODUCTEN EN PRIJS\n30 × Speculaasplak (met gedicht) · Met amandel · € 7,00 p.s. ex btw · € 210,00' }, expected: { productionDone: true } },
+  ];
+  for (const { input, expected } of candidates) {
+    let cursor = 0;
+    const states = [], writes = [];
+    const source = order(input);
+    const react = { ...require('react'),
+      useState(initial) {
+        const index = cursor++;
+        if (!(index in states)) states[index] = typeof initial === 'function' ? initial() : initial;
+        return [states[index], value => { states[index] = typeof value === 'function' ? value(states[index]) : value; }];
+      },
+      useRef(initial) { return { current: initial }; },
+      useMemo: fn => fn(),
+      useEffect() {},
+    };
+    // Load the real client through its normal initial fetch effect.
+    const effects = [];
+    react.useEffect = fn => { if (!effects.length) effects.push(fn); };
+    const component = loader({ react, '../sinterklaasApi': {
+      fetchB2BOrders: async () => [source],
+      updateB2BOrder: async (id, patch) => { writes.push(patch); return { ...source, ...patch }; },
+    } })('app/sinterklaas/b2b/SinterklaasB2BClient.tsx').default;
+    const nodes = node => !node || typeof node !== 'object' ? [] : Array.isArray(node) ? node.flatMap(nodes) : [node, ...nodes(node.props?.children)];
+    const render = () => { cursor = 0; return nodes(component({ season: 'sint', canViewProduction: true })); };
+    // The first effect is the editor listener, the second initializes orders.
+    react.useEffect = fn => effects.push(fn);
+    render();
+    await effects[1]();
+    await new Promise(resolve => setImmediate(resolve));
+    const row = render().find(node => node.props?.order?.id === source.id);
+    assert(row);
+    await row.props.onToggle(row.props.order, 'productionDone');
+    assert.equal(writes.length, 1);
+    for (const [key, value] of Object.entries(expected)) assert.equal(writes[0][key], value, key);
+    assert.equal(writes[0].productionDoneAt !== '', expected.productionDone);
+    if (input.department === 'bakkerij') assert.equal(writes[0].letterProductionDone, undefined);
+    assert.equal(writes[0].delivered, undefined);
+    assert.equal(writes[0].logoChecked, undefined);
+    assert.equal(writes[0].packagingChecked, undefined);
+  }
 });

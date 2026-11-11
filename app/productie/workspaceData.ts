@@ -4,6 +4,7 @@ import { type DepartmentId, type DemoRecipe, type ItemUnit, type PreviewState, t
 export type IngredientView = { id: string; name: string; supplier: string; unit: string; linked: boolean; specification: string; allergens: string };
 export type LiveWorkspace = {
   appVersion?:string;
+  readOnlyPreview?:boolean;
   state: PreviewState; revision: number; recipeRevision: number; updatedAt: string; today: string;
   recipes: DemoRecipe[]; ingredients: IngredientView[]; canManage: boolean;
   canManageData?: boolean;
@@ -117,6 +118,7 @@ export function validWorkspace(value: unknown, recipes: DemoRecipe[]): value is 
       addDays(t.date, 0); if (t.dueDate) { addDays(t.dueDate, 0); if (t.date > t.dueDate) return false; }
       if (t.minutes !== undefined && (!Number.isFinite(t.minutes) || t.minutes < 0 || t.minutes > 1440)) return false;
       if (t.requires!==undefined && (!Array.isArray(t.requires) || t.requires.length>250 || new Set(t.requires).size!==t.requires.length || t.requires.some(id=>typeof id!=="string" || !id || id===t.id))) return false;
+      if(t.materialNeeds!==undefined && (!t.materialNeeds || typeof t.materialNeeds!=="object" || Array.isArray(t.materialNeeds) || Object.keys(t.materialNeeds).length>250 || Object.entries(t.materialNeeds).some(([id,amount])=>!t.requires?.includes(id)||!Number.isFinite(amount)||amount<=0||amount>1000000)))return false;
       if (t.generatedFor!==undefined && (typeof t.generatedFor!=="string" || !t.generatedFor || t.generatedFor.length>250)) return false;
       if (t.recordsOutput) { if (batches.has(t.batchId) || state.items.find(i => i.id === t.itemId)?.kind === "activity") return false; batches.add(t.batchId); }
       tasks.set(t.id, t);
@@ -133,6 +135,11 @@ export function validWorkspace(value: unknown, recipes: DemoRecipe[]): value is 
         seen.add(prior.id); cursor = prior;
       }
     }
+    // An audited correction can reveal a shortage after dependent work began.
+    // Keep the recorded work intact. Starting further work still checks taskIssues.
+    const correctedOutput = new Map((state.productionWork?.history || [])
+      .filter(row => row.kind === "output" && row.taskId && row.actorId && Number.isFinite(Date.parse(row.at)))
+      .map(row => [row.taskId, row.quantityAfter]));
     const visiting=new Set<string>(),visited=new Set<string>();
     function visit(id:string,depth=0):boolean {
       if(depth>250 || visiting.has(id)) return false;
@@ -140,6 +147,7 @@ export function validWorkspace(value: unknown, recipes: DemoRecipe[]): value is 
       const t=tasks.get(id);if(!t)return false;visiting.add(id);
       for(const required of requiredTaskIds(t)) {
         const prior=tasks.get(required);
+        if(prior && ["done","active"].includes(t.status) && t.materialNeeds?.[required]!==undefined && (prior.completedQuantity??prior.quantity)+1e-6 < state.tasks.reduce((sum,consumer)=>sum+(consumer.materialNeeds?.[required]||0),0) && !(prior.completedQuantity!==undefined && correctedOutput.get(prior.id)===prior.completedQuantity))return false;
         if(!prior || prior.date>t.date || (["done","active"].includes(t.status) && prior.status!=="done") || !visit(required,depth+1))return false;
       }
       visiting.delete(id);visited.add(id);return true;

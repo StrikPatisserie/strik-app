@@ -31,6 +31,7 @@ export type Task = {
   note: string; source: "manual" | "shop" | "order" | "routine";
   dueDate?: string; dependsOn?: string; batchId: string; recordsOutput: boolean;
   requires?: string[]; generatedFor?: string;
+  materialNeeds?: Record<string, number>;
   recipePlan?: RecipePlanSettings;
   weddingCode?: string; weddingDeliveryDate?: string; completedQuantity?:number;
   stockFulfillmentId?:string;
@@ -38,7 +39,7 @@ export type Task = {
 export type PreparationChoice = { include?: boolean; date?: string; departmentId?: DepartmentId; operation?: string; minutes?: number | null };
 export type RecipePlanSettings = {
   amount: number; amountMode: "quantity" | "batches";
-  preparation?: { daysBefore: number; choices: Record<string, PreparationChoice> };
+  preparation?: { daysBefore: number; choices: Record<string, PreparationChoice>; combine?: boolean };
 };
 export type DemoRecipe = {
   id: string; name: string; yield: number; unit: ItemUnit;
@@ -192,6 +193,14 @@ export function durationLabel(minutes: number) {
 export function departmentsFor(board: BoardId) {
   return DEPARTMENTS.filter(d => canonicalBoardId(d.board) === canonicalBoardId(board));
 }
+export function convertRecipeQuantity(quantity:number,from:string,to:string):number {
+  const aliases:Record<string,string>={stuk:"stuks",g:"gram",l:"liter"};
+  from=aliases[from] || from;to=aliases[to] || to;
+  if(from===to)return quantity;
+  if(["gram","kg"].includes(from) && ["gram","kg"].includes(to))return quantity*(from==="kg"?1000:1)/(to==="kg"?1000:1);
+  if(["ml","liter"].includes(from) && ["ml","liter"].includes(to))return quantity*(from==="liter"?1000:1)/(to==="liter"?1000:1);
+  throw Error(`Eenheid ${from} kan niet zonder extra gegevens naar ${to} worden omgerekend.`);
+}
 export function requiredTaskIds(task: Task): string[] { return task.stockFulfillmentId && task.status === "done" ? [] : [...new Set([...(task.dependsOn ? [task.dependsOn] : []), ...(task.requires || [])])]; }
 export function taskIssues(task: Task, tasks: Task[], items: Item[] = []): string[] {
   if(task.stockFulfillmentId&&task.status==="done")return [];
@@ -211,6 +220,11 @@ export function taskIssues(task: Task, tasks: Task[], items: Item[] = []): strin
     if (!prior) issues.push("Benodigd halffabricaat ontbreekt in de planning.");
     else if (prior.date>task.date) issues.push(`${name} staat later ingepland (${dateLabel(prior.date)}).`);
     else if (prior.status!=="done") issues.push(`Wacht op ${name} (${dateLabel(prior.date)}).`);
+    else if (task.materialNeeds?.[id] !== undefined || prior.completedQuantity !== undefined) {
+      const consumers=tasks.filter(consumer=>consumer.requires?.includes(id));
+      const reserved=Math.max(consumers.reduce((total,consumer)=>total+(consumer.materialNeeds?.[id]||0),0),consumers.some(consumer=>consumer.materialNeeds?.[id]===undefined)?prior.quantity:0);
+      if((prior.completedQuantity??prior.quantity)+1e-6<reserved)issues.push(`${name}: minder beschikbaar dan de ${reserved.toLocaleString("nl-NL")} ${items.find(item=>item.id===prior.itemId)?.unit||""} die aan producties is gekoppeld.`);
+    }
   }
   if (task.dueDate && task.date > task.dueDate) issues.push("Gepland na de benodigde datum.");
   if (task.status === "blocked") issues.push(task.note || "Deze taak is geblokkeerd; controleer de oorzaak.");
@@ -343,6 +357,7 @@ export function completedOutput(items: Item[], tasks: Task[]): Map<string, numbe
 export function validRecipePlan(value:RecipePlanSettings):boolean {
   if(!value || !Number.isFinite(value.amount) || value.amount<=0 || value.amount>1000000 || !["quantity","batches"].includes(value.amountMode))return false;
   const prep=value.preparation;if(!prep)return true;
+  if(prep.combine!==undefined && typeof prep.combine!=="boolean")return false;
   if(!Number.isInteger(prep.daysBefore) || prep.daysBefore<0 || prep.daysBefore>30 || !prep.choices || typeof prep.choices!=="object" || Array.isArray(prep.choices) || Object.keys(prep.choices).length>250)return false;
   return Object.values(prep.choices).every(c=>{if(!c || typeof c!=="object" || (c.include!==undefined && typeof c.include!=="boolean") || (c.departmentId!==undefined && !DEPARTMENTS.some(d=>d.id===c.departmentId)) || (c.operation!==undefined && (typeof c.operation!=="string" || !c.operation.trim() || c.operation.length>100)) || (c.minutes!==undefined && c.minutes!==null && (!Number.isFinite(c.minutes) || c.minutes<0 || c.minutes>1440)))return false;try{if(c.date)addDays(c.date,0);return true;}catch{return false;}});
 }

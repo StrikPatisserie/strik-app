@@ -4,7 +4,7 @@ function load(file,imports={}){const exports={};vm.runInNewContext(ts.transpileM
 const access=load('app/lib/auth/access.ts'),planning=load('app/productie/planning.ts');
 const rights=load('app/productie/access.ts',{'../lib/auth/access':access,'./planning':planning});
 const workspace=load('app/productie/workspaceData.ts',{'./planning':planning});
-const recipePlanning=load('app/productie/recipePlanning.ts',{'./planning':planning});
+const recipePlanning=load('app/productie/recipePlanning.ts',{'./planning':planning,'./materialPlanning':load('app/productie/materialPlanning.ts',{'./planning':planning})});
 const productionWork=load('app/productie/productionWork.ts',{'./planning':planning,'./recipePlanning':recipePlanning});
 const work=load('app/productie/workRecipe.ts'),quick=load('app/productie/quickRecipe.ts');
 const baker={id:'baker',active:true,role:'bakkerij',permissions:{'bakkerij.patisserie':true}};

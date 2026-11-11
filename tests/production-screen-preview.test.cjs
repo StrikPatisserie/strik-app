@@ -1,6 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
 function load(file,imports={}){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:name=>{assert(name in imports,`Missing ${name}`);return imports[name];},Date,Intl,Map,Set,Error,structuredClone});return exports;}
-const planning=load('app/productie/planning.ts'),recipes=load('app/productie/recipePlanning.ts',{'./planning':planning}),sample=load('app/preview/productie/sampleData.ts',{'../../productie/planning':planning});
+const planning=load('app/productie/planning.ts'),recipes=load('app/productie/recipePlanning.ts',{'./planning':planning,'./materialPlanning':load('app/productie/materialPlanning.ts',{'./planning':planning})}),sample=load('app/preview/productie/sampleData.ts',{'../../productie/planning':planning});
 const work=load('app/productie/productionWork.ts',{'./planning':planning,'./recipePlanning':recipes});
 const model=load('app/preview/productie/scherm/model.ts',{'../../../productie/planning':planning,'../../../productie/productionWork':work,'../sampleData':sample});
 const now='2026-11-06T09:00:00.000Z';

@@ -7,9 +7,9 @@ import useTaskDrag from "./useTaskDrag";
 
 type Selection={date:string;edit?:boolean};
 type DialogProps={title:string;subtitle?:string;onClose:()=>void;children:ReactNode};
-type Props={days:string[];day:string;today:string;rows:CleaningDay[];canManage:boolean;canCheck:boolean;saving:boolean;statusFilter:string;selected:Selection|null;dragFrameRef?:RefObject<HTMLElement|null>;onDragChange?:(id:string|null)=>void;Dialog:ComponentType<DialogProps>;onOpen:(selection:Selection|null)=>void;onCommand:(command:CleaningCommand)=>Promise<string|undefined>};
+type Props={heading?:ReactNode;days:string[];day:string;today:string;rows:CleaningDay[];canManage:boolean;canCheck:boolean;saving:boolean;statusFilter:string;selected:Selection|null;dragFrameRef?:RefObject<HTMLElement|null>;onDragChange?:(id:string|null)=>void;Dialog:ComponentType<DialogProps>;onOpen:(selection:Selection|null)=>void;onCommand:(command:CleaningCommand)=>Promise<string|undefined>};
 
-export default function CleaningWeekLane({days,day,today,rows,canManage,canCheck,saving,statusFilter,selected,dragFrameRef,onDragChange,Dialog,onOpen,onCommand}:Props){
+export default function CleaningWeekLane({heading,days,day,today,rows,canManage,canCheck,saving,statusFilter,selected,dragFrameRef,onDragChange,Dialog,onOpen,onCommand}:Props){
   const [error,setError]=useState(""),[dragged,setDragged]=useState<string|null>(null);
   const laneRef=useRef<HTMLDivElement>(null);
   const visible=rows.filter(r=>days.includes(r.date)),done=visible.filter(r=>cleaningProgress(r).complete).length;
@@ -23,7 +23,7 @@ export default function CleaningWeekLane({days,day,today,rows,canManage,canCheck
   }});
   return <>
     <div ref={laneRef} className={`${s.departmentRow} ${s.cleaningLane}`} aria-label="Schoonmaak Patisserie" data-department="cleaning">
-      <div className={s.departmentLabel}><span className={s.departmentMark}/><h2><Icon name="cleaning" size={15}/>Schoonmaak</h2><span>{visible.length?`${done}/${visible.length} dagen klaar`:"Nog niet ingepland"}</span>{canManage && <button className={s.textLink} aria-label="Schoonmaak inplannen" title="Schoonmaak inplannen" onClick={()=>open({date:days.includes(day)?day:days[0],edit:true})}><Icon name="plus" size={13}/><span className={s.cleaningPlanLabel}>Inplannen</span></button>}</div>
+      <div className={s.departmentLabel}><span className={s.departmentMark}/><h2 title="Schoonmaak">{heading ?? <><Icon name="cleaning" size={15}/>Schoonmaak</>}</h2><span>{visible.length?`${done}/${visible.length} dagen klaar`:"Nog niet ingepland"}</span>{canManage && <button className={s.textLink} aria-label="Schoonmaak inplannen" title="Schoonmaak inplannen" onClick={()=>open({date:days.includes(day)?day:days[0],edit:true})}><Icon name="plus" size={13}/><span className={s.cleaningPlanLabel}>Inplannen</span></button>}</div>
       {days.map(date=>{const row=rows.find(r=>r.date===date),progress=row?cleaningProgress(row):undefined;
         const show=row && (statusFilter==="all" || (statusFilter==="done"?progress!.complete:statusFilter==="open"?!progress!.complete:statusFilter==="active"?progress!.done>0 && !progress!.complete:false));
         const handle=getHandleProps(`cleaning:${date}`);

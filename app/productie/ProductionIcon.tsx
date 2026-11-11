@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-export type IconName = "menu" | "cleaning" | "edit" | "refresh" | "trash" | "users" | "gift" | "grid" | "book" | "box" | "leaf" | "stock" | "settings" | "arrow" | "plus" | "chevron" | "check" | "clock" | "screen" | "keyboard" | "close" | "search" | "warning" | "link" | "back" | "move" | "play";
+export type IconName = "menu" | "cleaning" | "edit" | "refresh" | "trash" | "users" | "gift" | "grid" | "book" | "box" | "leaf" | "stock" | "settings" | "arrow" | "plus" | "chevron" | "check" | "clock" | "screen" | "keyboard" | "close" | "search" | "warning" | "link" | "back" | "move" | "play" | "fruit" | "pastry" | "cake" | "cream" | "wedding" | "oven" | "bread" | "icecream" | "chocolate";
 
 export default function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, ReactNode> = {
@@ -30,6 +30,15 @@ export default function Icon({ name, size = 18 }: { name: IconName; size?: numbe
     back: <path d="M19 12H5m6-6-6 6 6 6" />,
     move: <><path d="M12 2v20M2 12h20M8 6l4-4 4 4M8 18l4 4 4-4M6 8l-4 4 4 4M18 8l4 4-4 4" /></>,
     play: <path d="m8 4 12 8-12 8V4Z" />,
+    fruit: <><path d="M12 7c-4-3-8-1-8 4 0 5 3 10 6 9l2-1 2 1c3 1 6-4 6-9 0-5-4-7-8-4ZM12 7V3M12 5c1-3 3-3 5-3 0 2-2 4-5 3Z" /></>,
+    pastry: <><path d="M5 12h14l-2 9H7l-2-9ZM4 12c-2-3 0-6 3-6 0-5 10-5 10 0 3 0 5 3 3 6M10 15v3M14 15v3" /></>,
+    cake: <><path d="M3 10h18v11H3V10ZM3 14c3 3 3-3 6 0s3-3 6 0 3-3 6 0M6 10V6h12v4M12 6V3M10 3h4" /></>,
+    cream: <><path d="M5 14c-2-2-1-4 2-5-1-2 1-4 4-4l2-3c3 3 5 4 3 7 3 1 4 3 2 5M4 14h16l-2 7H6l-2-7ZM8 10c2 1 5 1 8-1" /></>,
+    wedding: <><path d="M3 21V13h18v8M6 13V7h12v6M9 7V3h6v4M2 21h20M3 16c3 3 6 3 9 0 3 3 6 3 9 0" /></>,
+    oven: <><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 8h18M7 5.5h.01M11 5.5h.01M15 5.5h.01M7 12h10v6H7z" /></>,
+    bread: <><path d="M6 21V11C0 9 3 3 7 4c1-3 9-3 10 0 4-1 7 5 1 7v10H6ZM9 10l2-2M13 12l2-2" /></>,
+    icecream: <><path d="M5 10h14l-7 12-7-12ZM6 10C0 5 7 1 10 4c1-5 10-3 8 3 4 1 2 5 0 3M9 12l5 6M14 12l-4 6" /></>,
+    chocolate: <><rect x="4" y="2" width="16" height="20" rx="1"/><path d="M12 2v20M4 9h16M4 15h16M7 5h2M15 5h2M7 12h2M15 12h2M7 18h2M15 18h2" /></>,
   };
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }

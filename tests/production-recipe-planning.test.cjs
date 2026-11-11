@@ -1,9 +1,9 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
-function load(file,imports={}) {const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:name=>{if(!(name in imports))throw Error(`Unmocked ${name}`);return imports[name];},Request,Response,Date,Intl,JSON,Number,Set,Map,Error});return exports;}
+function load(file,imports={}) {const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:name=>{if(!(name in imports))throw Error(`Unmocked ${name}`);return imports[name];},Request,Response,URL,Date,Intl,JSON,Number,Set,Map,Error});return exports;}
 const planning=load('app/productie/planning.ts');
 const workspace=load('app/productie/workspaceData.ts',{'./planning':planning});
-const rules=load('app/productie/recipePlanning.ts',{'./planning':planning});
+const rules=load('app/productie/recipePlanning.ts',{'./planning':planning,'./materialPlanning':load('app/productie/materialPlanning.ts',{'./planning':planning})});
 function fixture(){
  const r=(id,name,yieldAmount,lines=[],type='semiFinished',unit='kg')=>({id,name,type,yield:yieldAmount,unit,ingredients:[],steps:[],allergens:[],semiFinishedItems:lines});
  const line=(recipeId,quantity,unit='gram')=>({recipeId,quantity,unit});
@@ -176,7 +176,7 @@ test('whole production deletion never removes actual work or preparations still 
 class StoreError extends Error{constructor(message,status=503){super(message);this.status=status;}}
 function api(profile,options={}){
  const f=fixture();const source={ingredients:[],recipes:f.recipes.map(r=>({id:r.id,name:r.name,type:r.type,standardBatchQuantity:r.yield,standardBatchUnit:r.unit==='stuks'?'stuk':r.unit,ingredients:[],semiFinishedItems:r.semiFinishedItems.map(l=>({semiFinishedRecipeId:l.recipeId,quantity:l.quantity,unit:l.unit})),allergens:[]}))};
- let writes=0;const route=load('app/api/productie/plan/route.ts',{'@/app/lib/auth/session':{getCurrentProfile:async()=>profile},'@/app/lib/auth/access':load('app/lib/auth/access.ts'),'@/app/productie/access':load('app/productie/access.ts',{'../lib/auth/access':load('app/lib/auth/access.ts'),'./planning':planning}),'@/app/productie/documents.server':{ProductionStoreError:StoreError,readDocument:async key=>key==='recipes'?{data:source,revision:7}:{data:f.state,revision:3},saveRecipePlanDocument:async(revision,recipeRevision,state)=>{assert.equal(revision,3);assert.equal(recipeRevision,7);assert(workspace.validWorkspace(state,workspace.recipeViews(source)));if(options.conflict)throw new StoreError('revision-conflict',409);writes++;return 4;}},'@/app/productie/workspaceData':workspace,'@/app/productie/recipePlanning':rules});
+ let writes=0;const route=load('app/api/productie/plan/route.ts',{'@/app/lib/auth/session':{getCurrentProfile:async()=>profile},'@/app/lib/auth/access':load('app/lib/auth/access.ts'),'@/app/productie/access':load('app/productie/access.ts',{'../lib/auth/access':load('app/lib/auth/access.ts'),'./planning':planning}),'@/app/productie/documents.server':{ProductionStoreError:StoreError,readDocument:async key=>key==='recipes'?{data:source,revision:7}:{data:f.state,revision:3},saveRecipePlanDocument:async(revision,recipeRevision,state)=>{assert.equal(revision,3);assert.equal(recipeRevision,7);assert(workspace.validWorkspace(state,workspace.recipeViews(source)));if(options.conflict)throw new StoreError('revision-conflict',409);writes++;return 4;}},'@/app/productie/workspaceData':workspace,'@/app/productie/materialPlanning':load('app/productie/materialPlanning.ts',{'./planning':planning}),'@/app/productie/recipePlanning':rules});
  return{route,...f,source,writes:()=>writes};
 }
 function request(command,revision=3,recipeRevision=7){return new Request('https://app.invalid/api/productie/plan',{method:'POST',body:JSON.stringify({command,revision,recipeRevision})});}
@@ -334,4 +334,16 @@ test('catalog defaults apply to unassigned legacy components without relocating 
  current.items.find(item => item.recipeId === 'dough').departmentId = 'brood';
  const reloaded = workspace.syncRecipeCatalog(current, data);
  assert.equal(reloaded.items.find(item => item.recipeId === 'dough').departmentId, 'brood');
+});
+
+test('combining batches uses current recipes and one revision-protected server save',async()=>{
+ const a=api({id:'manager',active:true,role:'manager'});
+ const one=rules.buildRecipePlan(a.state,a.recipes,a.command);
+ const two=rules.buildRecipePlan(one,a.recipes,{...a.command,task:{...a.command.task,id:'order-2',batchId:'batch-2'}});
+ a.state.tasks.push(...two.tasks);
+ const ids=a.state.tasks.filter(t=>t.itemId==='recipe:foam').map(t=>t.id);
+ const send=(revision=3,recipeRevision=7)=>a.route.POST(new Request('https://app.invalid/api/productie/plan',{method:'POST',headers:{origin:'https://app.invalid'},body:JSON.stringify({action:'combine',taskIds:ids,revision,recipeRevision})}));
+ assert.equal((await send(2)).status,409);assert.equal(a.writes(),0);
+ assert.equal((await send(3,6)).status,409);assert.equal(a.writes(),0);
+ const response=await send();assert.equal(response.status,200);const result=await response.json();assert.equal(result.state.tasks.filter(t=>t.itemId==='recipe:foam').length,1);assert.equal(a.writes(),1);
 });

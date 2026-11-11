@@ -60,7 +60,8 @@ function harness(result, learnedEstimate = null) {
       useEffect() {},
     },
     'react/jsx-runtime': jsx,
-    './productionWork': { learnedWorkEstimate: () => learnedEstimate, workView: state => state },
+    './CompletedQuantityForm': { __esModule: true, default: function CompletedQuantityForm() {} },
+    './productionWork': { learnedWorkEstimate: () => learnedEstimate, workView: state => state, elapsedMilliseconds: timer => timer.elapsedMs },
     './ProductionIcon': { __esModule: true, default: () => null },
     './work.module.css': { __esModule: true, default: new Proxy({}, { get: (_, key) => key }) },
   }).default;
@@ -120,4 +121,110 @@ test('a manual task duration is shown for the full operation until a learned est
   tree = h.render({ task: { ...h.task, minutes: 0 } });assert(!text(tree).includes('Geschatte tijd'));
   const learned = harness(undefined, { minutes: 12, laborMinutes: 24, measurements: 2 });
   tree = learned.render({ task: { ...learned.task, minutes: 45 } });assert(text(tree).includes('12 min'));assert(!text(tree).includes('Geschatte tijd'));
+});
+
+test('a completed production exposes an amount correction without reopening its task', () => {
+  const h = harness();
+  const done = { ...h.task, status: 'done', completedQuantity: 1.2 };
+  let tree = h.render({ task: done });
+  button(tree, 'Aantal corrigeren').props.onClick();
+  tree = h.render();
+  const form = find(tree, node => typeof node.type === 'function' && node.type.name === 'CompletedQuantityForm');
+  assert.equal(form.props.task.completedQuantity, 1.2);
+  assert.equal(form.props.onCommand, h.props.onCommand);
+  assert.equal(h.commands.length, 0);
+  form.props.onClose();
+  tree = h.render();
+  assert(!nodes(tree).some(node => typeof node.type === 'function' && node.type.name === 'CompletedQuantityForm'));
+});
+
+
+test('already-finished work uses its learned advice and still requires an explicit confirmation', async () => {
+ const h = harness(undefined, { minutes: 18, laborMinutes: 18, measurements: 1 });
+ let tree = h.render();
+ assert(text(tree).includes('18 min'));
+ await button(tree, 'Al klaar').props.onClick();
+ tree = h.render();
+ assert.equal(field(tree, 'Werktijd').props.value, '18');
+ assert(text(tree).includes('1 eerdere productie'));
+ assert.equal(h.commands.length, 0);
+ field(tree, 'Werktijd').props.onChange({ target: { value: '21' } });
+ field(tree, 'Jouw naam').props.onChange({ target: { value: 'Bakker B' } });
+ tree = h.render();
+ await find(tree, node => node.type === 'form').props.onSubmit({ preventDefault() {} });
+ assert.equal(h.commands.length, 1);
+ assert.equal(h.commands[0].minutes, 21);
+ assert.equal(h.commands[0].crewSize, 1);
+});
+
+test('already-finished work without measurements or a planned duration asks for its actual time', async () => {
+ const h = harness();
+ await button(h.render(), 'Al klaar').props.onClick();
+ assert.equal(field(h.render(), 'Werktijd').props.value, '');
+ assert.equal(h.commands.length, 0);
+});
+
+
+test('a timed completion has one clear save action and a quiet adjustment option before saving', async () => {
+ const h = harness();
+ const timer = { id: 'timer-one', who: 'Bakker A', crewSize: 2, startedAt: '2026-11-11T08:00:00Z', runningSince: '2026-11-11T08:00:00Z', elapsedMs: 12 * 60000 };
+ const state = { ...h.props.state, productionWork: { timers: { task: timer } } };
+ let tree = h.render({ state, task: { ...h.task, status: 'active' } });
+ button(tree, 'Klaar').props.onClick();
+ await new Promise(resolve => setImmediate(resolve));
+ tree = h.render();
+ const form = find(tree, node => node.type === 'form' && node.props['aria-label'] === 'Productie afronden');
+ const save = button(form, 'Opslaan & klaar'), back = button(form, 'Nog aanpassen');
+ assert.equal(save.props.type, 'submit');
+ assert.equal(save.props.className, 'primary');
+ assert.equal(save.props.disabled, false);
+ assert.equal(back.props.type, 'button');
+ assert.equal(back.props.className, 'adjust');
+ assert.equal(field(form, 'Werktijd').props.value, '12');
+ assert.equal(field(form, 'Medewerkers').props.value, '2');
+ assert.equal(h.commands.length, 1);assert.equal(h.commands[0].kind, 'pause');
+ back.props.onClick();
+ tree = h.render({ state: { ...state, productionWork: { timers: { task: { ...timer, runningSince: undefined } } } } });
+ assert(!nodes(tree).some(node => node.type === 'form'));
+ assert.equal(h.commands.length, 1);
+ await button(tree, 'Klaar').props.onClick();
+ tree = h.render();
+ field(tree, 'Werktijd').props.onChange({ target: { value: '14' } });
+ tree = h.render({ busy: true });
+ assert.equal(button(tree, 'Opslaan…').props.disabled, true);
+ assert.equal(button(tree, 'Nog aanpassen').props.disabled, true);
+ await find(tree, node => node.type === 'form').props.onSubmit({ preventDefault() {} });
+ assert.equal(h.commands.length, 1);
+ tree = h.render({ busy: false });
+ await find(tree, node => node.type === 'form').props.onSubmit({ preventDefault() {} });
+ assert.equal(h.commands.length, 2);
+ assert.equal(h.commands[1].kind, 'complete');
+ assert.equal(h.commands[1].minutes, 14);
+ assert.equal(h.commands[1].crewSize, 2);
+ assert.equal(h.commands[1].quantity, 1.25);
+ assert.equal(h.commands[1].timerId, timer.id);
+});
+
+test('the save action needs valid completion details and retains those details after a failed save', async () => {
+ const h = harness('Verbinding tijdelijk verbroken.');
+ await button(h.render(), 'Al klaar').props.onClick();
+ let tree = h.render();
+ assert.equal(button(tree, 'Opslaan & klaar').props.disabled, true);
+ await find(tree, node => node.type === 'form').props.onSubmit({ preventDefault() {} });
+ assert.equal(h.commands.length, 0);
+ field(tree, 'Jouw naam').props.onChange({ target: { value: 'Bakker B' } });
+ field(tree, 'Werktijd').props.onChange({ target: { value: '22' } });
+ field(tree, 'Gemaakt').props.onChange({ target: { value: '0' } });
+ tree = h.render();
+ assert.equal(button(tree, 'Opslaan & klaar').props.disabled, true);
+ field(tree, 'Gemaakt').props.onChange({ target: { value: '1,5' } });
+ tree = h.render();
+ assert.equal(button(tree, 'Opslaan & klaar').props.disabled, false);
+ await find(tree, node => node.type === 'form').props.onSubmit({ preventDefault() {} });
+ tree = h.render();
+ assert(text(tree).includes('Verbinding tijdelijk verbroken.'));
+ assert.equal(field(tree, 'Werktijd').props.value, '22');
+ assert.equal(field(tree, 'Gemaakt').props.value, '1,5');
+ assert.equal(field(tree, 'Jouw naam').props.value, 'Bakker B');
+ assert.equal(button(tree, 'Opslaan & klaar').props.disabled, false);
 });

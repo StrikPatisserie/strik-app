@@ -1,13 +1,20 @@
 import type {DemoRecipe,DepartmentId,PreviewState} from './planning';
-import {confirmTaskCompletion,fulfillTaskFromStock,pauseWorkTimer,reopenTimedTask,setPreparation,startWorkTimer,storeWork,workView,type WorkCommand} from './productionWork';
+import {correctCompletedQuantity,confirmTaskCompletion,fulfillTaskFromStock,pauseWorkTimer,reopenTimedTask,setPreparation,startWorkTimer,storeWork,workView,type WorkCommand} from './productionWork';
 
 /** Only called with server time/identity. Browser snapshots never own work logs. */
 export function applyWorkCommand(state:PreviewState,recipes:DemoRecipe[],command:WorkCommand,allowed:DepartmentId[],actorId:string,id:string,at:string):PreviewState{
- if(!command||!['start','pause','complete','reopen','preparation','stock'].includes(command.kind))throw Error('Onbekende productieactie.');
+ if(!command||!['start','pause','complete','reopen','preparation','stock','correct-output'].includes(command.kind))throw Error('Onbekende productieactie.');
  const item=command.kind==='preparation'?state.items.find(i=>i.recipeId===command.recipeId):state.items.find(i=>i.id===state.tasks.find(t=>t.id===command.taskId)?.itemId);
  const task=command.kind==='preparation'?undefined:state.tasks.find(t=>t.id===command.taskId);
  if(!item||!allowed.includes(task?.departmentId||item.departmentId))throw Error('Geen toegang tot deze productie.');
  if(task?.weddingCode)throw Error('Pas deze bruidstaart via de bruidstaartplanning aan.');
+ if(command.kind==='correct-output'){
+  const previous=state.productionWork?.history?.find(row=>row.id===id);
+  if(previous){
+   if(previous.actorId===actorId&&previous.kind==='output'&&previous.taskId===command.taskId)return state;
+   throw Error('Deze productieactie is al gebruikt. Ververs de planning.');
+  }
+ }
  if(command.kind==='stock'){
   const receipt=state.productionWork?.receipts?.find(row=>row.id===id);
   if(receipt){
@@ -25,6 +32,7 @@ export function applyWorkCommand(state:PreviewState,recipes:DemoRecipe[],command
   case 'start':view=startWorkTimer(view,command.taskId,command.who,id,at,command.crewSize);break;
   case 'pause':view=pauseWorkTimer(view,command.taskId,at);break;
   case 'complete':view=confirmTaskCompletion(view,command,id,at);break;
+  case 'correct-output':view=correctCompletedQuantity(view,command,id,at);break;
   case 'preparation':view=setPreparation(view,command.recipeId,command.days,command.who,id,at);break;
   case 'reopen':view=reopenTimedTask(view,command.taskId);break;
   case 'stock':view=fulfillTaskFromStock(view,command,id,at);break;
@@ -41,7 +49,8 @@ export function applyWorkCommand(state:PreviewState,recipes:DemoRecipe[],command
 export function assertWorkUnchanged(current:PreviewState,next:PreviewState){
  if(JSON.stringify(current.productionWork)!==JSON.stringify(next.productionWork))throw Error('Productietijden en recepthistorie worden apart opgeslagen. Ververs de planning.');
  if(current.tasks.some(task=>task.stockFulfillmentId&&!next.tasks.some(row=>row.id===task.id)))throw Error('Een uit voorraad afgehandelde taak blijft in de registratie bewaard.');
- for(const task of next.tasks){const before=current.tasks.find(t=>t.id===task.id);
+ for(const task of next.tasks){const before=current.tasks.find(t=>t.id===task.id) || current.removedTasks?.find(row=>row.task.id===task.id)?.task;
+  if(JSON.stringify(task.materialNeeds)!==JSON.stringify(before?.materialNeeds))throw Error('Bundel of herbereken de materiaalbehoefte via de receptplanning.');
   if(task.completedQuantity!==before?.completedQuantity)throw Error('Bevestig de gemaakte hoeveelheid via de productiecontrole.');
   if(task.stockFulfillmentId!==before?.stockFulfillmentId)throw Error('Registreer voorraadgebruik via de voorraadcontrole.');
   if(before?.stockFulfillmentId&&JSON.stringify(task)!==JSON.stringify(before))throw Error('Een uit voorraad afgehandelde taak blijft bewaard. Corrigeer de voorraad via Voorraadbeheer.');

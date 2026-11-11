@@ -46,10 +46,10 @@ export default function ProductionStaffing({week,canManage,standalone=false,comp
   {!compact && settingsNotice && <p role="status" className={s.staffSaved}>{settingsNotice}</p>}
   {!standalone && <div className={s.staffPeek}>
    <button className={s.secondaryButton} onClick={()=>{setSelectedWeek(week);setOpen(true);}} aria-label="Personeelsrooster openen" title={[vacationNotice,rosterNotice].filter(Boolean).join("\n") || "Bekijk wie er deze week werkt"}>
-    <Icon name="users" size={17}/>{loading?"Rooster laden…":data?`${count} medewerkers${compact?"":" deze week"}`:"Personeelsrooster"}
-    {compact && (rosterNotice || !!data?.alerts.length || !!data?.reviewNames.length) && <span className={s.staffAlertBadge} role="status"><Icon name="warning" size={13}/>{rosterNotice?"Controleer rooster":data?.alerts.length?`${data.alerts.length} vakantie`:"Controleer vakantie"}</span>}
+    <Icon name="users" size={17}/>{compact?"Rooster":loading?"Rooster laden…":data?`${count} medewerkers${compact?"":" deze week"}`:"Personeelsrooster"}
+    {compact && (rosterNotice || !!data?.alerts.length || !!data?.reviewNames.length) && <span className={s.staffAlertBadge} role="status"><Icon name="warning" size={13}/><span className={s.srOnly}>{rosterNotice?"Controleer rooster":data?.alerts.length?`${data.alerts.length} vakantie`:"Controleer vakantie"}</span></span>}
    </button>
-   <Link className={s.textLink} href={`/bakkerij/productie/rooster?week=${week}`}>Rooster & vaste taken</Link>
+   {!compact&&<Link className={s.textLink} href={`/bakkerij/productie/rooster?week=${week}`}>Rooster & vaste taken</Link>}
    {!compact && rosterNotice && <span role="status">{rosterNotice}</span>}
   </div>}
   {!compact && alerts}

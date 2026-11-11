@@ -1,6 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
 function load(file,imports={}){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:name=>{assert(name in imports,`Missing ${name}`);return imports[name];},Date,Intl,Map,Set,structuredClone,Request,Response,URL});return exports;}
-const planning=load('app/productie/planning.ts'),recipePlanning=load('app/productie/recipePlanning.ts',{'./planning':planning}),work=load('app/productie/productionWork.ts',{'./planning':planning,'./recipePlanning':recipePlanning}),commands=load('app/productie/workCommands.ts',{'./productionWork':work}),workspace=load('app/productie/workspaceData.ts',{'./planning':planning}),access=load('app/lib/auth/access.ts'),rights=load('app/productie/access.ts',{'../lib/auth/access':access,'./planning':planning});
+const planning=load('app/productie/planning.ts'),recipePlanning=load('app/productie/recipePlanning.ts',{'./planning':planning,'./materialPlanning':load('app/productie/materialPlanning.ts',{'./planning':planning})}),work=load('app/productie/productionWork.ts',{'./planning':planning,'./recipePlanning':recipePlanning}),commands=load('app/productie/workCommands.ts',{'./productionWork':work}),workspace=load('app/productie/workspaceData.ts',{'./planning':planning}),access=load('app/lib/auth/access.ts'),rights=load('app/productie/access.ts',{'../lib/auth/access':access,'./planning':planning});
 const recipeData={ingredients:[],recipes:[],manualProductionPlanningItems:[]},recipes=[];
 const fixture=()=>({version:1,items:[{id:'cake',name:'Taart zonder recept',kind:'product',departmentId:'dessert',unit:'stuks',stock:0,note:''}],tasks:[{id:'task',itemId:'cake',date:'2026-11-06',departmentId:'dessert',operation:'Maken',status:'planned',quantity:1000,source:'manual',note:'',batchId:'batch',recordsOutput:true}],productionRequests:[]});
 const baker={id:'account-baker',active:true,role:'bakkerij',permissions:{'bakkerij.patisserie':true}},at='2026-11-06T08:00:00Z';
@@ -109,4 +109,72 @@ test('stock API uses one planner write, rejects concurrent stale counts and dedu
  for(const profile of [null,{...baker,active:false},{...baker,role:'winkel'},{...baker,permissions:{'bakkerij.ijs_chocolade':true}}]){
   const denied=endpoint(profile);assert.notEqual((await denied.route.POST(post(stockCommand,'stock-denied-100'))).status,200);assert.equal(denied.writes.length,0);
  }
+});
+
+test('correcting output preserves completion identity and time, records old/new amounts and updates stock and learned yield',()=>{
+ const inventory=load('app/productie/inventory.ts',{'./planning':planning});
+ const completed=apply(fixture(),{kind:'complete',taskId:'task',who:'Bakker A',minutes:15,quantity:1000,crewSize:2},'completed-output','2026-11-06T10:00:00Z');
+ const before=JSON.stringify(completed),original=completed.productionWork.completions.task;
+ const corrected=apply(completed,{kind:'correct-output',taskId:'task',who:'Bakker B',quantity:500,expectedQuantity:1000},'correct-output-100','2026-11-07T08:00:00Z');
+ assert.equal(JSON.stringify(completed),before);
+ assert.equal(corrected.tasks[0].status,'done');assert.equal(corrected.tasks[0].quantity,1000);assert.equal(corrected.tasks[0].completedQuantity,500);
+ assert.equal(corrected.productionWork.completions.task.id,original.id);assert.equal(corrected.productionWork.completions.task.at,original.at);assert.equal(corrected.productionWork.completions.task.who,original.who);
+ assert.equal(corrected.productionWork.completions.task.minutes,15);assert.equal(corrected.productionWork.completions.task.laborMinutes,30);assert.equal(corrected.productionWork.completions.task.quantity,500);
+ assert.equal(JSON.stringify(corrected.productionWork.work),JSON.stringify(completed.productionWork.work),'The original measurement remains auditable');
+ const audit=corrected.productionWork.history.at(-1);
+ assert.equal(audit.kind,'output');assert.equal(audit.quantityBefore,1000);assert.equal(audit.quantityAfter,500);assert.equal(audit.who,'Bakker B');assert.equal(audit.actorId,baker.id);assert.equal(audit.at,'2026-11-07T08:00:00Z');
+ assert.equal(planning.completedOutput(corrected.items,corrected.tasks).get('cake'),500);
+ assert.equal(work.learnedWorkEstimate(work.workView(corrected,[]),'cake','Maken',1000).laborMinutes,60);
+ const stock=inventory.emptyInventory();stock.counts=[{id:'count',itemId:'cake',unit:'stuks',date:'2026-11-05',quantity:0,who:'Bakker',actorId:'baker',at:'2026-11-05T18:00:00Z'}];
+ const overview=inventory.inventoryOverview(corrected,stock,[],'2026-11-07').rows[0];
+ assert.equal(overview.made,500);assert.equal(overview.balance,500);assert.equal(overview.latest.quantity,500);assert.equal(overview.latest.date,'2026-11-06','A correction keeps output on its original production day');
+ assert.equal(workspace.validWorkspace(corrected,[]),true);
+});
+
+test('legacy completed tasks accept an output correction without inventing a timer or labor measurement',()=>{
+ const legacy=fixture();legacy.tasks[0].status='done';
+ const corrected=apply(legacy,{kind:'correct-output',taskId:'task',who:'Bakker B',quantity:900,expectedQuantity:1000},'legacy-output-100');
+ assert.equal(corrected.tasks[0].completedQuantity,900);assert.equal(corrected.tasks[0].status,'done');assert.equal(corrected.productionWork.completions.task,undefined);
+ assert.equal(corrected.productionWork.work.length,0);assert.equal(Object.keys(corrected.productionWork.timers).length,0);
+ const receiptsExpired={...corrected,productionWork:{...corrected.productionWork,receipts:[]}};
+ assert.equal(apply(receiptsExpired,{kind:'correct-output',taskId:'task',who:'Bakker B',quantity:900,expectedQuantity:1000},'legacy-output-100'),receiptsExpired);
+});
+
+test('output corrections validate amounts, names, stale values and department access and exclude stock use',()=>{
+ const done=fixture();done.tasks[0].status='done';
+ const correction={kind:'correct-output',taskId:'task',who:'Bakker A',quantity:900,expectedQuantity:1000};
+ for(const changes of [{quantity:0},{quantity:-1},{quantity:NaN},{quantity:Infinity},{quantity:1000001},{quantity:1000},{who:' '},{expectedQuantity:980}])assert.throws(()=>apply(done,{...correction,...changes},'bad-output-100'));
+ assert.throws(()=>apply(fixture(),correction,'planned-output-100'),/afgeronde/);
+ assert.throws(()=>commands.applyWorkCommand(done,[],correction,['ijs'],'other','wrong-output-100',at),/toegang/);
+ const stock=apply(fixture(),stockCommand,'stock-output-100');assert.throws(()=>apply(stock,correction,'stock-correct-100'),/Voorraadbeheer/);
+ const wedding=structuredClone(done);wedding.tasks[0].weddingCode='wedding';assert.throws(()=>apply(wedding,correction,'wedding-output-100'),/bruidstaart/);
+ const corrected=apply(done,correction,'once-output-100');assert.throws(()=>apply(corrected,correction,'stale-output-100'),/intussen gewijzigd/);
+});
+
+test('an audited short-output correction keeps downstream history and exposes its shortage before starting further work',()=>{
+ const done=fixture();done.tasks[0].status='done';
+ done.items.push({...done.items[0],id:'final'});
+ done.tasks.push({...done.tasks[0],id:'consumer',itemId:'final',batchId:'consumer',status:'active',requires:['task'],materialNeeds:{task:1000}});
+ const corrected=apply(done,{kind:'correct-output',taskId:'task',who:'Bakker B',quantity:900,expectedQuantity:1000},'short-output-100');
+ assert.equal(corrected.tasks[1].status,'active');assert.equal(workspace.validWorkspace(corrected,[]),true);
+ assert(planning.taskIssues(corrected.tasks[1],corrected.tasks,corrected.items).some(issue=>issue.includes('minder beschikbaar')));
+ const additional={...corrected.tasks[1],id:'next-consumer',batchId:'next',status:'planned'};
+ assert.throws(()=>planning.transitionTask([...corrected.tasks,additional],additional.id,'active',corrected.items),/minder beschikbaar/);
+ const forged=structuredClone(done);forged.tasks[0].completedQuantity=900;
+ assert.equal(workspace.validWorkspace(forged,[]),false);assert.throws(()=>commands.assertWorkUnchanged(done,forged));
+});
+
+test('output correction API uses current revision, retries once and retains original data on a failed write',async()=>{
+ const e=endpoint();e.store.planner.data.tasks[0].status='done';
+ const correction={kind:'correct-output',taskId:'task',who:'Bakker B',quantity:900,expectedQuantity:1000};
+ const first=await e.route.POST(post(correction,'api-output-100'));
+ assert.equal(first.status,200);assert.equal(e.writes.length,1);assert.equal(e.store.planner.data.tasks[0].completedQuantity,900);
+ assert.equal((await e.route.POST(post(correction,'api-output-100'))).status,200);assert.equal(e.writes.length,1);
+ e.store.planner.data.productionWork.receipts=[];
+ assert.equal((await e.route.POST(post(correction,'api-output-100'))).status,200);assert.equal(e.writes.length,1);
+ assert.equal((await e.route.POST(post({...correction,quantity:800},'competing-output-100'))).status,409);assert.equal(e.writes.length,1);
+ const failed=endpoint(baker,true);failed.store.planner.data.tasks[0].status='done';
+ assert.equal((await failed.route.POST(post(correction,'failed-output-100'))).status,409);
+ assert.equal(failed.store.planner.data.tasks[0].completedQuantity,undefined);assert.equal(failed.store.planner.data.productionWork,undefined);assert.equal(failed.writes.length,0);
+ const anonymous=endpoint(null);assert.equal((await anonymous.route.POST(post(correction,'denied-output-100'))).status,403);assert.equal(anonymous.writes.length,0);
 });

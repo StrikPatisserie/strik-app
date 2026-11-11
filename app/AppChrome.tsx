@@ -19,7 +19,7 @@ export default function AppChrome({
   profile: UserProfile | null;
 }>) {
   const pathname = usePathname();
-  const isProductionPreview = process.env.NODE_ENV === "development" && (pathname === "/preview/productie" || pathname === "/preview/persoonlijk");
+  const isProductionPreview = process.env.NODE_ENV === "development" && (pathname === "/preview/productie" || pathname === "/preview/productie/live" || pathname === "/preview/persoonlijk");
   const isProductionWorkspace = pathname === "/bakkerij/productie" || pathname.startsWith("/bakkerij/productie/");
   const isAuthArea =
     pathname === "/login" ||

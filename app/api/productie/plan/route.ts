@@ -6,6 +6,7 @@ import { recipeViews, syncRecipeCatalog, validWorkspace } from "@/app/productie/
 import { buildRecipePlan, refreshRecipePlan } from "@/app/productie/recipePlanning";
 import type { RecepturenData } from "@/app/bakkerij/recepturen/recepturenApi";
 import type { PreviewState } from "@/app/productie/planning";
+import { combineMaterialTasks } from "@/app/productie/materialPlanning";
 export const dynamic="force-dynamic";
 const headers={"Cache-Control":"private, no-store"};
 export async function POST(request:Request) {
@@ -20,7 +21,7 @@ export async function POST(request:Request) {
     if(incoming.revision!==planner.revision || incoming.recipeRevision!==recipes.revision)throw new ProductionStoreError("De planning of recepten zijn intussen gewijzigd. Ververs het voorstel eerst; er is niets opgeslagen.",409);
     const views=recipeViews(recipes.data);
     const current=syncRecipeCatalog(planner.data,recipes.data,views);
-    let next=incoming.replaceTaskId?refreshRecipePlan(current,views,incoming.replaceTaskId,incoming.command):buildRecipePlan(current,views,incoming.command);
+    let next=incoming.action === "combine" ? combineMaterialTasks(current,views,incoming.taskIds) : incoming.replaceTaskId?refreshRecipePlan(current,views,incoming.replaceTaskId,incoming.command):buildRecipePlan(current,views,incoming.command);
     try{mergeWorkspaceForEmployee(current,next,productionDepartments(profile));}catch(error){throw new ProductionStoreError((error as Error).message,403);}
     if(incoming.replaceTaskId)next={...next,removedTasks:[...(current.removedTasks || []),...current.tasks.filter(t=>!next.tasks.some(n=>n.id===t.id)).map(task=>({task,removedAt:new Date().toISOString(),removedBy:profile.id}))]};
     if(!validWorkspace(next,views))throw new ProductionStoreError("Het voorstel bevat een ongeldige hoeveelheid, koppeling of planning.",400);

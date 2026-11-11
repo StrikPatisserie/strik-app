@@ -1,7 +1,7 @@
 import { addDays, addItem, transitionTask, type DemoRecipe, type DepartmentId, type ItemUnit, type PreviewState, type Task } from "./planning";
 import { buildRecipePlan, type PlanCommand } from "./recipePlanning";
 
-export type Change = { id:string; itemId:string; taskId?:string; who:string; at:string; actorId?:string; kind:"recipe"|"time"|"preparation"|"stock"; scope:"once"|"permanent"; summary:string; before?:DemoRecipe; after?:DemoRecipe };
+export type Change = { id:string; itemId:string; taskId?:string; who:string; at:string; actorId?:string; kind:"recipe"|"time"|"preparation"|"stock"|"output";quantityBefore?:number;quantityAfter?:number; scope:"once"|"permanent"; summary:string; before?:DemoRecipe; after?:DemoRecipe };
 export type WorkTime = { id:string; taskId:string; itemId:string; operation:string; quantity:number; minutes:number; who:string; at:string; actorId?:string; timerId?:string; measuredMs?:number; plannedQuantity?:number;crewSize?:number;laborMinutes?:number;recipeKey?:string;estimateEligible?:boolean };
 export type WorkTimer = {id:string;who:string;startedAt:string;runningSince?:string;elapsedMs:number;actorId?:string;crewSize?:number;recipeKey?:string;operation?:string};
 export type Completion = {id:string;who:string;at:string;minutes:number;quantity:number;plannedQuantity:number;measuredMs?:number;timerId?:string;actorId?:string;crewSize?:number;laborMinutes?:number;measuredCrewSize?:number};
@@ -42,6 +42,36 @@ export function confirmTaskCompletion(state:ScreenState,input:{taskId:string;who
   const recipeKey=productionRecipeKey(state,task.itemId);
   const log:WorkTime={...completion,taskId:task.id,itemId:task.itemId,operation:task.operation,recipeKey,estimateEligible:crewSize!==undefined&&!state.overrides[task.id]&&(!timer||timer.recipeKey===recipeKey&&timer.operation?.trim().toLowerCase()===task.operation.trim().toLowerCase())};
   return {...state,planner:{...state.planner,tasks},completions:{...state.completions,[task.id]:completion},work:[...state.work,log],history:[...state.history,{id,itemId:task.itemId,taskId:task.id,who,at,kind:"time",scope:"once",summary:`Afgerond: ${input.minutes.toLocaleString("nl-NL")} min${crewSize?` × ${crewSize} medewerkers = ${laborMinutes!.toLocaleString("nl-NL")} arbeidsmin`:""} · ${input.quantity.toLocaleString("nl-NL")} ${state.planner.items.find(i=>i.id===task.itemId)?.unit} gemaakt (gepland ${task.quantity.toLocaleString("nl-NL")}).`}]};
+}
+export function correctCompletedQuantity(state: ScreenState, input: {
+  taskId: string; who: string; quantity: number; expectedQuantity: number;
+}, id: string, at: string): ScreenState {
+  const who = actor(input.who);
+  timestamp(at);
+  const task = state.planner.tasks.find(row => row.id === input.taskId);
+  if (!task || task.status !== "done") throw Error("Kies een afgeronde productie.");
+  if (task.stockFulfillmentId) throw Error("Corrigeer deze voorraadtelling via Voorraadbeheer.");
+  if (!Number.isFinite(input.quantity) || input.quantity <= 0 || input.quantity > 1000000) {
+    throw Error("Controleer de gemaakte hoeveelheid.");
+  }
+  const previousQuantity = task.completedQuantity ?? task.quantity;
+  if (input.expectedQuantity !== previousQuantity) {
+    throw Error("Het gemaakte aantal is intussen gewijzigd. Open de correctie opnieuw.");
+  }
+  if (input.quantity === previousQuantity) throw Error("Vul het gewijzigde aantal in.");
+  const completion = state.completions?.[task.id];
+  const unit = state.planner.items.find(row => row.id === task.itemId)!.unit;
+  return {
+    ...state,
+    planner: { ...state.planner, tasks: state.planner.tasks.map(row => row.id === task.id
+      ? { ...row, completedQuantity: input.quantity } : row) },
+    completions: completion ? { ...state.completions, [task.id]: { ...completion, quantity: input.quantity } } : state.completions,
+    history: [...state.history, {
+      id, itemId: task.itemId, taskId: task.id, who, at, kind: "output", scope: "once",
+      quantityBefore: previousQuantity, quantityAfter: input.quantity,
+      summary: `Gemaakt: ${previousQuantity.toLocaleString("nl-NL")} → ${input.quantity.toLocaleString("nl-NL")} ${unit}.`,
+    }],
+  };
 }
 export function reopenTimedTask(state:ScreenState,taskId:string):ScreenState{
   if (state.planner.tasks.find(task => task.id === taskId)?.stockFulfillmentId) throw Error("Deze taak is uit voorraad afgehandeld. Corrigeer een verkeerde telling via Voorraadbeheer.");
@@ -136,7 +166,7 @@ export function learnedWorkEstimate(state:ScreenState,itemId:string,operation:st
   latest.delete(row.taskId);latest.set(row.taskId,row);
  }
  const records=[...latest.values()].slice(-20);
- const units=records.reduce((sum,row)=>sum+row.quantity,0);
+ const units=records.reduce((sum,row)=>sum+(state.completions![row.taskId].quantity??row.quantity),0);
  if(!records.length||units<=0)return null;
  const laborMinutes=records.reduce((sum,row)=>sum+row.laborMinutes!,0)/units*quantity;
  return {minutes:Math.max(.01,Math.round(laborMinutes/crewSize*100)/100),laborMinutes:Math.max(.01,Math.round(laborMinutes*100)/100),crewSize,measurements:records.length};
@@ -147,6 +177,7 @@ export type WorkCommand =
  | {kind:"start";taskId:string;who:string;crewSize?:number}
  | {kind:"pause";taskId:string}
  | {kind:"complete";taskId:string;who:string;minutes:number;quantity:number;timerId?:string;crewSize?:number}
+ | {kind:"correct-output";taskId:string;who:string;quantity:number;expectedQuantity:number}
  | {kind:"reopen";taskId:string}
  | {kind:"stock";taskId:string;who:string;countedQuantity:number;confirmed:true}
  | {kind:"preparation";recipeId:string;days:number;who:string};

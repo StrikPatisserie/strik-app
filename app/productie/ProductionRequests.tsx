@@ -10,14 +10,14 @@ type Data={revision:number;canCreate:boolean;departments:DepartmentId[];items:Pi
 type Props={
  board?:BoardId;week?:string;today?:string;selectedDay?:string;selectedDepartment?:DepartmentId;
  onPlanned?:()=>Promise<void>;logistics?:boolean;compact?:boolean;
- preview?:{state:PreviewState;onCommand:(command:RequestCommand)=>Promise<void>};
+ preview?:{readOnly?:boolean;canPlan?:boolean;state:PreviewState;onCommand:(command:RequestCommand)=>Promise<void>};
 };
 export default function ProductionRequests({board,week,today,selectedDay,selectedDepartment,onPlanned,logistics=false,compact=false,preview}:Props){
  const [remoteData,setData]=useState<Data|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[adding,setAdding]=useState(false),[planning,setPlanning]=useState(''),[showPlanned,setShowPlanned]=useState(false),[newItem,setNewItem]=useState(false);
  const [expanded,setExpanded]=useState(false),[planningDepartment,setPlanningDepartment]=useState<DepartmentId|''>('');
  const [editing,setEditing]=useState<ProductionRequest|null>(null),[selectedItem,setSelectedItem]=useState('');
  const data:Data|null=preview?{
-  revision:0,canCreate:true,departments:DEPARTMENTS.map(department=>department.id),items:preview.state.items,
+  revision:0,canCreate:!preview.readOnly,departments:preview.readOnly&&!preview.canPlan?[]:DEPARTMENTS.map(department=>department.id),items:preview.state.items,
   requests:(preview.state.productionRequests||[]).map(request=>({...request,plannedTask:requestPlanningTask(preview.state,request),canEdit:canEditProductionRequest(preview.state,request)})),
  }:remoteData;
  const previewMode=!!preview;

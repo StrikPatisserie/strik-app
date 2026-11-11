@@ -703,13 +703,20 @@
 .offerHeading{display:flex;align-items:center;justify-content:space-between;min-height:30px;margin-bottom:4px;color:#1b3344;font-size:13px;font-weight:700}
 .recipeGroup{position:absolute;right:5px;bottom:4px;display:inline-flex;align-items:center;gap:3px;padding:2px 4px;border-radius:4px;font-size:9px!important;line-height:1.2;white-space:nowrap}
 .recipeGroupTone0{background:#e1ebf1;color:#254f67}.recipeGroupTone1{background:#f9e8d6;color:#80532f}.recipeGroupTone2{background:#e2ebdc;color:#3d6049}
-.worksheetRoot .taskCard{position:relative}
+.worksheetRoot .taskCard{--quantity-width:clamp(64px,4vw,88px);--quantity-height:clamp(38px,2.4vw,52px);position:relative}
+.worksheetRoot .taskControls{display:flex;flex:0 0 calc(var(--quantity-width) - 12px);flex-direction:column;align-items:center;min-width:0;min-height:calc(24px + var(--quantity-height));color:#1b3344}
+.worksheetRoot .taskQuantity{position:absolute;left:0;bottom:0;display:flex;align-items:flex-end;justify-content:flex-start;gap:2px;width:var(--quantity-width);height:var(--quantity-height);padding:0 10px 5px 7px;min-width:0;border-radius:0 100% 0 4px;background:#dce6ed;text-align:left;font-size:clamp(11px,.65vw,16px);line-height:1.2;font-variant-numeric:tabular-nums;pointer-events:none}
+.worksheetRoot .taskQuantity b{display:block;min-width:0;font-size:clamp(15px,.9vw,24px);font-weight:650}
+.worksheetRoot .taskQuantity>span{flex-shrink:0}
+.worksheetRoot .task_done .taskQuantity{background:#b9cbb2;color:#3f5838}
+.worksheetRoot .task_active .taskQuantity{background:#f2d2c8;color:#923c32}
 .worksheetRoot .taskBody{flex:1;min-width:0}
 .worksheetRoot .taskOpen{display:block;width:100%!important}
 .worksheetRoot .taskMeta{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:2px 8px;margin-top:3px}
+.worksheetRoot .taskMeta:empty{display:none}
 .worksheetRoot .taskStep{display:flex;align-items:center;flex-wrap:wrap;gap:4px;padding:0;color:#1b3344;font-size:12px;text-align:left}
-.worksheetRoot .task_done :is(.taskOpen,.taskOpen strong,.taskStep,.taskWorkBadge){color:#3f5838}
-.worksheetRoot .task_active :is(.taskOpen,.taskOpen strong,.taskStep,.taskStep small){color:#923c32}
+.worksheetRoot .task_done :is(.taskControls,.taskOpen,.taskOpen strong,.taskStep,.taskStep small,.taskWorkBadge){color:#3f5838}
+.worksheetRoot .task_active :is(.taskControls,.taskOpen,.taskOpen strong,.taskStep,.taskStep small){color:#923c32}
 .worksheetRoot .taskStep small{display:inline-flex;align-items:center;gap:4px;margin:0;font-size:10px;color:#8b392e}.worksheetRoot .taskStep small:empty{display:none}
 .worksheetRoot .taskCard:has([data-warning-only]) .taskOpen strong{padding-right:17px}
 .worksheetRoot .taskStep small[data-warning-only]{position:absolute;top:5px;right:5px;margin:0}
@@ -952,6 +959,9 @@
 .readablePlanning.dayView .departmentLabel h2{font-size:19px}
 .readablePlanning.dayView .dayCell{min-height:120px!important}
 .readablePlanning.dayView .taskOpen strong{font-size:clamp(21px,var(--day-title-scale),var(--day-title-size));line-height:1.25}
+.readablePlanning.dayView .taskCard{--quantity-width:clamp(72px,5vw,100px);--quantity-height:clamp(42px,3vw,60px)}
+.readablePlanning.dayView .taskQuantity{font-size:clamp(12px,.85vw,18px)}
+.readablePlanning.dayView .taskQuantity b{font-size:clamp(17px,1.15vw,28px)}
 .readablePlanning.dayView .taskStep{font-size:clamp(14px,.85vw,20px)}
 .readablePlanning.largeText .taskOpen strong{font-size:clamp(20px,1.1vw,32px)}
 .readablePlanning.largeText.dayView .taskOpen strong{font-size:clamp(26px,var(--day-title-scale),var(--day-title-size))}
@@ -988,3 +998,282 @@
  .readablePlanning[data-bakery-screen=true] .main::before{flex-basis:40px}
 }
 @media print{.menuToggle,.planningNavigation,.readablePlanning .planningActions{display:none}}
+
+/* The optional live preview changes presentation, using the same tasks and writes. */
+.newPlanning.readablePlanning{background:#fbfcfa;color:#1b3342}
+.newPlanning .plannerWithRequests{grid-template-columns:minmax(0,1fr) clamp(230px,18vw,280px)!important;gap:12px}
+.newPlanning .plannerFilters{flex-wrap:wrap}
+.newPlanning .board{border:1px solid #dce4d6;border-radius:12px;min-width:calc(48px + var(--days) * 140px);background:#fff;overflow:hidden}
+.newPlanning :is(.boardHeader,.departmentRow){grid-template-columns:48px repeat(var(--days),minmax(0,1fr))}
+.newPlanning .boardHeader{display:grid;border-bottom:1px solid #dce4d6;position:sticky;top:0;z-index:2;background:#1b3344}
+.newPlanning .dayHeading{background:#1b3344!important;color:#fff!important;border-right:1px solid #526b78;min-height:36px;padding:6px 10px;align-items:center;justify-content:center;flex-direction:row;flex-wrap:nowrap;gap:6px;line-height:1.2;border-top:2px solid transparent}
+.newPlanning .dayHeading strong{font-size:16px;white-space:nowrap}.newPlanning .dayHeading>div>span{display:none}
+.newPlanning .dayHeading.today{border-top-color:#d57664;background:#304f5f!important}
+.newPlanning .dayRhythm{display:none}
+.newPlanning .departmentRow{display:grid;min-height:0;border-bottom:1px solid #e1e7dc;align-items:stretch}
+.newPlanning .departmentLabel{padding:4px 2px!important;min-height:0!important;background:#f7f9f4!important;color:#1b3342!important;display:flex;flex-direction:column;justify-content:center!important;align-items:center;border-left:0;writing-mode:horizontal-tb;gap:3px}
+.newPlanning .departmentLabel h2{display:flex;flex-direction:column;align-items:center;gap:3px;width:100%;writing-mode:horizontal-tb;transform:none;white-space:nowrap;font-size:9px!important;letter-spacing:.2px;margin:0;line-height:1.2}.newPlanning .departmentLabel h2 svg{display:block;flex-shrink:0}.newPlanning .departmentMark,.newPlanning .departmentLabel>span,.newPlanning .departmentLabel>small{display:none}
+.newPlanning .dayCell{padding:4px!important;gap:3px!important;min-height:44px!important;border-right:1px solid #edf0e9;background:#fff;display:flex;flex-direction:column;justify-content:flex-start}
+.newPlanning .todayCell{background:#f9fbf5!important}
+.newPlanning .dayCellFooter{margin-top:0;min-height:20px;justify-content:flex-end}
+.newPlanning .cellWorkTotals{display:none}
+.newPlanning .cellAdd{margin:0;min-height:20px;opacity:.7;background:transparent}
+.newPlanning .cellAdd:hover{opacity:1;background:#edf3e7}
+.newPlanning .departmentRow[data-collapsed=true] .dayCell>*{display:none}
+.newPlanning .departmentRow[data-collapsed=true] .dayCell{min-height:42px!important}
+.newPlanning .planningRail{top:12px;max-height:calc(100dvh - 100px);height:auto;min-height:0;gap:12px;position:sticky}
+.newPlanning .planningRail>aside{max-height:65dvh}
+.newPlanning[data-bakery-screen=true] .planningRail{top:60px;max-height:calc(100dvh - 140px);height:auto}
+.newPlanning.dayView .board{display:block;min-width:0}
+.newPlanning.dayView .boardHeader{display:flex;min-height:0}
+.newPlanning.dayView .boardHeader>.departmentColumn{display:none}
+.newPlanning.dayView .boardHeader>.dayHeading{flex:1;min-height:36px;flex-direction:row;justify-content:space-between;align-items:center}
+.newPlanning.dayView .boardHeader .dayRhythm{display:flex;flex-direction:row;gap:12px}
+.newPlanning.dayView .departmentRow{display:grid;grid-template-columns:48px minmax(0,1fr);padding:0;min-height:0}
+.newPlanning.dayView .departmentLabel{min-height:0!important;padding:4px 2px!important;display:flex;width:auto}
+.newPlanning.dayView .dayCell{min-height:0!important;padding:4px!important;gap:3px!important;background:#fff!important}
+.newPlanning.dayView .departmentRow[data-collapsed=true] .dayCell{display:none}
+.newPlanning.dayView .dayCellFooter{min-height:20px}
+.newPlanning .boardFooter{display:flex;padding:6px 10px;font-size:11px}
+@media(max-width:1100px){.newPlanning .plannerWithRequests{grid-template-columns:minmax(0,1fr) 230px!important}.newPlanning :is(.boardHeader,.departmentRow){grid-template-columns:48px repeat(var(--days),minmax(0,1fr))}.newPlanning .board{min-width:calc(48px + var(--days) * 140px)}}
+@media(max-width:900px){.newPlanning .plannerWithRequests{grid-template-columns:minmax(0,1fr)!important}.newPlanning .planningRail{position:static;max-height:none}.newPlanning .planningRail>aside{max-height:none}.newPlanning .board{min-width:calc(48px + var(--days) * 140px)}.newPlanning .mobileDays{display:none}.newPlanning .boardHeader>.dayHeading,.newPlanning .dayCell{display:flex!important}.newPlanning.dayView .board{min-width:0}.newPlanning.dayView .boardHeader{display:flex!important}.newPlanning.dayView .departmentLabel{display:flex}.newPlanning .plannerFilters{display:flex!important;flex:1;gap:6px}.newPlanning .extraFilter{display:block}.newPlanning .planningActions{gap:6px}}
+
+.newPlanning .dayHeading :is(strong,span,small,b){color:#fff!important}.newPlanning .emptyCell{display:none}.newPlanning .dayCellFooter{flex:0 0 auto}.newPlanning .planningRail>section{width:100%}
+
+.newPlanning .departmentRow[data-empty=true] .dayCell{min-height:44px!important}
+
+@media(min-width:901px){
+  .newPlanning.dayView .plannerWithRequests,
+  .newPlanning .plannerWithRequests:has([aria-label="Productiedetails"]){grid-template-columns:minmax(0,1fr) clamp(295px,24vw,380px)!important}
+}
+
+.newPlanning .cleaningLane .departmentLabel>.textLink{margin:0;padding:0;min-height:22px;width:100%;justify-content:center}
+.newPlanning .cleaningPlanLabel{display:none}
+.newPlanning .taskCard{padding:4px;gap:4px;min-height:44px}
+.newPlanning .taskOpen strong{font-size:14px!important;line-height:1.2;overflow-wrap:normal;word-break:normal}
+.newPlanning .taskOpen>span{font-size:11px;margin-top:2px}
+.newPlanning .taskOpen small{font-size:10px;margin-top:2px}
+.newPlanning .cleaningCard{padding:4px;gap:4px;min-height:0}
+.newPlanning .cleaningOpen strong{font-size:13px;line-height:1.2}
+.newPlanning .cleaningOpen small{margin-top:2px;font-size:10px}
+@media(pointer:coarse){
+ .newPlanning .departmentLabel h2 button{min-height:44px}
+ .newPlanning .cellAdd,.newPlanning .dayCellFooter{min-height:28px}
+}
+
+/* The new layout shares one compact control strip above the planner. */
+.newPlanning .planningActions {
+  flex-wrap:wrap;
+  gap:6px;
+  min-height:0;
+  padding:4px 0 6px;
+  border-bottom:0
+}
+.newPlanning .planningActions>.menuToggle {
+  width:32px;
+  min-height:32px;
+  padding:4px;
+  flex-shrink:0
+}
+.newPlanning .staffingCompact {
+  flex:0 0 auto;
+  min-width:0
+}
+.newPlanning .staffingCompact .staffPeek {
+  gap:0
+}
+.newPlanning .planningActions :is(.primaryButton,.secondaryButton) {
+  min-height:32px;
+  padding:4px 8px;
+  font-size:13px!important;
+  white-space:nowrap
+}
+.newPlanning .staffAlertBadge {
+  padding:2px;
+  background:transparent
+}
+.newPlanning .planningActions>.plannerToolbar {
+  display:flex;
+  flex:1 1 720px;
+  flex-wrap:wrap;
+  min-width:0;
+  gap:6px;
+  padding:0;
+  margin:0;
+  border:0
+}
+.newPlanning .plannerToolbar>.weekPicker {
+  flex:0 0 auto;
+  gap:3px;
+  margin:0
+}
+.newPlanning .weekPicker>div {
+  display:flex;
+  align-items:baseline;
+  gap:6px;
+  min-width:0
+}
+.newPlanning .weekPicker strong {
+  font-size:16px;
+  white-space:nowrap
+}
+.newPlanning .weekPicker span {
+  font-size:12px;
+  white-space:nowrap
+}
+.newPlanning .weekPicker button {
+  width:26px;
+  min-height:32px;
+  padding:3px
+}
+.newPlanning .weekPicker .thisWeek {
+  width:auto;
+  padding:4px 6px;
+  font-size:12px;
+  white-space:nowrap
+}
+.newPlanning .plannerToolbar>.plannerFilters {
+  display:flex;
+  flex:1 1 auto;
+  flex-wrap:wrap;
+  align-items:center;
+  min-width:0;
+  gap:5px;
+  margin:0
+}
+.newPlanning .plannerFilters label {
+  min-width:0
+}
+.newPlanning .plannerFilters select {
+  width:100%;
+  max-width:145px;
+  min-height:32px;
+  padding:4px 6px;
+  font-size:12px!important
+}
+.newPlanning .plannerMeta {
+  gap:3px;
+  margin-left:auto;
+  flex:0 0 auto
+}
+.newPlanning .plannerMeta>button {
+  min-width:28px;
+  min-height:30px;
+  padding:3px;
+  font-size:12px
+}
+.newPlanning .screenActions {
+  gap:4px;
+  margin-left:0;
+  flex:0 0 auto
+}
+.newPlanning .periodToggle {
+  padding:2px
+}
+.newPlanning .periodToggle button {
+  min-height:26px;
+  padding:3px 8px;
+  font-size:12px
+}
+.newPlanning .screenActions select {
+  min-height:32px;
+  max-width:180px;
+  font-size:12px!important;
+  padding:4px 6px
+}
+.newPlanning[data-bakery-screen=true] .planningActions {
+  padding:6px 0;
+  border-top:1px solid #b5c3b0
+}
+@media(min-width:1600px) {
+  .newPlanning .planningActions {
+    flex-wrap:nowrap
+  }
+  .newPlanning .planningActions>.plannerToolbar {
+    flex-basis:0
+  }
+  .newPlanning .plannerToolbar>.plannerFilters {
+    margin-left:auto
+  }
+  .newPlanning .plannerToolbar>.weekPicker {
+    margin-right:8px
+  }
+}
+@media(max-width:1200px) {
+  .newPlanning .planningActions>.plannerToolbar {
+    order:1;
+    flex-basis:100%
+  }
+  .newPlanning .screenActions {
+    margin-left:auto
+  }
+  .newPlanning .staffingCompact {
+    display:block
+  }
+  .newPlanning .weekPicker>div {
+    display:flex
+  }
+  .newPlanning .weekPicker .thisWeek {
+    display:none
+  }
+  .newPlanning .plannerFilters .mobileFilterToggle {
+    display:none
+  }
+}
+@media(max-width:600px) {
+  .newPlanning .plannerToolbar>.weekPicker {
+    flex:1 1 auto
+  }
+  .newPlanning .plannerToolbar>.plannerFilters {
+    flex-basis:100%
+  }
+  .newPlanning .plannerMeta {
+    margin-left:0
+  }
+  .newPlanning .screenActions select {
+    max-width:135px
+  }
+  .newPlanning .weekPicker strong {
+    font-size:15px
+  }
+  .newPlanning .weekPicker span {
+    font-size:11px
+  }
+}
+@media(pointer:coarse) {
+  .newPlanning .planningActions :is(button,select),.newPlanning .plannerFilters select {
+    min-height:40px
+  }
+  .newPlanning .periodToggle button {
+    min-height:36px
+  }
+  .newPlanning .planningActions>.menuToggle {
+    width:40px
+  }
+}
+@media(max-width:600px) {
+  .newPlanning .planningActions>.plannerToolbar {
+    display:grid;
+    grid-template-columns:minmax(0,1fr) max-content
+  }
+  .newPlanning .plannerToolbar>.weekPicker {
+    grid-column:1;
+    grid-row:1
+  }
+  .newPlanning .plannerToolbar>.plannerMeta {
+    grid-column:2;
+    grid-row:1
+  }
+  .newPlanning .plannerToolbar>.plannerFilters {
+    grid-column:1 / -1;
+    grid-row:2;
+    display:grid!important;
+    grid-template-columns:1fr 1fr
+  }
+  .newPlanning .plannerFilters label {
+    width:100%
+  }
+  .newPlanning .plannerFilters select {
+    max-width:none
+  }
+}

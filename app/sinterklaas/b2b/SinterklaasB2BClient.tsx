@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import OrderLogos from "./logos/OrderLogos";
+import OrderPrintMenu from "./OrderPrintMenu";
 import {logoOrderRequested} from "./logos/model";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import styles from "./B2BOrders.module.css";
@@ -56,6 +57,8 @@ import {
   tierFor,
   type Product,
 } from "../../sint-voor-bedrijven/sintProducts";
+
+type B2BProgressField = "entered" | "productionDone" | "delivered";
 
 const CUSTOM_PRODUCT_ID = "anders";
 const PRODUCT_SECTION_HEADING = "PRODUCTEN EN PRIJS";
@@ -853,14 +856,19 @@ function dueSoon(order: SinterklaasB2BOrder) {
   return days >= 0 && days <= 2;
 }
 
+function orderMade(order: SinterklaasB2BOrder) {
+  if (!order.productionDone) return false;
+  const letters = b2bProductionLetters(order);
+  const separateLetterProduction = letters.packageQuantity > 0 || order.department === "beide" || order.department === "bakkerij";
+  return !separateLetterProduction || letters.requiredQuantity === 0 || order.letterProductionDone || Boolean(order.productionChecklistReady);
+}
+
 function orderWarnings(order: SinterklaasB2BOrder) {
   if (order.status !== "akkoord" || order.cancelled || order.delivered || (order.deliveryDate && order.deliveryDate < addDays(todayIso(), -7))) return [];
   const production = b2bProductionLetters(order);
   return [
     production.issues.length > 0 && "Letterkeuze bij combinatieproduct controleren",
     order.department !== "bakkerij" && production.requiredQuantity === 0 && "Letterregels nog uitsplitsen",
-    Boolean(order.textInstructions) && !order.textChecked && "Tekst nog niet gecontroleerd",
-    Boolean(order.packaging) && !order.packagingChecked && "Verpakking nog niet gecontroleerd",
   ].filter((warning): warning is string => Boolean(warning));
 }
 
@@ -1730,7 +1738,7 @@ function B2BOrderEditor({ order, season, onClose, onSaved }: Readonly<{
 function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryConfirmation, onCustomerConfirmation, onQuotation, onApprove, onLogoCount }: Readonly<{
   order: SinterklaasB2BOrder;
   updatingId: string;
-  onToggle: (order: SinterklaasB2BOrder, key: "entered" | "productionScheduled" | "productionDone" | "letterProductionDone" | "packed" | "delivered" | "logoChecked" | "textChecked" | "packagingChecked") => void;
+  onToggle: (order: SinterklaasB2BOrder, key: B2BProgressField) => void;
   onEdit: (order: SinterklaasB2BOrder) => void;
   onDelete: (order: SinterklaasB2BOrder) => void;
   onRetryConfirmation: (order: SinterklaasB2BOrder) => void;
@@ -1747,6 +1755,7 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
   const orderTotal = effectiveOrderTotal(order);
   const archived = order.id.startsWith("historie-");
   const completed = order.delivered && !order.cancelled;
+  const made = orderMade(order) && !order.cancelled;
   const deliveryDateHint = !parseBusinessDate(order.deliveryDate)
     ? order.sourceDeliveryDate ? "Historische notatie" : order.deliveryDate ? "Datum controleren" : "Nog af te spreken"
     : order.deliveryWindowType === "date" ? "Vaste datum" : order.deliveryWindowType === "week" ? "Leverweek" : "Gewenste periode";
@@ -1769,7 +1778,9 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
     <div className={styles.orderMain} data-expanded={expanded||undefined}>
       <div className={styles.date}>{compactDeliveryWindow(order)}<small>{deliveryDateHint}</small>{dueSoon(order) && <small className={styles.warning}>Binnen 2 dagen</small>}</div>
       <div className={styles.customer}>
-        <h3 className={styles.customerHeading}><span>{order.customerName}</span>{!archived&&(logoOrderRequested(order)||expanded)&&<OrderLogos orderId={order.id} year={order.year} customer={order.customerName} printComplete={order.logoPrintComplete} missing={logoOrderRequested(order)&&order.logoAttachmentCount===0} onCountChange={(count,printed)=>onLogoCount(order.id,count,printed)}/>}</h3>
+        <h3 className={styles.customerHeading}>
+          {made && <span className={styles.madeCheck} role="img" aria-label="Gemaakt" title="Gemaakt"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg></span>}
+          <span className={styles.customerName}>{order.customerName}</span>{!archived&&(logoOrderRequested(order)||expanded)&&<OrderLogos orderId={order.id} year={order.year} customer={order.customerName} printComplete={order.logoPrintComplete} missing={logoOrderRequested(order)&&order.logoAttachmentCount===0} onCountChange={(count,printed)=>onLogoCount(order.id,count,printed)}/>}</h3>
         <p className={styles.orderProduct}><B2BProductText text={orderSummary || "Bestelling nog invullen"} /></p>
         {hasIndividualGiftWrap(order.packaging) && <p className={styles.giftWrapFlag}>Apart in cadeaupapier</p>}
         <p className={styles.delivery}>{order.deliveryMethod || "Levering nog afspreken"}{order.season === "sint-kerst" ? " · Sint & Kerst" : ""}</p>
@@ -1779,7 +1790,7 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
       </div>
       <div className={styles.rowStatus}>
         {completed && <span className={`${styles.status} ${styles.completionStatus}`}>✓ Geleverd</span>}
-        {order.productionChecklistReady && !order.cancelled && <span className={styles.status} style={{background:"#dcebd8",color:"#24551d"}}>✓ Letters klaar</span>}
+        {order.productionChecklistReady && !made && !order.cancelled && <span className={styles.status} style={{background:"#dcebd8",color:"#24551d"}}>✓ Letters klaar</span>}
         <span className={styles.status} data-status={order.cancelled ? "geannuleerd" : order.status}>{statusLabel}</span>
         {!archived && !order.cancelled && (order.status === "aanvraag" || order.status === "offerte") && <button type="button" className={styles.approveLink} aria-label={`Aanvraag goedkeuren van ${order.customerName}`} onClick={() => onApprove(order)}>Goedkeuren →</button>}
         {order.status === "akkoord" && !order.cancelled && <p className={styles.next} style={order.entered ? { color: "#52725c" } : undefined}>{order.entered ? "✓ Ingevoerd" : "! Nog invoeren"}</p>}
@@ -1789,6 +1800,12 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
       </div>
       <div className={styles.amount}>{order.totalExVat.trim() || priceBreakdowns.length > 0 ? <>{money(orderTotal)}<small>excl. btw</small></> : "—"}</div>
       <div className={styles.rowActions}>
+        <OrderPrintMenu data={{customer:order.customerName,reference:order.id,delivery:compactDeliveryWindow(order),
+          lines:[...parsedOrder.productLines.filter(line=>!order.letterLines.length||!["chocoladeletter","chocolade-vormletter"].includes(line.productId)).map(line=>({quantity:line.quantity,description:lineDescription(line)})),
+            ...order.letterLines.map(line=>({quantity:line.quantity,description:b2bLetterLineLabel(line)})),
+            ...(group&&groupMatches?group.rows.map(row=>({description:`${row.company} · ${row.melk} melk Q · ${row.wit} wit Q · ${row.puur} puur Q${row.withLogo?" · LOGO":""}`})):[]),
+            ...(!parsedOrder.productLines.length&&!order.letterLines.length?[{description:order.orderText}]:[])],
+          notes:[group&&!groupMatches?"Controleer de verdeling per bedrijf bij deze bestelling.":"",parsedOrder.productLines.length?parsedOrder.otherText:order.letterLines.length?order.orderText:"",order.packaging,order.logo,order.textInstructions].filter(Boolean)}}/>
         {!archived && <button type="button" onClick={() => onEdit(order)} className={styles.rowButton}>Wijzig</button>}
         <button type="button" aria-label={`Details ${order.customerName}`} aria-expanded={expanded} onClick={() => setExpanded(!expanded)} className={styles.chevron}>{expanded ? "⌃" : "⌄"}</button>
       </div>
@@ -1825,11 +1842,10 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
           {order.invoiceInfo && <details><summary>Factuurgegevens</summary><div><p>{order.invoiceInfo}</p></div></details>}
           {archived ? <p className={styles.contact}>Archief · alleen lezen</p> : order.status === "akkoord" && <div className={styles.checks}>
             {([
-              ["entered", "In Bake-it ingevoerd", true],
-              ["productionDone", order.department === "beide" || b2bProductionLetters(order).packageQuantity > 0 || (order.department === "bakkerij" && order.letterLines.length > 0) ? "Overig geproduceerd" : "Geproduceerd", true],
-              ["letterProductionDone", "Letters geproduceerd", b2bProductionLetters(order).packageQuantity > 0 || order.department === "beide" || (order.department === "bakkerij" && order.letterLines.length > 0)],
-              ["packed", "Ingepakt", true], ["delivered", "Geleverd", true], ["logoChecked", "Logo gecontroleerd", Boolean(order.logo)], ["textChecked", "Tekst gecontroleerd", Boolean(order.textInstructions)], ["packagingChecked", "Verpakking gecontroleerd", Boolean(order.packaging)],
-            ] as const).filter(([, , visible]) => visible).map(([key, label]) => <label key={key}><input type="checkbox" checked={order[key]} disabled={updatingId === `${order.id}-${key}`} onChange={() => onToggle(order, key)} />{label}</label>)}
+              ["entered", "In Bake-it ingevoerd"],
+              ["productionDone", "Gemaakt"],
+              ["delivered", "Geleverd"],
+            ] as const).map(([key, label]) => <label key={key}><input type="checkbox" checked={key === "productionDone" ? made : order[key]} disabled={updatingId.startsWith(`${order.id}-`)} onChange={() => onToggle(order, key)} />{label}</label>)}
           </div>}
         </section>
       </div>
@@ -1963,24 +1979,26 @@ export default function SinterklaasB2BClient({ season = "sint", canViewProductio
   );
   async function toggleStatus(
     order: SinterklaasB2BOrder,
-    key: "entered" | "productionScheduled" | "productionDone" | "letterProductionDone" | "packed" | "delivered" | "logoChecked" | "textChecked" | "packagingChecked"
+    key: B2BProgressField
   ) {
     if (order.status !== "akkoord") return;
-    const value = !order[key];
+    const value = !(key === "productionDone" ? orderMade(order) : order[key]);
     const timestampKey =
       key === "productionDone"
         ? "productionDoneAt"
-        : key === "packed"
-          ? "packedAt"
-          : key === "delivered"
-            ? "deliveredAt"
-            : null;
+        : key === "delivered"
+          ? "deliveredAt"
+          : null;
     setUpdatingId(`${order.id}-${key}`);
     setError("");
     try {
       const saved = await updateB2BOrder(order.id, {
         [key]: value,
         ...(timestampKey ? { [timestampKey]: value ? new Date().toISOString() : "" } : {}),
+        // One completion action covers both parts of combination orders.
+        ...(key === "productionDone" && b2bProductionLetters(order).requiredQuantity > 0 ? { letterProductionDone: value } : {}),
+        // Reopening an older packed order must also restore its production demand.
+        ...(key === "productionDone" && !value && order.packed ? { packed: false, packedAt: "" } : {}),
       });
       setOrders((current) => updateOrderList(current, saved));
     } catch (updateError) {

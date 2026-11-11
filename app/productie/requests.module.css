@@ -7,7 +7,7 @@
 .list article { border-top:1px solid #e4e7d9; padding:13px 0; }.row strong { display:block; font-size:13px; }.row span { display:block; font-size:12px; color:#6a7762; }.list article p { margin:6px 0; white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; }
 .form { display:grid; gap:9px; margin:12px 0; }.form label { display:grid; gap:3px; font-size:12px; }.form input,.form select,.form textarea { min-width:0; width:100%; box-sizing:border-box; padding:8px; border:1px solid #cdd8c6; border-radius:6px; background:white; font:inherit; }.form small { color:#6a7762; font-size:11px; }.panel .withdraw { border:0; background:none; padding:3px 0; min-height:28px; font-size:11px; text-decoration:underline; color:#7e8176; }.error { color:#a43a24; font-size:12px; }.panel details { margin-top:12px; border-top:1px solid #e4e7d9; padding-top:10px; font-size:12px; }.panel summary { cursor:pointer; }.panel details p { margin:8px 0; }
 @media print { .panel { display:none; } }
-.compact{padding:0;border:1px solid #aabbaa;border-radius:6px;background:#fff;color:#1b3344;font-size:12px}.compact header{background:#1b3344;color:#fff;align-items:center;padding:8px 10px;border-radius:5px 5px 0 0}.compact h2{font-size:18px;margin:0;color:inherit}.compact h2 span{font-size:13px;color:#fff}.compact header button{display:grid;place-items:center;min-height:28px;width:28px;padding:3px;background:white;color:#1b3344;border-radius:4px}.compact .list article{padding:9px 10px;border-color:#b6c5b3}.compact .row strong{font-size:12px}.compact .row span{font-size:10px;color:#1b3344}.compact .row button{min-height:27px;padding:4px}.compact .form,.compact>.error,.compact>details{margin:10px}.compact .form label,.compact .form small{font-size:11px}.compact .withdraw{font-size:9px;min-height:22px}.compact>p{padding:8px;font-size:11px}
+.compact{padding:0;border:1px solid #d9c987;border-radius:8px;background:#fff8df;color:#1b3344;font-size:12px}.compact header{background:#f2dfa2;color:#1b3344;align-items:center;padding:8px 10px;border-radius:5px 5px 0 0}.compact h2{font-size:18px;margin:0;color:inherit}.compact h2 span{font-size:13px;color:inherit}.compact header button{display:grid;place-items:center;min-height:28px;width:28px;padding:3px;background:white;color:#1b3344;border-radius:4px}.compact .list article{padding:9px 10px;border-color:#e0d4a4}.compact .row strong{font-size:12px}.compact .row span{font-size:10px;color:#1b3344}.compact .row button{min-height:27px;padding:4px}.compact .form,.compact>.error,.compact>details{margin:10px}.compact .form label,.compact .form small{font-size:11px}.compact .withdraw{font-size:9px;min-height:22px}.compact>p{padding:8px;font-size:11px}
 .form .checkbox{display:flex;align-items:center;gap:7px;min-height:32px}.form .checkbox input{width:auto;padding:0;accent-color:#315a44}
 .formHeader{display:flex;align-items:center;gap:12px;justify-content:space-between}.formHeader button{display:grid;place-items:center;min-height:28px;padding:4px}.planned{display:grid;gap:4px;margin:10px 0}.planned a{display:inline-flex;align-items:center;gap:5px;width:fit-content;color:#315a44;font-size:11px;text-underline-offset:3px}.planned small{font-size:10px;color:#6a7762}
 .requestName{min-width:0;flex:1}.row .requestQuantity{display:inline;white-space:nowrap;font-size:11px;font-weight:400;color:#62715f;margin-left:4px}.rowActions{display:flex;align-items:center;gap:3px;flex-shrink:0}.panel .rowActions button{display:grid;place-items:center;width:30px;min-width:30px;min-height:30px;padding:4px;border:0;border-radius:5px;background:transparent;text-decoration:none;color:#52634f}.panel .rowActions button:hover{background:#edf2e5}.panel .rowActions button:focus-visible{outline:2px solid #1b3344;outline-offset:2px}.panel .rowActions .withdraw:hover{color:#a43a24;background:#fff0e8}.panel .rowActions .plan{background:#edf2e5;color:#1b3344;border:1px solid #d6dfcd}.compact .row{gap:5px;align-items:center}.compact .list article{padding:7px 8px}.compact .rowActions button{width:28px;min-width:28px;min-height:30px;padding:3px}.compact .row strong{font-size:18px;line-height:1.25;overflow-wrap:normal;word-break:normal;hyphens:none}.compact .row .requestQuantity{font-size:13px}.compact .row span{font-size:12px;line-height:1.3;margin-top:2px}
@@ -18,7 +18,7 @@
 .deadline svg{flex-shrink:0}
 .deadline[data-urgency=soon]{border-color:#d59a63;background:#fff0dc;color:#7c3c17}
 .deadline[data-urgency=overdue]{border-color:#cf766e;background:#fff0ec;color:#972f25}
-.compact .list article{padding:9px 10px;border-color:#a9bca5}
+.compact .list article{padding:9px 10px;border-color:#e0d4a4}
 .compact .list article[data-deadline-urgency=soon]{box-shadow:inset 3px 0 #c87835}
 .compact .list article[data-deadline-urgency=overdue]{box-shadow:inset 3px 0 #b84235}
 .compact .row{align-items:flex-start;gap:7px}
@@ -26,7 +26,7 @@
 .compact .row .requestQuantity{font-size:14px;color:#52634f}
 .compact .rowActions{gap:1px;padding-top:1px}
 .compact .rowActions button{width:28px;min-width:28px;min-height:32px}
-.compact .rowActions .plan{background:#c3d3bc;border-color:#a0b498}
+.compact .rowActions .plan{background:#1b3344;color:#fff;border-color:#1b3344}
 .compact .deadline{font-size:16px;font-weight:800;line-height:1.25;margin-top:7px;padding:4px 7px}
 .compact .list article p{font-size:14px;line-height:1.35;margin:6px 0 0;color:#354a3f}
 @media(max-width:800px){.compact .row strong{font-size:17px}.compact .deadline{font-size:14px}.compact .list article p{font-size:13px}}
@@ -41,13 +41,13 @@
 .compact .deadline{font-size:13px;margin-top:5px;padding:3px 5px}
 .compact .deadline svg{width:14px;height:14px}
 .compact .list article p{font-size:12px;line-height:1.3}
-.panel.expanded{width:min(900px,calc(100vw - 32px));max-height:86dvh;margin:auto;padding:0;border:1px solid #aabbaa;border-radius:12px;background:#fff;font:16px/1.4 "Overpass",Arial,sans-serif;color:#1b3344;overflow:auto;overscroll-behavior:contain}
+.panel.expanded{width:min(900px,calc(100vw - 32px));max-height:86dvh;margin:auto;padding:0;border:1px solid #d9c987;border-radius:12px;background:#fff8df;font:16px/1.4 "Overpass",Arial,sans-serif;color:#1b3344;overflow:auto;overscroll-behavior:contain}
 .expanded::backdrop{background:#1b334466}
-.panel.expanded>header{position:sticky;top:0;z-index:2;align-items:center;padding:16px 20px;background:#1b3344;color:white}
+.panel.expanded>header{position:sticky;top:0;z-index:2;align-items:center;padding:16px 20px;background:#f2dfa2;color:#1b3344}
 .panel.expanded h2{font-size:24px;color:inherit;margin:0}
 .panel.expanded h2 span{font-size:16px;color:inherit}
 .panel.expanded>header button{width:42px;min-height:42px;padding:8px;background:#fff;color:#1b3344}
-.panel.expanded .list article{padding:14px 20px;border-top:1px solid #aabbaa}
+.panel.expanded .list article{padding:14px 20px;border-top:1px solid #e0d4a4}
 .panel.expanded .row strong{font-size:22px;line-height:1.3}
 .panel.expanded .row .requestQuantity{font-size:15px}
 .panel.expanded .rowActions button{width:40px;min-width:40px;min-height:42px}
@@ -69,3 +69,10 @@
 @media(min-width:2200px){.compact h2{font-size:20px}.compact .row strong{font-size:21px}.compact .deadline{font-size:16px}.compact .list article p{font-size:15px}}
 @media(pointer:coarse){.compact header button,.compact .rowActions button{width:40px;min-width:40px;min-height:44px}}
 @media(max-width:550px){.panel.expanded{width:calc(100vw - 16px);max-height:92dvh}.panel.expanded>header{padding:12px}.panel.expanded h2{font-size:20px}.panel.expanded .list article{padding:12px}.panel.expanded .row strong{font-size:18px}.quickDays{grid-template-columns:repeat(4,minmax(0,1fr))}}
+
+.compact>details,.panel.expanded>details { border-color:#e0d4a4; }
+:is(.compact,.expanded) .deadline:not([data-urgency=overdue]) { background:#fff3c7; border-color:#d5b76a; color:#704918; }
+:is(.compact,.expanded) .rowActions .plan { background:#1b3344; color:#fff; border-color:#1b3344; }
+:is(.compact,.expanded) .rowActions .plan:hover { background:#304f5f; }
+:is(.compact,.expanded) .quickDays button { background:#fff3c7; border-color:#d9c987; }
+:is(.compact,.expanded) .quickDays button:hover:not(:disabled) { background:#f2dfa2; }

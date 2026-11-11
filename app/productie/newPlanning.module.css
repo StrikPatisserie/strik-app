@@ -1,0 +1,169 @@
+.layoutChoice select {
+  font: inherit;
+  font-size: 12px !important;
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 1px solid #d2ddcd;
+  border-radius: 7px;
+  background: white;
+  color: #1b3342;
+}
+.search {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 140px;
+  padding: 0 8px;
+  border: 1px solid #d2ddcd;
+  border-radius: 7px;
+  background: white;
+}
+.search input {
+  width: 100%;
+  min-width: 0;
+  padding: 5px 0;
+  border: 0 !important;
+  outline: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+}
+.groupToggle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 100%;
+  min-height: 36px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+.groupToggle[aria-expanded=false] { opacity: .65; }
+.card {
+  position: relative;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) 16px;
+  grid-template-rows: auto auto;
+  align-items: start;
+  column-gap: 6px;
+  row-gap: 1px;
+  min-height: 44px;
+  padding: 3px 6px;
+  border: 1px solid #d9e2d3;
+  border-radius: 8px;
+  background: white;
+  color: #1b3342;
+  box-shadow: none;
+}
+.card.done { background: #e1eadb; border-color: #c6d6bd; color: #3c5d3d; }
+.card.active { background: #fff3ed; border-color: #d98e7e; color: #943d32; }
+.card.blocked { background: #fff3ed; border-color: #d98e7e; }
+.card.selected { outline: 2px solid #78916b; outline-offset: 1px; }
+.card button { font: inherit; color: inherit; cursor: pointer; }
+.card button:disabled { opacity: .5; cursor: default; }
+.checkColumn {
+  grid-column: 1;
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.check {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid #91a48d;
+  border-radius: 5px;
+  background: white;
+}
+.done .check { background: #d0dfc6; border-color: #78916b; }
+.active .check { background: #fae1d7; border-color: #ce806e; }
+.quantity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 2px;
+  max-width: 100%;
+  color: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+.quantity > span { white-space: nowrap; }
+.quantity small { font-size: 10px; font-weight: 400; }
+.openTask {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+.openTask strong { font-size: 14px; line-height: 1.2; font-weight: 700; overflow-wrap: normal; word-break: normal; hyphens: none; }
+.taskStatus { font-size: 11px; line-height: 1.3; }
+.card:has(.warning) .openTask { padding-right: 20px; }
+.warning { grid-column: 3; grid-row: 1; color: #a64e3a; }
+.drag { grid-column: 3; grid-row: 2; width: 17px; height: 20px; padding: 0; border: 0; background: none; opacity: 0; }
+.card:hover .drag, .drag:focus-visible { opacity: 1; }
+.cardMeta { grid-column: 2; grid-row: 2; display: flex; align-items: center; gap: 4px; min-width: 0; flex-wrap: wrap; }
+.card .cardMeta > button { display: flex; align-items: center; gap: 4px; max-width: 100%; padding: 2px 4px; border: 0; border-radius: 4px; background: #ffffff66; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cardMeta > time { font-size: 11px; }
+.cardMeta > button svg { flex-shrink: 0; }
+.day .card { min-height: 44px; padding: 3px 8px; box-shadow: none; border-radius: 6px; border-width: 0 0 1px; }
+.day .openTask strong { font-size: 16px; }
+.previewNotice { flex-shrink:0; font-size:10px; color:#596d60; padding:3px 5px; border:1px solid #d2ddcd; border-radius:5px; white-space:nowrap; }
+@media (pointer: coarse) {
+  .drag { opacity: .75; min-width: 28px; min-height: 28px; touch-action: none; }
+  .card { grid-template-columns: max-content minmax(0, 1fr) 28px; }
+  .check { width: 28px; height: 28px; }
+}
+
+.card:has(.recipeLinks) { margin-right: 10px; }
+.recipeLinks { position: absolute; top: 50%; right: -14px; z-index: 1; transform: translateY(-50%); }
+.recipeLinks:has(details[open]) { z-index: 5; }
+.recipeLink { position: relative; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 4px; border: 0; border-radius: 50%; background: transparent; list-style: none; cursor: pointer; }
+.recipeLink::-webkit-details-marker { display: none; }
+.recipeLinkIcon { display: inline-flex; flex: 0 0 20px; align-items: center; justify-content: center; width: 20px; height: 20px; border: 1px solid white; border-radius: 50%; background: var(--recipe-link-color); color: white; box-shadow: 0 1px 3px #1b33421c; }
+.recipeLink:hover .recipeLinkIcon { box-shadow: 0 0 0 3px #1b334211; }
+.recipeLink:focus-visible { outline: 2px solid #1b3344; outline-offset: 1px; }
+.recipeTone0 { --recipe-link-color: #50708f; }
+.recipeTone1 { --recipe-link-color: #81609b; }
+.recipeTone2 { --recipe-link-color: #b75676; }
+.recipeTone3 { --recipe-link-color: #987020; }
+.recipeTone4 { --recipe-link-color: #b55764; }
+.recipeTone5 { --recipe-link-color: #657b4f; }
+.sharedRecipeLinks { position: relative; }
+.sharedRecipeLinks summary small { position: absolute; top: 0; right: 0; min-width: 12px; padding: 0 2px; border: 1px solid white; border-radius: 6px; background: #1b3344; color: white; font-size: 9px; line-height: 11px; text-align: center; }
+.recipeLinkMenu { position: absolute; top: 0; right: 30px; display: grid; gap: 2px; width: 220px; max-height: 220px; overflow: auto; padding: 5px; border: 1px solid #d9e2d3; border-radius: 8px; background: white; box-shadow: 0 4px 18px #1b334222; }
+.recipeLinkMenu > button { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 5px; border: 0; border-radius: 4px; background: white; color: #1b3342; font-size: 12px; line-height: 1.35; text-align: left; }
+.recipeLinkMenu > button:hover { background: #f1f5ec; }
+
+@media (min-width: 901px) {
+  .day .card {
+    grid-template-columns: max-content minmax(0, 1fr) max-content 16px 20px;
+    grid-template-rows: auto;
+    align-items: center;
+    column-gap: 8px;
+    min-height: 34px;
+  }
+  .day .checkColumn { grid-column: 1; grid-row: 1; min-width: 80px; }
+  .day .openTask { grid-column: 2; grid-row: 1; }
+  .day .cardMeta { grid-column: 3; grid-row: 1; }
+  .day .warning { grid-column: 4; grid-row: 1; }
+  .day .drag { grid-column: 5; grid-row: 1; }
+}
