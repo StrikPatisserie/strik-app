@@ -348,7 +348,10 @@ function ProductionTable({
                             {isComplete ? "✓" : ""}
                           </button>
                         ) : <span className={styles.status} data-complete={isComplete}>{planned === 0 ? row.produced > 0 ? "Extra gemaakt" : "Vervallen" : isComplete ? "Gereed" : "Open"}</span>}
-                        {onEditQuantity && <button type="button" disabled={saving} className={styles.amountButton} onClick={() => onEditQuantity(row)} aria-label={`Geproduceerd aantal voor ${row.label} aanpassen`}>{row.produced}/{planned}</button>}
+                        {onEditQuantity && <button type="button" disabled={saving} className={styles.amountButton} onClick={() => onEditQuantity(row)} aria-label={`Geproduceerd aantal voor ${row.label} aanpassen`} aria-haspopup="dialog" title="Vul het totaal al gemaakte aantal in, ook als een deel klaar is">
+                          <span className={styles.amountValue}><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m12.5 4 3.5 3.5M4 12.5 12.5 4a2.5 2.5 0 0 1 3.5 3.5L7.5 16l-4.5 1z"/></svg>{row.produced}/{planned}</span>
+                          <span className={styles.amountLabel}>{row.produced > 0 ? "Aantal wijzigen" : "Aantal invullen"}</span>
+                        </button>}
                         {!onEditQuantity && row.produced > 0 && !isComplete && <small className={styles.partial}>{row.produced}/{planned} gereed</small>}
                         </div>
                         {surplus > 0 && <small className={styles.surplus}>{surplus} te veel gemaakt</small>}
