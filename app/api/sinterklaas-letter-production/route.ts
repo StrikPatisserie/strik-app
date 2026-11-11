@@ -12,7 +12,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-type SavedChecklist = { batch_id: string; rows: ProductionSeedRow[]; revision: number; plan_revision: number; locked_at: string; updated_at: string };
+type SavedChecklist = { batch_id: string; rows: ProductionSeedRow[]; revision: number; plan_revision: number; locked_at: string | null; updated_at: string };
 const columns = "batch_id,rows,revision,plan_revision,locked_at,updated_at";
 const jsonError = (message: string, status = 400) => Response.json({ message }, { status });
 
@@ -31,18 +31,26 @@ async function readLists(season: string, actorId: string | null) {
   const saved = new Map((result.data as SavedChecklist[]).map(list => [list.batch_id, list]));
   const views = await Promise.all(current.batches.map(async batch => {
     let list = saved.get(batch.id);
-    if (!list && productionDeadlinePassed(batch)) {
-      // The primary key makes simultaneous first opens safe: the first complete
-      // snapshot wins; every caller then reads that exact same working list.
-      const insert = await db.from("letter_production_checklists").insert({ batch_id: batch.id, rows: batch.rows, updated_by: actorId });
-      if (insert.error && insert.error.code !== "23505") throw new Error("Vastzetten van de productielijst is mislukt.");
-      const locked = await db.from("letter_production_checklists").select(columns).eq("batch_id", batch.id).single();
-      if (locked.error) throw new Error("De vastgezette productielijst kon niet worden geladen.");
-      list = locked.data as SavedChecklist;
+    // A provisional list stores actual production while demand remains live.
+    // Freeze with a revision check so a simultaneous quantity save survives.
+    for (let attempt = 0; productionDeadlinePassed(batch) && !list?.locked_at; attempt++) {
+      if (attempt === 3) throw new Error("De voortgang is intussen gewijzigd. Ververs de productielijst.");
+      if (list) {
+        const frozen = await db.from("letter_production_checklists")
+          .update({ rows: reviseProductionRows(list.rows, batch.rows), locked_at: new Date().toISOString(), revision: list.revision + 1, updated_at: new Date().toISOString(), updated_by: actorId })
+          .eq("batch_id", batch.id).eq("revision", list.revision);
+        if (frozen.error) throw new Error("Vastzetten van de productielijst is mislukt.");
+      } else {
+        const insert = await db.from("letter_production_checklists").insert({ batch_id: batch.id, rows: batch.rows, updated_by: actorId });
+        if (insert.error && insert.error.code !== "23505") throw new Error("Vastzetten van de productielijst is mislukt.");
+      }
+      const latest = await db.from("letter_production_checklists").select(columns).eq("batch_id", batch.id).single();
+      if (latest.error) throw new Error("De productielijst kon niet worden geladen.");
+      list = latest.data as SavedChecklist;
     }
     if (!list) return { ...batch, checklist: undefined };
-    const frozenRows=hydrateProductionRecipients(list.rows,batch.rows);
-    return { ...batch, rows: frozenRows, checklist: { revision: list.revision, planRevision: list.plan_revision, planVersion: productionPlanVersion(batch.rows), lockedAt: list.locked_at, updatedAt: list.updated_at, changes: productionChanges(frozenRows, batch.rows) } };
+    const rows = list.locked_at ? hydrateProductionRecipients(list.rows, batch.rows) : reviseProductionRows(list.rows, batch.rows);
+    return { ...batch, rows, checklist: { revision: list.revision, planRevision: list.plan_revision, planVersion: productionPlanVersion(batch.rows), lockedAt: list.locked_at, updatedAt: list.updated_at, changes: list.locked_at ? productionChanges(rows, batch.rows) : [] } };
   }));
   return { ...current, batches: views };
 }
@@ -70,31 +78,39 @@ export async function POST(request: Request) {
   try { data = await request.json(); } catch { return jsonError("Ongeldig verzoek."); }
   if (!data || typeof data !== "object") return jsonError("Ongeldig verzoek.");
   const { batchId, revision, action, key, quantity } = data;
-  if (typeof batchId !== "string" || !/^[0-9a-f-]{36}$/i.test(batchId) || !Number.isInteger(revision) || !["quantity", "revise"].includes(String(action))) return jsonError("Ongeldige productielijst.");
+  if (typeof batchId !== "string" || !/^[0-9a-f-]{36}$/i.test(batchId) || (!Number.isSafeInteger(revision) || Number(revision) < 0) || !["quantity", "revise"].includes(String(action))) return jsonError("Ongeldige productielijst.");
   try {
     const db = createAdminClient() as unknown as SupabaseClient;
     const batchResult = await db.from("letter_production_batches").select("status,order_deadline_at,season").eq("id", batchId).maybeSingle();
     if (batchResult.error) return jsonError("De deadline kon niet worden gecontroleerd.", 503);
     if (!batchResult.data) return jsonError("Productieronde niet gevonden.", 404);
-    if (!productionDeadlinePassed({status: batchResult.data.status, deadlineAt: batchResult.data.order_deadline_at})) return jsonError("Afvinken kan pas na de besteldeadline.", 409);
     const stored = await db.from("letter_production_checklists").select(columns).eq("batch_id", batchId).maybeSingle();
     if (stored.error) return jsonError("Voortgang laden is mislukt.", 503);
     const list = stored.data as SavedChecklist | null;
-    if (!list || list.revision !== revision) return jsonError("De lijst is intussen gewijzigd. De nieuwste versie wordt geladen; controleer je wijziging opnieuw.", 409);
-    let rows: ProductionSeedRow[];
-    if (action === "quantity") {
-      if (typeof key !== "string" || typeof quantity !== "number") return jsonError("Controleer het geproduceerde aantal.");
-      rows = setProductionQuantity(list.rows, key, quantity);
-    } else {
+    if ((list?.revision || 0) !== revision) return jsonError("De lijst is intussen gewijzigd. De nieuwste versie wordt geladen. Controleer je wijziging opnieuw.", 409);
+    let currentRows: ProductionSeedRow[] | undefined;
+    if (!list?.locked_at || action === "revise") {
       const current = await loadCurrent(String(batchResult.data.season));
       const batch = current.batches.find(item => item.id === batchId);
       if (!batch) return jsonError("Productieronde niet gevonden.", 404);
-      if (data.planVersion !== productionPlanVersion(batch.rows)) return jsonError("De bestellingen zijn opnieuw gewijzigd. Bekijk eerst de nieuwste verschillen.", 409);
-      rows = reviseProductionRows(list.rows, batch.rows);
+      currentRows = batch.rows;
     }
-    const updated = await db.from("letter_production_checklists")
-      .update({ rows, revision: list.revision + 1, plan_revision: list.plan_revision + (action === "revise" ? 1 : 0), updated_at: new Date().toISOString(), updated_by: profile?.id })
-      .eq("batch_id", batchId).eq("revision", list.revision).select(columns).maybeSingle();
+    let rows = list?.locked_at ? list.rows : reviseProductionRows(list?.rows || [], currentRows!);
+    if (action === "quantity") {
+      if (typeof key !== "string" || typeof quantity !== "number") return jsonError("Controleer het geproduceerde aantal.");
+      rows = setProductionQuantity(rows, key, quantity);
+    } else {
+      if (!list?.locked_at) return jsonError("Een open productielijst wordt automatisch bijgewerkt.", 409);
+      if (data.planVersion !== productionPlanVersion(currentRows!)) return jsonError("De bestellingen zijn opnieuw gewijzigd. Bekijk eerst de nieuwste verschillen.", 409);
+      rows = reviseProductionRows(list.rows, currentRows!);
+    }
+    const now = new Date().toISOString();
+    const lockedAt = list?.locked_at || (productionDeadlinePassed({status: batchResult.data.status, deadlineAt: batchResult.data.order_deadline_at}) ? now : null);
+    const values = { rows, revision: (list?.revision || 0) + 1, plan_revision: (list?.plan_revision || 1) + (action === "revise" ? 1 : 0), locked_at: lockedAt, updated_at: now, updated_by: profile?.id };
+    const updated = list
+      ? await db.from("letter_production_checklists").update(values).eq("batch_id", batchId).eq("revision", list.revision).select(columns).maybeSingle()
+      : await db.from("letter_production_checklists").insert({ batch_id: batchId, ...values }).select(columns).maybeSingle();
+    if (updated.error?.code === "23505") return jsonError("Iemand anders heeft de lijst gewijzigd. Controleer de nieuwste versie en probeer opnieuw.", 409);
     if (updated.error) return jsonError("Opslaan is mislukt. De wijziging is niet bevestigd.", 503);
     if (!updated.data) return jsonError("Iemand anders heeft de lijst gewijzigd. Controleer de nieuwste versie en probeer opnieuw.", 409);
     return Response.json({ list: updated.data });

@@ -120,7 +120,7 @@ export function combineProductionOrders(batches: ProductionBatchSeed[], legacyOr
 }
 
 export type ProductionChange = { key: string; label: string; before: number; after: number; detail: string };
-export type ProductionChecklist = { revision: number; planRevision: number; planVersion: string; lockedAt: string; updatedAt: string; changes: ProductionChange[] };
+export type ProductionChecklist = { revision: number; planRevision: number; planVersion: string; lockedAt: string | null; updatedAt: string; changes: ProductionChange[] };
 
 export function productionPlanVersion(rows: ProductionSeedRow[]) {
   return JSON.stringify(rows.filter(row => row.orders + row.stock > 0).map(row => [row.key, row.label, row.orders, row.stock, ...(["winkel", "online", "b2b", "onbekend"] as const).map(source => row.orderSources?.[source] || 0), productionRecipientVersion(row)]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))));
@@ -144,7 +144,7 @@ export function productionChanges(frozen: ProductionSeedRow[], current: Producti
 // Preserve actual production, including letters already made for a cancelled line.
 export function reviseProductionRows(frozen: ProductionSeedRow[], current: ProductionSeedRow[]) {
   const oldRows = new Map(frozen.map(row => [row.key, row]));
-  const result = current.map(row => ({...row, produced: Math.max(row.produced, oldRows.get(row.key)?.produced || 0)}));
+  const result = current.map(row => ({...row, produced: oldRows.get(row.key)?.produced ?? row.produced}));
   const keys = new Set(current.map(row => row.key));
   for (const old of frozen) if (!keys.has(old.key) && old.produced > 0) result.push({...old, orders: 0, stock: 0, orderSources: {}, recipients: []});
   return result;
@@ -152,14 +152,17 @@ export function reviseProductionRows(frozen: ProductionSeedRow[], current: Produ
 
 export function setProductionQuantity(rows: ProductionSeedRow[], key: string, quantity: number) {
   const selected = rows.find(row => row.key === key);
-  if (!selected) throw new Error("Deze letter staat niet op de vastgezette lijst.");
-  const maximum = Math.max(selected.orders + selected.stock, selected.produced);
-  if (!Number.isInteger(quantity) || quantity < 0 || quantity > maximum) throw new Error(`Kies een geheel aantal tussen 0 en ${maximum}.`);
+  if (!selected) throw new Error("Deze letter staat niet op de productielijst.");
+  if (!Number.isSafeInteger(quantity) || quantity < 0) throw new Error("Vul een geheel aantal van 0 of meer in.");
   return rows.map(row => row.key === key ? {...row, produced: quantity} : row);
 }
 
 export function productionRemaining(rows: ProductionSeedRow[]) {
   return rows.reduce((total, row) => total + Math.max(0, row.orders + row.stock - row.produced), 0);
+}
+
+export function productionSurplus(rows: ProductionSeedRow[]) {
+  return rows.reduce((total, row) => total + Math.max(0, row.produced - row.orders - row.stock), 0);
 }
 
 export function productionTotals(rows: ProductionSeedRow[]) {

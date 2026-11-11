@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { productionDeadlinePassed, productionRemaining, productionTotals as totalsFor, type ProductionChecklist } from "./productionChecklist";
+import { productionDeadlinePassed, productionPlanVersion, productionRemaining, productionSurplus, productionTotals as totalsFor, type ProductionChecklist } from "./productionChecklist";
 import styles from "./ProductionPlanning.module.css";
 import ProductionPrintPreviewDialog from "./ProductionPrintPreview";
 import ProductionDistributionPrint from "./ProductionDistributionPrint";
@@ -219,7 +219,7 @@ function distributionTotal(distribution: StartDistribution) {
 }
 
 function batchIsLocked(batch: ProductionBatchSeed) {
-  return Boolean(batch.checklist) || productionDeadlinePassed(batch);
+  return Boolean(batch.checklist?.lockedAt) || productionDeadlinePassed(batch);
 }
 
 function addDays(date: string, days: number) {
@@ -266,7 +266,7 @@ function ProductionRound({ batch, complete, keepOpen, actions, children }: Reado
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d={visible ? "m5 12 5-5 5 5" : "m5 8 5 5 5-5"}/></svg>
         </button></h2>
       </div>
-      <span className={styles.roundState} data-complete={complete} data-planned={Boolean(batch.checklist) || batchIsPlanned(batch.status)}>{complete ? "Alles afgerond" : batch.checklist ? "Vastgezet · afvinken mogelijk" : batchIsPlanned(batch.status) ? "Ingepland" : "Nog niet ingepland"}</span>
+      <span className={styles.roundState} data-complete={complete} data-planned={Boolean(batch.checklist?.lockedAt) || batchIsPlanned(batch.status)}>{complete ? "Alles afgerond" : batch.checklist?.lockedAt ? "Vastgezet · afvinken mogelijk" : "Open · alvast afvinken"}</span>
       <div className={styles.roundActions}>{actions}</div>
     </div>
     <div id={contentId} hidden={!visible}>{children}</div>
@@ -323,6 +323,8 @@ function ProductionTable({
                   const planned = row.orders + row.stock;
                   const variant = productionVariant(row.label);
                   const isComplete = productionRowIsComplete(row);
+                  const remaining = Math.max(0, planned - row.produced);
+                  const surplus = Math.max(0, row.produced - planned);
                   return (
                     <tr key={row.key} data-complete={isComplete}>
                       <td className={styles.letterCell}>
@@ -345,10 +347,12 @@ function ProductionTable({
                             disabled={saving} onClick={() => onToggleComplete(row)} className={styles.completeButton}>
                             {isComplete ? "✓" : ""}
                           </button>
-                        ) : <span className={styles.status} data-complete={isComplete}>{planned === 0 ? "Vervallen" : isComplete ? "Gereed" : "Open"}</span>}
+                        ) : <span className={styles.status} data-complete={isComplete}>{planned === 0 ? row.produced > 0 ? "Extra gemaakt" : "Vervallen" : isComplete ? "Gereed" : "Open"}</span>}
                         {onEditQuantity && <button type="button" disabled={saving} className={styles.amountButton} onClick={() => onEditQuantity(row)} aria-label={`Geproduceerd aantal voor ${row.label} aanpassen`}>{row.produced}/{planned}</button>}
                         {!onEditQuantity && row.produced > 0 && !isComplete && <small className={styles.partial}>{row.produced}/{planned} gereed</small>}
                         </div>
+                        {surplus > 0 && <small className={styles.surplus}>{surplus} te veel gemaakt</small>}
+                        {row.produced > 0 && remaining > 0 && <small className={styles.partial}>Nog {remaining}</small>}
                       </td>
                       <td className={styles.sourceCell}>
                         <div className={styles.sourceBadges}>
@@ -1603,19 +1607,18 @@ export default function ProductionPlanningClient({
       setProductionNotice("Demo: voortgang aangepast, niets werkelijk opgeslagen.");
       return true;
     }
-    if (!batch.checklist) return false;
     setSavingProduction(true);
     setProductionNotice("");
     productionMutationVersion.current += 1;
     try {
-      const response = await fetch("/api/sinterklaas-letter-production", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({batchId: batch.id, revision: batch.checklist.revision, planVersion: batch.checklist.planVersion, action, key: row?.key, quantity})});
+      const response = await fetch("/api/sinterklaas-letter-production", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({batchId: batch.id, revision: batch.checklist?.revision || 0, planVersion: batch.checklist?.planVersion, action, key: row?.key, quantity})});
       const result = await response.json();
       if (!response.ok) {
         if (response.status === 409) { setRefreshVersion(current => current + 1); setQuantityDialog(null); setReviseBatch(null); }
         throw new Error(result.message || "Productie opslaan is mislukt.");
       }
       const list = result.list;
-      setLiveBatches(current => current?.map(item => item.id === batch.id ? {...item, rows: list.rows, checklist: {...item.checklist!, revision: list.revision, planRevision: list.plan_revision, updatedAt: list.updated_at, changes: action === "revise" ? [] : item.checklist?.changes || []}} : item) || null);
+      setLiveBatches(current => current?.map(item => item.id === batch.id ? {...item, rows: list.rows, checklist: {revision: list.revision, planRevision: list.plan_revision, lockedAt: list.locked_at, planVersion: item.checklist?.lockedAt && action !== "revise" ? item.checklist.planVersion : productionPlanVersion(list.rows), updatedAt: list.updated_at, changes: action === "revise" || !item.checklist?.lockedAt ? [] : item.checklist.changes}} : item) || null);
       setProductionNotice(action === "revise" ? "Nieuwe versie opgeslagen. Print de bijgewerkte productielijst voor de bakkers." : "Productievoortgang opgeslagen.");
       return true;
     } catch (error) {
@@ -1697,7 +1700,7 @@ export default function ProductionPlanningClient({
           const planned = totals.orders + totals.stock;
           const storeStockTotal = (batch.storeOrders || []).reduce((sum, order) => sum + storeOrderTotal(order), 0);
           const storeOrdersLocked = batchIsLocked(batch);
-          const complete = !loading && !warning && productionRoundIsComplete(batch.rows, Boolean(batch.checklist?.changes.length));
+          const complete = !loading && !warning && storeOrdersLocked && productionRoundIsComplete(batch.rows, Boolean(batch.checklist?.changes.length));
           return <ProductionRound key={batch.id} batch={batch} complete={complete} keepOpen={quantityDialog?.batch.id === batch.id || reviseBatch?.id === batch.id || sourceDialogBatch === batch.id} actions={<>
                 {demoMode && <button type="button" onClick={() => setPrintOptionsBatch(batch)} className={styles.button}>Printlijsten</button>}
                 {!demoMode && <button type="button" disabled={loading || Boolean(warning) || !liveBatches} onClick={() => setPrintOptionsBatch(batch)} className={styles.button}>Printlijsten</button>}
@@ -1709,17 +1712,18 @@ export default function ProductionPlanningClient({
               <span>Totaal <b>{planned}</b></span>
               <span>Gereed <b>{totals.produced}</b></span>
               <span className={styles.remaining}>Nog te maken <b>{productionRemaining(batch.rows)}</b></span>
+              {productionSurplus(batch.rows) > 0 && <span className={styles.surplus}>Te veel gemaakt <b>{productionSurplus(batch.rows)}</b></span>}
               <p className={styles.tableLegend}>Besteld = klantbestellingen · Winkel = vrije winkelvoorraad</p>
             </div>
             <div className={styles.checklistNote}>
-              {batch.checklist ? <>Vastgezet op {formatDeadline(batch.checklist.lockedAt)} · versie {batch.checklist.planRevision}. Vink af wat klaar is, of tik op het aantal voor deelproductie. Printen verandert de voortgang niet.</> : <>Bestellen tot {formatDeadline(batch.deadlineAt)}. Daarna wordt de lijst vastgezet en kun je afvinken.</>}
+              {batch.checklist?.lockedAt ? <>Vastgezet op {formatDeadline(batch.checklist.lockedAt)} · versie {batch.checklist.planRevision}. Tik op het aantal om gemaakte aantallen te registreren.</> : <>Bestellen tot {formatDeadline(batch.deadlineAt)}. Gemaakte aantallen kun je nu al registreren.</>}
             </div>
             {productionNotice && productionNoticeBatch === batch.id && <p role="status" className={styles.checklistNote}>{productionNotice}</p>}
             {!!batch.checklist?.changes.length && <div className={styles.changeNotice} role="status"><strong>Bestellingen gewijzigd na vastzetten</strong><p>{batch.checklist.changes.length} gewijzigde letterregel(s). De productielijst blijft staan totdat je deze wijzigingen controleert.</p><button type="button" className={styles.button} disabled={savingProduction || Boolean(warning)} onClick={() => {setProductionNotice(""); setReviseBatch(batch);}}>Wijzigingen bekijken</button></div>}
             <ProductionTable rows={batch.rows} saving={savingProduction}
               onSourceDialogChange={open => setSourceDialogBatch(open ? batch.id : "")}
-              onToggleComplete={demoMode ? row => toggleProductionRow(batch, row) : batch.checklist && !warning ? row => { void saveProduction(batch, "quantity", row, productionRowIsComplete(row) ? 0 : row.orders + row.stock); } : undefined}
-              onEditQuantity={(demoMode || batch.checklist && !warning) ? row => {setProductionNotice(""); setQuantityDialog({batch, row}); setQuantityDraft(String(row.produced));} : undefined} />
+              onToggleComplete={demoMode ? row => toggleProductionRow(batch, row) : !loading && !warning ? row => { void saveProduction(batch, "quantity", row, productionRowIsComplete(row) ? 0 : row.orders + row.stock); } : undefined}
+              onEditQuantity={(demoMode || !loading && !warning) ? row => {setProductionNotice(""); setQuantityDialog({batch, row}); setQuantityDraft(String(row.produced));} : undefined} />
             <div className={styles.storeFooter}>
               <div className={styles.stockHeading}>
                 <span>Winkelbestellingen · voorraad per vestiging</span>
@@ -1771,8 +1775,9 @@ export default function ProductionPlanningClient({
         <ProductionPrintPreviewDialog batch={productionPrintBatch} onClose={() => setProductionPrintBatch(null)} />
       )}
       {quantityDialog && <div className={`${styles.progressOverlay} ${styles.dialog}`} role="dialog" aria-modal="true" aria-labelledby="quantity-title"><form className={styles.progressDialog} onSubmit={async event => {event.preventDefault(); if (!/^\d+$/.test(quantityDraft)) return; const saved = await saveProduction(quantityDialog.batch, "quantity", quantityDialog.row, Number(quantityDraft)); if (saved) setQuantityDialog(null);}}>
-        <h2 id="quantity-title">Hoeveel zijn er gemaakt?</h2><p>{quantityDialog.row.label}</p><p>Ingepland: {quantityDialog.row.orders + quantityDialog.row.stock} stuks. De rest blijft openstaan.</p>
-        <label>Geproduceerd aantal<input aria-label="Geproduceerd aantal" type="text" inputMode="numeric" pattern="[0-9]+" required value={quantityDraft} onChange={event => setQuantityDraft(event.target.value)} /></label>
+        <h2 id="quantity-title">Hoeveel zijn er gemaakt?</h2><p>{quantityDialog.row.label}</p><p>Nu nodig <strong>{quantityDialog.row.orders + quantityDialog.row.stock} stuks</strong></p>
+        <label>Totaal al gemaakt<input aria-label="Geproduceerd aantal" type="text" inputMode="numeric" pattern="[0-9]+" required value={quantityDraft} onChange={event => setQuantityDraft(event.target.value)} /></label>
+        {/^\d+$/.test(quantityDraft) && Number.isSafeInteger(Number(quantityDraft)) && <p className={Number(quantityDraft) > quantityDialog.row.orders + quantityDialog.row.stock ? styles.surplus : undefined}>{Number(quantityDraft) > quantityDialog.row.orders + quantityDialog.row.stock ? `${Number(quantityDraft) - quantityDialog.row.orders - quantityDialog.row.stock} te veel gemaakt` : `Nog ${quantityDialog.row.orders + quantityDialog.row.stock - Number(quantityDraft)} te maken`}</p>}
         {productionNotice && <p role="alert">{productionNotice}</p>}
         <div className={styles.progressActions}><button type="button" className={styles.button} disabled={savingProduction} onClick={() => setQuantityDialog(null)}>Annuleren</button><button type="submit" className={styles.primary} disabled={savingProduction}>{savingProduction ? "Opslaan…" : "Aantal opslaan"}</button></div>
       </form></div>}

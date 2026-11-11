@@ -41,7 +41,7 @@ export function ProductionPrintSheet({ batch }: Readonly<{ batch: ProductionBatc
           <h2>Productielijst chocoladeletters</h2>
           <p className={styles.date}>{date}</p>
         </div>
-        <span className={styles.version} data-provisional={!batch.checklist}>{batch.checklist ? <>Vastgezet<strong>Versie {batch.checklist.planRevision}</strong></> : <>Voorlopig<strong>Nog wijzigbaar</strong></>}</span>
+        <span className={styles.version} data-provisional={!batch.checklist?.lockedAt}>{batch.checklist?.lockedAt ? <>Vastgezet<strong>Versie {batch.checklist.planRevision}</strong></> : <>Voorlopig<strong>Nog wijzigbaar</strong></>}</span>
       </div>
       <div className={styles.summary}>
         <dl>
@@ -49,7 +49,7 @@ export function ProductionPrintSheet({ batch }: Readonly<{ batch: ProductionBatc
           <div><dt>Gemaakt</dt><dd>{totals.produced}</dd></div>
           <div className={styles.openTotal}><dt>Nog te maken</dt><dd>{productionRemaining(batch.rows)}</dd></div>
         </dl>
-        <p>{batch.checklist ? `Vastgezet: ${printDeadline(batch.checklist.lockedAt)}` : `Voorlopig: aantallen kunnen wijzigen tot ${printDeadline(batch.deadlineAt)}.`}</p>
+        <p>{batch.checklist?.lockedAt ? `Vastgezet: ${printDeadline(batch.checklist.lockedAt)}` : `Voorlopig: aantallen kunnen wijzigen tot ${printDeadline(batch.deadlineAt)}.`}</p>
       </div>
       {!!batch.checklist?.changes.length && <p className={styles.warning}><strong>LET OP</strong> {batch.checklist.changes.length} wijziging(en) nog niet overgenomen. Controleer deze eerst in de app.</p>}
       {unknownQuantity > 0 && <p className={styles.warning}><strong>HERKOMST CONTROLEREN:</strong> {printQuantity(unknownQuantity)} nog niet aan een krat toegewezen. Deze staan wel in het totaal en zijn hieronder gemarkeerd.</p>}

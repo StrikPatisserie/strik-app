@@ -13,11 +13,11 @@ export async function loadReadyProductionRecipients(season:string) {
   const [central,wordpress]=await Promise.all([loadCentralProduction(season,true),loadProductionWordPressOrders(season)]);
   const {batches}=combineProductionOrders(central.batches,wordpress.letters,wordpress.b2b,central.assignments);
   if(!batches.length)return new Set<string>();
-  const result=await (createAdminClient() as unknown as SupabaseClient).from("letter_production_checklists").select("batch_id,rows").in("batch_id",batches.map(batch=>batch.id));
+  const result=await (createAdminClient() as unknown as SupabaseClient).from("letter_production_checklists").select("batch_id,rows,locked_at").in("batch_id",batches.map(batch=>batch.id));
   if(result.error)throw Error("Productievoortgang kon niet worden gecontroleerd.");
   const expected={...central.orderQuantities};
   for(const order of wordpress.b2b)expected[`b2b:${order.id}`]=b2bProductionLetters(order).requiredQuantity;
-  return readyProductionRecipients(batches,result.data as {batch_id:string;rows:ProductionSeedRow[]}[],expected);
+  return readyProductionRecipients(batches,result.data as {batch_id:string;rows:ProductionSeedRow[];locked_at:string|null}[],expected);
 }
 
 // Only enrich an already authorized, shop-scoped response. No source orders or

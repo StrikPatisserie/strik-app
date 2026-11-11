@@ -127,3 +127,12 @@ test('regular letter rows keep their compact notes without logo customer details
   assert.equal(elements(sheet, node => node.type === 'ul').length, 0);
   assert.doesNotMatch(text(sheet), /Regulier bedrijf/);
 });
+
+
+test('early production prints a provisional plan with its actual made and remaining counts',()=>{
+ const sheet=ProductionPrintSheet({batch:{...batch,rows:[row({orders:370,produced:360})],checklist:{revision:1,planRevision:1,lockedAt:null,updatedAt:'2026-11-11T13:00:00Z',changes:[]}}});
+ const content=text(sheet);
+ assert.match(content,/Voorlopig/);assert(!content.includes('Vastgezet'));
+ const provisional=elements(sheet,node=>node.props['data-provisional']===true);
+ assert.equal(provisional.length,1);assert.match(content,/Gemaakt360/);assert.match(content,/Nog te maken10/);
+});

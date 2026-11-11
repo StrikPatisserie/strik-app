@@ -5,14 +5,14 @@ const path=require('node:path');
 const vm=require('node:vm');
 const ts=require('typescript');
 const React=require('react');
-function load(file,stubs={}){
+function load(file,stubs={},globals={}){
  const exports={};
  vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText,{exports,require(name){
   if(name in stubs)return stubs[name];
   if(name.endsWith('.module.css'))return{default:new Proxy({},{get:(_,key)=>key})};
   if(name.startsWith('.'))return load(path.resolve(path.dirname(file),name+'.ts'),stubs);
   return require(name);
- },Response,Request,URL,Buffer,process});
+ },Response,Request,URL,Buffer,process,...globals});
  return exports;
 }
 const base='app/sinterklaas/letters/productie/';
@@ -171,4 +171,80 @@ test('readiness enriches only authorized scoped responses, never mutates fulfill
  const response=await api.withProductionReadiness(Response.json({orders:[{id:'a',status:'besteld'},{id:'c',status:'opgehaald'}],total:2}),'2026','wordpress');
  const data=await response.json();assert.equal(data.orders[0].productionChecklistReady,true);assert.equal(data.orders[0].status,'besteld');assert.equal(data.orders[1].productionChecklistReady,false);assert.equal(data.total,2);assert.equal(response.headers.get('cache-control'),'no-store');
  assert.equal(JSON.stringify(data).includes('recipients'),false);
+});
+
+
+test('early production follows current demand for customer readiness and never assigns partial shared stock to one customer',()=>{
+ const a=row({orders:5,produced:5,recipients:[{id:'wordpress:a',source:'winkel',quantity:2,customerName:'A'},{id:'wordpress:b',source:'winkel',quantity:3,customerName:'B'}]});
+ const lists=[{batch_id:batchId,locked_at:null,rows:[a]}];
+ assert.equal(readiness.readyProductionRecipients([{id:batchId,rows:[a]}],lists).size,2);
+ const increased={...a,orders:7,recipients:[a.recipients[0],{...a.recipients[1],quantity:5}]};
+ assert.equal(readiness.readyProductionRecipients([{id:batchId,rows:[increased]}],lists).size,0);
+ const decreased={...a,orders:2,recipients:[a.recipients[0]]};
+ const ready=readiness.readyProductionRecipients([{id:batchId,rows:[decreased]}],lists);
+ assert.equal(ready.has('wordpress:a'),true);
+ assert.equal(ready.has('wordpress:b'),false);
+});
+
+test('provisional checklist keeps B2B planning editable and the database guards only block frozen lists',()=>{
+ const component=load(base+'B2BProductionPlanner.tsx',{react:{useState:value=>[value,()=>{}]}}).default;
+ const future=batch({deadlineAt:'2099-11-01T19:00:00Z',checklist:{lockedAt:null}});
+ const plan={id:'test',customerName:'Test',batchId:batchId,manual:false,quantity:5,letters:'5 S',revision:0};
+ function controls(nextBatch){
+  const tree=component({plans:[plan],batches:[nextBatch],season:'2099',onSaved:()=>{}});
+  const child=elements(tree,node=>typeof node.type==='function')[0];
+  return elements(child.type(child.props),node=>node.type==='select')[0];
+ }
+ assert.equal(controls(future).props.disabled,false);
+ assert.equal(elements(controls(future),node=>node.type==='option'&&node.props.value===batchId)[0].props.disabled,false);
+ assert.equal(controls({...future,checklist:{lockedAt:'2026-11-11T12:00:00Z'}}).props.disabled,true);
+ const sql=fs.readFileSync('app/supabase/migrations/20261111134854_letter_production_provisional_order_changes.sql','utf8');
+ assert.match(sql,/batch_id=batch\.id and locked_at is not null/);
+ assert.match(sql,/c\.batch_id=b\.id and c\.locked_at is not null/);
+});
+
+test('the real production screen saves its first early quantity with revision zero and keeps stock ordering open',async()=>{
+ const slots=[],effects=[];
+ let cursor=0,pending=[],posted;
+ const sameDeps=(a,b)=>a?.length===b?.length&&a.every((value,index)=>Object.is(value,b[index]));
+ const react={
+  useState(initial){const index=cursor++;if(!(index in slots))slots[index]=typeof initial==='function'?initial():initial;return[slots[index],value=>{slots[index]=typeof value==='function'?value(slots[index]):value;}];},
+  useRef(initial){const index=cursor++;if(!(index in slots))slots[index]={current:initial};return slots[index];},
+  useMemo(fn){cursor++;return fn();},
+  useEffect(effect,deps){const index=cursor++;if(!sameDeps(effects[index]?.deps,deps))pending.push(()=>{effects[index]?.cleanup?.();effects[index]={deps,cleanup:effect()};});},
+ };
+ const future=batch({deadlineAt:'2099-11-01T19:00:00Z',rows:[row({orders:370})]});
+ const dummy={default:()=>null};
+ const component=load(base+'ProductionPlanningClient.tsx',{
+  react,'./ProductionPrintPreview':dummy,'./ProductionDistributionPrint':dummy,'./B2BProductionPlanner':dummy,'./ProductionRecipientsDialog':dummy,
+ },{
+  AbortController,document:{visibilityState:'visible',addEventListener(){},removeEventListener(){}},
+  window:{setInterval(){return 1;},clearInterval(){},setTimeout(){return 2;},clearTimeout(){},addEventListener(){},removeEventListener(){}},
+  async fetch(url,options){
+   if(options?.method==='POST'){
+    posted=JSON.parse(options.body);
+    return Response.json({list:{batch_id:batchId,rows:future.rows.map(row=>({...row,produced:posted.quantity})),revision:1,plan_revision:1,locked_at:null,updated_at:'2026-11-11T14:00:00Z'}});
+   }
+   return Response.json(url.includes('start-distributions')?{distributions:[]}:{batches:[future],b2bPlanning:[],unplanned:[],centralUnplannedCount:0});
+  },
+ }).default;
+ function render(){cursor=0;pending=[];const tree=component({season:'2099',batches:[future],centralUnplannedCount:0});pending.forEach(effect=>effect());return tree;}
+ try{
+  render();await new Promise(setImmediate);
+  let tree=render();
+  const table=elements(tree,node=>typeof node.props.onEditQuantity==='function')[0];
+  assert(table);
+  table.props.onEditQuantity(table.props.rows[0]);
+  tree=render();
+  elements(tree,node=>node.type==='input'&&node.props['aria-label']==='Geproduceerd aantal')[0].props.onChange({target:{value:'360'}});
+  tree=render();
+  await elements(tree,node=>node.type==='form'&&node.props.onSubmit)[0].props.onSubmit({preventDefault(){}});
+  assert.equal(posted.revision,0);
+  assert.equal(posted.quantity,360);
+  tree=render();
+  assert.equal(elements(tree,node=>typeof node.props.onEditQuantity==='function')[0].props.rows[0].produced,360);
+  const round=elements(tree,node=>node.props.batch?.id===batchId&&node.props.actions)[0];
+  const stockButton=elements(round.props.actions,node=>node.type==='button'&&text(node).includes('Winkelvoorraad per winkel'))[0];
+  assert(stockButton);assert.equal(Boolean(stockButton.props.disabled),false);
+ }finally{effects.forEach(effect=>effect?.cleanup?.());}
 });

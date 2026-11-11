@@ -49,7 +49,7 @@ test('a round is complete only when every required letter is finished and no ord
  assert.equal(presentation.productionRoundIsComplete([row({orders:29,produced:28})]),false);
 });
 
-test('checkmarks become available exactly at the Amsterdam deadline, never through printing',()=>{
+test('the plan locks exactly at the Amsterdam deadline, independently of early production',()=>{
  const b=batch();
  assert.equal(helper.productionDeadlinePassed(b,Date.parse('2026-11-01T18:59:59Z')),false);
  assert.equal(helper.productionDeadlinePassed(b,Date.parse('2026-11-01T19:00:00Z')),true);
@@ -65,7 +65,7 @@ test('partial production remains open, can be corrected, and never changes reque
  const complete=helper.setProductionQuantity(partial,original[0].key,28);
  assert.equal(helper.productionRemaining(complete),0);
  assert.equal(helper.productionRemaining(helper.setProductionQuantity(complete,original[0].key,0)),28);
- for(const q of [-1,29,1.5,NaN])assert.throws(()=>helper.setProductionQuantity(original,original[0].key,q));
+ for(const q of [-1,1.5,NaN,Number.MAX_SAFE_INTEGER+1])assert.throws(()=>helper.setProductionQuantity(original,original[0].key,q));
  assert.throws(()=>helper.setProductionQuantity(original,'unknown',1));
 });
 test('frozen list differences ignore checkmarks but include changed stock and origin even when totals match',()=>{
@@ -172,18 +172,24 @@ test('actual cancellations and quantity changes still require review after fulfi
  }
 });
 
-function endpointFixture({allowed=true,locked=true,existing=true,wpFailure=false,race=false,cron=false}={}) {
+function endpointFixture({allowed=true,locked=true,existing=true,wpFailure=false,race=false,cron=false,freezeRace=false,insertRace=false}={}) {
  let current=batch({status:locked?'IN_PRODUCTION':'OPEN',deadlineAt:locked?'2020-01-01T19:00:00Z':'2099-01-01T19:00:00Z'});
  let wordpress={letters:[],b2b:[]};
- let saved=existing?{batch_id:id,rows:[row()],revision:1,plan_revision:1,locked_at:'2020-01-01T19:00:00Z',updated_at:'2020-01-01T19:00:00Z'}:null;
+ let saved=existing?{batch_id:id,rows:[row()],revision:1,plan_revision:1,locked_at:locked?'2020-01-01T19:00:00Z':null,updated_at:'2020-01-01T19:00:00Z'}:null;
  const writes=[];
+ let raceOccurred=false;
  const db={from(table){let action='read',values,filters={};const q={select(){return q},eq(k,v){filters[k]=v;return q},in(){return q},maybeSingle(){return q},single(){return q},insert(v){action='insert';values=v;return q},update(v){action='update';values=v;return q},then(resolve){let data,error=null;
  if(table==='letter_production_batches')data={status:current.status,order_deadline_at:current.deadlineAt,season:2026};
  else if(table==='letter_production_checklists'){
-  if(action==='insert'){writes.push({table,action,values});if(saved)error={code:'23505'};else saved={...values,revision:1,plan_revision:1,locked_at:'now',updated_at:'now'};}
+  if(action==='insert'){
+   if(insertRace&&!saved)saved={batch_id:id,rows:[row({produced:12})],revision:1,plan_revision:1,locked_at:null,updated_at:'now'};
+   if(saved)error={code:'23505'};
+   else{saved={revision:1,plan_revision:1,locked_at:'now',updated_at:'now',...values};writes.push({table,action,values});}
+  }
   if(action==='update'){
+   if(freezeRace&&!raceOccurred&&values.locked_at){raceOccurred=true;saved={...saved,revision:saved.revision+1,rows:[row({produced:18})]};}
    if(!race&&saved?.revision===filters.revision){saved={...saved,...values};writes.push({table,action,values});data=saved}else data=null;
-  }else data=filters.batch_id?saved:saved?[saved]:[];
+  }else data=action==='insert'||filters.batch_id?saved:saved?[saved]:[];
  }else throw Error('Unexpected write or table: '+table);
  return Promise.resolve({data,error}).then(resolve)}};return q;}};
  const api=load('app/api/sinterklaas-letter-production/route.ts',{
@@ -202,12 +208,82 @@ test('unauthorized or shop-only accounts cannot read or mark the global producti
  const f=endpointFixture({allowed:false});assert.equal((await f.api.GET(new Request('https://app.strik-patisserie.nl/api/sinterklaas-letter-production'))).status,403);
  assert.equal((await f.api.POST(f.request({}))).status,403);assert.equal(f.writes.length,0);
 });
-test('before deadline a list stays editable and cannot be marked produced',async()=>{
+test('an open production day accepts early production without freezing orders',async()=>{
  const f=endpointFixture({locked:false,existing:false});
- const get=await f.api.GET(new Request('https://app.strik-patisserie.nl/api/sinterklaas-letter-production'));
- assert.equal(get.status,200);assert.equal((await get.json()).batches[0].checklist,undefined);
- assert.equal((await f.api.POST(f.request({batchId:id,revision:1,action:'quantity',key:row().key,quantity:28}))).status,409);
- assert.equal(f.writes.length,0);
+ const get=()=>f.api.GET(new Request('https://app.strik-patisserie.nl/api/sinterklaas-letter-production'));
+ assert.equal((await (await get()).json()).batches[0].checklist,undefined);
+ const payload={batchId:id,revision:0,action:'quantity',key:row().key,quantity:12};
+ const response=await f.api.POST(f.request(payload));assert.equal(response.status,200);
+ assert.equal(f.saved.rows[0].produced,12);assert.equal(f.saved.locked_at,null);
+ assert.equal(f.saved.revision,1);assert.equal(f.saved.plan_revision,1);
+ const view=(await (await get()).json()).batches[0];
+ assert.equal(view.rows[0].produced,12);assert.equal(view.checklist.lockedAt,null);
+ assert.equal(view.checklist.changes.length,0);assert.equal(helper.productionRemaining(view.rows),16);
+ assert.equal((await f.api.POST(f.request(payload))).status,409,'retry never adds production twice');
+ assert.equal(f.saved.rows[0].produced,12);
+});
+test('live orders can increase, shrink or disappear while actual production and logo variants survive',async()=>{
+ const f=endpointFixture({locked:false,existing:false});
+ const key=row().key,logo=row({key:key+'|logo',label:row().label+' · logo',orders:70,stock:0});
+ const open=rows=>batch({deadlineAt:'2099-01-01T19:00:00Z',rows});
+ const get=()=>f.api.GET(new Request('https://app.strik-patisserie.nl/api/sinterklaas-letter-production'));
+ f.setCurrent(open([row({orders:370,stock:0}),logo]));
+ assert.equal((await f.api.POST(f.request({batchId:id,revision:0,action:'quantity',key,quantity:370}))).status,200);
+ for(const [demand,remaining,surplus] of [[400,100,0],[360,70,10],[0,70,370]]){
+  f.setCurrent(open([...(demand?[row({orders:demand,stock:0})]:[]),logo]));
+  const view=(await (await get()).json()).batches[0];
+  assert.equal(view.rows.find(r=>r.key===key).produced,370);
+  assert.equal(view.rows.find(r=>r.key===logo.key).produced,0);
+  assert.equal(helper.productionRemaining(view.rows),remaining);
+  assert.equal(helper.productionSurplus(view.rows),surplus);
+  assert.equal(view.checklist.changes.length,0);
+  assert.equal(view.checklist.lockedAt,null);
+ }
+ assert.equal(f.saved.revision,1,'reading changed demand does not rewrite actual production');
+});
+test('freezing reconciles the latest order totals and preserves early-made and cancelled quantities',async()=>{
+ const f=endpointFixture({locked:false,existing:false});
+ const key=row().key;
+ assert.equal((await f.api.POST(f.request({batchId:id,revision:0,action:'quantity',key,quantity:28}))).status,200);
+ f.setCurrent(batch({status:'IN_PRODUCTION',rows:[row({orders:40,stock:0})]}));
+ const get=()=>f.api.GET(new Request('https://app.strik-patisserie.nl/api/sinterklaas-letter-production'));
+ const locked=(await (await get()).json()).batches[0];
+ assert(locked.checklist.lockedAt);assert.equal(locked.checklist.revision,2);
+ assert.equal(locked.checklist.planRevision,1);assert.equal(locked.rows[0].produced,28);
+ assert.equal(helper.productionRemaining(locked.rows),12);
+ assert.equal(locked.checklist.changes.length,0);
+ const writes=f.writes.length;await get();assert.equal(f.writes.length,writes);
+ f.setCurrent(batch({status:'IN_PRODUCTION',rows:[]}));
+ const changed=(await (await get()).json()).batches[0];
+ assert.equal(changed.checklist.changes[0].after,0);
+ assert.equal((await f.api.POST(f.request({batchId:id,revision:2,action:'revise',planVersion:changed.checklist.planVersion}))).status,200);
+ assert.equal(f.saved.rows[0].produced,28);assert.equal(helper.productionSurplus(f.saved.rows),28);
+});
+test('freezing cannot overwrite a simultaneous production correction',async()=>{
+ const f=endpointFixture({locked:false,existing:true,freezeRace:true});
+ f.setCurrent(batch({status:'IN_PRODUCTION'}));
+ const response=await f.api.GET(new Request('https://app.strik-patisserie.nl/api/sinterklaas-letter-production'));
+ assert.equal(response.status,200);assert.equal(f.saved.rows[0].produced,18);
+ assert.equal(f.saved.revision,3);assert(f.saved.locked_at);
+});
+test('simultaneous first registrations conflict and source failures never create partial snapshots',async()=>{
+ const f=endpointFixture({locked:false,existing:false,insertRace:true});
+ const payload={batchId:id,revision:0,action:'quantity',key:row().key,quantity:28};
+ assert.equal((await f.api.POST(f.request(payload))).status,409);
+ assert.equal(f.saved.rows[0].produced,12);assert.equal(f.saved.locked_at,null);
+ const unavailable=endpointFixture({locked:false,existing:false,wpFailure:true});
+ assert.notEqual((await unavailable.api.POST(unavailable.request(payload))).status,200);
+ assert.equal(unavailable.saved,null);assert.equal(unavailable.writes.length,0);
+});
+test('a quantity save crossing the deadline freezes with its new count and absolute corrections persist',async()=>{
+ const f=endpointFixture({locked:false,existing:true});
+ f.setCurrent(batch({status:'IN_PRODUCTION',rows:[row({produced:28})]}));
+ assert.equal((await f.api.POST(f.request({batchId:id,revision:1,action:'quantity',key:row().key,quantity:10}))).status,200);
+ assert(f.saved.locked_at);assert.equal(f.saved.rows[0].produced,10);
+ assert.equal(helper.reviseProductionRows(f.saved.rows,[row({produced:28})])[0].produced,10);
+ assert.equal((await f.api.POST(f.request({batchId:id,revision:2,action:'quantity',key:row().key,quantity:40}))).status,200);
+ assert.equal(helper.productionSurplus(f.saved.rows),12);
+ assert.equal(helper.productionRemaining(f.saved.rows),0);
 });
 test('post-deadline first load freezes the complete plan once and incomplete sources never freeze a list',async()=>{
  const f=endpointFixture({existing:false});const request=()=>new Request('https://app.strik-patisserie.nl/api/sinterklaas-letter-production');

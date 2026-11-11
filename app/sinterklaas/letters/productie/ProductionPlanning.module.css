@@ -141,6 +141,8 @@ button.sourceBadge:focus-visible { outline: 2px solid currentColor; outline-offs
 .completeButton:disabled, .button:disabled, .primary:disabled { opacity: .5; cursor: wait; }
 .amountButton, .partial { display: inline-flex; align-items: center; justify-content: center; margin: 0; font-size: 10px; color: var(--b2b-muted); white-space: nowrap; }
 .amountButton { min-width: 30px; min-height: 30px; text-decoration: underline; text-underline-offset: 3px; }
+.table .surplus, .roundSummary .surplus, .progressDialog .surplus { color: #95601c; font-weight: 600; }
+.table .surplus { display: block; margin-top: 3px; font-size: 10px; line-height: 1.3; }
 .checklistNote { padding: 11px 18px; font-size: 11px; line-height: 1.6; color: var(--b2b-muted); }
 .changeNotice { margin: 0 18px 12px; padding: 12px; background: #fff8eb; border: 1px solid #e6d3aa; border-radius: 8px; color: #795a24; font-size: 12px; }
 .changeNotice p { margin: 5px 0 10px; }
