@@ -64,26 +64,30 @@ function deliverySummary(order: RawOrder) {
   const products = description.split("\n").map(line => line.replace(/\s*·?\s*€.*$/, "").trim()).filter(Boolean).join(" · ");
   return products.slice(0, 350) || (Array.isArray(order.letterLines) && order.letterLines.length ? `${order.letterLines.reduce((sum, line) => sum + (Number(line.quantity) || 0), 0)} chocoladeletters` : "Bestelling controleren");
 }
-export function businessDeliveriesForWeek(raw: unknown[], selectedDate: string): { week: { start: string; end: string }; orders: BusinessDelivery[] } {
+export function businessDeliveriesForWeek(
+  raw: unknown[],
+  selectedDate: string,
+  options: { includeUpcoming?: boolean; includePickup?: boolean } = {},
+): { week: { start: string; end: string }; orders: BusinessDelivery[] } {
   const week = businessWeek(selectedDate);
   const orders = raw.flatMap(value => {
     if (!value || typeof value !== "object" || Array.isArray(value)) return [];
     const order = value as RawOrder, id = text(order.id), company = text(order.customerName);
     if (!id || !company || id.startsWith("historie-") || flag(order.cancelled) || flag(order.delivered) || ["afgewezen", "geannuleerd"].includes(text(order.status))) return [];
     const window = businessDeliveryWindow(order);
-    if (!window || window.start > week.end) return [];
+    if (!window || (!options.includeUpcoming && window.start > week.end)) return [];
     const overdue = window.end < week.start;
     // Old annual archives must not reappear as current seasonal deliveries.
     if (overdue && window.end.slice(0, 4) !== selectedDate.slice(0, 4)) return [];
     const method = text(order.deliveryMethod), address = text(order.deliveryAddress);
     const pickup = /afhal|afhaal|ophal|gehaald|haalt|halen/i.test(method);
     const delivery = /bezorg|lever|brengen|deliver|transport/i.test(method);
-    if (pickup && !delivery && !address) return [];
+    if (!options.includePickup && pickup && !delivery && !address) return [];
     const season = order.season === "kerst" || order.season === "sint-kerst" ? order.season : "sint";
     const status = order.status === "akkoord" || order.status === "offerte" ? order.status : "aanvraag";
     return [{ id, season, company, start: window.start, end: window.end, windowType: window.type, status,
       entered: flag(order.entered), deliveryMethod: method, address, contact: text(order.contactName), phone: text(order.phone),
-      summary: deliverySummary(order), packaging: text(order.packaging), deliveryUnclear: !delivery || pickup,
+      summary: deliverySummary(order), packaging: text(order.packaging), deliveryUnclear: (!delivery && !pickup) || (pickup && (delivery || Boolean(address))),
       overdue: window.end < selectedDate, onSelectedDay: window.start <= selectedDate && window.end >= selectedDate,
       managementHref: businessSeasons[season === "kerst" ? "kerst" : "sint"].orders,
     } satisfies BusinessDelivery];
@@ -96,4 +100,23 @@ export function possibleBusinessReceipts(order: BusinessDelivery, receipts: { cu
   const company = normalize(order.company);
   // A receipt is only a hint; it must never hide the independent B2B check.
   return company.length >= 5 ? [...new Set(receipts.filter(receipt => normalize(receipt.customer) === company).map(receipt => receipt.receiptNumber).filter(Boolean))] : [];
+}
+
+export function businessDeliveryUrgency(order: BusinessDelivery, today: string) {
+  if (order.start <= today && order.end >= today) return "today";
+  const tomorrow = addDays(today, 1);
+  if (order.start <= tomorrow && order.end >= tomorrow) return "tomorrow";
+  if (order.end < today) return "overdue";
+  return null;
+}
+
+export function prioritizeBusinessDeliveries(orders: BusinessDelivery[], today: string) {
+  const priority = { today: 0, tomorrow: 1, overdue: 2 };
+  return [...orders].sort((a, b) => {
+    const urgencyA = businessDeliveryUrgency(a, today);
+    const urgencyB = businessDeliveryUrgency(b, today);
+    return (urgencyA ? priority[urgencyA] : 3) - (urgencyB ? priority[urgencyB] : 3)
+      || a.start.localeCompare(b.start)
+      || a.company.localeCompare(b.company, "nl");
+  });
 }

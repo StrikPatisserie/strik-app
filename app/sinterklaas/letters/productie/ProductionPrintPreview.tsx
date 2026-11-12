@@ -2,7 +2,7 @@
 
 import { createPortal } from "react-dom";
 import type { ProductionBatchSeed } from "./ProductionPlanningClient";
-import { productionRemaining, productionTotals } from "./productionChecklist";
+import { productionRemaining, productionSurplus, productionTotals } from "./productionChecklist";
 import { productionRowIsComplete, productionSections, productionVariant } from "./productionPresentation";
 import { productionRecipientsFor, productionSourceBreakdown } from "./productionSources";
 import styles from "./ProductionPrint.module.css";
@@ -67,12 +67,14 @@ export function ProductionPrintSheet({ batch }: Readonly<{ batch: ProductionBatc
           <tr className={styles.groupHeading}><th scope="colgroup" colSpan={8}><div><h3><span>{section.label}</span> {group.label}</h3><span>{printQuantity(group.rows.reduce((sum, row) => sum + row.orders + row.stock, 0))}</span></div></th></tr>
           <tr className={styles.columns}>
             <th scope="col">Letter</th>
-            {PRINT_CRATES.map(crate => <th key={crate.id} scope="col" aria-label={`Krat ${crate.number}: ${crate.label}`}><span className={styles.crateNumber}>{crate.number}</span><span className={styles.crateLabel}>{crate.lines[0]}<br />{crate.lines[1]}</span></th>)}
-            <th scope="col">Totaal</th><th scope="col">Gereed</th><th scope="col">Bijzonderheden / notities</th>
+            {PRINT_CRATES.map(crate => <th key={crate.id} scope="col" className={styles.crateColumn} aria-label={`Krat ${crate.number}: ${crate.label}`}><span className={styles.crateNumber}>{crate.number}</span><span className={styles.crateLabel}>{crate.lines[0]}<br />{crate.lines[1]}</span></th>)}
+            <th scope="col">Nog te maken</th><th scope="col">Gereed</th><th scope="col">Bijzonderheden / notities</th>
           </tr>
         </thead>
         <tbody>{group.rows.map(row => {
           const total = row.orders + row.stock;
+          const remaining = productionRemaining([row]);
+          const surplus = productionSurplus([row]);
           const variant = productionVariant(row.label);
           const complete = productionRowIsComplete(row);
           const sources = new Map(productionSourceBreakdown(row).map(source => [source.id, source.quantity]));
@@ -82,11 +84,14 @@ export function ProductionPrintSheet({ batch }: Readonly<{ batch: ProductionBatc
             : [];
           return <tr key={row.key} className={styles.row} data-special={variant.extras.length > 0 || unknown > 0}>
             <th scope="row" className={styles.letter}>{variant.letter}</th>
-            {PRINT_CRATES.map(crate => <td key={crate.id} className={styles.quantity} data-source={crate.id} aria-label={`${crate.label}: ${sources.get(crate.id) || 0}`}>{sources.get(crate.id) || "—"}</td>)}
-            <td className={styles.total}>{total}</td>
+            {PRINT_CRATES.map(crate => <td key={crate.id} className={`${styles.quantity} ${styles.crateQuantity}`} data-source={crate.id} aria-label={`${crate.label}: ${sources.get(crate.id) || 0}`}>{sources.get(crate.id) || "—"}</td>)}
+            <td className={styles.total} aria-label={`Nog te maken: ${remaining}. Totaal: ${total}. Al gemaakt: ${row.produced}.`}>
+              <strong>{remaining}</strong>
+              <small><span>Totaal {total}</span>{" · "}<span>{row.produced} gemaakt</span></small>
+              {surplus > 0 && total > 0 && <small className={styles.surplus}>{surplus} te veel gemaakt</small>}
+            </td>
             <td className={styles.done}>
               {total > 0 ? <span className={styles.checkBox} aria-label={complete ? "Gereed" : "Nog af te vinken"}>{complete ? "✓" : ""}</span> : <span>-</span>}
-              {row.produced > 0 && <small>{row.produced}/{total} gemaakt</small>}
             </td>
             <td className={styles.notes}>
               {variant.extras.length > 0 && <div className={styles.extras}>

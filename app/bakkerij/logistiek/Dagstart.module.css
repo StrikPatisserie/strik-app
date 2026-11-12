@@ -1,0 +1,234 @@
+.requests {
+  margin: 4px 0 12px;
+  color: #344d3e;
+}
+.requests > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  min-height: 34px;
+  padding: 4px 2px;
+  list-style: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+}
+.requests > summary::-webkit-details-marker { display: none; }
+.requests[open] > summary > span { transform: rotate(180deg); }
+.requestContent { padding-top: 5px; }
+.dayOverview {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #c3cdbd;
+  border-radius: 14px;
+  background: #fffefa;
+  color: #1c3342;
+}
+.dayToolbar { padding: 10px 12px; }
+.dayToolbarLayout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.dayToolbarLayout > div:first-child { flex: 1 1 340px; }
+.dateChoices { display: flex; align-items: center; gap: 5px; }
+.dayButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 7px 11px;
+  border-width: 1px;
+  border-style: solid;
+  border-radius: 8px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.dayButton > span:first-child { font-size: 13px; font-weight: 750; }
+.dayButton > span:last-child { margin: 0; font-size: 11px; font-weight: 500; }
+.dayButton[aria-pressed="true"] { border-color: #344d3e; box-shadow: inset 0 0 0 1px #344d3e; }
+.dayButton:disabled { cursor: wait; opacity: .55; }
+.calendarButton {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #4d6151;
+  cursor: pointer;
+}
+.calendarButton:hover { background: #edf2e9; }
+.calendarButton[data-active] { border-color: #aebfa5; background: #edf2e9; }
+.batchStatus {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 7px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.batchActions { display: grid; justify-items: end; gap: 7px; }
+.batchActions > div { align-items: center; }
+.batchActions button { box-shadow: none; }
+.metricGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid #dfe4d9;
+  background: #f4f6ef;
+}
+.metricCell { min-width: 0; padding: 8px 12px; border-left: 1px solid #dfe4d9; }
+.metricCell:first-child { border-left: 0; }
+.metricCell[data-banket] { grid-column: 1 / -1; border-top: 1px solid #dfe4d9; border-left: 0; }
+.viewTabs {
+  display: flex;
+  gap: 5px;
+  margin-top: 12px;
+  border-bottom: 1px solid #a8b69e;
+}
+.viewTab {
+  min-width: 85px;
+  min-height: 36px;
+  padding: 6px 16px;
+  border-bottom: 2px solid transparent;
+  color: #53634d;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.viewTab[aria-pressed="true"] { border-bottom-color: #1c3342; color: #1c3342; font-weight: 800; }
+.viewTab:hover { background: #ffffff38; }
+.routeToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  min-width: 0;
+}
+.routeToolbar > h2 { margin: 0; color: #3f5845; font-size: 12px; font-weight: 750; letter-spacing: 0; text-transform: none; }
+.departures { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.departure {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 3px 7px;
+  border: 1px solid #aabda3;
+  border-radius: 8px;
+  background: #e7eee15c;
+  color: #344d3e;
+  font-size: 11px;
+  font-weight: 600;
+}
+.departure > svg { width: 13px; height: 13px; }
+.departure input {
+  width: 78px;
+  min-width: 0;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: #1c3342;
+  font-size: 12px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.roadInfo { position: relative; color: #4b614c; }
+.roadInfo > summary {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 32px;
+  font-size: 12px;
+  font-weight: 650;
+  list-style: none;
+  cursor: pointer;
+}
+.roadInfo > summary::-webkit-details-marker { display: none; }
+.roadInfo > div {
+  position: absolute;
+  right: 0;
+  z-index: 5;
+  width: 230px;
+  max-width: calc(100vw - 48px);
+  padding: 10px 12px;
+  border: 1px solid #becbb5;
+  border-radius: 8px;
+  background: #fffefa;
+  box-shadow: 0 3px 12px #1c334219;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.roadInfo a { text-decoration: underline; text-underline-offset: 3px; }
+.routeActions { display: flex; align-items: center; gap: 5px; margin-left: auto; }
+.routeAction {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 8px;
+  border: 1px solid #9daf95;
+  border-radius: 8px;
+  background: #e7eee14d;
+  color: #34543e;
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+.routeAction > svg { width: 19px; height: 19px; }
+.routeAction:hover { background: #f3f7ed; }
+.routeAction:disabled { cursor: not-allowed; opacity: .4; }
+.routeAction[data-saved] { border-color: #456a45; background: #456a45; color: white; opacity: 1; }
+.undoButton { min-height: 36px; padding: 4px 8px; color: #34543e; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
+.roadMessage { flex-basis: 100%; color: #58634f; font-size: 11px; }
+.saveMessage { flex-basis: 100%; color: #58634f; font-size: 12px; }
+.saveMessage[data-error] { color: #9b2d1f; }
+.routeWarning {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 0;
+  padding: 7px 10px;
+  border-left: 2px solid #b98a35;
+  border-radius: 0 6px 6px 0;
+  background: #fff8e3b3;
+  color: #795421;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.routeWarning > svg { flex-shrink: 0; width: 16px; height: 16px; margin-top: 1px; }
+.dayButton:focus-visible, .viewTab:focus-visible, .routeAction:focus-visible, .departure:focus-within, .calendarButton:focus-within, .roadInfo > summary:focus-visible, .requests > summary:focus-visible {
+  outline: 2px solid #1c3342;
+  outline-offset: 2px;
+}
+@media (min-width: 1100px) {
+  .metricGrid { grid-template-columns: minmax(0, .9fr) minmax(0, .8fr) minmax(0, .75fr) minmax(260px, 2.35fr); }
+  .metricCell[data-banket] { grid-column: auto; border-top: 0; border-left: 1px solid #dfe4d9; }
+}
+@media (max-width: 750px) {
+  .dayToolbarLayout > div:first-child { flex-basis: 100%; }
+  .batchActions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; width: 100%; }
+  .metricCell { padding: 8px; }
+  .routeToolbar > h2 { flex-basis: 100%; }
+  .routeToolbar { gap: 6px; }
+  .departure { padding: 3px 5px; gap: 4px; }
+  .departure input { width: 70px; }
+  .roadInfo > summary { width: 24px; }
+}
+@media (pointer: coarse) {
+  .dayButton, .calendarButton, .routeAction, .viewTab, .undoButton, .requests > summary { min-height: 44px; }
+  .calendarButton, .routeAction { width: 44px; }
+  .departure { min-height: 44px; }
+  .departure input { width: 88px; font-size: 16px; }
+  .roadInfo > summary { min-width: 36px; min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .routeAction { transition: none; }
+  .routeAction > svg { animation: none; }
+}

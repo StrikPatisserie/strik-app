@@ -12,6 +12,7 @@ import { getRoutePrintBlockedReason, openRoutePrintWindow } from "./routePrintWi
 import { routePrintPaginationScript } from "./routePrintPagination";
 import { normalizeReceiptDelivery } from "./receiptDelivery";
 import BusinessDeliveries from "./BusinessDeliveries";
+import styles from "./Dagstart.module.css";
 import { hasIncompleteWebshopPhotos, webshopPhotoDuplicateKey } from "./webshopPhotoIdentity";
 import { PhotoPrintChoiceModal } from "./PhotoPrintChoiceModal";
 import { usePhotoPrintHistory } from "./usePhotoPrintHistory";
@@ -9674,6 +9675,11 @@ export default function BakkerijLogistiekDashboard() {
   const routeViewDateRef = useRef("");
   const [routeSaveState, setRouteSaveState] = useState<RouteSaveState>("idle");
   const [routeSaveMessage, setRouteSaveMessage] = useState("");
+  useEffect(() => {
+    if (routeSaveState !== "saved") return;
+    const timer = window.setTimeout(() => setRouteSaveState(current => current === "saved" ? "idle" : current), 2500);
+    return () => window.clearTimeout(timer);
+  }, [routeSaveState, routeSaveMessage]);
   const [isImporting, setIsImporting] = useState(false);
   const [isOpeningTomorrow, setIsOpeningTomorrow] = useState(false);
   const [importMessage, setImportMessage] = useState("");
@@ -10817,6 +10823,11 @@ export default function BakkerijLogistiekDashboard() {
   }
 
   async function resetRouteDraft() {
+    const confirmed = window.confirm(
+      "Weet je zeker dat je de route opnieuw wilt berekenen? Je handmatige route-indeling wordt vervangen door de automatische indeling."
+    );
+    if (!confirmed) return;
+
     routeSaveQueueRef.current!.invalidate();
     pendingRouteDateRef.current = "";
     await routeSaveQueueRef.current!.settled();
@@ -11400,7 +11411,12 @@ export default function BakkerijLogistiekDashboard() {
         description="Ochtendregie, pakbonnen, routes en tweede rondes."
       />
 
-      <BusinessDeliveries date={selectedPlan.date} reloadKey={batchReloadCounter} receipts={receiptSummaries} />
+      <BusinessDeliveries
+        date={selectedPlan.date}
+        today={dateState.today}
+        reloadKey={batchReloadCounter}
+        receipts={receiptSummaries}
+      />
 
       {futureGateMessage ? (
         <div className="relative mt-5 min-h-[35rem]">
@@ -11460,11 +11476,15 @@ export default function BakkerijLogistiekDashboard() {
         </div>
       ) : (
       <>
-      <details className="mb-3 rounded-2xl border border-[#d7dfce] bg-[#fffdf6] p-3"><summary className="cursor-pointer text-sm font-bold">Productieverzoeken aan de bakkerij</summary><div className="mt-3"><ProductionRequests logistics/></div></details>
-      <section className="relative rounded-2xl border border-[#e8e4de] bg-white/95 p-2.5 shadow-sm sm:p-3">
-        <div className="grid gap-3 md:grid-cols-[minmax(17rem,1fr)_auto] md:items-start">
+      <details className={styles.requests}>
+        <summary>Productieverzoeken <span aria-hidden="true">⌄</span></summary>
+        <div className={styles.requestContent}><ProductionRequests logistics/></div>
+      </details>
+      <div className={styles.dayOverview}>
+      <section aria-label="Dag kiezen en bonnen beheren" className={styles.dayToolbar}>
+        <div className={styles.dayToolbarLayout}>
           <div className="min-w-0">
-            <div className="flex items-stretch gap-2">
+            <div className={styles.dateChoices}>
               <BatchDayButton
                 active={selectedPlan.date === dateState.today}
                 date={dateState.today}
@@ -11485,12 +11505,8 @@ export default function BakkerijLogistiekDashboard() {
               <label
                 aria-label="Eerdere datum kiezen"
                 title="Eerdere datum kiezen"
-                className={`relative flex h-12 w-10 shrink-0 cursor-pointer items-center justify-center self-center rounded-xl border shadow-sm transition ${
-                  selectedPlan.date !== dateState.today &&
-                  selectedPlan.date !== dateState.tomorrow
-                    ? "border-[#1a1815] bg-[#1a1815] text-white"
-                    : "border-[#e8e4de] bg-[#faf8f5] text-[#6b645b] hover:bg-white"
-                }`}
+                className={styles.calendarButton}
+                data-active={selectedPlan.date !== dateState.today && selectedPlan.date !== dateState.tomorrow || undefined}
               >
                 <CalendarIcon />
                 <input
@@ -11504,7 +11520,7 @@ export default function BakkerijLogistiekDashboard() {
               </label>
             </div>
             <div
-              className={`mt-2 flex min-h-5 flex-wrap items-center gap-x-2 gap-y-1 pl-0.5 text-[0.68rem] font-semibold italic tracking-normal ${
+              className={`${styles.batchStatus} ${
                 definitiveBatchMissing || batchLoadState === "error"
                   ? "text-[#a43d28]"
                   : "text-[#7b746c]"
@@ -11514,7 +11530,7 @@ export default function BakkerijLogistiekDashboard() {
                 {(definitiveBatchMissing || batchLoadState === "error") && (
                   <WarningIcon />
                 )}
-                <span className="truncate">{compactBatchStatus}</span>
+                <span>{compactBatchStatus}</span>
               </span>
               {showManualBatchUpload && (
                 <button
@@ -11529,7 +11545,7 @@ export default function BakkerijLogistiekDashboard() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-2 md:h-full md:flex-col md:items-end">
+          <div className={styles.batchActions}>
             <div className="flex flex-wrap items-center justify-end gap-1.5">
               {showAcquisitionCampaign && acquisitionCampaign && (
                 <div className="flex h-9 overflow-hidden rounded-xl border border-[#d46b3f] bg-[#fff0d7] text-[#713519] shadow-sm">
@@ -11662,13 +11678,12 @@ export default function BakkerijLogistiekDashboard() {
         Foto-import onvolledig: {Array.from(new Set(incompletePhotoImports.map(image => `${image.customerName || "Klant controleren"}${image.orderNumber ? ` · ${image.orderNumber}` : ""}`))).join(", ")}. De foto&apos;s van deze bestellingen blijven uit de printselectie tot de import compleet is.
         <button type="button" className="ml-2 min-h-11 underline underline-offset-2" onClick={() => setActiveTab("bonnen")}>Bonnen bekijken</button>
       </div>}
-      <section className="mt-2 grid grid-cols-3 overflow-hidden rounded-xl border border-[#e8e4de] bg-white/95 shadow-sm sm:grid-cols-[minmax(7.5rem,0.9fr)_minmax(6.5rem,0.72fr)_minmax(7rem,0.75fr)_minmax(21rem,2.35fr)]">
-        {stats.map((stat, index) => (
+      <section aria-label="Dagtotalen" className={styles.metricGrid}>
+        {stats.map((stat) => (
           <div
             key={stat.label}
-            className={`min-h-9 border-l border-t border-[#efe7dd] px-2 py-1.5 sm:border-t-0 sm:px-3 last:col-span-3 sm:last:col-span-1 ${
-              index < 3 ? "border-t-0" : "border-l-0 sm:border-l"
-            } ${index === 0 ? "border-l-0" : ""}`}
+            className={styles.metricCell}
+            data-banket={Boolean(stat.metrics) || undefined}
           >
             {stat.metrics ? (
               <div className="flex h-full min-w-0 items-center gap-2">
@@ -11744,7 +11759,9 @@ export default function BakkerijLogistiekDashboard() {
         ))}
       </section>
 
-      <div className="mt-2 grid grid-cols-2 rounded-2xl border border-[#e8e4de] bg-white p-1 shadow-sm">
+      </div>
+
+      <div className={styles.viewTabs} role="group" aria-label="Weergave dagstart">
         {tabs.map((tab) => {
           const active = activeTab === tab.id;
 
@@ -11754,11 +11771,7 @@ export default function BakkerijLogistiekDashboard() {
               type="button"
               aria-pressed={active}
               onClick={() => setActiveTab(tab.id)}
-              className={`min-h-9 rounded-xl px-2 text-xs font-black tracking-normal transition ${
-                active
-                  ? "bg-[#1a1815] text-white"
-                  : "bg-white text-[#6b645b] hover:bg-[#faf8f5]"
-              }`}
+              className={styles.viewTab}
             >
               {tab.label}
             </button>
@@ -12827,23 +12840,37 @@ function RoutesPanel({
     <section className="grid gap-3">
       {addingRoute&&<AddRouteStopDialog route={addingRoute} departureMinute={addingDeparture} stops={addingRoute.stops.map(stop=>({id:stop.id,label:stop.label,address:stop.learningTarget||routeStopAddressLabel(stop),location:stop.location,serviceMinutes:estimatedServiceMinutes(stop),deadlineMinute:routeStopDeliveryTime(stop)?routePrintTimeMinutes(routeStopDeliveryTime(stop)):undefined})).map(stop=>({...stop,deadlineMinute:stop.deadlineMinute!==undefined&&stop.deadlineMinute<2880?stop.deadlineMinute:undefined}))} onAdd={(label,detail,smart)=>onRouteStopAdd(addingRoute.id,label,detail,smart)} onClose={()=>setAddingRouteId("")}/>}
 
-      <div className="flex min-h-8 flex-wrap items-center justify-between gap-2 px-1">
-        <h2 className="text-[0.68rem] font-bold uppercase tracking-[0.14em] text-[#52654f]">
-          Routeplanning
-        </h2>
-        {roadTimingMessage && <span role="status" className="text-[0.62rem] font-semibold text-[#6b645b]">{roadTimingMessage}</span>}
-        <div className="flex flex-wrap items-center justify-end gap-2">
+      <div className={styles.routeToolbar}>
+        <h2>Routeplanning</h2>
+        <div className={styles.departures} role="group" aria-label="Vertrektijdsuggesties">
+          {(["A", "B"] as BusId[]).map(bus => (
+            <label key={bus} className={styles.departure} title={`Vertrektijdsuggestie Bus ${bus} aanpassen`}>
+              <ClockIcon />
+              <span>Bus {bus}</span>
+              <input
+                type="time"
+                aria-label={`Vertrektijd Bus ${bus}`}
+                value={plannedBusDepartures[bus]}
+                onChange={event => onPlannedDepartureChange(bus, event.target.value)}
+              />
+            </label>
+          ))}
+          <details className={styles.roadInfo}>
+            <summary aria-label="Over de rijtijden" title="Over de rijtijden">i</summary>
+            <div>
+              Rijtijden zonder actuele files · OSRM / <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>
+            </div>
+          </details>
+        </div>
+        <div className={styles.routeActions}>
           {deletedRouteStopLabel && (
-            <button
-              type="button"
-              onClick={onRouteStopUndo}
-              className="min-h-8 rounded-lg border border-white/70 bg-white/55 px-2.5 text-xs font-bold tracking-normal text-[#4a4540] transition hover:bg-white"
-            >
+            <button type="button" onClick={onRouteStopUndo} className={styles.undoButton}>
               Ongedaan
             </button>
           )}
           <RouteConfirmButton
             disabled={!routeCanSave || routeSaveState === "saving"}
+            state={routeSaveState}
             onClick={onRoutesSave}
           />
           <RouteRecalculateButton
@@ -12851,13 +12878,10 @@ function RoutesPanel({
             onClick={onRoutesReset}
           />
         </div>
+        {roadTimingMessage && <span role="status" className={styles.roadMessage}>{roadTimingMessage}</span>}
         {(routeSaveState === "error" || routeSaveState === "saving") && (
-          <span
-            aria-live="polite"
-            className={`basis-full text-right text-[0.62rem] font-semibold italic ${
-              routeSaveState === "error" ? "text-[#9b2d1f]" : "text-[#6b645b]"
-            }`}
-          >
+          <span role={routeSaveState === "error" ? "alert" : "status"}
+            className={styles.saveMessage} data-error={routeSaveState === "error" || undefined}>
             {routeSaveMessage || "Route opslaan..."}
           </span>
         )}
@@ -12913,35 +12937,9 @@ function RoutesPanel({
         </section>
       )}
 
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[#d8d1c8] bg-white px-2.5 py-2 shadow-sm">
-        <span className="flex items-center gap-1.5 text-[0.66rem] font-black tracking-normal text-[#4a4540]">
-          <ClockIcon /> Vertrektijd
-        </span>
-        {(["A", "B"] as BusId[]).map((bus) => (
-          <label
-            key={bus}
-            className="flex items-center gap-1.5 text-[0.64rem] font-bold tracking-normal text-[#6b645b]"
-          >
-            Bus {bus}
-            <input
-              type="time"
-              value={plannedBusDepartures[bus]}
-              onChange={(event) =>
-                onPlannedDepartureChange(bus, event.target.value)
-              }
-              className="h-8 w-[5.6rem] rounded-md border border-[#d8d1c8] bg-[#faf8f5] px-2 text-xs font-black tabular-nums tracking-normal text-[#1a1815] outline-none focus:border-[#ef5737]"
-            />
-          </label>
-        ))}
-        <span className="text-[0.6rem] font-semibold italic tracking-normal text-[#7b746c]">
-          Rijtijden zonder actuele files · OSRM / <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="underline">OpenStreetMap</a>
-        </span>
-      </div>
-
-
       {routePrintBlockedReason && (
-        <p role="status" className="rounded-xl border border-[#ead7a6] bg-[#fff8e3] px-3 py-2 text-xs font-semibold text-[#7a5417]">
-          {routePrintBlockedReason}
+        <p role="status" className={styles.routeWarning}>
+          <WarningIcon /> <span>{routePrintBlockedReason}</span>
         </p>
       )}
       <div
@@ -14779,9 +14777,8 @@ function BatchDayButton({
       aria-pressed={active}
       disabled={disabled}
       onClick={onClick}
-      className={`min-w-[6.75rem] rounded-xl border px-3 py-2 text-left shadow-sm transition hover:brightness-[0.99] disabled:cursor-wait disabled:opacity-60 ${tone} ${
-        active ? "ring-2 ring-[#1a1815] ring-offset-1" : ""
-      }`}
+      title={`${label} · ${formatDateLabel(date)}${status ? ` · ${status}` : ""}`}
+      className={`${styles.dayButton} ${tone}`}
     >
       <span className="block text-sm font-black leading-none tracking-normal">
         {loading ? "Ophalen..." : label}
@@ -14889,33 +14886,42 @@ function RouteRecalculateButton({
       title="Herbereken automatisch"
       disabled={disabled}
       onClick={onClick}
-      className="flex h-8 items-center gap-1.5 rounded-lg border border-white/70 bg-white/55 px-2.5 text-xs font-bold tracking-normal text-[#4a4540] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+      className={styles.routeAction}
     >
       <RefreshIcon spinning={false} />
-      <span>Herbereken</span>
     </button>
   );
 }
 
 function RouteConfirmButton({
   disabled,
+  state,
   onClick,
 }: Readonly<{
   disabled: boolean;
+  state: RouteSaveState;
   onClick: () => void;
 }>) {
+  const saved = state === "saved";
+  const saving = state === "saving";
+  const label = saved ? "Route opgeslagen" : saving ? "Route opslaan…" : "Route opslaan";
   return (
-    <button
-      type="button"
-      aria-label="Route opslaan"
-      title="Route opslaan en routegeheugen bijwerken"
-      disabled={disabled}
-      onClick={onClick}
-      className="flex h-8 items-center gap-1.5 rounded-lg border border-[#abc6a8] bg-[#e4eee0] px-2.5 text-xs font-bold tracking-normal text-[#315641] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
-    >
-      <SaveIcon />
-      <span>Route opslaan</span>
-    </button>
+    <>
+      <button
+        type="button"
+        aria-label={label}
+        aria-busy={saving}
+        title={saved ? "Route opgeslagen" : "Route opslaan en routegeheugen bijwerken"}
+        disabled={disabled}
+        onClick={onClick}
+        className={styles.routeAction}
+        data-saved={saved || undefined}
+      >
+        {saved ? <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 4 4L19 6" /></svg>
+          : saving ? <RefreshIcon spinning /> : <SaveIcon />}
+      </button>
+      <span role="status" className="sr-only">{saved ? "Route opgeslagen" : ""}</span>
+    </>
   );
 }
 

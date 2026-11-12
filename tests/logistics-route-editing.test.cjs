@@ -153,3 +153,76 @@ test('verified road times survive route API save, reconciliation and a manual re
  assert.equal(restored[0].stops[0].location.id,'pdok-a');assert.equal(restored[0].stops[0].serviceMinutes,8);
  assert.equal(road.roadLegMinutes(restored[0].road,'__depot','manual-a',undefined,restored[0].stops[0].location),2);
 });
+
+function resetHarness(confirmed) {
+  const file = 'app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx';
+  const source = fs.readFileSync(file, 'utf8');
+  const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let node;
+  function visit(value) {
+    if (ts.isFunctionDeclaration(value) && value.name?.text === 'resetRouteDraft') node = value;
+    ts.forEachChild(value, visit);
+  }
+  visit(ast);
+  const code = ts.transpileModule(source.slice(node.pos, node.end), { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+  const events = [];
+  const context = {
+    window: { confirm: message => { events.push(['confirm', message]); return confirmed; } },
+    routeSaveQueueRef: { current: { invalidate: () => events.push(['invalidate']), settled: async () => events.push(['settled']) } },
+    pendingRouteDateRef: { current: '2026-11-12' },
+    routeRounds: automatic,
+    routeStopSourceKey: stop => stop.sourceId,
+    selectedPlan: { date: '2026-11-12' },
+    fetch: async (url, options) => {
+      events.push(['request', url, JSON.parse(options.body)]);
+      return { ok: true, json: async () => ({ ok: true, routeLearning: null }) };
+    },
+  };
+  for (const name of ['setManualRouteRounds', 'setExcludedRouteStopSourceIds', 'setDeletedRouteStopSnapshot', 'setRoutesEdited', 'setRouteHasUnsavedChanges', 'setRouteDraft', 'setRouteSaveState', 'setRouteSaveMessage', 'setRouteLearning']) {
+    context[name] = value => events.push([name, value]);
+  }
+  vm.runInNewContext(code + '\nthis.reset = resetRouteDraft;', context);
+  return { reset: context.reset, events, pending: context.pendingRouteDateRef };
+}
+
+test('cancelling route recalculation leaves the route, pending saves and stored draft untouched', async () => {
+  const harness = resetHarness(false);
+  await harness.reset();
+  assert.equal(harness.events.length, 1);
+  assert.equal(harness.events[0][0], 'confirm');
+  assert.match(harness.events[0][1], /Weet je zeker/);
+  assert.equal(harness.pending.current, '2026-11-12');
+});
+
+test('confirming route recalculation performs exactly one reset after waiting for pending writes', async () => {
+  const harness = resetHarness(true);
+  await harness.reset();
+  assert.deepEqual(harness.events.slice(0, 3).map(event => event[0]), ['confirm', 'invalidate', 'settled']);
+  const requests = harness.events.filter(event => event[0] === 'request');
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0][1], '/api/bakkerij-logistiek/route-draft');
+  assert.deepEqual(plain(requests[0][2]), { date: '2026-11-12', reset: true });
+  assert.ok(harness.events.some(event => event[0] === 'setRouteSaveMessage' && event[1].includes('automatische route actief')));
+});
+
+
+test('route action buttons are icon-only, retain accessible labels, and show success only after a confirmed save', () => {
+ const {renderToStaticMarkup}=require('react-dom/server');
+ const controls=load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx',{
+  './roadRouting':load('app/bakkerij/logistiek/roadRouting.ts'),
+  'react/jsx-runtime':require('react/jsx-runtime'),
+  './Dagstart.module.css':{default:{routeAction:'routeAction'}},
+ },'exports.saveButton=RouteConfirmButton;exports.resetButton=RouteRecalculateButton;');
+ const render=state=>renderToStaticMarkup(controls.saveButton({state,disabled:state==='saving',onClick(){}}));
+ assert.match(render('idle'),/aria-label="Route opslaan"/);
+ assert.doesNotMatch(render('idle'),/data-saved/);
+ assert.match(render('saving'),/aria-busy="true"/);
+ assert.doesNotMatch(render('error'),/data-saved/);
+ assert.match(render('saved'),/aria-label="Route opgeslagen"/);
+ assert.match(render('saved'),/data-saved="true"/);
+ assert.match(render('saved'),/role="status"/);
+ const reset=renderToStaticMarkup(controls.resetButton({disabled:false,onClick(){}}));
+ assert.match(reset,/aria-label="Herbereken automatisch"/);
+ assert.doesNotMatch(reset,/>Herbereken</);
+ assert.doesNotMatch(render('idle'),/>Route opslaan</);
+});

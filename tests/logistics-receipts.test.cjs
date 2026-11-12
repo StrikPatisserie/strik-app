@@ -11,7 +11,7 @@ function load(file, imports = {}, expose = '') {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
   new Function('require', 'exports', code + '\n' + expose)(name =>
-    name === 'server-only' ? {} : name === '@/app/bakkerij/logistiek/roadRouting' ? load('app/bakkerij/logistiek/roadRouting.ts') : imports[name] || require(name), exports);
+    name.endsWith('.module.css') ? {default:{}} : name === 'server-only' ? {} : name === '@/app/bakkerij/logistiek/roadRouting' ? load('app/bakkerij/logistiek/roadRouting.ts') : imports[name] || require(name), exports);
   return exports;
 }
 

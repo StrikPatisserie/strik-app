@@ -40,7 +40,8 @@ function printedRows(sheet) {
   return elements(sheet, node => node.type === 'tr' && node.props['data-special'] !== undefined).map(node => ({
     text: text(node),
     sources: Object.fromEntries(elements(node, child => child.type === 'td' && child.props['data-source']).map(cell => [cell.props['data-source'], Number(text(cell).replace('—', '0'))])),
-    total: Number(text(elements(node, child => child.type === 'td')[4])),
+    total: Number(text(elements(node, child => child.type === 'td')[4]).match(/Totaal (\d+)/)[1]),
+    remaining: Number(text(elements(elements(node, child => child.type === 'td')[4], child => child.type === 'strong')[0])),
   }));
 }
 
@@ -135,4 +136,51 @@ test('early production prints a provisional plan with its actual made and remain
  assert.match(content,/Voorlopig/);assert(!content.includes('Vastgezet'));
  const provisional=elements(sheet,node=>node.props['data-provisional']===true);
  assert.equal(provisional.length,1);assert.match(content,/Gemaakt360/);assert.match(content,/Nog te maken10/);
+});
+
+
+test('production print makes remaining work primary and keeps the original total and made count together', () => {
+  const source = {...batch, rows: [row({orders: 9, produced: 5, orderSources: {winkel: 1, online: 3, b2b: 5}})]};
+  const before = JSON.stringify(source);
+  const sheet = ProductionPrintSheet({batch: source});
+  const [printed] = printedRows(sheet);
+  assert.equal(printed.remaining, 4);
+  assert.equal(printed.total, 9);
+  assert.match(printed.text, /4Totaal 9 · 5 gemaakt/);
+  assert.deepEqual(printed.sources, {winkel: 1, voorraad: 0, online: 3, b2b: 5});
+  assert.equal(elements(sheet, node => node.type === 'th' && text(node) === 'Nog te maken').length, 1);
+  assert.equal(elements(sheet, node => node.props['aria-label'] === 'Nog af te vinken').length, 1);
+  assert.equal(JSON.stringify(source), before);
+});
+
+test('remaining print counts include stock and stay at zero for completed, surplus and cancelled rows', () => {
+  for (const [orders, stock, produced, remaining, complete] of [
+    [9, 0, 0, 9, false],
+    [7, 2, 5, 4, false],
+    [9, 0, 9, 0, true],
+    [9, 0, 11, 0, true],
+    [0, 0, 5, 0, false],
+  ]) {
+    const source = {...batch, rows: [row({orders, stock, produced, orderSources: {b2b: orders}})]};
+    const before = JSON.stringify(source);
+    const sheet = ProductionPrintSheet({batch: source});
+    const [printed] = printedRows(sheet);
+    assert.equal(printed.remaining, remaining);
+    assert.equal(printed.total, orders + stock);
+    assert(printed.text.includes(`Totaal ${orders + stock} · ${produced} gemaakt`));
+    assert.equal(elements(sheet, node => node.props['aria-label'] === 'Gereed').length, complete ? 1 : 0);
+    if (produced > orders + stock && orders + stock > 0) assert.match(printed.text, /2 te veel gemaakt/);
+    if (orders + stock === 0) assert.match(printed.text, /Vervallen bestelling · 5 al gemaakt/);
+    assert.equal(JSON.stringify(source), before);
+  }
+});
+
+test('surplus from a completed row never reduces the remaining work on a different letter', () => {
+  const sheet = ProductionPrintSheet({batch: {...batch, rows: [
+    row({orders: 9, produced: 12, orderSources: {b2b: 9}}),
+    row({key: 'a|melk|groot|spuit', label: 'A · melk · groot · spuit', orders: 9, produced: 5, orderSources: {b2b: 9}}),
+  ]}});
+  assert.deepEqual(printedRows(sheet).map(printed => printed.remaining), [4, 0]);
+  const summary = elements(sheet, node => node.type === 'div' && node.props.className === 'openTotal')[0];
+  assert.equal(text(summary), 'Nog te maken4');
 });
