@@ -24,6 +24,32 @@ test('long orders paginate before the bottom print margin and retain all product
  for(const row of drawnText.filter(row=>row.text.includes('Product ')))assert(row.y+17<=297*72/25.4-18*72/25.4,'Product line clears the bottom margin');
  if(process.env.PRINT_QA_OUTPUT)fs.writeFileSync('/tmp/strik-b2b-lang.pdf',bytes);
 });
+test('every A4 sheet starts 10 mm lower and preserves the footer clearance', async () => {
+  drawnText = [];
+  const lines = Array.from({ length: 85 }, (_, index) => ({
+    quantity: index + 1,
+    description: `Product ${index + 1} met een volledige lange omschrijving van het bestelde product en de verpakking.`,
+  }));
+  const blob = await prints.createOrderPrint({ ...source, lines }, {
+    format: 'a4', copies: 1, products: true,
+  });
+  const pdf = await PDFDocument.load(await blob.arrayBuffer());
+  const headings = drawnText.filter(row => row.text === 'VERDEELVEL' || row.text === 'VERDEELVEL · VERVOLG');
+  assert.equal(headings.length, pdf.getPageCount());
+  for (const heading of headings) {
+    assert(Math.abs(heading.y - 22 * 72 / 25.4) < .001, 'Every A4 heading starts at 22 mm');
+  }
+  for (const row of drawnText.filter(row => row.text.includes('Product '))) {
+    assert(row.y + 21 <= 261 * 72 / 25.4, 'Products stay above the reserved footer area');
+  }
+});
+
+test('Zebra customer headings keep their 3 mm top inset', async () => {
+  drawnText = [];
+  await prints.createOrderPrint(source, { format: 'zebra', copies: 1, products: true });
+  assert(Math.abs(drawnText[0].y - 3 * 72 / 25.4) < .001);
+});
+
 test('invalid copies and unknown/prototype format keys are rejected before rendering',()=>{
  for(const copies of [0,-1,1.5,101,NaN])assert.throws(()=>prints.validatePrintOptions({format:'a4',copies,products:true}));
  assert.throws(()=>prints.validatePrintOptions({format:'toString',copies:1,products:true}));

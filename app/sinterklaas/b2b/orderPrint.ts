@@ -31,6 +31,7 @@ export async function createOrderPrint(data: OrderPrintData, options: OrderPrint
   let context!: CanvasRenderingContext2D;
   let y = 0;
   const margin = (options.format === "a4" ? 12 : 3) * mm;
+  const topMargin = margin + (options.format === "a4" ? 10 * mm : 0);
   const available = width - margin * 2;
   function page() {
     const canvas = document.createElement("canvas");
@@ -39,7 +40,7 @@ export async function createOrderPrint(data: OrderPrintData, options: OrderPrint
     if (!context) throw Error("Dit apparaat kan het printvel niet maken.");
     context.scale(scale, scale); context.fillStyle = "white"; context.fillRect(0, 0, width, height);
     context.fillStyle = "black"; context.textBaseline = "top";
-    canvases.push(canvas); y = margin;
+    canvases.push(canvas); y = topMargin;
   }
   function font(size: number, bold = false) { context.font = `${bold ? 700 : 400} ${size}px Arial, sans-serif`; }
   function wrap(value: string, maxWidth = available) {
