@@ -82,15 +82,15 @@ function printRoute(db) {
 }
 const selection = () => ({ itemIds: [id], orders: [{ id: orderId, revision: 2 }], widthCm: 3, heightCm: 3 });
 const request = input => new Request('https://app.test/api/lettershop/logos/print', { method: 'POST', headers: { origin: 'https://app.test' }, body: JSON.stringify(input) });
-test('PDF generation uses authoritative quantities, customer and summary, and records no print receipt', async () => {
+test('PDF generation uses authoritative quantities, customer and order grouping, and records no print receipt', async () => {
   const db = repository();
   const response = await printRoute(db).POST(request({ ...selection(), quantity: 999, customer: 'forged' }));
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('X-Print-Job'), jobId);
   assert.equal(db.choices[0].quantity, 3);
   assert.equal(db.files[0].customer, 'Testklant');
-  assert.match(db.files[0].summary, /CL26-9999/);
-  assert.match(db.files[0].printSummary, /^CL26-9999.*3 × spuitletter S.*melk.*groot/);
+  assert.equal(db.files[0].orderId, orderId);
+  assert.equal(db.files[0].printSummary, undefined);
   assert.equal(db.printOptions.packGroups, true);
   assert.equal(db.jobs[0].created_by, actor);
   assert.equal(db.jobs[0].items[0].quantity, 3);
@@ -121,8 +121,22 @@ test('multiple customer selections reach one packed document with their own auth
   for (let index = 0; index < 9; index++) {
     assert.equal(db.choices[index].quantity, index + 1);
     assert.equal(db.files[index].customer, `Klant ${index + 1}`);
-    assert(db.files[index].printSummary.startsWith(`CL26-${index + 1} · `));
+    assert.equal(db.files[index].orderId, db.orders[index].id);
   }
+});
+test('one customer with matching logo files retains one confirmation snapshot per original product line', async () => {
+  const db = repository();
+  db.order.letter_order_items.push({ ...db.order.letter_order_items[0], id: second, quantity: 7, logo_storage_path: 'example/copy.png' });
+  const response = await printRoute(db).POST(request({ ...selection(), itemIds: [id, second] }));
+  assert.equal(response.status, 200);
+  assert.equal(db.files.length, 2);
+  assert.equal(db.files[0].orderId, db.files[1].orderId);
+  assert.equal(db.files[0].bytes_base64, db.files[1].bytes_base64);
+  assert.equal(db.jobs[0].items.length, 2);
+  assert.equal(db.jobs[0].items[0].item_id, id);
+  assert.equal(db.jobs[0].items[1].item_id, second);
+  assert.equal(db.jobs[0].items[0].quantity + db.jobs[0].items[1].quantity, 10);
+  assert.equal(db.receipts.length, 0);
 });
 test('server refuses stale selections, missing images, invalid sizes and unintended reprints', async () => {
   for (const variant of ['stale', 'missing', 'size', 'printed']) {

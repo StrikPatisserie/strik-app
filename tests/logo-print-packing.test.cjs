@@ -94,10 +94,11 @@ function fixtures(quantities) {
       content_type: 'image/png', bytes_base64: canvas.toBuffer('image/png').toString('base64') };
   });
 }
-test('real packed PDFs render every selected logo at 30 mm and show trusted customer/order headers on every sequence', async () => {
+function inspectRenderer() {
   const drawn = [];
   const titleText = [];
   const headerInk = [];
+  const frames = [];
   const renderer = load(base + 'print.server.ts', {
     'server-only': {}, './model': model, './packedLayout': packed,
     'pdf-lib': { ...pdfLib, PDFDocument: {
@@ -107,6 +108,8 @@ test('real packed PDFs render every selected logo at 30 mm and show trusted cust
         const addPage = pdf.addPage.bind(pdf);
         pdf.addPage = (...args) => {
           const page = addPage(...args);
+          const drawRectangle = page.drawRectangle.bind(page);
+          page.drawRectangle = options => { frames.push(options); drawRectangle(options); };
           const drawImage = page.drawImage.bind(page);
           page.drawImage = (image, options) => { drawn.push(options); drawImage(image, options); };
           return page;
@@ -132,17 +135,29 @@ test('real packed PDFs render every selected logo at 30 mm and show trusted cust
       return canvas;
     } },
   });
+  return { renderer, drawn, titleText, headerInk, frames };
+}
+test('real packed PDFs render exact-size logos with cutting frames and customer/count headers', async () => {
+  const { renderer, drawn, titleText, headerInk, frames } = inspectRenderer();
   for (const quantities of [Array(9).fill(1), Array(9).fill(8), [2, 12, 7]]) {
-    drawn.length = 0; titleText.length = 0; headerInk.length = 0;
+    drawn.length = 0; titleText.length = 0; headerInk.length = 0; frames.length = 0;
     const items = quantities.map((quantity, index) => choice(index, quantity));
     const bytes = await renderer.createLogoPrint(items, fixtures(quantities), 'Lettershop', { packGroups: true });
     const pdf = await pdfLib.PDFDocument.load(bytes);
     assert.equal(pdf.getPageCount(), new Set(packed.packedLogoPrintLayout(items).cells.map(cell => cell.page)).size);
     const logos = drawn.filter(rect => Math.abs(rect.height - 3 * 72 / 2.54) < .000001);
     assert.equal(logos.length, quantities.reduce((sum, quantity) => sum + quantity, 0));
-    for (let index = 0; index < quantities.length; index++) assert(titleText.some(text => text.includes(`CL26-${String(index + 1).padStart(4, '0')}`)));
+    for (let index = 0; index < quantities.length; index++) assert(titleText.some(text => text.includes(`${quantities[index]}× logo`)));
+    assert(!/CL26-|spuitletter|melk|groot/.test(titleText.join(' ')), 'order and product details stay off the print header');
+    assert.equal(frames.length, logos.length);
+    for (const [index, frame] of frames.entries()) {
+      for (const dimension of ['x', 'y', 'width', 'height']) assert.equal(frame[dimension], logos[index][dimension]);
+      assert.equal(frame.borderWidth, .4);
+      assert.deepEqual(frame.borderColor, pdfLib.rgb(.8, .8, .8));
+      assert.equal(frame.color, undefined, 'cutting frames have no fill over the logo');
+    }
     if (quantities.length > 3) assert.match(titleText.join(' '), /Wildenberg Advocaten/);
-    assert(headerInk.every(ink => ink > 2000), 'customer/order text produces visible print pixels even without system fonts');
+    assert(headerInk.every(ink => ink > 2000), 'customer/count text produces visible print pixels even without system fonts');
     assert.match(titleText.join(' '), /Mondzorg Lindenholt/);
     for (const page of pdf.getPages()) {
       assert(Math.abs(page.getWidth() - 210 * 72 / 25.4) < .000001);
@@ -154,4 +169,38 @@ test('real packed PDFs render every selected logo at 30 mm and show trusted cust
       fs.writeFileSync(path.join(process.env.STRIK_LOGO_TEST_PDF_DIR, `lettershop-${quantities.length === 3 ? 'separate-order-blocks' : quantities[0] === 1 ? 'nine-customers' : 'multiple-pages'}.pdf`), bytes);
     }
   }
+});
+
+test('identical logo contents on different product lines combine per order while receipts retain their original lines', async () => {
+  const { renderer, drawn, titleText, frames } = inspectRenderer();
+  const items = [choice(0, 2), choice(1, 3), choice(2, 5), choice(3, 3), choice(4, 2)];
+  const files = fixtures(items.map(item => item.quantity));
+  for (let index = 0; index < files.length; index++) {
+    files[index].orderId = index < 4 ? id(100) : id(101);
+    files[index].customer = index < 4 ? 'Rudi Wilders' : 'Regina';
+    if (index !== 3) files[index].bytes_base64 = files[0].bytes_base64;
+  }
+  const before = JSON.stringify({ items, files });
+  const bytes = await renderer.createLogoPrint(items, files, 'Lettershop', { packGroups: true });
+  const pdf = await pdfLib.PDFDocument.load(bytes);
+  assert.equal(pdf.getPageCount(), 1);
+  assert.deepEqual(titleText, ['Rudi Wilders, 10× logo', 'Rudi Wilders, 3× logo', 'Regina, 2× logo']);
+  assert.equal(frames.length, 15);
+  assert.equal(drawn.length, 15 + 3, 'one header per customer/logo sequence');
+  assert.equal(JSON.stringify({ items, files }), before, 'original individual receipt IDs and quantities stay intact');
+  if (process.env.STRIK_LOGO_TEST_PDF_DIR) fs.writeFileSync(path.join(process.env.STRIK_LOGO_TEST_PDF_DIR, 'lettershop-grouped-logos.pdf'), bytes);
+});
+test('grouping keeps distinct orders, unknown order identities and sizes separate and validates original selections', async () => {
+  const { renderer, titleText, frames } = inspectRenderer();
+  const items = [choice(0, 2), choice(1, 3), choice(2, 1, 4, 4), choice(3, 1), choice(4, 1)];
+  const files = fixtures(items.map(item => item.quantity));
+  for (let index = 0; index < files.length; index++) {
+    files[index].customer = 'Zelfde klantnaam';
+    files[index].bytes_base64 = files[0].bytes_base64;
+    if (index < 3) files[index].orderId = id(index === 1 ? 101 : 100);
+  }
+  await renderer.createLogoPrint(items, files, 'Lettershop', { packGroups: true });
+  assert.equal(titleText.length, 5, 'matching customer names alone never merge orders or sizes');
+  assert.equal(frames.filter(frame => Math.abs(frame.width - 4 * 72 / 2.54) < .000001).length, 1);
+  await assert.rejects(renderer.createLogoPrint([choice(0), choice(0)], files, 'Lettershop', { packGroups: true }), /Controleer/);
 });

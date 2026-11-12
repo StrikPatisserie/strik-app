@@ -1,12 +1,13 @@
 import "server-only";
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
-import { PDFDocument, PrintScaling, type PDFImage, type PDFEmbeddedPage } from "pdf-lib";
+import { PDFDocument, PrintScaling, rgb, type PDFImage, type PDFEmbeddedPage } from "pdf-lib";
 import { createCanvas, GlobalFonts, loadImage, DOMMatrix, ImageData, Path2D, type SKRSContext2D } from "@napi-rs/canvas";
-import { logoPrintLayout, type PrintLogo } from "./model";
+import { logoPrintLayout, validateLogoPrintItems, type PrintLogo } from "./model";
 import { packedLogoPrintLayout } from "./packedLayout";
 
-type FileLogo = { id: string; name?: string; customer?: string; summary?: string; printSummary?: string; content_type: string; bytes_base64: string };
+type FileLogo = { id: string; orderId?: string; name?: string; customer?: string; summary?: string; content_type: string; bytes_base64: string };
 const cm = 72 / 2.54;
 let fontsReady = false;
 
@@ -107,7 +108,7 @@ function headerLines(context: SKRSContext2D, text: string, width: number) {
   return lines;
 }
 
-async function packedPrintHeader(customer: string, file: FileLogo, thumbnail: Buffer, widthCm: number, heightCm: number) {
+async function packedPrintHeader(customer: string, file: FileLogo, quantity: number, thumbnail: Buffer, widthCm: number, heightCm: number) {
   const pixelsPerCm = 120;
   const canvas = createCanvas(Math.round(widthCm * pixelsPerCm), Math.round(heightCm * pixelsPerCm));
   const context = canvas.getContext("2d");
@@ -117,7 +118,7 @@ async function packedPrintHeader(customer: string, file: FileLogo, thumbnail: Bu
   context.drawImage(await loadImage(thumbnail), 0, 5, thumbnailSize, thumbnailSize);
   const textX = thumbnailSize + 10;
   const textWidth = canvas.width - textX - 4;
-  const title = (file.customer || customer).replace(/\s+/g, " ").trim();
+  const title = `${(file.customer || customer).replace(/\s+/g, " ").trim()}, ${quantity}× logo`;
   let titleSize = 52;
   let titleLines: string[];
   do {
@@ -132,26 +133,33 @@ async function packedPrintHeader(customer: string, file: FileLogo, thumbnail: Bu
     context.fillText(line, textX, baseline, textWidth);
     baseline += titleSize + 2;
   }
-  baseline -= titleSize + 2;
-  context.font = "36px StrikLogoRegular";
-  const summary = file.printSummary || file.summary || file.name || "Logo";
-  const lines = headerLines(context, summary, textWidth);
-  const availableLines = Math.max(1, Math.floor((canvas.height - 7 - baseline - 38) / 38) + 1);
-  for (let index = 0; index < Math.min(lines.length, availableLines); index++) {
-    let line = lines[index];
-    if (index === availableLines - 1 && lines.length > availableLines) line += "…";
-    context.fillText(line, textX, baseline + 38, textWidth);
-    baseline += 38;
-  }
   context.fillStyle = "#aaa";
   context.fillRect(0, canvas.height - 3, canvas.width, 1);
   return canvas.toBuffer("image/png");
 }
 
+function groupCustomerLogos(items: PrintLogo[], files: FileLogo[]) {
+  validateLogoPrintItems(items);
+  const groups = new Map<string, PrintLogo>();
+  for (const item of items) {
+    if (item.quantity === 0) continue;
+    const file = files.find(file => file.id === item.id);
+    if (!file) throw Error("Een gekozen logo is niet meer beschikbaar. Vernieuw de lijst.");
+    const digest = createHash("sha256").update(Buffer.from(file.bytes_base64, "base64")).digest("hex");
+    // Keep different orders and print sizes separate, even when their logo matches.
+    const key = JSON.stringify([file.orderId || file.id, file.customer, digest, item.width_cm, item.height_cm]);
+    const group = groups.get(key);
+    if (group) group.quantity += item.quantity;
+    else groups.set(key, { ...item });
+  }
+  return [...groups.values()];
+}
+
 export async function createLogoPrint(items: PrintLogo[], files: FileLogo[], customer: string, options: { packGroups?: boolean } = {}) {
   if (!customer?.trim()) throw Error("De klantnaam kon niet worden geladen. Vernieuw de bestelling.");
   registerPrintFonts();
-  const packed = options.packGroups ? packedLogoPrintLayout(items) : null;
+  const printItems = options.packGroups ? groupCustomerLogos(items, files) : items;
+  const packed = options.packGroups ? packedLogoPrintLayout(printItems) : null;
   const layout = packed?.cells || logoPrintLayout(items);
   const pdf = await PDFDocument.create();
   const images = new Map<string, PDFImage | PDFEmbeddedPage>();
@@ -202,13 +210,18 @@ export async function createLogoPrint(items: PrintLogo[], files: FileLogo[], cus
     };
     if (files.find(file => file.id === cell.id)?.content_type === "application/pdf") page.drawPage(image as PDFEmbeddedPage, options);
     else page.drawImage(image as PDFImage, options);
+    if (packed) page.drawRectangle({
+      x: cell.x * cm, y: (29.7 - cell.y - cell.height) * cm,
+      width: cell.width * cm, height: cell.height * cm,
+      borderColor: rgb(.8, .8, .8), borderWidth: .4,
+    });
   }
   for (const header of packed?.headers || []) {
     const key = `${header.id}:${header.width}`;
     let image = headers.get(key);
     if (!image) {
       const file = files.find(file => file.id === header.id)!;
-      image = await pdf.embedPng(await packedPrintHeader(customer, file, thumbnails.get(header.id)!, header.width, header.height));
+      image = await pdf.embedPng(await packedPrintHeader(customer, file, printItems.find(item => item.id === header.id)!.quantity, thumbnails.get(header.id)!, header.width, header.height));
       headers.set(key, image);
     }
     pdf.getPage(header.page).drawImage(image, { x: header.x * cm, y: (29.7 - header.y - header.height) * cm,

@@ -1,8 +1,8 @@
 import { createCanvas, ImageData } from "@napi-rs/canvas";
 import { logoAccess, logoHeaders, uuid } from "@/app/sinterklaas/letters/online/logos/access.server";
 import { loadLogoReceipts, logoOrderSelect } from "@/app/sinterklaas/letters/online/logos/data.server";
-import { logoItemPrinted, logoItems, logoOrderSummary, type LogoPrintSnapshot } from "@/app/sinterklaas/letters/online/logos/model";
-import { onlineItemLabel, type OnlineLetterOrder } from "@/app/sinterklaas/letters/online/onlineOrders";
+import { logoItemPrinted, logoItems, type LogoPrintSnapshot } from "@/app/sinterklaas/letters/online/logos/model";
+import { type OnlineLetterOrder } from "@/app/sinterklaas/letters/online/onlineOrders";
 import { createLogoPrint } from "@/app/sinterklaas/b2b/logos/print.server";
 import { packedLogoPrintLayout } from "@/app/sinterklaas/b2b/logos/packedLayout";
 export const dynamic = "force-dynamic";
@@ -42,8 +42,7 @@ export async function POST(request: Request) {
         snapshots.push({ item_id: item.id, order_id: order.id, revision: order.revision, quantity: item.quantity,
           product_id: item.product_id, logo_storage_path: item.logo_storage_path });
         choices.push({ id: item.id, quantity: item.quantity, width_cm: input.widthCm, height_cm: input.heightCm });
-        files.push({ id: item.id, customer: order.customer_name, summary: `${onlineItemLabel(item)} — ${logoOrderSummary(order)}`,
-          printSummary: `${order.order_number} · ${onlineItemLabel(item).replace(/ · foto\/logo$/, "")}`,
+        files.push({ id: item.id, orderId: order.id, customer: order.customer_name,
           content_type: "", bytes_base64: "", path: item.logo_storage_path });
       }
     }
