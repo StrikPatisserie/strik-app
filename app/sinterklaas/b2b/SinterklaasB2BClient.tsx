@@ -1764,6 +1764,9 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
     ? order.sourceDeliveryDate ? "Historische notatie" : order.deliveryDate ? "Datum controleren" : "Nog af te spreken"
     : order.deliveryWindowType === "date" ? "Vaste datum" : order.deliveryWindowType === "week" ? "Leverweek" : "Gewenste periode";
   const warnings = orderWarnings(order);
+  const decoratedLetters = order.letterLines.filter(line => b2bLetterDecoration(line));
+  const decoratedQuantity = b2bLetterTotal(decoratedLetters);
+  const decoratedLogoQuantity = b2bLetterTotal(decoratedLetters.filter(line => b2bLetterHasLogo(order, line)));
   const confirmationNeedsAttention = order.status === "akkoord" && (!order.confirmationEmailedAt || Boolean(order.confirmationEmailError)) && Boolean(order.deliveryDate) && order.deliveryDate >= todayIso() && !archived;
   const folderProductsText = order.orderText.match(/(?:GEKOZEN SINTERKLAASPRODUCTEN|LOSSE KERSTCADEAUS|KERSTPAKKET OP MAAT)\s+([\s\S]*?)(?:PRIJSINDICATIE|GEWENSTE LEVERING|WENSEN|$)/i)?.[1]?.trim();
   const orderSummary = group && groupMatches
@@ -1786,7 +1789,16 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
           {made && <span className={styles.madeCheck} role="img" aria-label="Gemaakt" title="Gemaakt"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg></span>}
           <span className={styles.customerName}>{order.customerName}</span>{!archived&&(logoOrderRequested(order)||expanded)&&<OrderLogos orderId={order.id} year={order.year} customer={order.customerName} printComplete={order.logoPrintComplete} missing={logoOrderRequested(order)&&order.logoAttachmentCount===0} onCountChange={(count,printed)=>onLogoCount(order.id,count,printed)}/>}</h3>
         <p className={styles.orderProduct}><B2BProductText text={orderSummary || "Bestelling nog invullen"} /></p>
-        {order.letterLines.filter(line => line.decoration?.trim()).map(line => <p key={line.id} className={styles.decorationFlag}>{line.quantity}× {line.letter} · {line.chocolate} · {line.size} · Decoratie · {line.decoration}</p>)}
+        {decoratedQuantity > 0 && <button
+          type="button"
+          className={styles.decorationSummary}
+          aria-label={`Letterdetails ${order.customerName}`}
+          aria-expanded={expanded}
+          onClick={() => setExpanded(!expanded)}
+        >
+          <span>{decoratedQuantity} {decoratedQuantity === 1 ? "letter" : "letters"}{decoratedLogoQuantity > 0 && ` · ${decoratedLogoQuantity === decoratedQuantity ? "met logo" : `${decoratedLogoQuantity} met logo`}`} · decoratie-opmerking</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d={expanded ? "m6 15 6-6 6 6" : "m6 9 6 6 6-6"} /></svg>
+        </button>}
         {hasIndividualGiftWrap(order.packaging) && <p className={styles.giftWrapFlag}>Apart in cadeaupapier</p>}
         <p className={styles.delivery}>{order.deliveryMethod || "Levering nog afspreken"}{order.season === "sint-kerst" ? " · Sint & Kerst" : ""}</p>
         {!archived&&!order.cancelled&&logoOrderRequested(order)&&order.logoAttachmentCount===0&&<p className={styles.warning} style={{color:"#b23827"}}>! Nog geen logo geüpload — controleer</p>}

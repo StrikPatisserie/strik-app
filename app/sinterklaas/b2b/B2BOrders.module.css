@@ -486,4 +486,6 @@
 .decorationField { display: grid; gap: .2rem; margin-top: .4rem; font-size: .75rem; color: #705000; }
 .decorationField input { width: 100%; min-width: 0; padding: .35rem .5rem; border: 1px solid #d5c699; border-radius: .4rem; background: #fffcf2; color: #302827; font: inherit; }
 .decorationNote { color: #705000; font-weight: 600; }
-.decorationFlag { margin: .25rem 0; padding: .2rem .4rem; width: fit-content; border: 1px solid #d5bc7a; border-radius: .3rem; background: #fff7df; color: #705000; font-size: .75rem; font-weight: 600; }
+.decorationSummary { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 24px; margin-top: 3px; padding: 2px 6px; border: 1px solid #d5bc7a; border-radius: 4px; background: #fff7df; color: #705000; font-size: 11px; font-weight: 500; line-height: 1.35; text-align: left; }
+.decorationSummary svg { flex-shrink: 0; }
+.decorationSummary:hover { background: #fff0c6; }

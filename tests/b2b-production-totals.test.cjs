@@ -89,6 +89,43 @@ test('B2B handling shows only entered, made and delivered controls', () => {
   for (const label of ['In Bake-it ingevoerd', 'Gemaakt', 'Geleverd']) assert(detail.includes(label));
   for (const removed of ['Overig geproduceerd', 'Geproduceerd', 'Letters geproduceerd', 'Ingepakt', 'Logo gecontroleerd', 'Tekst gecontroleerd', 'Verpakking gecontroleerd', 'Tekst nog niet gecontroleerd', 'Verpakking nog niet gecontroleerd']) assert(!detail.includes(removed), removed);
 });
+test('decorated B2B letters stay behind one compact summary and retain their full details when expanded', () => {
+  const React = require('react');
+  const base = { letter: 'S', style: 'spuit', size: 'groot', chocolate: 'melk', exceptions: [], decoration: 'Blauwe balletjes, geen rood' };
+  const decoratedOrder = order({ logo: 'Eigen logo', letterLines: [
+    { ...base, id: 'first', quantity: 10, withLogo: true },
+    { ...base, id: 'second', quantity: 15, letter: 'A', withLogo: true },
+    { ...base, id: 'standard', quantity: 3, decoration: '', withLogo: false },
+  ] });
+  const props = { order: decoratedOrder, updatingId: '', onToggle() {}, onEdit() {}, onDelete() {},
+    onRetryConfirmation() {}, onCustomerConfirmation() {}, onQuotation() {}, onApprove() {}, onLogoCount() {} };
+  const { B2BOrderRow } = load('app/sinterklaas/b2b/SinterklaasB2BClient.tsx');
+  const collapsed = renderToStaticMarkup(React.createElement(B2BOrderRow, props));
+  assert.equal((collapsed.match(/class="decorationSummary"/g) || []).length, 1);
+  assert.match(collapsed, /25 letters · met logo · decoratie-opmerking/);
+  assert.match(collapsed, /aria-label="Letterdetails Klant A" aria-expanded="false"/);
+  assert(!collapsed.includes('Blauwe balletjes'));
+
+  let stateIndex = 0;
+  const expanded = loader({ react: { ...React, useState(initial) {
+    return [stateIndex++ === 0 ? true : typeof initial === 'function' ? initial() : initial, () => {}];
+  } } })('app/sinterklaas/b2b/SinterklaasB2BClient.tsx').B2BOrderRow;
+  const detail = renderToStaticMarkup(React.createElement(expanded, props));
+  assert.match(detail, /aria-label="Letterdetails Klant A" aria-expanded="true"/);
+  assert.match(detail, /Decoratie · Blauwe balletjes, geen rood/);
+  assert.match(detail, /10× S/);
+  assert.match(detail, /15× A/);
+
+  const mixed = renderToStaticMarkup(React.createElement(B2BOrderRow, { ...props, order: {
+    ...decoratedOrder, letterLines: [{ ...base, id: 'logo', quantity: 2 }, { ...base, id: 'plain', quantity: 3, withLogo: false }],
+  } }));
+  assert.match(mixed, /5 letters · 2 met logo · decoratie-opmerking/);
+  const single = renderToStaticMarkup(React.createElement(B2BOrderRow, { ...props, order: {
+    ...decoratedOrder, logo: '', letterLines: [{ ...base, id: 'plain', quantity: 1, withLogo: false }],
+  } }));
+  assert.match(single, /1 letter · decoratie-opmerking/);
+  assert(!single.includes('met logo'));
+});
 test('delivered B2B rows are visibly completed while production-only and cancelled orders retain their own presentation', () => {
   const { B2BOrderRow } = load('app/sinterklaas/b2b/SinterklaasB2BClient.tsx');
   function row(input) {
