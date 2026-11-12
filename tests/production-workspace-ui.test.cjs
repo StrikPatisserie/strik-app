@@ -459,6 +459,31 @@ test('the compact planning form foregrounds product, quantity and day while opti
  assert(result.tasks.some(task=>task.generatedFor===submitted[0].task.id),'The compact outline still schedules actual preparation tasks');
 });
 
+test('preparation days can be cleared and retyped without resetting the input or hiding recipe rows',()=>{
+ const h=harness();let tree=xl(h);
+ button(tree,'Inplannen').props.onClick();tree=h.render(h.Component);
+ const form=find(tree,node=>typeof node.type==='function'&&!!node.props.onPlan);
+ const render=()=>h.render(form.type,form.props,tree.props.value);
+ let view=render();find(view,node=>node.type===h.pickerWidget).props.onChange('fruit');
+ view=render();
+ const label='Dagen ervoor Vanillecrème';
+ const input=()=>find(view,node=>node.type==='input'&&node.props['aria-label']===label);
+ const advancedDate=()=>find(view,node=>node.type==='input'&&node.props['aria-label']==='Productiedatum Vanillecrème');
+ const type=value=>{input().props.onChange({target:{value}});view=render();};
+ const blur=()=>{input().props.onBlur({target:{value:String(input().props.value)}});view=render();};
+ assert.equal(input().props.value,0);
+ type('');assert.equal(input().props.value,'');assert(text(view).includes('Vanillecrème'));
+ type('1');assert.equal(input().props.value,'1');assert.equal(advancedDate().props.value,planning.addDays(sample.DEMO_TODAY,-1));
+ type('12');assert.equal(input().props.value,'12');assert.equal(advancedDate().props.value,planning.addDays(sample.DEMO_TODAY,-12));
+ type('31');assert.equal(input().props.value,'31');assert.equal(advancedDate().props.value,planning.addDays(sample.DEMO_TODAY,-12));
+ type('2');blur();assert.equal(input().props.value,2);assert.equal(advancedDate().props.value,planning.addDays(sample.DEMO_TODAY,-2));
+ type('');blur();assert.equal(input().props.value,0);assert.equal(advancedDate().props.value,sample.DEMO_TODAY);
+ type('3');advancedDate().props.onChange({target:{value:planning.addDays(sample.DEMO_TODAY,-5)}});view=render();
+ assert.equal(input().props.value,5,'An explicit date refreshes the days shown');
+ blur();assert.equal(advancedDate().props.value,planning.addDays(sample.DEMO_TODAY,-5),'Focusing an unchanged field keeps the explicit date');
+ find(view,node=>node.type===h.pickerWidget).props.onChange('fruit');view=render();assert.equal(input().props.value,0,'Selecting a recipe starts fresh');
+});
+
 test('global planning follows the selected product department while a day-cell plus keeps its chosen day and row',()=>{
  const live={state:sample.initialPreviewState(),today:sample.DEMO_TODAY,recipes:sample.demoRecipes,ingredients:[],canManage:true,departments:planning.DEPARTMENTS.map(department=>department.id),revision:1};
  for(const clicked of [false,true]){

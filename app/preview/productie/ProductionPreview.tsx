@@ -701,6 +701,7 @@ function TaskForm({ combineDefault=false, state, initial, today, onClose, onPlan
   const [combine,setCombine]=useState(settings?.preparation?.combine ?? combineDefault);
   const daysBefore=settings?.preparation?.daysBefore ?? 0;
   const [choices,setChoices]=useState<Record<string,PreparationChoice>>(() => settings?.preparation?.choices || defaultPreparationChoices(recipeList, initialRecipe?.id));
+  const [dayInputs,setDayInputs]=useState<Record<string,string>>({});
   const item=state.items.find(i=>i.id===itemId),recipe=recipeList.find(r=>r.id===item?.recipeId);
   const pickerItems = useMemo(() => {
     const recipes = new Map(recipeList.map(candidate => [candidate.id, candidate]));
@@ -737,10 +738,35 @@ function TaskForm({ combineDefault=false, state, initial, today, onClose, onPlan
   const formContext=fromCell ? [categoryContext,dateLabel(date,true)].filter(Boolean).join(" · ") : categoryContext || undefined;
   const dateField=<label className={s.field}>Productiedatum<input type="date" required value={date} min={prior?.date} onChange={e=>setDate(e.target.value)}/></label>;
   const existingOutput=prior && state.tasks.some(t=>t.batchId===prior.batchId && t.recordsOutput);
-  const updateChoice=(id:string,change:PreparationChoice)=>{setError("");setChoices(current=>({...current,[id]:{...current[id],...change}}));};
+  const clearDayInput=(id:string)=>setDayInputs(current=>{
+    const next={...current};
+    delete next[id];
+    return next;
+  });
+  const updateChoice=(id:string,change:PreparationChoice)=>{
+    setError("");
+    if(change.date!==undefined)clearDayInput(id);
+    setChoices(current=>({...current,[id]:{...current[id],...change}}));
+  };
+  function changePreparationDays(id:string,value:string) {
+    setDayInputs(current=>({...current,[id]:value}));
+    const days=Number(value);
+    if(value!=="" && Number.isInteger(days) && days>=0 && days<=30) {
+      updateChoice(id,{date:undefined,daysBefore:days});
+    }
+  }
+  function finishPreparationDays(id:string,value:string) {
+    if(dayInputs[id]===undefined)return;
+    const days=Number(value);
+    if(Number.isInteger(days) && days>=0 && days<=30) {
+      updateChoice(id,{date:undefined,daysBefore:days});
+      clearDayInput(id);
+    }
+  }
   function chooseItem(id:string) {
     const selected=state.items.find(i=>i.id===id),recipe=recipeList.find(r=>r.id===selected?.recipeId);
     setItemId(id);
+    setDayInputs({});
     setAmount("1");
     setAmountMode(!prior && selected?.kind!=="activity" && recipe && recipe.yield>0 ? "batches" : "quantity");
     setCustomOperation(null);setExtraOperations([]);setEstimatedMinutes("");setChoices(defaultPreparationChoices(recipeList, recipe?.id));setError("");
@@ -783,7 +809,7 @@ function TaskForm({ combineDefault=false, state, initial, today, onClose, onPlan
               const leadDays=Math.round((Date.parse(row.latestDate)-Date.parse(row.date))/86400000);
               return <div className={`${s.preparationRow} ${!row.included?s.preparationExcluded:""} ${dateInvalid?s.preparationInvalid:""}`} key={row.recipeId}>
                 <label className={s.preparationName}><input type="checkbox" aria-label={`Meemaken: ${row.name}`} checked={row.included} onChange={e=>updateChoice(row.recipeId,{include:e.target.checked})}/><span><strong>{row.name}</strong><small>{quantity(row.quantity)} {row.unit}</small></span></label>
-                <label className={s.preparationDays}><input type="number" min="0" max="30" step="1" required disabled={!row.included} aria-label={`Dagen ervoor ${row.name}`} value={leadDays} onChange={e=>updateChoice(row.recipeId,{date:undefined,daysBefore:Number(e.target.value)})}/><span>dagen ervoor</span></label>
+                <label className={s.preparationDays}><input type="number" min="0" max="30" step="1" required disabled={!row.included} aria-label={`Dagen ervoor ${row.name}`} inputMode="numeric" value={dayInputs[row.recipeId]??leadDays} onChange={e=>changePreparationDays(row.recipeId,e.target.value)} onBlur={e=>finishPreparationDays(row.recipeId,e.target.value)}/><span>dagen ervoor</span></label>
                 <details className={s.preparationOptions}>
                   <summary aria-label={`Extra instellingen ${row.name}`}><Icon name="settings" size={15}/></summary>
                   <div className={s.formGrid}>
