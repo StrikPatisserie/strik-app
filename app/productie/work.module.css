@@ -5,7 +5,7 @@
 .panel .stockCheck{display:flex;align-items:flex-start;gap:8px;font-size:12px;line-height:1.5}
 .panel .stockCheck input{width:18px;height:18px;flex:0 0 18px;margin:0;padding:0;accent-color:#1b3344}
 .plannedEstimate{padding:10px 12px;background:#fff;border:1px solid #d3decf;border-radius:6px}.plannedEstimate small{margin-top:3px;color:#607154}
-.quick{display:grid;gap:15px;margin:0;border:0;background:white;padding:20px 24px}.quickQuantity{margin:0;font-weight:650}.quick .buttons{justify-content:flex-end}.quick .numbers input{font-size:20px}
+.quick{display:grid;gap:15px;margin:0;border:0;background:white;padding:20px 24px}.quickQuantity{margin:0;font-weight:650}.quick .buttons{justify-content:flex-end}.quick .numbers input{font-size:16px}
 
 .correction{width:100%;margin:0}.correction>p{margin:0}.correction .numbers input{font-size:16px}.correction .buttons{justify-content:flex-end}
 
@@ -17,3 +17,5 @@
 .panel .completionActions .adjust:hover:not(:disabled){color:#1b3344;text-decoration:underline;text-underline-offset:3px}
 .panel .completionActions .primary{flex:1 0 136px;min-height:44px;margin-left:auto;border:1px solid #1b3344;background:#1b3344;color:#fff;font-weight:650}
 .panel .completionActions .primary:hover:not(:disabled){border-color:#2d4c61;background:#2d4c61}
+
+.batchButtons{display:flex;flex-wrap:wrap;gap:6px}.panel .batchButtons button{min-height:34px;padding:6px 10px;font-size:12px}.quick .numbers{gap:12px}

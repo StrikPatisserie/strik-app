@@ -1,6 +1,6 @@
 "use client";
 import {useEffect,useState} from 'react';
-import type {DemoRecipe,Item,PreviewState,Task} from './planning';
+import {convertRecipeQuantity,type DemoRecipe,type Item,type PreviewState,type Task} from './planning';
 import {elapsedMilliseconds,learnedWorkEstimate,timerLabel,workView,type WorkCommand} from './productionWork';
 import Icon from './ProductionIcon';
 import CompletedQuantityForm from './CompletedQuantityForm';
@@ -15,6 +15,12 @@ export function WorkClock({state,taskId}:{state:PreviewState;taskId:string}){
 export default function TaskWorkPanel({state,task,item,recipes,busy,onCommand}:{state:PreviewState;task:Task;item:Item;recipes:DemoRecipe[];busy:boolean;onCommand:(command:WorkCommand)=>Promise<string|undefined>}){
  const timer=state.productionWork?.timers?.[task.id],completion=state.productionWork?.completions?.[task.id];
  const stock=state.productionWork?.stockFulfillments?.[task.id];
+ const recipe=state.productionWork?.overrides?.[task.id]||recipes.find(recipe=>recipe.id===item.recipeId);
+ let baseQuantity:number|undefined;
+ if(recipe&&recipe.yield>0){
+  try{baseQuantity=convertRecipeQuantity(recipe.yield,recipe.unit,item.unit);}
+  catch{ /* Only offer base recipes when their yield matches the task unit. */ }
+ }
  const [who,setWho]=useState(timer?.who||''),[crew,setCrew]=useState(String(timer?.crewSize??1));
  const [checking,setChecking]=useState(false),[enteredMinutes,setMinutes]=useState<string|null>(null),[quantity,setQuantity]=useState(String(task.quantity)),[error,setError]=useState('');
  const [correctingQuantity,setCorrectingQuantity]=useState(false);
@@ -51,7 +57,7 @@ export default function TaskWorkPanel({state,task,item,recipes,busy,onCommand}:{
   {task.status==='done'?<div className={s.done}>
    <Icon name="check"/>Klaar{stock?<span> · uit voorraad · {stockNumber(stock.quantity)} {stock.unit} · {stock.who}<small>{stockNumber(stock.countedQuantity)} geteld − {stockNumber(stock.quantity)} gebruikt = {stockNumber(stock.remainingQuantity)} over</small></span>:<span> · {stockNumber(task.completedQuantity??completion?.quantity??task.quantity)} {item.unit}{completion&&<> · {number(completion.minutes)} min{completion.crewSize!==undefined&&<> × {completion.crewSize} pers. = {number(completion.laborMinutes!)} arbeidsmin</>} · {completion.who}</>}</span>}
    {!stock&&<><button disabled={busy} onClick={()=>setCorrectingQuantity(true)}>Aantal corrigeren</button><button disabled={busy} onClick={()=>void act({kind:'reopen',taskId:task.id})}>Heropen</button></>}
-   {correctingQuantity&&!stock&&<CompletedQuantityForm key={task.id} task={task} item={item} busy={busy} onCommand={onCommand} onClose={()=>setCorrectingQuantity(false)}/>}
+   {correctingQuantity&&!stock&&<CompletedQuantityForm key={task.id} task={task} item={item} recipe={recipe} busy={busy} onCommand={onCommand} onClose={()=>setCorrectingQuantity(false)}/>}
   </div>:countingStock?<form className={s.confirm} onSubmit={async event=>{
    event.preventDefault();
    if(stockConfirmed&&!await act({kind:'stock',taskId:task.id,who,countedQuantity:countedStock,confirmed:true}))setCountingStock(false);
@@ -72,6 +78,9 @@ export default function TaskWorkPanel({state,task,item,recipes,busy,onCommand}:{
     <label>Werktijd (minuten)<input required disabled={busy} inputMode="decimal" value={minutes} onChange={event=>setMinutes(event.target.value)}/></label>
     <label>Gemaakt ({item.unit})<input required disabled={busy} inputMode="decimal" value={quantity} onChange={event=>setQuantity(event.target.value)}/></label>
    </div>
+   {baseQuantity!==undefined&&<div className={s.batchButtons}>
+    {[baseQuantity,baseQuantity*2].map((batchQuantity,index)=><button key={index} type="button" disabled={busy} onClick={()=>setQuantity(String(batchQuantity))}>{index+1}× basisrecept · {number(batchQuantity)} {item.unit}</button>)}
+   </div>}
    <div className={s.people}><label>Jouw naam<input required disabled={busy} minLength={2} maxLength={80} value={who} onChange={event=>setWho(event.target.value)}/></label>{crewField}</div>
    {validCrew&&Number.isFinite(confirmedLabor)&&confirmedLabor>0&&<p className={s.labor}>{number(Number(minutes.replace(',','.')))} min × {crewSize} {crewSize===1?'persoon':'personen'} = <strong>{number(confirmedLabor)} arbeidsminuten</strong></p>}
    <small>Gepland: {number(task.quantity)} {item.unit}{timer&&<> · gemeten <WorkClock state={state} taskId={task.id}/></>}</small>

@@ -35,9 +35,11 @@ export default function CompletedQuantityForm({ task, item, recipe, busy, readOn
     else onClose();
   }}>
     <p>{expectedQuantity.toLocaleString("nl-NL", { maximumFractionDigits: 6 })} {item.unit} geregistreerd</p>
-    {baseQuantity !== undefined && <button type="button" disabled={busy || readOnly} onClick={() => setQuantity(String(baseQuantity))}>
-      1× basisrecept · {baseQuantity.toLocaleString("nl-NL", { maximumFractionDigits: 6 })} {item.unit}
-    </button>}
+    {baseQuantity !== undefined && <div className={styles.batchButtons}>
+      {[baseQuantity, baseQuantity * 2].map((batchQuantity, index) => <button key={index} type="button" disabled={busy || readOnly} onClick={() => setQuantity(String(batchQuantity))}>
+        {index + 1}× basisrecept · {batchQuantity.toLocaleString("nl-NL", { maximumFractionDigits: 2 })} {item.unit}
+      </button>)}
+    </div>}
     <div className={styles.numbers}>
       <label>Werkelijk gemaakt ({item.unit})<input autoFocus required inputMode="decimal" disabled={busy} value={quantity} onChange={event => setQuantity(event.target.value)} /></label>
       <label>Jouw naam<input required minLength={2} maxLength={80} disabled={busy} value={who} onChange={event => setWho(event.target.value)} /></label>

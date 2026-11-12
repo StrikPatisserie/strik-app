@@ -60,6 +60,7 @@ function harness(result, learnedEstimate = null) {
       useEffect() {},
     },
     'react/jsx-runtime': jsx,
+    './planning': load('app/productie/planning.ts', {}),
     './CompletedQuantityForm': { __esModule: true, default: function CompletedQuantityForm() {} },
     './productionWork': { learnedWorkEstimate: () => learnedEstimate, workView: state => state, elapsedMilliseconds: timer => timer.elapsedMs },
     './ProductionIcon': { __esModule: true, default: () => null },
@@ -227,4 +228,24 @@ test('the save action needs valid completion details and retains those details a
  assert.equal(field(tree, 'Gemaakt').props.value, '1,5');
  assert.equal(field(tree, 'Jouw naam').props.value, 'Bakker B');
  assert.equal(button(tree, 'Opslaan & klaar').props.disabled, false);
+});
+
+
+test('the timer completion offers double base yield and passes the same recipe into later corrections', async () => {
+ const h=harness();
+ const recipe={id:'mousse-recipe',name:'Vanillemousse',type:'semiFinished',yield:4800,unit:'gram',ingredients:[],steps:[],semiFinishedItems:[]};
+ const item={...h.item,recipeId:recipe.id};
+ h.render({item,recipes:[recipe]});
+ await button(h.render(),'Al klaar').props.onClick();
+ let tree=h.render();
+ button(tree,'2× basisrecept · 9,6 kg').props.onClick();
+ tree=h.render();assert.equal(field(tree,'Gemaakt').props.value,'9.6');
+ field(tree,'Jouw naam').props.onChange({target:{value:'Bakker A'}});
+ field(tree,'Werktijd').props.onChange({target:{value:'45'}});
+ tree=h.render();await find(tree,node=>node.type==='form').props.onSubmit({preventDefault(){}});
+ assert.equal(h.commands[0].quantity,9.6);
+ tree=h.render({task:{...h.task,status:'done',completedQuantity:9.6}});
+ button(tree,'Aantal corrigeren').props.onClick();tree=h.render();
+ const correction=find(tree,node=>typeof node.type==='function'&&node.type.name==='CompletedQuantityForm');
+ assert.equal(correction.props.recipe,recipe);
 });

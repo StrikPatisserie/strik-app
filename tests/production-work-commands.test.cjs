@@ -178,3 +178,22 @@ test('output correction API uses current revision, retries once and retains orig
  assert.equal(failed.store.planner.data.tasks[0].completedQuantity,undefined);assert.equal(failed.store.planner.data.productionWork,undefined);assert.equal(failed.writes.length,0);
  const anonymous=endpoint(null);assert.equal((await anonymous.route.POST(post(correction,'denied-output-100'))).status,403);assert.equal(anonymous.writes.length,0);
 });
+
+
+test('overproduction and a later correction count the actual output once on the original production day', () => {
+ const inventory=load('app/productie/inventory.ts',{'./planning':planning});
+ const state=fixture();state.tasks[0].quantity=300;
+ const completed=apply(state,{kind:'complete',taskId:'task',who:'Bakker A',minutes:45,quantity:600,crewSize:2},'made-extra','2026-11-06T10:00:00Z');
+ const corrected=apply(completed,{kind:'correct-output',taskId:'task',who:'Bakker B',quantity:900,expectedQuantity:600},'correct-extra','2026-11-07T08:00:00Z');
+ assert.equal(corrected.tasks.length,1);assert.equal(corrected.tasks[0].quantity,300);assert.equal(corrected.tasks[0].completedQuantity,900);
+ assert.equal(corrected.productionWork.completions.task.plannedQuantity,300);
+ assert.equal(corrected.productionWork.completions.task.minutes,45);assert.equal(corrected.productionWork.completions.task.crewSize,2);
+ assert.equal(planning.completedOutput(corrected.items,corrected.tasks).get('cake'),900);
+ const stock=inventory.emptyInventory();stock.counts=[{id:'count',itemId:'cake',unit:'stuks',date:'2026-11-05',quantity:100,who:'Bakker',actorId:'baker',at:'2026-11-05T18:00:00Z'}];
+ const row=inventory.inventoryOverview(corrected,stock,[],'2026-11-07').rows[0];
+ assert.equal(row.made,900);assert.equal(row.balance,1000);assert.equal(row.latest.quantity,900);assert.equal(row.latest.date,'2026-11-06');
+ assert.equal(corrected.productionWork.history.at(-1).quantityBefore,600);assert.equal(corrected.productionWork.history.at(-1).quantityAfter,900);
+ assert.equal(workspace.validWorkspace(corrected,[]),true);
+ const retried=apply(corrected,{kind:'correct-output',taskId:'task',who:'Bakker B',quantity:900,expectedQuantity:600},'correct-extra','2026-11-07T08:00:00Z');
+ assert.equal(retried,corrected);assert.equal(planning.completedOutput(retried.items,retried.tasks).get('cake'),900);
+});

@@ -18,7 +18,7 @@ function harness({fetchImpl,timerApi={}}={}) {
  const records=new Map(),screenLayouts=[];let current,index,context;
  const slot=initial=>{const i=index++;if(!(i in current))current[i]=typeof initial==='function'?initial():initial;return i;};
  const react={Fragment:jsx.Fragment,createContext:value=>({Provider:'workspace-provider',defaultValue:value}),useContext:c=>context || c.defaultValue,useEffect:()=>{},useMemo:fn=>fn(),useRef:value=>current[slot(()=>({current:value}))],useState:initial=>{const i=slot(initial),store=current;return[store[i],next=>{store[i]=typeof next==='function'?next(store[i]):next;}];}};
- const quickCompletion=load('app/productie/QuickTaskCompletion.tsx',{'./ProductionIcon':{__esModule:true,default:()=>null},'react':react,'react/jsx-runtime':jsx,'./productionWork':productionWork,'./work.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})}});
+ const quickCompletion=load('app/productie/QuickTaskCompletion.tsx',{'./ProductionIcon':{__esModule:true,default:()=>null},'react':react,'react/jsx-runtime':jsx,'./productionWork':productionWork,'./planning':planning,'./work.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})}});
  const quantityCorrection=load('app/productie/CompletedQuantityForm.tsx',{'./planning':planning,'react':react,'react/jsx-runtime':jsx,'./work.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})}});
  const navigation={__esModule:true,default:function Navigation(){},ProductionMobileNavigation:function MobileNavigation(){}};
  const offerWidget={__esModule:true,default:function ProductionWeekOffer(){}};
@@ -39,6 +39,7 @@ function visibleNodes(tree) {
 function text(tree){if(typeof tree==='string' || typeof tree==='number')return String(tree);if(Array.isArray(tree))return tree.map(text).join('');return tree?.props?text(tree.props.children):'';}
 function find(tree,predicate){const node=nodes(tree).find(predicate);assert(node,'Expected rendered control');return node;}
 function button(tree,label){return find(tree,n=>n.type==='button' && (text(n)===label || n.props['aria-label']===label));}
+function inputByLabel(tree,label){return find(find(tree,node=>node.type==='label'&&text(node).startsWith(label)),node=>node.type==='input');}
 function xl(h,props={}) {return h.render(h.Component,props);}
 
 function movingTaskHarness(state=sample.initialPreviewState()){
@@ -978,7 +979,7 @@ test('a selected bridal source survives a week change and reloads immediately af
 });
 
 
-test('the completion square opens only the fast name, time and crew form and saves through the shared work command',async()=>{
+test('the completion square opens the fast name, output, time and crew form and saves through the shared work command',async()=>{
  for(const initialLayout of ['current','new']){
  const props={initialLayout};
  const h=harness();let tree=h.render(h.Component,props);
@@ -990,12 +991,11 @@ test('the completion square opens only the fast name, time and crew form and sav
  assert(!nodes(tree).some(node=>typeof node.type==='function'&&node.props.onMove));
  const quick=find(tree,node=>typeof node.type==='function'&&node.type.name==='QuickTaskCompletion');
  let form=h.render(quick.type,quick.props);
- assert.equal(nodes(form).filter(node=>node.type==='input').length,3);
+ assert.equal(nodes(form).filter(node=>node.type==='input').length,4);
  assert.equal(nodes(form).filter(node=>node.type==='details').length,0);
- const inputs=nodes(form).filter(node=>node.type==='input');
- inputs[0].props.onChange({target:{value:'Bakker test'}});
- inputs[1].props.onChange({target:{value:'12,5'}});
- inputs[2].props.onChange({target:{value:'2'}});
+ inputByLabel(form,'Naam').props.onChange({target:{value:'Bakker test'}});
+ inputByLabel(form,'Tijd (minuten)').props.onChange({target:{value:'12,5'}});
+ inputByLabel(form,'Aantal mensen').props.onChange({target:{value:'2'}});
  form=h.render(quick.type,quick.props);
  await form.props.onSubmit({preventDefault(){}});
  tree=h.render(h.Component,props);
@@ -1047,8 +1047,7 @@ test('the read-only real-data preview opens the quick check without sending or s
  const quick=find(tree,node=>typeof node.type==='function'&&node.type.name==='QuickTaskCompletion');
  assert.equal(quick.props.readOnly,true);
  let form=h.render(quick.type,quick.props);
- const inputs=nodes(form).filter(node=>node.type==='input');
- for(const [index,value] of ['Bakker test','10','2'].entries())inputs[index].props.onChange({target:{value}});
+ for(const [label,value] of [['Naam','Bakker test'],['Tijd (minuten)','10'],['Aantal mensen','2']])inputByLabel(form,label).props.onChange({target:{value}});
  form=h.render(quick.type,quick.props);
  assert.equal(find(form,node=>node.type==='button'&&node.props.type==='submit').props.disabled,true);
  await form.props.onSubmit({preventDefault(){}});
@@ -1129,21 +1128,23 @@ test('next production prefills learned time in the quick check and adapts to qua
   const commands = [], before = JSON.stringify(state);
   const quickProps = { ...quick.props, onCommand: async command => { commands.push(command); } };
   let form = h.render(quick.type, quickProps);
-  let inputs = nodes(form).filter(node => node.type === 'input');
-  assert.equal(inputs.length, 3);
-  assert.equal(inputs[1].props.value, '80');
+  assert.equal(nodes(form).filter(node => node.type === 'input').length, 4);
+  assert.equal(inputByLabel(form,'Tijd (minuten)').props.value, '80');
   assert(text(form).includes('1 eerdere productie'));
   assert.equal(commands.length, 0);
   assert.equal(JSON.stringify(state), before);
-  inputs[2].props.onChange({ target: { value: '2' } });
+  inputByLabel(form,'Aantal mensen').props.onChange({ target: { value: '2' } });
   form = h.render(quick.type, quickProps);
-  inputs = nodes(form).filter(node => node.type === 'input');
-  assert.equal(inputs[1].props.value, '40');
-  inputs[1].props.onChange({ target: { value: '37,5' } });
-  inputs[2].props.onChange({ target: { value: '3' } });
-  inputs[0].props.onChange({ target: { value: 'Bakker B' } });
+  assert.equal(inputByLabel(form,'Tijd (minuten)').props.value, '40');
+  inputByLabel(form,'Werkelijk gemaakt').props.onChange({ target: { value: String(next.quantity * 2) } });
   form = h.render(quick.type, quickProps);
-  assert.equal(nodes(form).filter(node => node.type === 'input')[1].props.value, '37,5');
+  assert.equal(inputByLabel(form,'Tijd (minuten)').props.value, '80');
+  inputByLabel(form,'Tijd (minuten)').props.onChange({ target: { value: '37,5' } });
+  inputByLabel(form,'Aantal mensen').props.onChange({ target: { value: '3' } });
+  inputByLabel(form,'Naam').props.onChange({ target: { value: 'Bakker B' } });
+  inputByLabel(form,'Werkelijk gemaakt').props.onChange({ target: { value: String(next.quantity) } });
+  form = h.render(quick.type, quickProps);
+  assert.equal(inputByLabel(form,'Tijd (minuten)').props.value, '37,5');
   await form.props.onSubmit({ preventDefault() {} });
   assert.equal(commands.length, 1);
   assert.equal(commands[0].minutes, 37.5);
@@ -1166,9 +1167,8 @@ test('quick completion prioritizes a measured timer and leaves unknown work blan
   if (scenario === 'once') state.productionWork = { overrides: { [task.id]: sample.demoRecipes[0] } };
   const commands = [];
   const form = h.render(quick.type, { ...quick.props, state, item, task: { ...task, minutes: scenario === 'planned' ? 25 : undefined }, recipes: sample.demoRecipes, onCommand: async command => commands.push(command) });
-  const inputs = nodes(form).filter(node => node.type === 'input');
-  assert.equal(inputs[1].props.value, scenario === 'timer' ? '7' : scenario === 'planned' ? '25' : '');
-  if (scenario === 'timer') assert.equal(inputs[2].props.value, '2');
+  assert.equal(inputByLabel(form,'Tijd (minuten)').props.value, scenario === 'timer' ? '7' : scenario === 'planned' ? '25' : '');
+  if (scenario === 'timer') assert.equal(inputByLabel(form,'Aantal mensen').props.value, '2');
   assert.equal(commands.length, 0);
  }
 });
@@ -1524,5 +1524,93 @@ test('day and category add buttons prefill only their selected context and submi
   await find(view,node=>node.type==='form').props.onSubmit({preventDefault(){},currentTarget:{output:'on'}});
   assert.equal(commands[0].task.date,fromDay?'2026-10-29':'2026-10-30');
   assert.equal(commands[0].task.departmentId,fromDay?'dessert':'luxe');
+ }
+});
+
+
+test('quick completion accepts 600 made against 300 planned in both layouts and retains invalid input on failure', async () => {
+ for (const initialLayout of ['current', 'new']) {
+  const h = harness(), state = sample.initialPreviewState();
+  const task = state.tasks.find(row => row.status === 'planned' && !row.dependsOn && !row.requires?.length && !row.weddingCode);
+  task.quantity = 300;
+  const props = {live:{state,today:sample.DEMO_TODAY,recipes:sample.demoRecipes,ingredients:[],canManage:true,departments:planning.DEPARTMENTS.map(row=>row.id),revision:1},initialLayout};
+  let tree = h.render(h.Component, props);
+  const card = find(tree,node=>node.type==='article'&&node.props['data-task-id']===task.id);
+  await find(card,node=>node.props.className===(initialLayout==='new'?'check':'taskCheck')).props.onClick();
+  tree = h.render(h.Component, props);
+  const quick = find(tree,node=>typeof node.type==='function'&&node.type.name==='QuickTaskCompletion');
+  const commands = [];let saved,closes=0;
+  const quickProps = {...quick.props,onClose:()=>closes++,onCommand:async command=>{
+   commands.push(command);
+   saved=workCommands.applyWorkCommand(state,sample.demoRecipes,command,planning.DEPARTMENTS.map(row=>row.id),'baker-test','made-600','2026-10-28T08:00:00Z');
+  }};
+  const render = () => h.render(quick.type, quickProps);
+  let form = render();
+  assert.equal(inputByLabel(form,'Werkelijk gemaakt').props.value,'300');
+  inputByLabel(form,'Naam').props.onChange({target:{value:'Bakker A'}});
+  inputByLabel(form,'Tijd (minuten)').props.onChange({target:{value:'45'}});
+  for(const invalid of ['', '0', '-1', 'Infinity', '1000001']){
+   inputByLabel(form,'Werkelijk gemaakt').props.onChange({target:{value:invalid}});form=render();
+   assert.equal(button(form,'Opslaan & klaar').props.disabled,true);
+   await form.props.onSubmit({preventDefault(){}});assert.equal(commands.length,0);
+  }
+  inputByLabel(form,'Werkelijk gemaakt').props.onChange({target:{value:'600'}});form=render();
+  assert.equal(button(form,'Opslaan & klaar').props.disabled,false);
+  await form.props.onSubmit({preventDefault(){}});
+  assert.equal(commands.length,1);assert.equal(commands[0].quantity,600);assert.equal(closes,1);
+  const completed=saved.tasks.find(row=>row.id===task.id);
+  assert.equal(completed.status,'done');assert.equal(completed.quantity,300);assert.equal(completed.completedQuantity,600);
+  assert.equal(saved.productionWork.completions[task.id].quantity,600);
+  assert.equal(saved.productionWork.completions[task.id].plannedQuantity,300);
+  assert.equal(task.status,'planned');assert.equal(task.completedQuantity,undefined);
+  const failing={...quickProps,onCommand:async()=> 'Opslaan niet gelukt'};
+  form=h.render(quick.type,failing);await form.props.onSubmit({preventDefault(){}});
+  form=h.render(quick.type,failing);
+  assert.equal(inputByLabel(form,'Werkelijk gemaakt').props.value,'600');
+  assert(text(form).includes('Opslaan niet gelukt'));assert.equal(closes,1);
+ }
+});
+
+test('quick and retrospective completion can select two base recipes using the actual yield and compatible units', async () => {
+ for(const unit of ['stuks','kg']){
+  const h=harness(),state=sample.initialPreviewState();
+  const task=state.tasks.find(row=>row.status==='planned'&&!row.dependsOn&&!row.requires?.length&&!row.weddingCode);
+  const item=state.items.find(row=>row.id===task.itemId);
+  item.unit=unit;item.recipeId='batch-recipe';task.quantity=unit==='kg'?4.8:84;
+  const recipe={...sample.demoRecipes[0],id:'batch-recipe',yield:unit==='kg'?4800:84,unit:unit==='kg'?'gram':'stuks'};
+  const props={live:{state,today:sample.DEMO_TODAY,recipes:[recipe],ingredients:[],canManage:true,departments:planning.DEPARTMENTS.map(row=>row.id),revision:1},initialLayout:'new'};
+  let tree=h.render(h.Component,props);
+  button(tree,`Afronden: ${item.name}`).props.onClick();tree=h.render(h.Component,props);
+  const quick=find(tree,node=>typeof node.type==='function'&&node.type.name==='QuickTaskCompletion');
+  const commands=[],actual=unit==='kg'?9.6:168;
+  const quickProps={...quick.props,onCommand:async command=>{commands.push(command);}};
+  let form=h.render(quick.type,quickProps);
+  const doubleLabel=`2× basisrecept · ${actual.toLocaleString('nl-NL')} ${unit}`;
+  button(form,doubleLabel).props.onClick();form=h.render(quick.type,quickProps);
+  assert.equal(Number(inputByLabel(form,'Werkelijk gemaakt').props.value),actual);
+  inputByLabel(form,'Naam').props.onChange({target:{value:'Bakker B'}});
+  inputByLabel(form,'Tijd (minuten)').props.onChange({target:{value:'30'}});
+  form=h.render(quick.type,quickProps);await form.props.onSubmit({preventDefault(){}});
+  assert.equal(commands[0].quantity,actual);
+  const completed=workCommands.applyWorkCommand(state,[recipe],commands[0],planning.DEPARTMENTS.map(row=>row.id),'baker','double-batch','2026-10-28T08:00:00Z');
+  const done=completed.tasks.find(row=>row.id===task.id);
+  const doneProps={...props,live:{...props.live,state:completed}};
+  const correctionHarness=harness();tree=correctionHarness.render(correctionHarness.Component,doneProps);
+  const doneCard=find(tree,node=>node.type==='article'&&node.props['data-task-id']===task.id);
+  button(doneCard,`Aantal corrigeren: ${item.name}`).props.onClick();tree=correctionHarness.render(correctionHarness.Component,doneProps);
+  const correction=find(tree,node=>typeof node.type==='function'&&node.type.name==='CompletedQuantityForm');
+  let corrected;
+  const correctionProps={...correction.props,onCommand:async command=>{
+   corrected=workCommands.applyWorkCommand(completed,[recipe],command,planning.DEPARTMENTS.map(row=>row.id),'manager','change-batch','2026-10-29T08:00:00Z');
+  }};
+  const render=()=>correctionHarness.render(correction.type,correctionProps);
+  form=render();assert(button(form,doubleLabel));
+  inputByLabel(form,'Werkelijk gemaakt').props.onChange({target:{value:String(actual*1.5)}});
+  inputByLabel(form,'Jouw naam').props.onChange({target:{value:'Feline'}});
+  form=render();await form.props.onSubmit({preventDefault(){}});
+  const changed=corrected.tasks.find(row=>row.id===task.id);
+  assert.equal(changed.completedQuantity,actual*1.5);assert.equal(changed.quantity,task.quantity);assert.equal(changed.status,'done');
+  assert.equal(corrected.productionWork.completions[task.id].at,completed.productionWork.completions[task.id].at);
+  assert.equal(corrected.productionWork.history.at(-1).quantityBefore,done.completedQuantity);
  }
 });
