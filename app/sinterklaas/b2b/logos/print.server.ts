@@ -1,11 +1,23 @@
 import "server-only";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { PDFDocument, PrintScaling, type PDFImage, type PDFEmbeddedPage } from "pdf-lib";
-import { createCanvas, loadImage, DOMMatrix, ImageData, Path2D, type SKRSContext2D } from "@napi-rs/canvas";
+import { createCanvas, GlobalFonts, loadImage, DOMMatrix, ImageData, Path2D, type SKRSContext2D } from "@napi-rs/canvas";
 import { logoPrintLayout, type PrintLogo } from "./model";
 import { packedLogoPrintLayout } from "./packedLayout";
 
 type FileLogo = { id: string; name?: string; customer?: string; summary?: string; printSummary?: string; content_type: string; bytes_base64: string };
 const cm = 72 / 2.54;
+let fontsReady = false;
+
+function registerPrintFonts() {
+  if (fontsReady) return;
+  // Bundle the actual fonts so customer names also print on servers without system fonts.
+  const regular = GlobalFonts.register(readFileSync(join(process.cwd(), "public/fonts/Overpass-Regular.ttf")), "StrikLogoRegular");
+  const bold = GlobalFonts.register(readFileSync(join(process.cwd(), "public/fonts/Overpass-Bold.ttf")), "StrikLogoBold");
+  if (!regular || !bold) throw Error("Het lettertype voor de klantnamen kon niet worden geladen. Probeer opnieuw.");
+  fontsReady = true;
+}
 
 async function logoThumbnail(file: FileLogo, bytes: Buffer) {
   let preview = bytes;
@@ -53,12 +65,12 @@ async function printHeader(customer: string, file: FileLogo, thumbnail: Buffer) 
   const title = (file.customer || customer).replace(/\s+/g, " ").trim();
   let size = 44;
   do {
-    context.font = `bold ${size}px sans-serif`;
+    context.font = `${size}px StrikLogoBold`;
     if (context.measureText(title).width <= 1450) break;
     size--;
   } while (size > 14);
   context.fillText(title, 125, 52);
-  context.font = "22px sans-serif";
+  context.font = "22px StrikLogoRegular";
   const subtitle = file.summary || file.name || "Logo";
   const words = subtitle.split(/\s+/);
   let line = "";
@@ -101,34 +113,35 @@ async function packedPrintHeader(customer: string, file: FileLogo, thumbnail: Bu
   const context = canvas.getContext("2d");
   context.fillStyle = "#fff";
   context.fillRect(0, 0, canvas.width, canvas.height);
-  const thumbnailSize = 48;
+  const thumbnailSize = 96;
   context.drawImage(await loadImage(thumbnail), 0, 5, thumbnailSize, thumbnailSize);
   const textX = thumbnailSize + 10;
   const textWidth = canvas.width - textX - 4;
   const title = (file.customer || customer).replace(/\s+/g, " ").trim();
-  let titleSize = 30;
+  let titleSize = 52;
   let titleLines: string[];
   do {
-    context.font = `bold ${titleSize}px sans-serif`;
+    context.font = `${titleSize}px StrikLogoBold`;
     titleLines = headerLines(context, title, textWidth);
     if (titleLines.length <= 2) break;
     titleSize--;
-  } while (titleSize > 24);
+  } while (titleSize > 40);
   context.fillStyle = "#111";
-  let baseline = titleSize + 2;
-  for (const line of titleLines.slice(0, 3)) {
+  let baseline = titleSize;
+  for (const line of titleLines.slice(0, 2)) {
     context.fillText(line, textX, baseline, textWidth);
     baseline += titleSize + 2;
   }
-  context.font = "24px sans-serif";
+  baseline -= titleSize + 2;
+  context.font = "36px StrikLogoRegular";
   const summary = file.printSummary || file.summary || file.name || "Logo";
-  const lines = headerLines(context, summary, canvas.width - 4);
-  const availableLines = Math.max(1, Math.floor((canvas.height - 6 - baseline - 23) / 26) + 1);
+  const lines = headerLines(context, summary, textWidth);
+  const availableLines = Math.max(1, Math.floor((canvas.height - 7 - baseline - 38) / 38) + 1);
   for (let index = 0; index < Math.min(lines.length, availableLines); index++) {
     let line = lines[index];
     if (index === availableLines - 1 && lines.length > availableLines) line += "…";
-    context.fillText(line, 0, baseline + 23, canvas.width - 4);
-    baseline += 26;
+    context.fillText(line, textX, baseline + 38, textWidth);
+    baseline += 38;
   }
   context.fillStyle = "#aaa";
   context.fillRect(0, canvas.height - 3, canvas.width, 1);
@@ -137,6 +150,7 @@ async function packedPrintHeader(customer: string, file: FileLogo, thumbnail: Bu
 
 export async function createLogoPrint(items: PrintLogo[], files: FileLogo[], customer: string, options: { packGroups?: boolean } = {}) {
   if (!customer?.trim()) throw Error("De klantnaam kon niet worden geladen. Vernieuw de bestelling.");
+  registerPrintFonts();
   const packed = options.packGroups ? packedLogoPrintLayout(items) : null;
   const layout = packed?.cells || logoPrintLayout(items);
   const pdf = await PDFDocument.create();

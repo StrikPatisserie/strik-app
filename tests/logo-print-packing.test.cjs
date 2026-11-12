@@ -39,27 +39,34 @@ function checkLayout(items) {
   }
   for (const cell of result.cells) {
     const headers = result.headers.filter(header => header.id === cell.id && header.page === cell.page
-      && Math.abs(header.y + header.height + .15 - cell.y) < .000001
+      && header.y + header.height + .15 <= cell.y + .000001
+      && !result.headers.some(next => next.page === cell.page && next.y > header.y && next.y < cell.y)
       && header.x <= cell.x + .000001 && header.x + header.width >= cell.x + cell.width - .000001);
-    assert.equal(headers.length, 1, 'each continuous row of a customer logo has its own identifying header');
+    assert.equal(headers.length, 1, 'every logo belongs to exactly one identified full-width customer block');
   }
   const pages = new Set(result.cells.map(cell => cell.page));
   assert.deepEqual([...pages], Array.from({ length: pages.size }, (_, index) => index), 'no blank pages');
   return result;
 }
-test('nine separate Lettershop customers share one sheet and reuse the remaining width', () => {
+test('different orders start full-width blocks separated by a white strip, sharing pages where possible', () => {
   const result = checkLayout(Array.from({ length: 9 }, (_, index) => choice(index)));
-  assert.equal(new Set(result.cells.map(cell => cell.page)).size, 1);
+  assert.equal(new Set(result.cells.map(cell => cell.page)).size, 3);
   assert.equal(result.headers.length, 9);
-  assert.equal(result.cells.filter(cell => cell.y === result.cells[0].y).length, 6);
+  for (const header of result.headers) {
+    assert.equal(header.x, .5);
+    assert.equal(header.width, 20);
+    const previous = result.cells.filter(cell => cell.page === header.page && cell.y < header.y);
+    if (previous.length) assert(header.y - Math.max(...previous.map(cell => cell.y + cell.height)) >= .649999);
+  }
+  const compact = checkLayout([choice(1, 2), choice(2, 12), choice(3, 7)]);
+  assert.equal(new Set(compact.cells.map(cell => cell.page)).size, 1, 'the reported selection still fits on one page');
+  assert.equal(new Set(compact.cells.map(cell => cell.id + ':' + cell.y)).size, 5);
 });
 test('larger selections fill the sheet, repeat customer identification and continue on subsequent pages', () => {
   const result = checkLayout(Array.from({ length: 9 }, (_, index) => choice(index, 8)));
-  assert.equal(new Set(result.cells.map(cell => cell.page)).size, 3);
-  assert.equal(result.cells.filter(cell => cell.page === 0).length, 30);
-  assert.equal(result.cells.filter(cell => cell.page === 1).length, 30);
-  assert.equal(result.cells.filter(cell => cell.page === 2).length, 12);
-  assert(result.headers.filter(header => header.id === id(3)).length > 1);
+  assert(new Set(result.cells.map(cell => cell.page)).size > 1);
+  assert(result.cells.filter(cell => cell.page === 0).length > 16, 'the next customer uses the remaining page space');
+  assert(result.headers.some(header => result.headers.filter(other => other.id === header.id).length > 1));
 });
 test('mixed sizes, zero selections and narrow logos keep readable headers and exact requested sizes', () => {
   const items = [choice(0, 0), choice(1, 3, .5, .5), choice(2, 4, 6, 2), choice(3, 1, 19, 22.5), choice(4, 20, 4, 3)];
@@ -74,7 +81,7 @@ test('mixed sizes, zero selections and narrow logos keep readable headers and ex
 });
 function fixtures(quantities) {
   const customers = ['Testklant A', 'Testklant B', 'Mondzorg Lindenholt', 'Wildenberg Advocaten', 'Tandartspraktijk Kuipers',
-    'Testklant F', 'Testklant G', 'Testklant H', 'Testklant I'];
+    'Samenwerkingsverband voor bedrijfsgezondheidszorg en tandartspraktijken regio Nijmegen en omgeving', 'Testklant G', 'Testklant H', 'Testklant I'];
   return quantities.map((quantity, index) => {
     const canvas = canvasModule.createCanvas(400, 400);
     const context = canvas.getContext('2d');
@@ -90,6 +97,7 @@ function fixtures(quantities) {
 test('real packed PDFs render every selected logo at 30 mm and show trusted customer/order headers on every sequence', async () => {
   const drawn = [];
   const titleText = [];
+  const headerInk = [];
   const renderer = load(base + 'print.server.ts', {
     'server-only': {}, './model': model, './packedLayout': packed,
     'pdf-lib': { ...pdfLib, PDFDocument: {
@@ -111,21 +119,30 @@ test('real packed PDFs render every selected logo at 30 mm and show trusted cust
       if (args[1] === 156) {
         const context = canvas.getContext('2d');
         const draw = context.fillText.bind(context);
-        context.fillText = (text, ...rest) => { titleText.push(text); draw(text, ...rest); };
+        context.fillText = (text, ...rest) => { assert(rest[0] >= 106, 'header text stays beside the small logo preview'); assert(rest[1] <= 148, 'all header text stays above the separator'); titleText.push(text); draw(text, ...rest); };
+        const toBuffer = canvas.toBuffer.bind(canvas);
+        canvas.toBuffer = (...options) => {
+          const { data } = context.getImageData(110, 0, canvas.width - 110, 145);
+          let ink = 0;
+          for (let offset = 0; offset < data.length; offset += 4) if (data[offset] < 100 && data[offset + 3] > 200) ink++;
+          headerInk.push(ink);
+          return toBuffer(...options);
+        };
       }
       return canvas;
     } },
   });
-  for (const quantities of [Array(9).fill(1), Array(9).fill(8)]) {
-    drawn.length = 0; titleText.length = 0;
+  for (const quantities of [Array(9).fill(1), Array(9).fill(8), [2, 12, 7]]) {
+    drawn.length = 0; titleText.length = 0; headerInk.length = 0;
     const items = quantities.map((quantity, index) => choice(index, quantity));
     const bytes = await renderer.createLogoPrint(items, fixtures(quantities), 'Lettershop', { packGroups: true });
     const pdf = await pdfLib.PDFDocument.load(bytes);
-    assert.equal(pdf.getPageCount(), quantities[0] === 1 ? 1 : 3);
+    assert.equal(pdf.getPageCount(), new Set(packed.packedLogoPrintLayout(items).cells.map(cell => cell.page)).size);
     const logos = drawn.filter(rect => Math.abs(rect.height - 3 * 72 / 2.54) < .000001);
     assert.equal(logos.length, quantities.reduce((sum, quantity) => sum + quantity, 0));
-    for (let index = 0; index < 9; index++) assert(titleText.some(text => text.includes(`CL26-${String(index + 1).padStart(4, '0')}`)));
-    assert.match(titleText.join(' '), /Wildenberg Advocaten/);
+    for (let index = 0; index < quantities.length; index++) assert(titleText.some(text => text.includes(`CL26-${String(index + 1).padStart(4, '0')}`)));
+    if (quantities.length > 3) assert.match(titleText.join(' '), /Wildenberg Advocaten/);
+    assert(headerInk.every(ink => ink > 2000), 'customer/order text produces visible print pixels even without system fonts');
     assert.match(titleText.join(' '), /Mondzorg Lindenholt/);
     for (const page of pdf.getPages()) {
       assert(Math.abs(page.getWidth() - 210 * 72 / 25.4) < .000001);
@@ -134,7 +151,7 @@ test('real packed PDFs render every selected logo at 30 mm and show trusted cust
     assert.equal(pdf.catalog.getOrCreateViewerPreferences().getPrintScaling(), 'None');
     if (process.env.STRIK_LOGO_TEST_PDF_DIR) {
       fs.mkdirSync(process.env.STRIK_LOGO_TEST_PDF_DIR, { recursive: true });
-      fs.writeFileSync(path.join(process.env.STRIK_LOGO_TEST_PDF_DIR, `lettershop-${quantities[0] === 1 ? 'nine-customers' : 'three-pages'}.pdf`), bytes);
+      fs.writeFileSync(path.join(process.env.STRIK_LOGO_TEST_PDF_DIR, `lettershop-${quantities.length === 3 ? 'separate-order-blocks' : quantities[0] === 1 ? 'nine-customers' : 'multiple-pages'}.pdf`), bytes);
     }
   }
 });
