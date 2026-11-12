@@ -399,6 +399,25 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
     "--day-detail-size": departmentCount === 1 ? "22px" : departmentCount === 2 ? "20px" : "18px",
   } as CSSProperties;
 
+  function dayHeaderWork(date:string) {
+    const total=visibleDepartments.reduce((sum,dep)=>{
+      const work=dailyWork.get(`${dep.id}:${date}`);
+      if(work) {
+        sum.scheduledLaborMinutes+=work.scheduledLaborMinutes;
+        sum.scheduledMissingCount+=work.scheduledMissingCount;
+        sum.doneLaborMinutes+=work.doneLaborMinutes;
+        sum.doneMissingCount+=work.doneMissingCount;
+      }
+      return sum;
+    },{scheduledLaborMinutes:0,scheduledMissingCount:0,doneLaborMinutes:0,doneMissingCount:0});
+    const planned=`Gepland · ${workTotalLabel(total.scheduledLaborMinutes,total.scheduledMissingCount)} arbeidsuren voor alle productietaken. Gebaseerd op tijdsinschattingen en receptadvies.${total.scheduledMissingCount?` ${total.scheduledMissingCount} taken zonder tijdsinschatting.`:""}`;
+    const actual=`Gewerkt · ${workTotalLabel(total.doneLaborMinutes,total.doneMissingCount)} arbeidsuren afgerond. Werktijd × aantal personen.${total.doneMissingCount?` ${total.doneMissingCount} taken zonder volledige tijdregistratie.`:""}`;
+    return <div className={s.dayHeaderWork} role="group" aria-label={`Productieuren · ${dateLabel(date,true)}`}>
+      <span title={planned} aria-label={planned}>{workTotalLabel(total.scheduledLaborMinutes,total.scheduledMissingCount)}</span>
+      <span className={s.dayHoursDivider} aria-hidden="true">/</span>
+      <span className={s.dayHoursActual} title={actual} aria-label={actual}><Icon name="check" size={11}/>{workTotalLabel(total.doneLaborMinutes,total.doneMissingCount)}</span>
+    </div>;
+  }
   function dayWork(departmentId:DepartmentId,date:string) {
     const total=dailyWork.get(`${departmentId}:${date}`);
     if(!total)return null;
@@ -613,7 +632,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
         <div className={s.mobileRhythm}><DayRhythm board={board} date={day}/></div>
         <div className={s.plannerWithRequests}><div className={s.plannerBoardColumn}>
         <section className={s.board} aria-label={period==="day"?"Dagbord":"Weekbord"}>
-          <div className={s.boardHeader}><div className={s.departmentColumn}/>{days.map(d => <div key={d} className={`${s.dayHeading} ${d === today ? s.today : ""}`} aria-current={d === today ? "date" : undefined} title={d === today ? "Vandaag" : undefined}><div><strong>{dateLabel(d)}</strong>{d===today&&<span>Vandaag</span>}</div>{newLayout && canManage && <button type="button" className={s.dayAdd} disabled={saving} aria-label={`Productie toevoegen · ${dateLabel(d, true)}`} title={`Productie toevoegen · ${dateLabel(d, true)}`} onClick={() => setModal({type:"task",date:d,departmentId:department!=="all"?department:undefined,fromCell:true})}><Icon name="plus" size={14}/></button>}<DayRhythm board={board} date={d}/></div>)}</div>
+          <div className={s.boardHeader}><div className={s.departmentColumn}/>{days.map(d => <div key={d} className={`${s.dayHeading} ${d === today ? s.today : ""}`} aria-current={d === today ? "date" : undefined} title={d === today ? "Vandaag" : undefined}><div className={s.dayHeaderContent}><strong>{dateLabel(d)}</strong>{dayHeaderWork(d)}</div>{newLayout && canManage && <button type="button" className={s.dayAdd} disabled={saving} aria-label={`Productie toevoegen · ${dateLabel(d, true)}`} title={`Productie toevoegen · ${dateLabel(d, true)}`} onClick={() => setModal({type:"task",date:d,departmentId:department!=="all"?department:undefined,fromCell:true})}><Icon name="plus" size={14}/></button>}<DayRhythm board={board} date={d}/></div>)}</div>
           {visibleDepartments.map(dep => {
             if(dep.id==="bruidstaarten"&&!live?.readOnlyPreview)return <WeddingWeekLane heading={newLayout ? departmentBadge("bruidstaarten") : undefined} renderTaskWork={completionBadge} renderDayWork={date=>dayWork("bruidstaarten",date)} dragFrameRef={frameRef} onDragChange={setDragged} key={dep.id} week={week} days={days} day={day} today={today} state={state} canManage={canManage} saving={saving} demo={demo} statusFilter={effectiveStatusFilter} Dialog={ModalFrame} onUpdate={updateWedding}/>;
             const tasks = filtered.filter(t => t.departmentId === dep.id);

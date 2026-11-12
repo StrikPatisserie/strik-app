@@ -739,6 +739,46 @@ function dayWorkGroup(tree,department='Desserttaart & fruit',date=sample.DEMO_TO
 }
 function dayWorkMetric(tree,label,department,date){return find(dayWorkGroup(tree,department,date),node=>node.type==='span'&&node.props['aria-label']?.startsWith(label));}
 
+test('day headers show full planned hours before completed person-hours in both planning layouts',()=>{
+ for(const initialLayout of ['current','new']){
+  const {state,live}=summaryWorkspace([
+   {id:'hours-done',status:'done',minutes:90},
+   {id:'hours-next',minutes:300},
+   {id:'hours-luxe',departmentId:'luxe',minutes:60},
+   {id:'hours-other-day',date:planning.addDays(sample.DEMO_TODAY,1),minutes:120},
+   {id:'hours-other-board',departmentId:'bak',minutes:900},
+  ],{'hours-done':{minutes:60,crewSize:2}});
+  const before=JSON.stringify(state),h=harness(),props={live,initialLayout};
+  let tree=h.render(h.Component,props);
+  const header=()=>find(tree,node=>node.props?.role==='group'&&node.props['aria-label']===`Productieuren · ${planning.dateLabel(sample.DEMO_TODAY,true)}`);
+  const metric=label=>find(header(),node=>node.type==='span'&&node.props['aria-label']?.startsWith(label));
+  assert.equal(text(header()),'9u/2u');
+  assert.equal(text(metric('Gepland · ')),'9u');assert.equal(text(metric('Gewerkt · ')),'2u');
+  assert.equal(metric('Gewerkt · ').props.className,'dayHoursActual');
+  const next=find(tree,node=>node.props?.['aria-label']===`Productieuren · ${planning.dateLabel(planning.addDays(sample.DEMO_TODAY,1),true)}`);
+  assert.equal(text(next),'2u/0u');
+  if(initialLayout==='new'){
+   button(tree,'Zoek in planning').props.onClick();tree=h.render(h.Component,props);
+   find(tree,node=>node.type==='input'&&node.props['aria-label']==='Zoek product').props.onChange({target:{value:'onvindbaar'}});
+   tree=h.render(h.Component,props);assert.equal(text(header()),'9u/2u','Search does not hide hours already worked');
+  }
+  button(tree,'Dag').props.onClick();tree=h.render(h.Component,props);assert.equal(text(header()),'9u/2u');
+  const department=find(tree,node=>node.type==='select'&&text(node).includes('Alle afdelingen'));
+  department.props.onChange({target:{value:'dessert'}});tree=h.render(h.Component,props);
+  assert.equal(text(header()),'8u/2u','Department selection totals only the selected department');
+  assert.equal(JSON.stringify(state),before,'Rendering totals never changes production records');
+ }
+});
+
+test('header totals mark missing estimates and unrecorded work instead of showing false zeroes',()=>{
+ const {live}=summaryWorkspace([{id:'unknown',status:'done'},{id:'planned',minutes:60}],{});
+ const h=harness(),tree=h.render(h.Component,{live,initialLayout:'new'});
+ const header=find(tree,node=>node.props?.['aria-label']===`Productieuren · ${planning.dateLabel(sample.DEMO_TODAY,true)}`);
+ assert.equal(text(header),'≥1u/—');
+ assert.match(find(header,node=>node.type==='span'&&node.props['aria-label']?.startsWith('Gepland · ')).props.title,/1 taken zonder tijdsinschatting/);
+ assert.match(find(header,node=>node.type==='span'&&node.props['aria-label']?.startsWith('Gewerkt · ')).props.title,/1 taken zonder volledige tijdregistratie/);
+});
+
 test('completed task badges show the recorded crew and elapsed time while day totals use productive person-minutes',()=>{
  const {live}=summaryWorkspace([{id:'summary-done',status:'done'},{id:'summary-next',minutes:40}],{'summary-done':{minutes:35,crewSize:2,laborMinutes:70}});
  const h=harness();let tree=xl(h,{live});

@@ -1435,3 +1435,12 @@
 @media(pointer:coarse) {
  .newPlanning .categoryAdd { width:32px;min-height:32px }
 }
+
+
+.dayHeaderContent { display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0 }
+.dayHeading .dayHeaderWork { display:flex;align-items:center;justify-content:center;gap:4px;min-width:0;font-size:11px;font-weight:600;line-height:1.2;font-variant-numeric:tabular-nums;white-space:nowrap }
+.dayHeading .dayHeaderWork>span { display:inline-flex;align-items:center;gap:2px;margin:0;font-size:inherit;color:inherit }
+.dayHeading .dayHeaderWork .dayHoursDivider { opacity:.5;font-weight:400 }
+.dayHeading .dayHeaderWork .dayHoursActual { color:#c3d3bc!important }
+.dayHeaderWork svg { flex-shrink:0 }
+.dayView .dayHeaderContent { flex-direction:row;gap:12px }

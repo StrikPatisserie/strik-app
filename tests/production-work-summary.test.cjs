@@ -19,7 +19,7 @@ const normal=value=>JSON.parse(JSON.stringify(value));
 test('a current completion exposes its duration, crew and productive person-minutes',()=>{
  const done=task('complete',{status:'done'}),workspace=state([done],{complete:{minutes:30,crewSize:2,laborMinutes:60}});
  assert.deepEqual(normal(taskWorkSummary(workspace,done)),{minutes:30,crewSize:2,laborMinutes:60,fromStock:false});
- assert.deepEqual(normal(departmentDayWork(workspace).get('dessert:2026-11-10')),{totalTaskCount:1,doneCount:1,doneLaborMinutes:60,doneMissingCount:0,plannedLaborMinutes:0,plannedMissingCount:0});
+ assert.deepEqual(normal(departmentDayWork(workspace).get('dessert:2026-11-10')),{totalTaskCount:1,doneCount:1,doneLaborMinutes:60,doneMissingCount:0,plannedLaborMinutes:0,plannedMissingCount:0,scheduledLaborMinutes:0,scheduledMissingCount:1});
  const inconsistent=state([done],{complete:{minutes:30,crewSize:2,laborMinutes:600}});
  assert.equal(taskWorkSummary(inconsistent,done).laborMinutes,60,'Duration and crew take precedence over an inconsistent cached total');
 });
@@ -119,4 +119,25 @@ test('explicit estimates override learned norms and one-off recipe changes do no
  delete workspace.productionWork.completions.previous;
  const reopenedHistory=departmentDayWork(workspace,recipes).get('dessert:2026-11-10');
  assert.equal(reopenedHistory.plannedLaborMinutes,35);assert.equal(reopenedHistory.plannedMissingCount,2,'Reopened historical measurements are excluded by the shared estimator');
+});
+
+
+test('full scheduled hours include finished work while actual hours multiply crew and exclude stock use',()=>{
+ const tasks=[task('complete',{status:'done',minutes:90}),task('next',{minutes:360}),task('stock',{status:'done',stockFulfillmentId:'stock-check',minutes:30}),task('unknown',{status:'done'})];
+ const workspace=state(tasks,{complete:{minutes:60,crewSize:2},unknown:{unmeasured:true}});
+ const before=JSON.stringify(workspace);
+ const total=departmentDayWork(workspace).get('dessert:2026-11-10');
+ assert.equal(total.scheduledLaborMinutes,540);
+ assert.equal(total.plannedLaborMinutes,360,'Remaining work still excludes completed tasks');
+ assert.equal(total.doneLaborMinutes,120,'One hour with two people is two labor hours');
+ assert.equal(total.scheduledMissingCount,1);assert.equal(total.doneMissingCount,1);
+ assert.equal(JSON.stringify(workspace),before);
+});
+
+test('the scheduled total retains the team estimate when an active task is completed',()=>{
+ const active=task('team',{status:'active',minutes:60});
+ const running=departmentDayWork(state([active],{}, {team:{crewSize:2}})).get('dessert:2026-11-10');
+ const finished=departmentDayWork(state([{...active,status:'done'}],{team:{minutes:45,crewSize:2}})).get('dessert:2026-11-10');
+ assert.equal(running.scheduledLaborMinutes,120);assert.equal(finished.scheduledLaborMinutes,120);
+ assert.equal(finished.doneLaborMinutes,90);assert.equal(finished.plannedLaborMinutes,0);
 });

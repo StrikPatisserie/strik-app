@@ -15,6 +15,8 @@ export type DepartmentDayWork = {
   doneMissingCount: number;
   plannedLaborMinutes: number;
   plannedMissingCount: number;
+  scheduledLaborMinutes: number;
+  scheduledMissingCount: number;
 };
 
 function validCrewSize(value: number | undefined): value is number {
@@ -42,7 +44,8 @@ export function taskWorkSummary(state: PreviewState, task: Task): TaskWorkSummar
 }
 
 /** Aggregate the full workspace, independent of the visible status/search filter.
- * Explicit estimates use one person until the active task has a recorded crew.
+ * Scheduled estimates include completed tasks, keeping the full plan comparable
+ * with actual work. Explicit times use the recorded crew when available.
  * Otherwise, confirmed recipe measurements provide their existing labor estimate. */
 export function departmentDayWork(state: PreviewState, recipes?: DemoRecipe[]): Map<string, DepartmentDayWork> {
   const view = recipes ? workView(state, recipes) : undefined;
@@ -52,7 +55,7 @@ export function departmentDayWork(state: PreviewState, recipes?: DemoRecipe[]): 
     const key = `${task.departmentId}:${task.date}`;
     let total = totals.get(key);
     if (!total) {
-      total = { totalTaskCount: 0, doneCount: 0, doneLaborMinutes: 0, doneMissingCount: 0, plannedLaborMinutes: 0, plannedMissingCount: 0 };
+      total = { totalTaskCount: 0, doneCount: 0, doneLaborMinutes: 0, doneMissingCount: 0, plannedLaborMinutes: 0, plannedMissingCount: 0, scheduledLaborMinutes: 0, scheduledMissingCount: 0 };
       totals.set(key, total);
     }
     total.totalTaskCount++;
@@ -61,18 +64,25 @@ export function departmentDayWork(state: PreviewState, recipes?: DemoRecipe[]): 
       const summary = taskWorkSummary(state, task);
       if (summary.laborMinutes === undefined) total.doneMissingCount++;
       else total.doneLaborMinutes += summary.laborMinutes;
-    } else if (task.minutes !== undefined && Number.isFinite(task.minutes) && task.minutes >= 0) {
-      const crewSize = task.status === "active" ? state.productionWork?.timers?.[task.id]?.crewSize : undefined;
-      total.plannedLaborMinutes += task.minutes * (validCrewSize(crewSize) ? crewSize : 1);
-    } else {
-      let estimate: number | undefined;
-      if (view && !view.overrides[task.id]) {
-        const estimateKey = JSON.stringify([task.itemId, task.operation.trim().toLowerCase(), task.quantity]);
-        if (!estimates.has(estimateKey)) {
-          estimates.set(estimateKey, learnedWorkEstimate(view, task.itemId, task.operation, task.quantity)?.laborMinutes);
-        }
-        estimate = estimates.get(estimateKey);
+    }
+    if (task.stockFulfillmentId) continue;
+
+    let estimate: number | undefined;
+    if (task.minutes !== undefined && Number.isFinite(task.minutes) && task.minutes >= 0) {
+      const crewSize = task.status === "active"
+        ? state.productionWork?.timers?.[task.id]?.crewSize
+        : task.status === "done" ? state.productionWork?.completions?.[task.id]?.crewSize : undefined;
+      estimate = task.minutes * (validCrewSize(crewSize) ? crewSize : 1);
+    } else if (view && !view.overrides[task.id]) {
+      const estimateKey = JSON.stringify([task.itemId, task.operation.trim().toLowerCase(), task.quantity]);
+      if (!estimates.has(estimateKey)) {
+        estimates.set(estimateKey, learnedWorkEstimate(view, task.itemId, task.operation, task.quantity)?.laborMinutes);
       }
+      estimate = estimates.get(estimateKey);
+    }
+    if (estimate === undefined) total.scheduledMissingCount++;
+    else total.scheduledLaborMinutes += estimate;
+    if (task.status !== "done") {
       if (estimate === undefined) total.plannedMissingCount++;
       else total.plannedLaborMinutes += estimate;
     }
