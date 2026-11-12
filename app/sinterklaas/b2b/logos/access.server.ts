@@ -11,7 +11,8 @@ export async function logoContext(request:Request,mutate=false) {
   if(!orderId||orderId.length>180||/[\x00-\x1f]/.test(orderId)||!/^20\d{2}$/.test(year))return{error:Response.json({message:"Ongeldige bestelling."},{status:400,headers:logoHeaders})};
   try {
     const orders=await loadProductionB2BOrders(year);
-    if(!orders.some(order=>order.id===orderId))return{error:Response.json({message:"Bestelling niet gevonden."},{status:404,headers:logoHeaders})};
-    return{profile,orderId,year:Number(year),db:createAdminClient() as unknown as SupabaseClient};
+    const order=orders.find(order=>order.id===orderId);
+    if(!order)return{error:Response.json({message:"Bestelling niet gevonden."},{status:404,headers:logoHeaders})};
+    return{profile,orderId,customer:order.customerName,year:Number(year),db:createAdminClient() as unknown as SupabaseClient};
   } catch {return{error:Response.json({message:"De bestelling kon niet worden gecontroleerd. Probeer opnieuw."},{status:503,headers:logoHeaders})};}
 }

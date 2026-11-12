@@ -12,7 +12,7 @@ test('logo controls cover standalone letters, packages, explicit logo agreements
 test('A4 layout uses exact centimeters, keeps each requested count and never runs outside printable margins',()=>{
  const items=[choice({quantity:63}),choice({id:id2,quantity:17,width_cm:4.2,height_cm:2.1})],cells=model.logoPrintLayout(items);
  assert.equal(cells.length,80);assert.equal(cells.filter(item=>item.id===id2).length,17);
- for(const cell of cells){assert(cell.x>=.5&&cell.y>=.6);assert(cell.x+cell.width<=20.500001);assert(cell.y+cell.height<=24.700001);}
+ for(const cell of cells){assert(cell.x>=.5&&cell.y>=2.2);assert(cell.x+cell.width<=20.500001);assert(cell.y+cell.height<=24.700001);}
  assert.equal(cells[0].width,3);assert.equal(cells[0].height,3);assert(cells.at(-1).page>0);
  for(const items of [[choice({quantity:0})],[choice({quantity:2001})],[choice({width_cm:20})],[choice({height_cm:28})],[choice(),choice()],[choice({quantity:101,width_cm:19,height_cm:27})]])assert.throws(()=>model.logoPrintLayout(items));
 });
@@ -61,11 +61,13 @@ test('PDF generator produces real A4 sheets with both raster logos and vector PD
  const canvas=createCanvas(600,300),ctx=canvas.getContext('2d');ctx.fillStyle='#842E3C';ctx.fillRect(0,0,600,300);ctx.fillStyle='#fff';ctx.font='bold 90px sans-serif';ctx.fillText('STRIK',140,185);
  const vector=await PDFDocument.create();const page=vector.addPage([200,200]);page.drawCircle({x:100,y:100,size:90,color:rgb(.3,.5,.4)});page.drawText('LOGO',{x:48,y:90,size:32,color:rgb(1,1,1)});
  const files=[{id,content_type:'image/png',bytes_base64:canvas.toBuffer('image/png').toString('base64')},{id:id2,content_type:'application/pdf',bytes_base64:Buffer.from(await vector.save()).toString('base64')}];
- const print=load(base+'print.server.ts',{'server-only':{},'pdf-lib':require('pdf-lib'),'./model':model});
- const bytes=await print.createLogoPrint([choice({quantity:70}),choice({id:id2,quantity:5,width_cm:4,height_cm:4})],files);
- const pdf=await PDFDocument.load(bytes);assert(pdf.getPageCount()>=2);assert(Math.abs(pdf.getPage(0).getSize().width-595.27559)<.01);assert(Math.abs(pdf.getPage(0).getSize().height-841.88976)<.01);
+ const headerText=[];
+ const canvasModule=require('@napi-rs/canvas');
+ const print=load(base+'print.server.ts',{'server-only':{},'pdf-lib':require('pdf-lib'),'./model':model,'@napi-rs/canvas':{...canvasModule,createCanvas(...args){const result=canvasModule.createCanvas(...args);if(args[0]===1600){const ctx=result.getContext('2d'),draw=ctx.fillText.bind(ctx);ctx.fillText=(value,...rest)=>{headerText.push(value);draw(value,...rest);};}return result;}}});
+ const bytes=await print.createLogoPrint([choice({quantity:70}),choice({id:id2,quantity:5,width_cm:4,height_cm:4})],files,'Testbedrijf & Partners');
+ const pdf=await PDFDocument.load(bytes);assert.equal(pdf.getPageCount(),3);assert.equal(headerText.filter(text=>text==='Testbedrijf & Partners').length,2);assert.match(pdf.getTitle(),/Testbedrijf & Partners/);assert(Math.abs(pdf.getPage(0).getSize().width-595.27559)<.01);assert(Math.abs(pdf.getPage(0).getSize().height-841.88976)<.01);
  if(process.env.STRIK_LOGO_TEST_PDF_DIR){fs.mkdirSync(process.env.STRIK_LOGO_TEST_PDF_DIR,{recursive:true});fs.writeFileSync(`${process.env.STRIK_LOGO_TEST_PDF_DIR}/logo-print-test.pdf`,bytes);}
- await assert.rejects(print.createLogoPrint([choice()],[{id,content_type:'application/pdf',bytes_base64:Buffer.from('invalid').toString('base64')}]),/onbeveiligde PDF/);
+ await assert.rejects(print.createLogoPrint([choice()],[{id,content_type:'application/pdf',bytes_base64:Buffer.from('invalid').toString('base64')}],'Testbedrijf'),/onbeveiligde PDF/);
 });
 
 test('metadata lists never include file contents and another order cannot download the file',async()=>{
@@ -124,10 +126,10 @@ test('reprinting an already confirmed logo requires explicit confirmation on the
 
 test('printer safety reserves 50 mm below every logo, uses 5 mm side margins and never shrinks requested dimensions',()=>{
  const cells=model.logoPrintLayout([choice({quantity:100})]);
- assert.equal(cells[0].x,.5);assert.equal(cells[0].y,.6);assert.equal(cells.filter(cell=>cell.page===0&&cell.y===.6).length,6,'six 3 cm logos fit across the wider print area');
+ assert.equal(cells[0].x,.5);assert.equal(cells[0].y,2.2);assert.equal(cells.filter(cell=>cell.page===0&&cell.y===2.2).length,6,'six 3 cm logos fit across the wider print area');
  for(const cell of cells){assert(29.7-cell.y-cell.height>=5-.000001);assert.equal(cell.width,3);assert.equal(cell.height,3);}
- assert.throws(()=>model.logoPrintLayout([choice({height_cm:24.2,quantity:1})]),/5 cm vrij/);
- const large=model.logoPrintLayout([choice({height_cm:24.1,quantity:1})]);assert.equal(large.length,1);assert(Math.abs(29.7-large[0].y-large[0].height-5)<.000001);
+ assert.throws(()=>model.logoPrintLayout([choice({height_cm:22.6,quantity:1})]),/5 cm vrij/);
+ const large=model.logoPrintLayout([choice({height_cm:22.5,quantity:1})]);assert.equal(large.length,1);assert(Math.abs(29.7-large[0].y-large[0].height-5)<.000001);
 });
 
 
@@ -159,4 +161,24 @@ test('confirming or changing a logo print updates the overview callback immediat
  assert.deepEqual(reports.at(-1),[1,true]);tree=render();assert.equal(nodes(tree).find(n=>n.type==='input'&&n.props.type==='checkbox').props.checked,true);
  fail=true;nodes(tree).find(n=>n.type==='input'&&n.props.type==='checkbox').props.onChange({target:{checked:false}});await new Promise(setImmediate);assert.deepEqual(reports.at(-1),[1,true]);
  fail=false;tree=render();nodes(tree).find(n=>n.type==='input'&&n.props.type==='checkbox').props.onChange({target:{checked:false}});await new Promise(setImmediate);assert.deepEqual(reports.at(-1),[1,false]);
+});
+
+
+test('each logo starts its own sheets and every sheet reserves a customer header above exact-size logos', () => {
+ const cells=model.logoPrintLayout([choice({quantity:2}),choice({id:id2,quantity:2})]);
+ assert.equal(cells.filter(cell=>cell.id===id)[0].page,0);
+ assert.equal(cells.filter(cell=>cell.id===id2)[0].page,1);
+ for(const page of new Set(cells.map(cell=>cell.page)))assert.equal(new Set(cells.filter(cell=>cell.page===page).map(cell=>cell.id)).size,1);
+ assert(cells.every(cell=>cell.y>=2.2&&cell.width===3&&cell.height===3));
+});
+
+test('print customer name comes from the verified order, ignoring a supplied customer name', async () => {
+ let actualCustomer='';const db=repository([row()]);
+ const api=load('app/api/b2b-logos/print/route.ts', {
+  '@/app/sinterklaas/b2b/logos/access.server':{logoHeaders:{},logoContext:async()=>({db,orderId:'one',year:2026,customer:'Verified customer'})},
+  '@/app/sinterklaas/b2b/logos/model':model,
+  '@/app/sinterklaas/b2b/logos/print.server':{createLogoPrint:async(items,files,customer)=>{actualCustomer=customer;return Buffer.from('%PDF-test');}},
+ });
+ const response=await api.POST(request('POST',{logos:[choice({quantity:1})],customer:'Forged'}));
+ assert.equal(response.status,200);assert.equal(actualCustomer,'Verified customer');
 });
