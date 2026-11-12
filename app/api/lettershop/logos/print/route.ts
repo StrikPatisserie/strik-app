@@ -4,7 +4,7 @@ import { loadLogoReceipts, logoOrderSelect } from "@/app/sinterklaas/letters/onl
 import { logoItemPrinted, logoItems, logoOrderSummary, type LogoPrintSnapshot } from "@/app/sinterklaas/letters/online/logos/model";
 import { onlineItemLabel, type OnlineLetterOrder } from "@/app/sinterklaas/letters/online/onlineOrders";
 import { createLogoPrint } from "@/app/sinterklaas/b2b/logos/print.server";
-import { logoPrintLayout } from "@/app/sinterklaas/b2b/logos/model";
+import { packedLogoPrintLayout } from "@/app/sinterklaas/b2b/logos/packedLayout";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -43,12 +43,13 @@ export async function POST(request: Request) {
           product_id: item.product_id, logo_storage_path: item.logo_storage_path });
         choices.push({ id: item.id, quantity: item.quantity, width_cm: input.widthCm, height_cm: input.heightCm });
         files.push({ id: item.id, customer: order.customer_name, summary: `${onlineItemLabel(item)} — ${logoOrderSummary(order)}`,
+          printSummary: `${order.order_number} · ${onlineItemLabel(item).replace(/ · foto\/logo$/, "")}`,
           content_type: "", bytes_base64: "", path: item.logo_storage_path });
       }
     }
     if (snapshots.length !== selectedIds.size) throw new Error("Selecteer alleen bestelregels met logo.");
     if (choices.length > 30) throw new Error("Kies maximaal 30 verschillende logoregels per afdruk.");
-    logoPrintLayout(choices);
+    packedLogoPrintLayout(choices);
     // Sequential downloads bound memory usage for large photo selections.
     for (const file of files) {
       const { data, error } = await context.db.storage.from("lettershop-logos").download(file.path);
@@ -72,7 +73,7 @@ export async function POST(request: Request) {
       }
       file.bytes_base64 = imageBytes.toString("base64");
     }
-    const bytes = await createLogoPrint(choices, files, "Lettershop");
+    const bytes = await createLogoPrint(choices, files, "Lettershop", { packGroups: true });
     const job = await context.db.from("letter_logo_print_jobs").insert({ created_by: context.profile.id, items: snapshots,
       width_cm: input.widthCm, height_cm: input.heightCm }).select("id").single();
     if (job.error || !job.data) throw new Error("Afdruk vastleggen is mislukt. Probeer opnieuw.");

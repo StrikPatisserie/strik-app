@@ -1,9 +1,10 @@
 import "server-only";
 import { PDFDocument, PrintScaling, type PDFImage, type PDFEmbeddedPage } from "pdf-lib";
-import { createCanvas, loadImage, DOMMatrix, ImageData, Path2D } from "@napi-rs/canvas";
+import { createCanvas, loadImage, DOMMatrix, ImageData, Path2D, type SKRSContext2D } from "@napi-rs/canvas";
 import { logoPrintLayout, type PrintLogo } from "./model";
+import { packedLogoPrintLayout } from "./packedLayout";
 
-type FileLogo = { id: string; name?: string; customer?: string; summary?: string; content_type: string; bytes_base64: string };
+type FileLogo = { id: string; name?: string; customer?: string; summary?: string; printSummary?: string; content_type: string; bytes_base64: string };
 const cm = 72 / 2.54;
 
 async function logoThumbnail(file: FileLogo, bytes: Buffer) {
@@ -80,19 +81,76 @@ async function printHeader(customer: string, file: FileLogo, thumbnail: Buffer) 
   return canvas.toBuffer("image/png");
 }
 
-export async function createLogoPrint(items: PrintLogo[], files: FileLogo[], customer: string) {
+function headerLines(context: SKRSContext2D, text: string, width: number) {
+  const lines: string[] = [];
+  let line = "";
+  for (const word of text.trim().split(/\s+/)) {
+    const next = line ? `${line} ${word}` : word;
+    if (line && context.measureText(next).width > width) {
+      lines.push(line);
+      line = word;
+    } else line = next;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+async function packedPrintHeader(customer: string, file: FileLogo, thumbnail: Buffer, widthCm: number, heightCm: number) {
+  const pixelsPerCm = 120;
+  const canvas = createCanvas(Math.round(widthCm * pixelsPerCm), Math.round(heightCm * pixelsPerCm));
+  const context = canvas.getContext("2d");
+  context.fillStyle = "#fff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  const thumbnailSize = 48;
+  context.drawImage(await loadImage(thumbnail), 0, 5, thumbnailSize, thumbnailSize);
+  const textX = thumbnailSize + 10;
+  const textWidth = canvas.width - textX - 4;
+  const title = (file.customer || customer).replace(/\s+/g, " ").trim();
+  let titleSize = 30;
+  let titleLines: string[];
+  do {
+    context.font = `bold ${titleSize}px sans-serif`;
+    titleLines = headerLines(context, title, textWidth);
+    if (titleLines.length <= 2) break;
+    titleSize--;
+  } while (titleSize > 24);
+  context.fillStyle = "#111";
+  let baseline = titleSize + 2;
+  for (const line of titleLines.slice(0, 3)) {
+    context.fillText(line, textX, baseline, textWidth);
+    baseline += titleSize + 2;
+  }
+  context.font = "24px sans-serif";
+  const summary = file.printSummary || file.summary || file.name || "Logo";
+  const lines = headerLines(context, summary, canvas.width - 4);
+  const availableLines = Math.max(1, Math.floor((canvas.height - 6 - baseline - 23) / 26) + 1);
+  for (let index = 0; index < Math.min(lines.length, availableLines); index++) {
+    let line = lines[index];
+    if (index === availableLines - 1 && lines.length > availableLines) line += "…";
+    context.fillText(line, 0, baseline + 23, canvas.width - 4);
+    baseline += 26;
+  }
+  context.fillStyle = "#aaa";
+  context.fillRect(0, canvas.height - 3, canvas.width, 1);
+  return canvas.toBuffer("image/png");
+}
+
+export async function createLogoPrint(items: PrintLogo[], files: FileLogo[], customer: string, options: { packGroups?: boolean } = {}) {
   if (!customer?.trim()) throw Error("De klantnaam kon niet worden geladen. Vernieuw de bestelling.");
-  const layout = logoPrintLayout(items);
+  const packed = options.packGroups ? packedLogoPrintLayout(items) : null;
+  const layout = packed?.cells || logoPrintLayout(items);
   const pdf = await PDFDocument.create();
   const images = new Map<string, PDFImage | PDFEmbeddedPage>();
   const headers = new Map<string, PDFImage>();
+  const thumbnails = new Map<string, Buffer>();
   for (const id of new Set(layout.map(cell => cell.id))) {
     const file = files.find(file => file.id === id);
     if (!file) throw Error("Een gekozen logo is niet meer beschikbaar. Vernieuw de lijst.");
     const bytes = Buffer.from(file.bytes_base64, "base64");
     try {
       const thumbnail = await logoThumbnail(file, bytes);
-      headers.set(id, await pdf.embedPng(await printHeader(customer, file, thumbnail)));
+      if (packed) thumbnails.set(id, thumbnail);
+      else headers.set(id, await pdf.embedPng(await printHeader(customer, file, thumbnail)));
       if (file.content_type === "application/pdf") {
         const source = await PDFDocument.load(bytes);
         if (!source.getPageCount()) throw Error("Lege PDF.");
@@ -115,7 +173,7 @@ export async function createLogoPrint(items: PrintLogo[], files: FileLogo[], cus
     if (pdf.getPageCount() <= cell.page) {
       const page = pdf.addPage();
       page.setSize(21 * cm, 29.7 * cm);
-      page.drawImage(headers.get(cell.id)!, { x: .5 * cm, y: (29.7 - .5 - 1.5) * cm, width: 20 * cm, height: 1.5 * cm });
+      if (!packed) page.drawImage(headers.get(cell.id)!, { x: .5 * cm, y: (29.7 - .5 - 1.5) * cm, width: 20 * cm, height: 1.5 * cm });
     }
     const page = pdf.getPage(cell.page);
     const image = images.get(cell.id)!;
@@ -130,6 +188,17 @@ export async function createLogoPrint(items: PrintLogo[], files: FileLogo[], cus
     };
     if (files.find(file => file.id === cell.id)?.content_type === "application/pdf") page.drawPage(image as PDFEmbeddedPage, options);
     else page.drawImage(image as PDFImage, options);
+  }
+  for (const header of packed?.headers || []) {
+    const key = `${header.id}:${header.width}`;
+    let image = headers.get(key);
+    if (!image) {
+      const file = files.find(file => file.id === header.id)!;
+      image = await pdf.embedPng(await packedPrintHeader(customer, file, thumbnails.get(header.id)!, header.width, header.height));
+      headers.set(key, image);
+    }
+    pdf.getPage(header.page).drawImage(image, { x: header.x * cm, y: (29.7 - header.y - header.height) * cm,
+      width: header.width * cm, height: header.height * cm });
   }
   pdf.catalog.getOrCreateViewerPreferences().setPrintScaling(PrintScaling.None);
   pdf.setTitle(`${customer} · logo printvel`);

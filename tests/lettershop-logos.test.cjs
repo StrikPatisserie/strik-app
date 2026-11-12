@@ -13,6 +13,8 @@ function load(file, imports = {}) {
 const base = 'app/sinterklaas/letters/online/';
 const online = load(base + 'onlineOrders.ts');
 const model = load(base + 'logos/model.ts', { '../onlineOrders': online });
+const printModel = load('app/sinterklaas/b2b/logos/model.ts');
+const packedLayout = load('app/sinterklaas/b2b/logos/packedLayout.ts', { './model': printModel });
 const id = '11111111-1111-4111-8111-111111111111';
 const second = '22222222-2222-4222-8222-222222222222';
 const orderId = '33333333-3333-4333-8333-333333333333';
@@ -56,7 +58,8 @@ function repository(order = fixture()) {
         insert(value) { inserted = value; return this; },
         async single() { db.jobs.push(inserted); return { data: { id: jobId }, error: null }; },
         then(resolve) {
-          const data = table === 'letter_order_items' ? db.order.letter_order_items : table === 'letter_orders' ? [db.order] : [];
+          const orders = db.orders || [db.order];
+          const data = table === 'letter_order_items' ? orders.flatMap(order => order.letter_order_items) : table === 'letter_orders' ? orders : [];
           return Promise.resolve({ data, error: null }).then(resolve);
         },
       };
@@ -73,8 +76,8 @@ function printRoute(db) {
     [accessPath]: { uuid, logoHeaders: {}, logoAccess: async () => ({ db, profile: { id: actor } }) },
     [dataPath]: { logoOrderSelect: '', loadLogoReceipts: async () => db.receipts },
     [modelPath]: model, '@/app/sinterklaas/letters/online/onlineOrders': online,
-    '@/app/sinterklaas/b2b/logos/print.server': { createLogoPrint: async (choices, files) => { db.choices = choices; db.files = files; return Buffer.from('%PDF-test'); } },
-    '@/app/sinterklaas/b2b/logos/model': load('app/sinterklaas/b2b/logos/model.ts'),
+    '@/app/sinterklaas/b2b/logos/print.server': { createLogoPrint: async (choices, files, customer, options) => { db.choices = choices; db.files = files; db.printOptions = options; return Buffer.from('%PDF-test'); } },
+    '@/app/sinterklaas/b2b/logos/packedLayout': packedLayout,
   });
 }
 const selection = () => ({ itemIds: [id], orders: [{ id: orderId, revision: 2 }], widthCm: 3, heightCm: 3 });
@@ -87,10 +90,39 @@ test('PDF generation uses authoritative quantities, customer and summary, and re
   assert.equal(db.choices[0].quantity, 3);
   assert.equal(db.files[0].customer, 'Testklant');
   assert.match(db.files[0].summary, /CL26-9999/);
+  assert.match(db.files[0].printSummary, /^CL26-9999.*3 × spuitletter S.*melk.*groot/);
+  assert.equal(db.printOptions.packGroups, true);
   assert.equal(db.jobs[0].created_by, actor);
   assert.equal(db.jobs[0].items[0].quantity, 3);
   assert.equal(db.jobs[0].confirmed_at, undefined);
   assert.equal(db.receipts.length, 0);
+});
+test('multiple customer selections reach one packed document with their own authoritative counts and identifiers', async () => {
+  const db = repository();
+  const uniqueId = index => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
+  db.orders = Array.from({ length: 9 }, (_, index) => {
+    const order = fixture();
+    order.id = uniqueId(index + 10);
+    order.customer_name = `Klant ${index + 1}`;
+    order.order_number = `CL26-${index + 1}`;
+    order.letter_order_items[0].id = uniqueId(index + 30);
+    order.letter_order_items[0].order_id = order.id;
+    order.letter_order_items[0].quantity = index + 1;
+    return order;
+  });
+  const response = await printRoute(db).POST(request({ ...selection(),
+    itemIds: db.orders.map(order => order.letter_order_items[0].id),
+    orders: db.orders.map(order => ({ id: order.id, revision: order.revision })),
+  }));
+  assert.equal(response.status, 200);
+  assert.equal(db.printOptions.packGroups, true);
+  assert.equal(db.jobs.length, 1);
+  assert.equal(db.jobs[0].items.length, 9);
+  for (let index = 0; index < 9; index++) {
+    assert.equal(db.choices[index].quantity, index + 1);
+    assert.equal(db.files[index].customer, `Klant ${index + 1}`);
+    assert(db.files[index].printSummary.startsWith(`CL26-${index + 1} · `));
+  }
 });
 test('server refuses stale selections, missing images, invalid sizes and unintended reprints', async () => {
   for (const variant of ['stale', 'missing', 'size', 'printed']) {
@@ -111,7 +143,7 @@ test('every endpoint rejects unauthorized requests before inspecting private fil
     const imports = {
       [accessPath]: { uuid, logoHeaders: {}, logoAccess: async () => ({ error: new Response('Forbidden', { status: 403 }) }) },
       [dataPath]: {}, [modelPath]: model, '@/app/sinterklaas/letters/online/onlineOrders': online,
-      '@/app/sinterklaas/b2b/logos/print.server': {}, '@/app/sinterklaas/b2b/logos/model': {},
+      '@/app/sinterklaas/b2b/logos/print.server': {}, '@/app/sinterklaas/b2b/logos/packedLayout': {},
     };
     const api = load('app/api/lettershop/logos/' + name + '.ts', imports);
     const response = await (api.GET || api.POST)(request({}));
