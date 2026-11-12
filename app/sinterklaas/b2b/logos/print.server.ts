@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { PDFDocument, PrintScaling, rgb, type PDFImage, type PDFEmbeddedPage } from "pdf-lib";
 import { createCanvas, GlobalFonts, loadImage, DOMMatrix, ImageData, Path2D, type SKRSContext2D } from "@napi-rs/canvas";
 import { logoPrintLayout, validateLogoPrintItems, type PrintLogo } from "./model";
-import { packedLogoPrintLayout } from "./packedLayout";
+import { LOGO_CUT_PADDING_CM, packedLogoPrintLayout } from "./packedLayout";
 
 type FileLogo = { id: string; orderId?: string; name?: string; customer?: string; summary?: string; content_type: string; bytes_base64: string };
 const cm = 72 / 2.54;
@@ -211,8 +211,8 @@ export async function createLogoPrint(items: PrintLogo[], files: FileLogo[], cus
     if (files.find(file => file.id === cell.id)?.content_type === "application/pdf") page.drawPage(image as PDFEmbeddedPage, options);
     else page.drawImage(image as PDFImage, options);
     if (packed) page.drawRectangle({
-      x: cell.x * cm, y: (29.7 - cell.y - cell.height) * cm,
-      width: cell.width * cm, height: cell.height * cm,
+      x: (cell.x - LOGO_CUT_PADDING_CM) * cm, y: (29.7 - cell.y - cell.height - LOGO_CUT_PADDING_CM) * cm,
+      width: (cell.width + 2 * LOGO_CUT_PADDING_CM) * cm, height: (cell.height + 2 * LOGO_CUT_PADDING_CM) * cm,
       borderColor: rgb(.8, .8, .8), borderWidth: .4,
     });
   }

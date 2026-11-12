@@ -26,7 +26,10 @@ function checkLayout(items) {
     assert.equal(cells.length, item.quantity);
     assert(cells.every(cell => cell.width === item.width_cm && cell.height === item.height_cm));
   }
-  const rectangles = [...result.cells, ...result.headers];
+  const padding = packed.LOGO_CUT_PADDING_CM;
+  const frames = result.cells.map(cell => ({ ...cell, x: cell.x - padding, y: cell.y - padding,
+    width: cell.width + 2 * padding, height: cell.height + 2 * padding }));
+  const rectangles = [...frames, ...result.headers];
   for (const rect of rectangles) {
     assert(rect.x >= .5 && rect.y >= .5);
     assert(rect.x + rect.width <= 20.500001 && rect.y + rect.height <= 24.700001);
@@ -34,7 +37,7 @@ function checkLayout(items) {
       if (rect === other || rect.page !== other.page) continue;
       const overlapX = Math.min(rect.x + rect.width, other.x + other.width) - Math.max(rect.x, other.x);
       const overlapY = Math.min(rect.y + rect.height, other.y + other.height) - Math.max(rect.y, other.y);
-      assert(overlapX < .000001 || overlapY < .000001, 'customer headers and exact-size logos never overlap');
+      assert(overlapX < .000001 || overlapY < .000001, 'customer headers and padded cutting frames never overlap');
     }
   }
   for (const cell of result.cells) {
@@ -68,7 +71,8 @@ test('larger selections fill the sheet, repeat customer identification and conti
   assert(result.cells.filter(cell => cell.page === 0).length > 16, 'the next customer uses the remaining page space');
   assert(result.headers.some(header => result.headers.filter(other => other.id === header.id).length > 1));
 });
-test('mixed sizes, zero selections and narrow logos keep readable headers and exact requested sizes', () => {
+test('mixed sizes including the maximum height keep exact-size logos and 1 mm cutting space inside safe margins', () => {
+  assert.equal(packed.LOGO_CUT_PADDING_CM, .1);
   const items = [choice(0, 0), choice(1, 3, .5, .5), choice(2, 4, 6, 2), choice(3, 1, 19, 22.5), choice(4, 20, 4, 3)];
   const result = checkLayout(items);
   assert(result.headers.every(header => header.width >= 3));
@@ -151,7 +155,9 @@ test('real packed PDFs render exact-size logos with cutting frames and customer/
     assert(!/CL26-|spuitletter|melk|groot/.test(titleText.join(' ')), 'order and product details stay off the print header');
     assert.equal(frames.length, logos.length);
     for (const [index, frame] of frames.entries()) {
-      for (const dimension of ['x', 'y', 'width', 'height']) assert.equal(frame[dimension], logos[index][dimension]);
+      const padding = .1 * 72 / 2.54;
+      for (const dimension of ['x', 'y']) assert(Math.abs(frame[dimension] + padding - logos[index][dimension]) < .000001);
+      for (const dimension of ['width', 'height']) assert(Math.abs(frame[dimension] - 2 * padding - logos[index][dimension]) < .000001);
       assert.equal(frame.borderWidth, .4);
       assert.deepEqual(frame.borderColor, pdfLib.rgb(.8, .8, .8));
       assert.equal(frame.color, undefined, 'cutting frames have no fill over the logo');
@@ -201,6 +207,6 @@ test('grouping keeps distinct orders, unknown order identities and sizes separat
   }
   await renderer.createLogoPrint(items, files, 'Lettershop', { packGroups: true });
   assert.equal(titleText.length, 5, 'matching customer names alone never merge orders or sizes');
-  assert.equal(frames.filter(frame => Math.abs(frame.width - 4 * 72 / 2.54) < .000001).length, 1);
+  assert.equal(frames.filter(frame => Math.abs(frame.width - 4.2 * 72 / 2.54) < .000001).length, 1);
   await assert.rejects(renderer.createLogoPrint([choice(0), choice(0)], files, 'Lettershop', { packGroups: true }), /Controleer/);
 });

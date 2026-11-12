@@ -1,7 +1,8 @@
 import { LOGO_PRINT_MARGINS, validateLogoPrintItems, type PrintLogo } from "./model";
 
 type LogoCell = { id: string; page: number; x: number; y: number; width: number; height: number };
-const gap = 0.3;
+export const LOGO_CUT_PADDING_CM = 0.1;
+const gap = 0.1;
 const headerHeight = 1.3;
 const headerGap = 0.15;
 const groupGap = 0.65;
@@ -17,25 +18,27 @@ export function packedLogoPrintLayout(items: PrintLogo[]) {
   let y = top;
 
   for (const item of items) {
-    const columns = Math.floor((width + gap + 0.000001) / (item.width_cm + gap));
+    const frameWidth = item.width_cm + 2 * LOGO_CUT_PADDING_CM;
+    const frameHeight = item.height_cm + 2 * LOGO_CUT_PADDING_CM;
+    const columns = Math.floor((width + gap + 0.000001) / (frameWidth + gap));
     let remaining = item.quantity;
     while (remaining > 0) {
-      if (y + headerHeight + headerGap + item.height_cm > bottom + 0.000001) {
+      if (y + headerHeight + headerGap + frameHeight > bottom + 0.000001) {
         page++;
         if (page >= 100) throw Error("Dit zijn meer dan 100 printvellen. Kies minder logo’s of een kleiner formaat.");
         y = top;
       }
       headers.push({ id: item.id, page, x: LOGO_PRINT_MARGINS.left, y, width, height: headerHeight });
-      const logoTop = y + headerHeight + headerGap;
-      const rows = Math.floor((bottom - logoTop + gap + 0.000001) / (item.height_cm + gap));
+      const frameTop = y + headerHeight + headerGap;
+      const rows = Math.floor((bottom - frameTop + gap + 0.000001) / (frameHeight + gap));
       const count = Math.min(remaining, columns * rows);
       for (let index = 0; index < count; index++) {
         cells.push({ id: item.id, page,
-          x: LOGO_PRINT_MARGINS.left + (index % columns) * (item.width_cm + gap),
-          y: logoTop + Math.floor(index / columns) * (item.height_cm + gap),
+          x: LOGO_PRINT_MARGINS.left + LOGO_CUT_PADDING_CM + (index % columns) * (frameWidth + gap),
+          y: frameTop + LOGO_CUT_PADDING_CM + Math.floor(index / columns) * (frameHeight + gap),
           width: item.width_cm, height: item.height_cm });
       }
-      y = logoTop + Math.ceil(count / columns) * (item.height_cm + gap) - gap + groupGap;
+      y = frameTop + Math.ceil(count / columns) * (frameHeight + gap) - gap + groupGap;
       remaining -= count;
     }
   }
