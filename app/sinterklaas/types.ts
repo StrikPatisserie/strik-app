@@ -132,6 +132,7 @@ export type B2BConfirmationReceipt = {
 };
 
 export type B2BLetterLine = {
+  decoration?: string;
   withLogo?: boolean;
   id: string;
   letter: string;

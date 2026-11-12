@@ -80,8 +80,8 @@ export function buildB2BOrderPrintData(order: SinterklaasB2BOrder, parsed: Parse
       const letter = { ...original, withLogo: b2bLetterHasLogo(order, original) };
       entries.push({ letter, row: {
         quantity: letter.quantity,
-        description: b2bLetterLineLabel(letter).replace(/^\d+× /, ""),
-        attention: [...letter.exceptions, ...(letter.withLogo ? ["EIGEN LOGO"] : [])],
+        description: b2bLetterLineLabel({ ...letter, decoration: undefined }).replace(/^\d+× /, ""),
+        attention: [...letter.exceptions, ...(letter.withLogo ? ["EIGEN LOGO"] : []), ...(letter.decoration ? [`DECO · ${letter.decoration}`] : [])],
       } });
     }
   }

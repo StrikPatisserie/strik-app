@@ -1,4 +1,4 @@
-import { b2bLetterHasLogo } from "../../b2bLetterLines";
+import { b2bLetterHasLogo, b2bLetterDecoration } from "../../b2bLetterLines";
 import { b2bProductionLetters } from "../../b2bCombinationLetters";
 import { b2bProductionPlan, eligibleB2BLetterOrder, type B2BProductionAssignment, type B2BProductionPlan } from "./b2bProductionPlanning";
 import type { ChocolateLetterLine, ChocolateLetterOrder, SinterklaasB2BOrder } from "../../types";
@@ -104,8 +104,10 @@ export function combineProductionOrders(batches: ProductionBatchSeed[], legacyOr
       }
       b2bProductionLetters(order).lines.forEach((line) => {
         const extras = [b2bLetterHasLogo(order, line) ? "logo" : "", ...line.exceptions].filter(Boolean);
-        const label = [line.letter, line.chocolate, line.size, line.style, ...extras].join(" · ");
-        const key = [line.letter, line.chocolate, line.size, line.style, ...extras].join("|").toLocaleLowerCase("nl-NL");
+        const decoration = b2bLetterDecoration(line);
+        const label = [line.letter, line.chocolate, line.size, line.style, ...extras, ...(decoration ? [`decoratie: ${decoration}`] : [])].join(" · ");
+        const variantKey = [line.letter, line.chocolate, line.size, line.style, ...extras].join("|").toLocaleLowerCase("nl-NL");
+        const key = decoration ? `${variantKey}|deco:${encodeURIComponent(decoration.toLocaleLowerCase("nl-NL"))}` : variantKey;
         addOrderLine(date, key, label, line.quantity, "b2b", {id:`b2b:${order.id}`,customerName:order.customerName,code:order.folderQuote?.reference || order.id,date:order.deliveryDate,notes:[order.packaging,order.importantNotes].filter(Boolean).join(" · "),...(line.combinationProduct?{combinationProduct:line.combinationProduct}:{})});
       });
     });

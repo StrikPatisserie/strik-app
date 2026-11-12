@@ -568,3 +568,21 @@ test('editing the grouped 12Q order saves Ponos at 20 without S pricing and pres
  const reopened=entry('sint',{...fixture,...saved});reopened.button('Verder naar producten →');
  const next=nodes(reopened.render(),n=>typeof n.props?.onChange==='function'&&n.props?.group?.rows)[0];assert.equal(next.props.group.rows.length,10);assert.equal(next.props.group.rows.find(row=>row.company==='Ponos').melk,20);
 });
+
+
+test('decoration stays on its letter line through entry, editing, review and reopening, and never merges with standard letters', async () => {
+ const ui=entry();ui.field('Bedrijfsnaam / klantnaam *','Decoratiebedrijf');ui.field('Vaste leverdatum','2026-11-30');ui.button('Verder naar producten →');
+ function add(decoration,quantity){
+  ui.field('Letter','S');ui.field('Chocolade','melk');ui.field('Soort','spuit');ui.field('Formaat','groot');ui.field('Aantal letters',String(quantity));
+  ui.field('Decoratie op deze letters',decoration);ui.button('+ Letter toevoegen');
+ }
+ add('Blauwe balletjes',3);add('',4);add('Blauwe balletjes',2);
+ const rows=nodes(ui.render(),n=>n.props?.['data-order-item']==='letter');assert.equal(new Set(rows.map(row=>row.props['data-item-id'])).size,2);
+ ui.field('Decoratie letterregel 1: S','Blauwe balletjes, geen rood');
+ ui.button('Bestelling controleren →');assert.match(label(ui.render()),/Blauwe balletjes, geen rood/);await ui.submit();
+ const saved=ui.calls[0];assert.equal(saved.letterLines.length,2);assert.equal(saved.letterLines[0].quantity,5);assert.equal(saved.letterLines[1].quantity,4);
+ assert.equal(saved.letterLines[0].decoration,'Blauwe balletjes, geen rood');
+ const reopened=entry('sint',{...saved,id:'decorated-order'});assert.match(label(reopened.render()),/Decoratie/);
+ reopened.button('Verder naar producten →');reopened.button('Bestelling controleren →');await reopened.submit();
+ assert.equal(reopened.calls[0].letterLines[0].decoration,'Blauwe balletjes, geen rood');
+});

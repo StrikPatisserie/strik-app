@@ -38,7 +38,7 @@ import {
 } from "../sinterklaasApi";
 import type { SinterklaasB2BOrder } from "../types";
 import type { B2BLetterLine } from "../types";
-import { B2B_LETTER_EXCEPTIONS, B2B_SPUIT_LETTERS, B2B_VORM_LETTERS, b2bLetterHasLogo, b2bLetterLineLabel, b2bLetterTotal } from "../b2bLetterLines";
+import { B2B_LETTER_EXCEPTIONS, B2B_SPUIT_LETTERS, B2B_VORM_LETTERS, b2bLetterHasLogo, b2bLetterDecoration, b2bLetterLineLabel, b2bLetterTotal } from "../b2bLetterLines";
 import B2BLetterLineBadges from "../B2BLetterLineBadges";
 import {
   PACKAGE_LETTERS,
@@ -1246,6 +1246,7 @@ export function B2BOrderForm({
       id: `b2b-letter-${crypto.randomUUID()}`,
       letter: letterDraft.letter,
       quantity: letterDraft.quantity,
+      decoration: b2bLetterDecoration(letterDraft),
     };
     setForm((current) => {
       const matchingIndex = current.letterLines.findIndex((line) =>
@@ -1254,6 +1255,7 @@ export function B2BOrderForm({
         line.style === lineToAdd.style &&
         line.size === lineToAdd.size &&
         Boolean(line.withLogo) === Boolean(lineToAdd.withLogo) &&
+        b2bLetterDecoration(line) === b2bLetterDecoration(lineToAdd) &&
         JSON.stringify([...line.exceptions].sort()) === JSON.stringify([...lineToAdd.exceptions].sort())
       );
       const letterLines = matchingIndex >= 0
@@ -1466,7 +1468,7 @@ export function B2BOrderForm({
         const logo = line.withLogo ? roundCents(line.quantity * productLogoPrice(false)) : 0;
         const amount = roundCents(line.quantity * base + logo);
         return <div key={line.id} className={styles.cartRow} data-order-item="letter" data-item-id={line.id}>
-          <div className={styles.cartArticle}><span className={styles.letterMark}>{line.letter}</span><div><strong>{line.style === "vorm" ? "Vormletter" : "Spuitletter"} {line.letter}</strong><p>{line.chocolate === "melk" ? "Melk" : line.chocolate === "puur" ? "Puur" : "Wit"} · {line.size === "groot" ? "Groot" : "Klein"}</p>{line.exceptions.length > 0 && <div className={styles.itemTags}>{line.exceptions.map(exception => <span key={exception} data-exception={exception}>{exception === "vegan" && <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M19 4C10 4 5 8 5 15c0 3 2 5 5 5 7 0 9-7 9-16Z"/><path d="M6 18c3-4 6-6 10-9"/></svg>}{B2B_LETTER_EXCEPTIONS.find(item => item.id === exception)?.label || exception}</span>)}</div>}</div></div>
+          <div className={styles.cartArticle}><span className={styles.letterMark}>{line.letter}</span><div><strong>{line.style === "vorm" ? "Vormletter" : "Spuitletter"} {line.letter}</strong><p>{line.chocolate === "melk" ? "Melk" : line.chocolate === "puur" ? "Puur" : "Wit"} · {line.size === "groot" ? "Groot" : "Klein"}</p>{line.exceptions.length > 0 && <div className={styles.itemTags}>{line.exceptions.map(exception => <span key={exception} data-exception={exception}>{exception === "vegan" && <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M19 4C10 4 5 8 5 15c0 3 2 5 5 5 7 0 9-7 9-16Z"/><path d="M6 18c3-4 6-6 10-9"/></svg>}{B2B_LETTER_EXCEPTIONS.find(item => item.id === exception)?.label || exception}</span>)}</div>}{editable ? <label className={styles.decorationField}>Decoratie<input aria-label={`Decoratie letterregel ${index + 1}: ${line.letter}`} maxLength={240} placeholder="Bijv. blauwe balletjes" value={line.decoration || ""} onChange={event => updateLetterLine(line.id, { decoration: event.target.value })}/></label> : line.decoration && <p className={styles.decorationNote}>Decoratie · {line.decoration}</p>}</div></div>
           <div className={styles.cartQuantity}>{editable ? <label><span>Aantal</span><input aria-label={`Aantal letterregel ${index + 1}: ${line.letter}`} type="number" min="1" max="10000" value={line.quantity} onChange={event => updateLetterLine(line.id, { quantity: Math.max(1, Number(event.target.value) || 1) })}/></label> : <strong>{line.quantity}×</strong>}</div>
           <div className={styles.cartUnit}><span>Prijs / stuk</span><strong>{money(base)}</strong><small>{price?.manualPrice ? "Prijsafspraak" : "Folderprijs"}</small></div>
           <div className={styles.cartLogo}>{editable ? <label data-selected={Boolean(line.withLogo)}><input type="checkbox" aria-label={`Logo op letterregel ${index + 1}: ${line.letter} · ${line.chocolate} · ${line.size}`} checked={Boolean(line.withLogo)} onChange={event => updateLetterLine(line.id, { withLogo: event.target.checked })}/><span>{line.withLogo ? "Met logo" : "Zonder logo"}<small>{line.withLogo ? `+ ${money(logo)}` : "+ € 0,00"}</small></span></label> : <span>{line.withLogo ? `Met logo · + ${money(logo)}` : "Zonder logo"}</span>}</div>
@@ -1614,6 +1616,7 @@ export function B2BOrderForm({
               <label className={styles.field}>Aantal<input data-order-draft aria-label="Aantal letters" type="number" min="1" max="10000" value={letterDraft.quantity || ""} onChange={event => updateLetterDraft({ quantity: Number(event.target.value) })} /></label>
               <label className={styles.logoChoice}><input aria-label="Eigen logo op deze letters" type="checkbox" checked={Boolean(letterDraft.withLogo)} onChange={event => updateLetterDraft({ withLogo: event.target.checked })} /><span>Eigen logo op deze letters<small>+ {money(productLogoPrice(false))} per letter excl. btw</small></span></label>
               <details className={styles.letterExtras}><summary>Bijzondere wensen</summary>              <fieldset className={styles.exceptions}><legend>Bijzondere wensen</legend><div>{B2B_LETTER_EXCEPTIONS.map(({ id, label }) => <label key={id}><input type="checkbox" checked={letterDraft.exceptions.includes(id)} onChange={event => updateLetterDraft({ exceptions: event.target.checked ? [...letterDraft.exceptions, id] : letterDraft.exceptions.filter(value => value !== id) })} />{label}</label>)}</div></fieldset></details>
+              <label className={`${styles.field} ${styles.fullWidth}`}>Decoratie (optioneel)<input aria-label="Decoratie op deze letters" maxLength={240} placeholder="Bijv. blauwe balletjes in plaats van rood" value={letterDraft.decoration || ""} onChange={event => updateLetterDraft({ decoration: event.target.value })}/></label>
               <div className={styles.addLine}><button type="button" className={styles.button} onClick={addLetterToOrder}>+ Letter toevoegen</button></div>
             </div>
           </div>
@@ -1783,6 +1786,7 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
           {made && <span className={styles.madeCheck} role="img" aria-label="Gemaakt" title="Gemaakt"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg></span>}
           <span className={styles.customerName}>{order.customerName}</span>{!archived&&(logoOrderRequested(order)||expanded)&&<OrderLogos orderId={order.id} year={order.year} customer={order.customerName} printComplete={order.logoPrintComplete} missing={logoOrderRequested(order)&&order.logoAttachmentCount===0} onCountChange={(count,printed)=>onLogoCount(order.id,count,printed)}/>}</h3>
         <p className={styles.orderProduct}><B2BProductText text={orderSummary || "Bestelling nog invullen"} /></p>
+        {order.letterLines.filter(line => line.decoration?.trim()).map(line => <p key={line.id} className={styles.decorationFlag}>{line.quantity}× {line.letter} · {line.chocolate} · {line.size} · Decoratie · {line.decoration}</p>)}
         {hasIndividualGiftWrap(order.packaging) && <p className={styles.giftWrapFlag}>Apart in cadeaupapier</p>}
         <p className={styles.delivery}>{order.deliveryMethod || "Levering nog afspreken"}{order.season === "sint-kerst" ? " · Sint & Kerst" : ""}</p>
         {!archived&&!order.cancelled&&logoOrderRequested(order)&&order.logoAttachmentCount===0&&<p className={styles.warning} style={{color:"#b23827"}}>! Nog geen logo geüpload — controleer</p>}

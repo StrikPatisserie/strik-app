@@ -86,3 +86,19 @@ if (getenv('STRIK_MAIL_PREVIEW_DIR')) {
     file_put_contents(getenv('STRIK_MAIL_PREVIEW_DIR') . '/wijziging-kerst.html', $mail_calls[0]['body']);
 }
 echo "All B2B order-change tests passed; no real emails sent.\n";
+
+
+reset_mails();
+$decorated_lines = $new_letters;
+$decorated_lines[0]['decoration'] = 'Blauwe balletjes in plaats van rood';
+$decorated = b2b_save(array('id' => $legacy['id'], 'letterLines' => $decorated_lines));
+check(!is_wp_error($decorated), 'Decoration can be saved.');
+check($decorated['letterLines'][0]['decoration'] === 'Blauwe balletjes in plaats van rood', 'Decoration survives the WordPress sanitizer.');
+check(count($mail_calls) === 1 && has($mail_calls[0]['body'], 'Blauwe balletjes in plaats van rood'), 'The internal change notification includes decoration.');
+$preview = preview_final($decorated['id']);
+check(has($preview['html'], 'Decoratie: Blauwe balletjes in plaats van rood'), 'The customer confirmation retains the decoration.');
+$before = strik_business_b2b_mail_content($decorated);
+$decorated['letterLines'][0]['decoration'] = 'Witte balletjes';
+$after = strik_business_b2b_mail_content($decorated);
+check($before !== $after, 'A decoration edit changes the confirmation version.');
+echo "PASS per-line decoration persists and appears in change notices and customer confirmations\n";

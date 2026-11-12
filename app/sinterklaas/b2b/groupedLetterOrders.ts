@@ -36,7 +36,7 @@ export function groupLetterLines(group: LetterOrderGroup, letter = "Q"): B2BLett
 }
 export function letterGroupMatchesOrder(group: LetterOrderGroup, order: Pick<SinterklaasB2BOrder, "letterLines" | "logo">) {
   const expected = groupLetterLines(group);
-  if (order.letterLines.some(line => line.letter !== "Q" || line.style !== "vorm" || line.size !== "groot" || line.exceptions.length)) return false;
+  if (order.letterLines.some(line => line.letter !== "Q" || line.style !== "vorm" || line.size !== "groot" || line.exceptions.length || line.decoration?.trim())) return false;
   return expected.every(target => order.letterLines.filter(line => line.chocolate === target.chocolate && (typeof line.withLogo === "boolean" ? line.withLogo : Boolean(order.logo)) === target.withLogo).reduce((sum, line) => sum + line.quantity, 0) === target.quantity)
     && order.letterLines.reduce((sum, line) => sum + line.quantity, 0) === groupLetterTotals(group).quantity;
 }

@@ -167,6 +167,7 @@ export function normalizeB2BOrder(value: unknown): SinterklaasB2BOrder | null {
       style,
       size: style === "vorm" ? "groot" : rawLine.size === "klein" ? "klein" : "groot",
       quantity,
+      ...(textFrom(rawLine.decoration).trim() ? { decoration: textFrom(rawLine.decoration).replace(/\s+/g, " ").trim().slice(0, 240) } : {}),
       exceptions: B2B_LETTER_EXCEPTIONS.filter(({ id }) => Array.isArray(rawLine.exceptions) && rawLine.exceptions.includes(id)).map(({ id }) => id),
     }];
   });

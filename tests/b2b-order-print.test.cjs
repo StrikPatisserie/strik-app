@@ -181,3 +181,13 @@ test('group orders print the company breakdown once with the correct logo choice
   assert.deepEqual(data.lines[1].attention, []);
   assert(data.lines[0].description.includes('5 melk Q'));
 });
+
+
+test('decoration prints against its own letter row without borrowing another line’s instructions', async () => {
+ const decorated={...order,letterLines:[{...letters[0],quantity:2,decoration:'Blauwe balletjes'}, {...letters[0],id:'standard',quantity:3}],packaging:'',logo:'',textInstructions:''};
+ const data=buildB2BOrderPrintData(decorated,{delivery:'30 nov',productLines:[],otherText:''});
+ assert.equal(data.lines.length,2);assert(data.lines[0].attention.includes('DECO · Blauwe balletjes'));
+ assert(!data.lines[1].attention.some(value=>value.includes('Blauwe')));
+ drawnText=[];await prints.createOrderPrint(data,{format:'a4',copies:1,products:true});
+ assert(drawnText.some(row=>/BLAUWE BALLETJES/i.test(row.text)));
+});

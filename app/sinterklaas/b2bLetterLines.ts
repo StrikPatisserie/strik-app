@@ -15,8 +15,13 @@ export function b2bLetterHasLogo(order: Pick<SinterklaasB2BOrder, "logo">, line:
   return typeof line.withLogo === "boolean" ? line.withLogo : Boolean(order.logo);
 }
 
+export function b2bLetterDecoration(line: Pick<B2BLetterLine, "decoration">) {
+  return (line.decoration || "").replace(/\s+/g, " ").trim().slice(0, 240);
+}
+
 export function b2bLetterLineLabel(line: B2BLetterLine) {
-  return `${line.quantity}× ${line.letter} · ${line.chocolate} ${line.style} · ${line.size}${line.withLogo ? " · eigen logo" : ""}${line.exceptions.length ? ` · ${line.exceptions.join(", ")}` : ""}`;
+  const decoration = b2bLetterDecoration(line);
+  return `${line.quantity}× ${line.letter} · ${line.chocolate} ${line.style} · ${line.size}${line.withLogo ? " · eigen logo" : ""}${line.exceptions.length ? ` · ${line.exceptions.join(", ")}` : ""}${decoration ? ` · decoratie: ${decoration}` : ""}`;
 }
 
 export function b2bLetterTotal(lines: B2BLetterLine[]) {

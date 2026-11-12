@@ -699,6 +699,8 @@ function strik_sinterklaas_sanitize_b2b_letter_lines($lines) {
             'exceptions' => array_values(array_unique($exceptions)),
             'withLogo' => isset($line['withLogo']) ? $line['withLogo'] === true : null,
         );
+        $decoration = isset($line['decoration']) ? strik_sinterklaas_text($line['decoration'], 240) : '';
+        if ($decoration !== '') $clean[count($clean) - 1]['decoration'] = $decoration;
     }
     return $clean;
 }
@@ -1273,6 +1275,7 @@ function strik_business_b2b_mail_content($order, $internal = false) {
         $exceptions = isset($line['exceptions']) ? array_values(array_unique($line['exceptions'])) : array();
         sort($exceptions);
         $item = array('letter' => $line['letter'], 'chocolate' => $line['chocolate'], 'style' => $line['style'], 'size' => $line['size'], 'withLogo' => !empty($line['withLogo']), 'exceptions' => $exceptions);
+        if (!empty($line['decoration'])) $item['decoration'] = $line['decoration'];
         $key = wp_json_encode($item);
         if (!isset($letters[$key])) $letters[$key] = array_merge($item, array('quantity' => 0));
         $letters[$key]['quantity'] += (int) $line['quantity'];
@@ -1294,7 +1297,7 @@ function strik_business_b2b_mail_content($order, $internal = false) {
     return $data;
 }
 function strik_business_b2b_letter_change_label($line) {
-    return $line['quantity'] . '× ' . ($line['style'] === 'vorm' ? 'Vormletter ' : 'Spuitletter ') . $line['letter'] . ' · ' . $line['chocolate'] . ' · ' . $line['size'] . (!empty($line['withLogo']) ? ' · eigen logo' : ' · zonder logo') . (!empty($line['exceptions']) ? ' · ' . implode(', ', $line['exceptions']) : '');
+    return $line['quantity'] . '× ' . ($line['style'] === 'vorm' ? 'Vormletter ' : 'Spuitletter ') . $line['letter'] . ' · ' . $line['chocolate'] . ' · ' . $line['size'] . (!empty($line['withLogo']) ? ' · eigen logo' : ' · zonder logo') . (!empty($line['exceptions']) ? ' · ' . implode(', ', $line['exceptions']) : '') . (!empty($line['decoration']) ? ' · Decoratie: ' . $line['decoration'] : '');
 }
 function strik_business_b2b_order_changes($before, $after) {
     $labels = array('season' => 'Seizoen', 'company' => 'Klant', 'contact' => 'Contactpersoon', 'email' => 'E-mailadres', 'phone' => 'Telefoon', 'products' => 'Bestelling / overige producten', 'letters' => 'Chocoladeletters', 'legacyLetters' => 'Letterbestelling', 'moment' => 'Levermoment', 'method' => 'Levering / afhalen', 'address' => 'Bezorgadres', 'total' => 'Totaal excl. btw', 'agreement' => 'Prijsafspraak', 'logo' => 'Logo-afspraak', 'packaging' => 'Verpakking', 'text' => 'Tekst / personalisatie', 'importantNotes' => 'Interne orderafspraken', 'invoiceInfo' => 'Factuurgegevens');
@@ -1382,7 +1385,7 @@ function strik_business_b2b_confirmation_html($order, $internal = false, $update
     if (count($data['letters'])) {
         $html .= '<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse">';
         foreach ($data['letters'] as $line) {
-            $html .= '<tr><td style="padding:11px 10px 11px 0;border-bottom:1px solid #e2e8df;font-weight:bold;vertical-align:top;white-space:nowrap">' . absint($line['quantity']) . '×</td><td style="padding:11px 0;border-bottom:1px solid #e2e8df"><strong>' . esc_html(($line['style'] === 'vorm' ? 'Vormletter ' : 'Spuitletter ') . $line['letter']) . '</strong> · ' . esc_html($line['chocolate'] . ' · ' . $line['size']) . (!empty($line['withLogo']) ? ' · <strong>Eigen logo</strong>' : '') . (!empty($line['exceptions']) ? '<br><span style="font-size:13px">' . esc_html(implode(', ', $line['exceptions'])) . '</span>' : '') . '</td></tr>';
+            $html .= '<tr><td style="padding:11px 10px 11px 0;border-bottom:1px solid #e2e8df;font-weight:bold;vertical-align:top;white-space:nowrap">' . absint($line['quantity']) . '×</td><td style="padding:11px 0;border-bottom:1px solid #e2e8df"><strong>' . esc_html(($line['style'] === 'vorm' ? 'Vormletter ' : 'Spuitletter ') . $line['letter']) . '</strong> · ' . esc_html($line['chocolate'] . ' · ' . $line['size']) . (!empty($line['withLogo']) ? ' · <strong>Eigen logo</strong>' : '') . (!empty($line['exceptions']) ? '<br><span style="font-size:13px">' . esc_html(implode(', ', $line['exceptions'])) . '</span>' : '') . (!empty($line['decoration']) ? '<br><strong>Decoratie: ' . esc_html($line['decoration']) . '</strong>' : '') . '</td></tr>';
         }
         $html .= '</table>';
     }
@@ -1578,7 +1581,7 @@ function strik_sinterklaas_create_b2b_confirmation_body($order, $is_new_confirma
     if (!empty($order['letterOrderText'])) $lines[] = 'Oude vrije letteromschrijving: ' . $order['letterOrderText'];
     if (!empty($order['letterLines'])) {
         $lines[] = 'Chocoladeletterregels:';
-        foreach ($order['letterLines'] as $line) $lines[] = sprintf('%d x %s - %s %s - %s%s', $line['quantity'], $line['letter'], $line['chocolate'], $line['style'], $line['size'], !empty($line['exceptions']) ? ' - VEREIST: ' . implode(', ', $line['exceptions']) : '') . ((isset($line['withLogo']) ? $line['withLogo'] : !empty($order['logo'])) ? ' - EIGEN LOGO' : '');
+        foreach ($order['letterLines'] as $line) $lines[] = sprintf('%d x %s - %s %s - %s%s', $line['quantity'], $line['letter'], $line['chocolate'], $line['style'], $line['size'], !empty($line['exceptions']) ? ' - VEREIST: ' . implode(', ', $line['exceptions']) : '') . ((isset($line['withLogo']) ? $line['withLogo'] : !empty($order['logo'])) ? ' - EIGEN LOGO' : '') . (!empty($line['decoration']) ? ' - DECORATIE: ' . $line['decoration'] : '');
     }
     $lines[] = '';
     $lines[] = 'Order-id: ' . $order['id'];
@@ -1719,7 +1722,7 @@ function strik_business_b2b_attention_html($order, $attention) {
     $html .= '<h2 style="font-size:18px">Levering</h2><p><strong>' . esc_html($data['moment']) . '</strong><br>' . esc_html($data['method'] ?: 'Leverwijze nog afspreken') . ($data['address'] !== '' ? '<br>' . $p($data['address']) : '') . '</p>';
     $html .= '<p><strong>Fase:</strong> ' . ($final ? 'Definitief' : ($order['status'] === 'offerte' ? 'Offerte · akkoord nog controleren' : 'Aanvraag · akkoord nog controleren')) . '<br><strong>Bake-it:</strong> ' . (!empty($order['entered']) ? 'Gemarkeerd als ingevoerd' : 'Nog niet gemarkeerd als ingevoerd') . '</p>';
     $html .= '<h2 style="font-size:18px">Bestelling</h2>' . strik_business_quote_details_html($data['products']);
-    foreach ($data['letters'] as $line) $html .= '<p><strong>' . absint($line['quantity']) . '× ' . esc_html(($line['style'] === 'vorm' ? 'Vormletter ' : 'Spuitletter ') . $line['letter']) . '</strong> · ' . esc_html($line['chocolate'] . ' · ' . $line['size']) . (!empty($line['withLogo']) ? ' · <strong>Eigen logo</strong>' : '') . (!empty($line['exceptions']) ? '<br>' . esc_html(implode(', ', $line['exceptions'])) : '') . '</p>';
+    foreach ($data['letters'] as $line) $html .= '<p><strong>' . absint($line['quantity']) . '× ' . esc_html(($line['style'] === 'vorm' ? 'Vormletter ' : 'Spuitletter ') . $line['letter']) . '</strong> · ' . esc_html($line['chocolate'] . ' · ' . $line['size']) . (!empty($line['withLogo']) ? ' · <strong>Eigen logo</strong>' : '') . (!empty($line['exceptions']) ? '<br>' . esc_html(implode(', ', $line['exceptions'])) : '') . (!empty($line['decoration']) ? '<br><strong>Decoratie: ' . esc_html($line['decoration']) . '</strong>' : '') . '</p>';
     if ($data['legacyLetters'] !== '') $html .= '<p>' . $p($data['legacyLetters']) . '</p>';
     foreach (array('Logo' => $data['logo'], 'Verpakking' => $data['packaging'], 'Tekst' => $data['text'], 'Interne opmerkingen' => $order['importantNotes']) as $label => $value) if ($value !== '') $html .= '<p><strong>' . esc_html($label) . '</strong><br>' . $p($value) . '</p>';
     $html .= '<h2 style="font-size:18px">Contact</h2><p>' . $p(implode("\n", array_filter(array($data['company'], $data['contact'], $data['email'], $data['phone'])))) . '</p><p><strong>' . ($final ? 'Afgesproken totaal' : 'Huidige prijsindicatie') . ':</strong> ' . esc_html(strik_business_b2b_total_label($data['total'])) . ' excl. btw</p>';

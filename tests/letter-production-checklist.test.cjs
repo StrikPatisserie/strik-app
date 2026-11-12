@@ -387,3 +387,20 @@ test('the authorized deadline task can freeze lists but cannot mark production w
  assert.equal((await f.api.POST(f.request({batchId:id,revision:1,action:'quantity',key:row().key,quantity:28}))).status,403);
  assert.equal(f.saved.rows[0].produced,0);
 });
+
+
+test('decoration creates separate production variants and frozen revisions retain made quantities', () => {
+ const source=b2bLetterOrder({letterLines:[
+  {letter:'S',chocolate:'melk',size:'groot',style:'spuit',quantity:4,exceptions:[],withLogo:false},
+  {letter:'S',chocolate:'melk',size:'groot',style:'spuit',quantity:3,exceptions:[],withLogo:false,decoration:'Blauwe balletjes'},
+  {letter:'S',chocolate:'melk',size:'groot',style:'spuit',quantity:2,exceptions:[],withLogo:false,decoration:'Gouden balletjes'},
+ ]});
+ const combined=helper.combineProductionOrders([batch({rows:[]})],[],[source]);
+ const rows=combined.batches[0].rows.filter(row=>row.orderSources?.b2b>0);
+ assert.equal(rows.length,3);assert.equal(rows.reduce((sum,row)=>sum+row.orders,0),9);
+ assert(rows.some(row=>row.key==='s|melk|groot|spuit'&&row.orders===4));
+ const blue=rows.find(row=>row.label.includes('Blauwe balletjes'));
+ assert(blue);assert.equal(blue.orders,3);assert(presentation.productionVariant(blue.label).extras.includes('decoratie: Blauwe balletjes'));
+ const revised=helper.reviseProductionRows(rows.map(row=>({...row,produced:row.key===blue.key?3:0})),rows.filter(row=>row.key!==blue.key));
+ assert.equal(revised.find(row=>row.key===blue.key).produced,3);
+});

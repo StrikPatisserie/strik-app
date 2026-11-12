@@ -1,5 +1,7 @@
 "use client";
 
+import { b2bLetterDecoration, b2bLetterHasLogo } from "../b2bLetterLines";
+
 import { useEffect, useMemo, useState } from "react";
 import {
   deleteLetterOrder,
@@ -408,10 +410,13 @@ function SummaryStrip({ orders, b2bOrders }: Readonly<{ orders: ChocolateLetterO
 
     b2bOrders.filter((order) => !((order.department === "beide" || order.department === "bakkerij") ? order.letterProductionDone : order.productionDone)).forEach((order) => {
       order.letterLines.forEach((line) => {
-        const key = [line.chocolate, line.size, line.style, line.letter, order.logo ? "logo" : "zonder-logo", ...line.exceptions].join("-");
+        const decoration = b2bLetterDecoration(line);
+        const withLogo = b2bLetterHasLogo(order, line);
+        const variantKey = [line.chocolate, line.size, line.style, line.letter, withLogo ? "logo" : "zonder-logo", ...line.exceptions].join("-");
+        const key = decoration ? `${variantKey}|deco:${encodeURIComponent(decoration.toLocaleLowerCase("nl-NL"))}` : variantKey;
         const existing = map.get(key);
         map.set(key, {
-          label: `${line.letter} · ${line.chocolate} · ${line.size} · ${line.style}${order.logo ? " · logo" : ""}${line.exceptions.length ? ` · ${line.exceptions.join(", ")}` : ""}`,
+          label: `${line.letter} · ${line.chocolate} · ${line.size} · ${line.style}${withLogo ? " · logo" : ""}${line.exceptions.length ? ` · ${line.exceptions.join(", ")}` : ""}${decoration ? ` · decoratie: ${decoration}` : ""}`,
           quantity: (existing?.quantity || 0) + line.quantity,
         });
       });

@@ -9,6 +9,7 @@ function loader(overrides = {}, globals = {}) {
     const exports = cache[file] = {};
     let source = fs.readFileSync(file, 'utf8');
     if (file.endsWith('SinterklaasB2BClient.tsx')) source += '\nexport { B2BOrderRow, orderMade };';
+    if (file.endsWith('SinterklaasLettersClient.tsx')) source += '\nexport { SummaryStrip };';
     const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
     vm.runInNewContext(code, { exports, Date, Intl, URL, URLSearchParams, Map, Set, process: { env: {} }, ...globals, require(name) {
       if (name in overrides) return overrides[name];
@@ -206,4 +207,20 @@ test('one made action updates all required production parts and reopening releas
     assert.equal(writes[0].logoChecked, undefined);
     assert.equal(writes[0].packagingChecked, undefined);
   }
+});
+
+
+test('letter overview combines standard store and B2B quantities while keeping decoration separate', () => {
+  const React = require('react');
+  const { SummaryStrip } = load('app/sinterklaas/letters/SinterklaasLettersClient.tsx');
+  const base = { letter: 'S', chocolate: 'melk', style: 'spuit', size: 'groot', quantity: 3, exceptions: [], withLogo: false };
+  const b2b = order({ letterLines: [{ ...base, id: 'plain' }, { ...base, id: 'deco', quantity: 2, decoration: 'Blauwe balletjes' }] });
+  const html = renderToStaticMarkup(React.createElement(SummaryStrip, {
+    orders: [{ productionDone: false, pickedUp: false, status: 'besteld', lines: [{ ...base, logo: false, quantity: 4 }] }],
+    b2bOrders: [b2b],
+  }));
+  assert.equal((html.match(/S · melk · groot · spuit/g) || []).length, 2);
+  assert.match(html, />7<\/span>/);
+  assert.match(html, /decoratie: Blauwe balletjes/);
+  assert.match(html, />2<\/span>/);
 });

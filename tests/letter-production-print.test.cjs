@@ -184,3 +184,14 @@ test('surplus from a completed row never reduces the remaining work on a differe
   const summary = elements(sheet, node => node.type === 'div' && node.props.className === 'openTotal')[0];
   assert.equal(text(summary), 'Nog te maken4');
 });
+
+test('decorated letters remain a separate clearly marked production print row', () => {
+  const line={letter:'S',chocolate:'melk',size:'groot',style:'spuit',quantity:3,exceptions:[],withLogo:false};
+  const combined=combineProductionOrders([batch],[],[{id:'decorated-print',customerName:'Blauw BV',status:'akkoord',deliveryDate:'2026-11-05',department:'chocolade',logo:'',packaging:'',importantNotes:'',letterLines:[line,{...line,quantity:2,decoration:'Blauwe balletjes'}]}]).batches[0];
+  const rows=combined.rows.map(row=>({...row,produced:0}));
+  const sheet=ProductionPrintSheet({batch:combined,rows,version:1});
+  const values=printedRows(sheet);
+  assert.equal(values.length,2);
+  assert(values.some(row=>row.text.includes('decoratie: Blauwe balletjes')&&row.total===2));
+  assert(values.some(row=>!row.text.includes('Blauwe balletjes')&&row.total===3));
+});
