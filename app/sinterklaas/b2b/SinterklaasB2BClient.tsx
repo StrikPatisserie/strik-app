@@ -3,6 +3,7 @@
 import Link from "next/link";
 import OrderLogos from "./logos/OrderLogos";
 import OrderPrintMenu from "./OrderPrintMenu";
+import { buildB2BOrderPrintData } from "./orderPrintData";
 import {logoOrderRequested} from "./logos/model";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import styles from "./B2BOrders.module.css";
@@ -1800,12 +1801,13 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
       </div>
       <div className={styles.amount}>{order.totalExVat.trim() || priceBreakdowns.length > 0 ? <>{money(orderTotal)}<small>excl. btw</small></> : "—"}</div>
       <div className={styles.rowActions}>
-        <OrderPrintMenu data={{customer:order.customerName,reference:order.id,delivery:compactDeliveryWindow(order),
-          lines:[...parsedOrder.productLines.filter(line=>!order.letterLines.length||!["chocoladeletter","chocolade-vormletter"].includes(line.productId)).map(line=>({quantity:line.quantity,description:lineDescription(line)})),
-            ...order.letterLines.map(line=>({quantity:line.quantity,description:b2bLetterLineLabel({...line,withLogo:b2bLetterHasLogo(order,line)}).replace(/^\d+× /, ""),attention:line.exceptions})),
-            ...(group&&groupMatches?group.rows.map(row=>({description:`${row.company} · ${row.melk} melk Q · ${row.wit} wit Q · ${row.puur} puur Q${row.withLogo?" · LOGO":""}`,attention:row.withLogo?["EIGEN LOGO"]:[]})):[]),
-            ...(!parsedOrder.productLines.length&&!order.letterLines.length?[{description:order.orderText}]:[])],
-          notes:[group&&!groupMatches?"Controleer de verdeling per bedrijf bij deze bestelling.":"",parsedOrder.productLines.length?parsedOrder.otherText:order.letterLines.length?order.orderText:"",order.packaging,order.logo,order.textInstructions].filter(Boolean)}}/>
+        <OrderPrintMenu data={buildB2BOrderPrintData(order, {
+          delivery: compactDeliveryWindow(order),
+          productLines: parsedOrder.productLines.map(line => ({
+            productId: line.productId, quantity: line.quantity, description: lineDescription(line),
+          })),
+          otherText: parsedOrder.otherText,
+        })}/>
         {!archived && <button type="button" onClick={() => onEdit(order)} className={styles.rowButton}>Wijzig</button>}
         <button type="button" aria-label={`Details ${order.customerName}`} aria-expanded={expanded} onClick={() => setExpanded(!expanded)} className={styles.chevron}>{expanded ? "⌃" : "⌄"}</button>
       </div>
