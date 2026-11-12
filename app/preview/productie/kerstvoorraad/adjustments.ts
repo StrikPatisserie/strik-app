@@ -1,4 +1,4 @@
-import type { ProductAdjustment } from "./forecast";
+import type { ProductAdjustment, ProductChoice } from "./forecast";
 
 export const ADJUSTMENTS_STORAGE_KEY = "strik-christmas-forecast-2026-v1";
 
@@ -6,8 +6,11 @@ export const ADJUSTMENTS_STORAGE_KEY = "strik-christmas-forecast-2026-v1";
 // historical product ID. The source spreadsheets stay read-only.
 export const configuredProductAdjustments: Record<string, ProductAdjustment> = {};
 
-export function parseForecastSettings(raw: string | null): { growth: number; adjustments: Record<string, ProductAdjustment> } {
-  const result = { growth: 10, adjustments: { ...configuredProductAdjustments } };
+export type ForecastMapping = Pick<ProductChoice, "recipeId" | "productionItemId" | "checked">;
+export type ForecastSettings = { growth: number; adjustments: Record<string, ProductAdjustment>; mappings: Record<string, ForecastMapping> };
+
+export function parseForecastSettings(raw: string | null): ForecastSettings {
+  const result: ForecastSettings = { growth: 10, adjustments: { ...configuredProductAdjustments }, mappings: {} };
   if (!raw) return result;
   try {
     const data = JSON.parse(raw);
@@ -27,6 +30,15 @@ export function parseForecastSettings(raw: string | null): { growth: number; adj
         if (typeof input.cashCode2026 === "string" && /^\d{1,20}$/.test(input.cashCode2026) && input.cashCode2026 !== "9999999999") adjustment.cashCode2026 = input.cashCode2026;
       }
       result.adjustments[id] = adjustment;
+    }
+    if (data.mappings && typeof data.mappings === "object" && !Array.isArray(data.mappings)) {
+      for (const [id, value] of Object.entries(data.mappings).slice(0, 3000)) {
+        if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+        const input = value as Record<string, unknown>;
+        const recipeId = typeof input.recipeId === "string" && input.recipeId.length <= 200 ? input.recipeId : "";
+        const productionItemId = typeof input.productionItemId === "string" && input.productionItemId.length <= 200 ? input.productionItemId : undefined;
+        result.mappings[id] = { recipeId, productionItemId, checked: input.checked === true };
+      }
     }
   } catch { /* An unavailable or older local trial keeps the configured defaults. */ }
   return result;

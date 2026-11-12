@@ -15,7 +15,8 @@ function load(file, imports = {}, globals = {}) {
   return exports;
 }
 const planning = load('app/productie/planning.ts');
-const expansion = load('app/productie/recipePlanning.ts', { './planning': planning });
+const materials = load('app/productie/materialPlanning.ts', { './planning': planning });
+const expansion = load('app/productie/recipePlanning.ts', { './planning': planning, './materialPlanning': materials });
 const forecast = load('app/preview/productie/kerstvoorraad/forecast.ts', { '../../../productie/recipePlanning': expansion });
 const examples = load('app/preview/productie/kerstvoorraad/examples.ts', { './forecast': forecast });
 const inventory = load('app/productie/inventory.ts', { './planning': planning });
@@ -511,4 +512,76 @@ test('authorized preview receipt reads are limited to the campaign and never cac
   const body = await response.json();
   assert.equal(body.days.length, 1);
   assert.equal(body.days[0].date, '2026-11-16');
+});
+
+
+test('local settings preserve real production mappings without introducing demo recipe links', () => {
+  const raw = JSON.stringify({version:1,growth:10,adjustments:{a:{name2026:'Nieuwe taart'}},mappings:{
+    a:{recipeId:'recipe:real',productionItemId:'item:real',checked:true,stock:5000},
+    b:{recipeId:[],productionItemId:'x'.repeat(201),checked:'yes'},
+    c:null,
+  }});
+  const settings = adjustments.parseForecastSettings(raw);
+  assert.equal(settings.mappings.a.recipeId, 'recipe:real');
+  assert.equal(settings.mappings.a.productionItemId, 'item:real');
+  assert.equal(settings.mappings.a.checked, true);
+  assert.equal(settings.mappings.a.stock, undefined);
+  assert.equal(settings.mappings.b.recipeId, '');
+  assert.equal(settings.mappings.b.productionItemId, undefined);
+  assert.equal(settings.mappings.b.checked, false);
+  assert.equal(settings.mappings.c, undefined);
+  assert.equal(Object.keys(adjustments.parseForecastSettings(null).mappings).length, 0);
+  assert.equal(Object.keys(adjustments.parseForecastSettings(JSON.stringify({version:1,adjustments:{}})).mappings).length, 0);
+});
+
+function liveForecastSource(env, options = {}) {
+  const imports = {
+    'server-only': {},
+    'next/navigation': {notFound:()=>{throw Error('not found');}},
+    '@/app/lib/auth/session': {requireCurrentProfile:async()=>({id:'bakery'})},
+    '@/app/productie/access': {productionDepartments:()=>options.allowed === false ? [] : ['luxe']},
+    '@/app/productie/documents.server': {readDocument:async key=>{
+      if (options.fail) throw Error('source unavailable');
+      return {data:key === 'planner' ? options.planner || {version:1,items:[],tasks:[]} : {},revision:1};
+    }},
+    '@/app/productie/operationalStore.server': {readOperational:async()=>inventory.emptyInventory()},
+    '@/app/productie/inventorySource.server': {inventoryDispatchDays:async()=>{
+      if (options.receiptsFail) throw Error('receipts unavailable');
+      return [receiptDay('2026-11-15',90),receiptDay('2026-11-16',100)];
+    }},
+    '@/app/productie/inventory': inventory,
+    '@/app/productie/workspaceData': {todayAmsterdam:()=> '2026-11-17',recipeViews:()=>options.recipes || [],syncRecipeCatalog:planner=>planner},
+    './campaignNeed': campaign,
+  };
+  return load('app/preview/productie/kerstvoorraad/liveSource.server.ts', imports, {process:{env:{NODE_ENV:env}}});
+}
+
+test('the authenticated local forecast starts from real output and recipes, counting a multi-step batch once', async () => {
+  const planner = {version:1,items:[{id:'slof',name:'Woudvruchten slof',kind:'product',unit:'stuks',departmentId:'luxe',recipeId:'recipe-slof'}],tasks:[
+    {id:'filling',itemId:'slof',batchId:'batch-slof',date:'2026-11-10',quantity:84,completedQuantity:84,status:'done',recordsOutput:false},
+    {id:'finish',itemId:'slof',batchId:'batch-slof',date:'2026-11-11',quantity:84,completedQuantity:84,status:'done',recordsOutput:true},
+  ]};
+  const source = await liveForecastSource('development',{planner,recipes:[{id:'recipe-slof',name:'Woudvruchten slof',yield:84,unit:'stuks'}]}).christmasProductionSource();
+  assert.equal(source.production.mode,'live');
+  assert.equal(source.production.items[0].id,'slof');
+  assert.equal(source.production.recipes[0].yield,84);
+  assert.equal(source.production.overview.rows.find(row=>row.itemId==='slof').latest.quantity,84);
+  assert.equal(source.campaignReceipts.available,true);
+  assert.equal(source.campaignReceipts.days.length,1);
+  assert.equal(source.campaignReceipts.days[0].date,'2026-11-16');
+});
+
+test('local forecast data rejects production and unauthorized access, and failures never supply examples', async () => {
+  await assert.rejects(liveForecastSource('production').christmasProductionSource(), /not found/);
+  await assert.rejects(liveForecastSource('development',{allowed:false}).christmasProductionSource(), /not found/);
+  const failed = await liveForecastSource('development',{fail:true}).christmasProductionSource();
+  assert.equal(failed.production.mode,'live');
+  assert.equal(failed.production.items.length,0);
+  assert.equal(failed.production.recipes.length,0);
+  assert.equal(failed.production.overview.rows.length,0);
+  assert.equal(failed.campaignReceipts.available,false);
+  assert.match(failed.productionError,/niet bereikbaar/);
+  const missingReceipts = await liveForecastSource('development',{receiptsFail:true}).christmasProductionSource();
+  assert.equal(missingReceipts.campaignReceipts.available,false);
+  assert.match(missingReceipts.productionError,/bonnen/);
 });

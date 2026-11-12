@@ -7,7 +7,7 @@ import Icon from "../../../productie/ProductionIcon";
 import SearchableChoice from "../../../productie/SearchableChoice";
 import { matchesProductionSearch, type DemoRecipe, type PreviewState } from "../../../productie/planning";
 import { buildForecastPlan, emptyChoice, mappedProductsFor2026, productFor2026, productProjection, type ProductChoice, type SalesProduct } from "./forecast";
-import { ADJUSTMENTS_STORAGE_KEY, parseForecastSettings } from "./adjustments";
+import { ADJUSTMENTS_STORAGE_KEY, parseForecastSettings, type ForecastMapping } from "./adjustments";
 import { exampleChoices, exampleRecipes } from "./examples";
 import { includeInStockOverview, salesVolume, stockCategories } from "./assortment";
 import { CAMPAIGN_START, campaignWindow, exampleCampaignReceipts, remainingNeed, todayInAmsterdam, validCampaignDays, type CampaignReceipts, type RemainingNeed } from "./campaignNeed";
@@ -156,11 +156,26 @@ function recipeIssue(product: SalesProduct, recipeId: string, recipes: DemoRecip
   return result.rows[0].issues[0] || null;
 }
 
-export default function ChristmasStockPreview({ products, today, error, week52Error, returnHref = "/preview/productie?view=feestdagen", planningHref = "/preview/productie" }: { products: SalesProduct[]; today: string; error?: string; week52Error?: string; returnHref?: string; planningHref?: string }) {
-  const [choices, setChoices] = useState(() => exampleChoices(products));
-  const [recipes, setRecipes] = useState(exampleRecipes);
-  const [source, setSource] = useState(() => exampleProduction(products, exampleChoices(products), exampleRecipes));
-  const [receipts, setReceipts] = useState(() => exampleCampaignReceipts(products));
+type Props = {
+  products: SalesProduct[];
+  today: string;
+  error?: string;
+  week52Error?: string;
+  returnHref?: string;
+  planningHref?: string;
+  production?: ProductionReading;
+  campaignReceipts?: CampaignReceipts;
+  productionError?: string;
+};
+
+export default function ChristmasStockPreview({
+  products, today, error, week52Error, production, campaignReceipts, productionError,
+  returnHref = "/preview/productie?view=feestdagen", planningHref = "/preview/productie",
+}: Props) {
+  const [choices, setChoices] = useState(() => production ? Object.fromEntries(products.map(product => [product.id, emptyChoice()])) : exampleChoices(products));
+  const [recipes, setRecipes] = useState(production?.recipes || exampleRecipes);
+  const [source, setSource] = useState(() => production || exampleProduction(products, exampleChoices(products), exampleRecipes));
+  const [receipts, setReceipts] = useState<CampaignReceipts>(() => campaignReceipts || (production ? { mode: "live", available: false, days: [] } : exampleCampaignReceipts(products)));
   const [actualDate, setActualDate] = useState(today), [demoDate, setDemoDate] = useState<string | null>(null);
   const viewDate = source.mode === "example" ? demoDate || actualDate : actualDate;
   const [group, setGroup] = useState("all"), [department, setDepartment] = useState("all");
@@ -168,27 +183,32 @@ export default function ChristmasStockPreview({ products, today, error, week52Er
   const [growth, setGrowth] = useState(10), [page, setPage] = useState(0), [pageSize, setPageSize] = useState(9);
   const [xl, setXl] = useState(true), [productId, setProductId] = useState<string | null>(null);
   const [removeId, setRemoveId] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false), [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false), [message, setMessage] = useState(productionError || "");
   const [settingsReady, setSettingsReady] = useState(false);
   const controller = useRef<AbortController | null>(null);
+  const savedMappings = useRef<Record<string, ForecastMapping>>({});
   useEffect(() => {
     try {
       const settings = parseForecastSettings(localStorage.getItem(ADJUSTMENTS_STORAGE_KEY));
       setGrowth(settings.growth);
+      savedMappings.current = settings.mappings;
       setChoices(current => Object.fromEntries(Object.entries(current).map(([id, choice]) => [id, {
-        ...choice, ...(settings.adjustments[id]?.name2026 ? { recipeId: "", productionItemId: undefined, checked: false } : {}),
+        ...choice, ...(production ? settings.mappings[id] : {}), ...(!settings.mappings[id] && settings.adjustments[id]?.name2026 ? { recipeId: "", productionItemId: undefined, checked: false } : {}),
         adjustment: settings.adjustments[id],
       }])));
     } catch { setMessage("Browseropslag niet bereikbaar. Bijstellingen blijven deze sessie zichtbaar."); }
     setSettingsReady(true);
-  }, []);
+  }, [production]);
   useEffect(() => {
     if (!settingsReady) return;
     try {
-      localStorage.setItem(ADJUSTMENTS_STORAGE_KEY, JSON.stringify({ version: 1, growth,
+      if (source.mode === "live") savedMappings.current = Object.fromEntries(Object.entries(choices).map(([id, choice]) => [id, {
+        recipeId: choice.recipeId, productionItemId: choice.productionItemId, checked: choice.checked,
+      }]));
+      localStorage.setItem(ADJUSTMENTS_STORAGE_KEY, JSON.stringify({ version: 1, growth, mappings: savedMappings.current,
         adjustments: Object.fromEntries(Object.entries(choices).filter(([, choice]) => choice.adjustment).map(([id, choice]) => [id, choice.adjustment])) }));
     } catch { setMessage("Bijstellingen konden niet worden bewaard. Houd deze pagina open."); }
-  }, [choices, growth, settingsReady]);
+  }, [choices, growth, settingsReady, source.mode]);
   useEffect(() => {
     const resize = () => setPageSize(window.innerHeight < 820 ? 6 : window.innerHeight < 1050 ? 8 : window.innerHeight < 1500 ? 9 : 15);
     resize(); window.addEventListener("resize", resize);
@@ -252,6 +272,7 @@ export default function ChristmasStockPreview({ products, today, error, week52Er
   function reset() {
     controller.current?.abort();
     const defaults = parseForecastSettings(null);
+    savedMappings.current = {};
     setChoices(Object.fromEntries(Object.entries(exampleChoices(products)).map(([id, choice]) => [id, {
       ...choice, ...(defaults.adjustments[id]?.name2026 ? { recipeId: "", productionItemId: undefined, checked: false } : {}), adjustment: defaults.adjustments[id],
     }]))); setGrowth(defaults.growth); setRecipes(exampleRecipes);
@@ -265,7 +286,7 @@ export default function ChristmasStockPreview({ products, today, error, week52Er
     try {
       const receiptReading = readCampaignReceipts(abort.signal).catch((): CampaignReceipts => ({ mode: "live", available: false, days: [], error: "Bonnen niet bereikbaar" }));
       const responses = await Promise.all([fetch("/api/productie/voorraad", { cache: "no-store", signal: abort.signal }), fetch("/api/productie", { cache: "no-store", signal: abort.signal })]);
-      if (responses.some(response => response.status === 401 || response.status === 403)) throw Error("Log in op deze lokale app om echte productiegegevens te lezen. De voorbeeldgegevens blijven zichtbaar.");
+      if (responses.some(response => response.status === 401 || response.status === 403)) throw Error("Log in op deze lokale app om productiegegevens te lezen.");
       if (responses.some(response => !response.ok)) throw Error("Productiegegevens zijn nu niet bereikbaar. De huidige gegevens blijven staan.");
       const [inventory, production] = await Promise.all(responses.map(response => response.json())) as [StockOverview, { state: PreviewState; recipes: DemoRecipe[] }];
       if (!Array.isArray(inventory.rows) || !Array.isArray(production.state?.items) || !Array.isArray(production.recipes)) throw Error("De productiegegevens hebben geen herkenbaar formaat.");
@@ -276,11 +297,11 @@ export default function ChristmasStockPreview({ products, today, error, week52Er
       setReceipts(nextReceipts); setDemoDate(null); setActualDate(todayInAmsterdam());
       setSource(next); setRecipes(next.recipes);
       setChoices(current => Object.fromEntries(products.map(product => {
-        const old = current[product.id] || emptyChoice();
+        const old = { ...(current[product.id] || emptyChoice()), ...(source.mode === "example" ? savedMappings.current[product.id] : {}) };
         const currentProduct = productFor2026(product, old);
-        const stock = productInventory(currentProduct, { ...emptyChoice(), productionItemId: source.mode === "live" ? old.productionItemId : undefined }, next);
-        const recipeId = next.items.find(item => item.id === stock?.itemId)?.recipeId || "";
-        return [product.id, { ...emptyChoice(), adjustment: old.adjustment, week52Base: old.week52Base, productionItemId: stock?.itemId, recipeId, checked: source.mode === "live" && old.recipeId === recipeId && old.productionItemId === stock?.itemId && old.checked }];
+        const stock = productInventory(currentProduct, { ...emptyChoice(), productionItemId: old.productionItemId }, next);
+        const recipeId = next.recipes.some(recipe => recipe.id === old.recipeId) ? old.recipeId : next.items.find(item => item.id === stock?.itemId)?.recipeId || "";
+        return [product.id, { ...emptyChoice(), adjustment: old.adjustment, week52Base: old.week52Base, productionItemId: stock?.itemId, recipeId, checked: old.recipeId === recipeId && old.productionItemId === stock?.itemId && old.checked }];
       })));
       setMessage(nextReceipts.available ? "Productie en bonnen ingelezen · bonnen verversen elke minuut" : "Productie ingelezen · bonnen zijn nog niet bereikbaar");
     } catch (failure) {
@@ -330,7 +351,7 @@ export default function ChristmasStockPreview({ products, today, error, week52Er
         <span role="status">{error || message || "Klik op een product of prognose om bij te stellen · bijstellingen bewaard op deze browser"}</span>
         <button type="button" className={s.secondary} disabled={busy} onClick={() => void loadProduction()}><Icon name="refresh" size={17} />{busy ? "Inlezen…" : "Productie ophalen"}</button>
         <button type="button" className={s.secondary} aria-pressed={xl} onClick={() => setXl(value => !value)}><Icon name="screen" size={17} />XL weergave</button>
-        <button type="button" className={s.iconButton} onClick={reset} aria-label="Proef herstellen" title="Proef herstellen"><Icon name="refresh" size={17} /></button>
+        {source.mode === "example" && <button type="button" className={s.iconButton} onClick={reset} aria-label="Proef herstellen" title="Proef herstellen"><Icon name="refresh" size={17} /></button>}
       </footer>
     </section>
     {selected && <ProductDetails key={selected.product.id} row={selected} source={source} recipes={recipes} growth={growth} onClose={() => setProductId(null)} onSave={choice => { setChoices(current => ({ ...current, [selected.product.id]: choice })); setProductId(null); setMessage("Proef aangepast · alleen lokaal bewaard"); }} />}

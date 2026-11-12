@@ -7,8 +7,8 @@ forecast overview. Authenticated local use also supports
 `/bakkerij/productie/feestdagen/kerstvoorraad`. The forecast menu item and this
 route remain development-only while sales still come from a local Excel.
 The existing page rejects production access. The UI is one filtered overview,
-without scheduling or other workspace tabs. Product forecast adjustments persist in
-this browser only. Production and recipe trial links reset on reload.
+without scheduling or other workspace tabs. Product forecast adjustments and explicit production/recipe mappings persist in
+this browser only.
 
 ## Forecast sources
 
@@ -36,11 +36,12 @@ leave manual counts and product-specific percentages in place.
 
 A 2026 replacement retains the stable historical ID and source sales. Its new
 name is displayed with the original 2025 product beneath it. Recipe/stock links
-are cleared when changing the replacement, including on reload. Receipt demand
+are cleared when changing the replacement. Newly selected links are then saved
+with the replacement settings. Receipt demand
 uses the new Cash-it number and requires the existing live inventory validation.
 An absent new number never reuses the retired article for live subtraction.
 
-Only the forecast settings are saved to versioned localStorage. They do not
+Forecast settings and explicit production/recipe mappings are saved to versioned localStorage. They do not
 synchronize between browsers or devices. `adjustments.ts` also accepts
 owner-approved, ID-keyed defaults entered through Codex. No change is written
 back to an Excel, catalogue, recipe, stock count or production task.
@@ -61,11 +62,12 @@ dispatch. A missing count, missing dispatch coverage, intraday checkpoint,
 negative balance or ambiguous product link leaves current stock unknown. This
 is bakery dispatch stock, not a claim about point-of-sale retail stock.
 
-The initial production, recipes and counts are explicitly labelled examples.
-The `Productie ophalen` button makes authenticated, read-only GET requests to
-`/api/productie/voorraad` and `/api/productie`; it preserves the existing app
-permissions. A failed read leaves the labelled examples visible. No stock,
-recipe or production write endpoint is used.
+The design preview starts with explicitly labelled example production, recipes
+and counts. The authenticated local route reads the existing production, recipes,
+counts and dispatch archive on opening through `liveSource.server.ts`. Unavailable
+sources show unknown values. The `Productie ophalen` button refreshes through the
+existing authenticated GET routes `/api/productie/voorraad` and `/api/productie`.
+A failed refresh keeps the current source visible with an error message.
 
 Automatic product matching uses an exact, unique current Cash-it article number
 and a stock product measured in pieces. It does not guess by name or old
@@ -101,6 +103,9 @@ new tables, permissions or production writes are introduced. Local unauthenticat
 browser testing receives 403 and retains labelled examples.
 
 ## Limits
+
+Publication still requires a centrally available sales basis and shared forecast
+settings. The current Excel source and browser settings support local review.
 
 Reconciliation of future orders against dispatch,
 shelf-life, production lead times, future stock depletion and capacity
