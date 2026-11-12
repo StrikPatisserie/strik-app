@@ -1,6 +1,7 @@
+const {productionConcurrencyImports}=require('./helpers/production-concurrency.cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
-function load(file,imports={}) {const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:name=>{if(!(name in imports))throw Error(`Unmocked ${name}`);return imports[name];},Request,Response,URL,Date,Intl,JSON,Number,Set,Map,Error});return exports;}
+function load(file,imports={}) { imports={...productionConcurrencyImports(imports),...imports};const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:name=>{if(!(name in imports))throw Error(`Unmocked ${name}`);return imports[name];},Request,Response,URL,Date,Intl,JSON,Number,Set,Map,Error});return exports;}
 const planning=load('app/productie/planning.ts');
 const workspace=load('app/productie/workspaceData.ts',{'./planning':planning});
 const rules=load('app/productie/recipePlanning.ts',{'./planning':planning,'./materialPlanning':load('app/productie/materialPlanning.ts',{'./planning':planning})});
@@ -346,4 +347,49 @@ test('combining batches uses current recipes and one revision-protected server s
  assert.equal((await send(2)).status,409);assert.equal(a.writes(),0);
  assert.equal((await send(3,6)).status,409);assert.equal(a.writes(),0);
  const response=await send();assert.equal(response.status,200);const result=await response.json();assert.equal(result.state.tasks.filter(t=>t.itemId==='recipe:foam').length,1);assert.equal(a.writes(),1);
+});
+
+
+test('new plans start all preparations on day zero despite old preferences, and relative nested dates follow their consumer', () => {
+ const {state,recipes,command}=fixture();
+ state.productionWork={preparation:{base:5,caramel:2}};
+ command.preparation={daysBefore:0,choices:rules.defaultPreparationChoices(recipes,'pie')};
+ let proposal=rules.preparationProposal(state,recipes,command);
+ assert.equal(proposal.errors.length,0);assert(proposal.rows.every(row=>row.date===command.task.date));
+ command.preparation.choices.mousse.daysBefore=1;
+ command.preparation.choices.caramel.daysBefore=2;
+ proposal=rules.preparationProposal(state,recipes,command);
+ assert.equal(proposal.rows.find(row=>row.recipeId==='mousse').date,'2026-11-01');
+ assert.equal(proposal.rows.find(row=>row.recipeId==='caramel').date,'2026-10-30');
+ const saved=rules.buildRecipePlan(state,recipes,command);
+ assert.equal(saved.tasks.find(row=>row.id==='order-1').recipePlan.preparation.choices.caramel.daysBefore,2);
+ assert(workspace.validWorkspace(saved,recipes));
+ const restored=rules.currentPlanCommand(saved,saved.tasks.find(row=>row.id==='order-1'));
+ assert.equal(rules.preparationProposal(saved,recipes,restored).rows.find(row=>row.recipeId==='caramel').date,'2026-10-30');
+ for(const days of [-1,31,.5,Infinity,'2']){
+  command.preparation.choices.caramel.daysBefore=days;
+  assert(rules.preparationProposal(state,recipes,command).errors.length>0);
+  assert.equal(planning.validRecipePlan({amount:100,amountMode:'quantity',preparation:command.preparation}),false);
+ }
+});
+
+test('daily sweetened and whipped cream are unchecked but remain selectable with their real recipe quantity', () => {
+ for(const name of ['Gezoete slagroom','Opgeklopte slagroom','Slagroom opgeklopt','SLAGROOM GEZOET']){
+  const {state,recipes,command}=fixture();
+  recipes.find(row=>row.id==='foam').name=name;
+  let proposal=rules.preparationProposal(state,recipes,command);
+  const cream=proposal.rows.find(row=>row.recipeId==='foam');
+  assert.equal(cream.name,name);assert.equal(cream.quantity,16.24);assert.equal(cream.included,false);
+  const defaultPlan=rules.buildRecipePlan(state,recipes,command);
+  assert(!defaultPlan.tasks.some(row=>row.itemId==='recipe:foam'));
+  command.preparation.choices.foam={include:true,daysBefore:0};
+  const selected=rules.buildRecipePlan(state,recipes,command);
+  assert.equal(selected.tasks.find(row=>row.itemId==='recipe:foam').quantity,16.24);
+  assert.equal(selected.tasks.find(row=>row.itemId==='recipe:foam').date,command.task.date);
+  const restored=rules.currentPlanCommand(selected,selected.tasks.find(row=>row.id==='order-1'));
+  assert.equal(rules.preparationProposal(selected,recipes,restored).rows.find(row=>row.recipeId==='foam').included,true);
+  assert(workspace.validWorkspace(selected,recipes));
+ }
+ const {state,recipes,command}=fixture();recipes.find(row=>row.id==='foam').name='Slagroom-botercrème';
+ assert.equal(rules.preparationProposal(state,recipes,command).rows.find(row=>row.recipeId==='foam').included,true);
 });

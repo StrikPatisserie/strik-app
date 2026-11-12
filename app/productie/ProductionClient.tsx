@@ -1,5 +1,6 @@
 "use client";
 import ProductionLoading from "./ProductionLoading";
+import { pageIsBeingEdited } from "./useProductionUpdates";
 import ProductionResourceFrame from "./ProductionResourceFrame";
 import { useProductionSession } from "./ProductionSession";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -29,19 +30,20 @@ export default function ProductionClient({canManage,initialView,initialLayout,in
   const serial=useRef(0);
   const pending=useRef(0);
   const [mountedVersion]=useState(appVersion);
-  const load=useCallback(async()=>{
+  const load=useCallback(async(background=false)=>{
     const id=++serial.current;
     pending.current++;
     const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),20000);
     try {
       const response=await fetch("/api/productie",{cache:"no-store",signal:controller.signal}),data=await response.json();
       if (!response.ok) { setSetup(!!data.setupRequired); throw Error(data.message || "De planning kon niet worden vernieuwd."); }
+      if(background && pageIsBeingEdited())return;
       if(id===serial.current){setWorkspace(current=>current&&(current.revision>data.revision || unchangedWorkspace(current,data))?current:data);setError("");setSetup(false);}
     } catch(e) {if(id===serial.current)setError(controller.signal.aborted?"Verversen duurt te lang. Probeer opnieuw.":(e as Error).message);} finally {clearTimeout(timeout);pending.current--;if(id===serial.current)setLoading(false);}
   },[]);
   const available=!!workspace;
   useEffect(()=>{void load();},[load]);
-  useEffect(()=>{if(!available || busy)return;const timer=setInterval(()=>{if(!document.hidden&&!pending.current&&(typeof navigator==='undefined'||navigator.onLine!==false))void load();},15000);return()=>clearInterval(timer);},[load,available,busy]);
+  useEffect(()=>{if(!available || busy)return;const timer=setInterval(()=>{if(!document.hidden&&!pending.current&&(typeof navigator==='undefined'||navigator.onLine!==false)&&!pageIsBeingEdited())void load(true);},15000);return()=>clearInterval(timer);},[load,available,busy]);
   async function transfer(migrate=false) {
     setBusy(true);setError("");
     try {

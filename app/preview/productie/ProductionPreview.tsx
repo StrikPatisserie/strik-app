@@ -48,7 +48,7 @@ import {
 import { DEMO_TODAY, DEMO_WEEK, demoIngredients, demoRecipes, initialPreviewState, PREVIEW_STORAGE_KEY } from "./sampleData";
 import s from "./production.module.css";
 import { validWorkspace, type LiveWorkspace } from "../../productie/workspaceData";
-import { buildRecipePlan, preparationProposal, currentPlanCommand, recipePlanChanges, recipePlanUpdateBlock, refreshRecipePlan, type PlanCommand, type PreparationChoice } from "../../productie/recipePlanning";
+import { buildRecipePlan, defaultPreparationChoices, preparationProposal, currentPlanCommand, recipePlanChanges, recipePlanUpdateBlock, refreshRecipePlan, type PlanCommand, type PreparationChoice } from "../../productie/recipePlanning";
 const BakeryScreenMessages=dynamic(()=>import("../../productie/BakeryScreenMessages"));
 const ProductionInventory=dynamic(()=>import("../../productie/ProductionInventory"));
 const WorkspaceContext = createContext({ demo:true, recipes:demoRecipes, canManage:true, saving:false });
@@ -699,8 +699,8 @@ function TaskForm({ combineDefault=false, state, initial, today, onClose, onPlan
   const [extraOperations, setExtraOperations] = useState<ExtraTaskOperation[]>(() => splitTaskOperation(refreshing?.operation || "").extras);
   const [estimatedMinutes, setEstimatedMinutes] = useState(refreshing?.minutes !== undefined ? String(refreshing.minutes) : "");
   const [combine,setCombine]=useState(settings?.preparation?.combine ?? combineDefault);
-  const [daysBefore,setDaysBefore]=useState(settings?.preparation?.daysBefore ?? 1);
-  const [choices,setChoices]=useState<Record<string,PreparationChoice>>(settings?.preparation?.choices || {});
+  const daysBefore=settings?.preparation?.daysBefore ?? 0;
+  const [choices,setChoices]=useState<Record<string,PreparationChoice>>(() => settings?.preparation?.choices || defaultPreparationChoices(recipeList, initialRecipe?.id));
   const item=state.items.find(i=>i.id===itemId),recipe=recipeList.find(r=>r.id===item?.recipeId);
   const pickerItems = useMemo(() => {
     const recipes = new Map(recipeList.map(candidate => [candidate.id, candidate]));
@@ -743,7 +743,7 @@ function TaskForm({ combineDefault=false, state, initial, today, onClose, onPlan
     setItemId(id);
     setAmount("1");
     setAmountMode(!prior && selected?.kind!=="activity" && recipe && recipe.yield>0 ? "batches" : "quantity");
-    setCustomOperation(null);setExtraOperations([]);setEstimatedMinutes("");setChoices({});setError("");
+    setCustomOperation(null);setExtraOperations([]);setEstimatedMinutes("");setChoices(defaultPreparationChoices(recipeList, recipe?.id));setError("");
     setIncludePreparation(!initial.priorId && !!recipe?.semiFinishedItems?.length && !!recipe && recipe.yield>0);
     if(!initial.departmentId && selected)setDepartmentId(selected.departmentId);
   }
@@ -776,37 +776,31 @@ function TaskForm({ combineDefault=false, state, initial, today, onClose, onPlan
         </div>
         {item && amountMode==="batches" && proposal.quantity>0 && !proposal.errors.length && <p className={s.calculatedAmount} role="status">{quantity(Number(amount))}× basisrecept = <strong>{quantity(proposal.quantity)} {item.unit}</strong></p>}
         {hasPreparation && <section className={s.preparationSection}>
-          <label className={s.checkboxRow}><input type="checkbox" checked={includePreparation} disabled={!(recipe!.yield>0)} onChange={e=>setIncludePreparation(e.target.checked)}/><span>Onderdelen meeplannen</span></label>
+          <label className={s.checkboxRow}><input type="checkbox" checked={includePreparation} disabled={!(recipe!.yield>0)} onChange={e=>setIncludePreparation(e.target.checked)}/><span>Halffabricaten apart meenemen</span></label>
           {includePreparation && <>
-            {combineDefault&&<label className={s.checkboxRow}><input type="checkbox" checked={combine} onChange={event=>setCombine(event.target.checked)}/><span>Gelijke onderdelen op dezelfde dag samen maken</span></label>}<div className={s.planRecipeOutline} aria-label={`Productiestappen ${item?.name}`}>
-              <strong>{item?.name}</strong>
-              {proposal.rows.filter(row=>row.included).map(row=><div key={row.recipeId}><span>{row.name}</span><small>{quantity(row.quantity)} {row.unit} · {departmentName(row.departmentId)} · {dateLabel(row.date,true)}</small></div>)}
-              <div className={s.planFinishingRow}><span>{item?.name} afwerken</span><small>{dateLabel(date,true)}</small></div>
-            </div>
-            <details className={s.planDetails}>
-              <summary>Onderdelen aanpassen</summary>
-              <label className={s.field}>Standaard dagen vooraf<input type="number" min="0" max="30" step="1" value={daysBefore} onChange={e=>setDaysBefore(Number(e.target.value))}/></label>
-              <div className={s.preparationList}>{proposal.rows.map(row=>{
-                const dateInvalid=row.included && row.date>row.latestDate;
-                return <div className={`${s.preparationRow} ${!row.included?s.preparationExcluded:""} ${dateInvalid?s.preparationInvalid:""}`} key={row.recipeId}>
-                  <div>
-                    <label className={s.preparationName}><input type="checkbox" aria-label={`Meemaken: ${row.name}`} checked={row.included} onChange={e=>updateChoice(row.recipeId,{include:e.target.checked})}/><span><strong>{row.name}</strong><small>{quantity(row.quantity)} {row.unit}</small>{!row.included&&<small>Al beschikbaar</small>}{row.departmentUnconfirmed&&row.included&&<small>Afdeling controleren</small>}</span></label>
-                    <button type="button" className={s.textLink} disabled={saving} aria-label={`Recept aanpassen ${row.name}`} onClick={()=>editRecipe(row.itemId)}><Icon name="book" size={13}/>Recept aanpassen</button>
+            <div className={s.preparationList}>{proposal.rows.map(row=>{
+              const dateInvalid=row.included && row.date>row.latestDate;
+              const leadDays=Math.round((Date.parse(row.latestDate)-Date.parse(row.date))/86400000);
+              return <div className={`${s.preparationRow} ${!row.included?s.preparationExcluded:""} ${dateInvalid?s.preparationInvalid:""}`} key={row.recipeId}>
+                <label className={s.preparationName}><input type="checkbox" aria-label={`Meemaken: ${row.name}`} checked={row.included} onChange={e=>updateChoice(row.recipeId,{include:e.target.checked})}/><span><strong>{row.name}</strong><small>{quantity(row.quantity)} {row.unit}</small></span></label>
+                <label className={s.preparationDays}><input type="number" min="0" max="30" step="1" required disabled={!row.included} aria-label={`Dagen ervoor ${row.name}`} value={leadDays} onChange={e=>updateChoice(row.recipeId,{date:undefined,daysBefore:Number(e.target.value)})}/><span>dagen ervoor</span></label>
+                <details className={s.preparationOptions}>
+                  <summary aria-label={`Extra instellingen ${row.name}`}><Icon name="settings" size={15}/></summary>
+                  <div className={s.formGrid}>
+                    <label className={s.field}>Datum<input type="date" aria-label={`Productiedatum ${row.name}`} aria-invalid={dateInvalid||undefined} disabled={!row.included} max={row.latestDate} value={row.date} onChange={e=>updateChoice(row.recipeId,{date:e.target.value,daysBefore:undefined})}/></label>
+                    <label className={s.field}>Afdeling<select aria-label={`Afdeling ${row.name}`} disabled={!row.included} value={row.departmentId} onChange={e=>updateChoice(row.recipeId,{departmentId:e.target.value as DepartmentId})}>{DEPARTMENTS.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
                   </div>
-                  <div className={s.preparationDate}>
-                    <label className={s.field}>Datum<input type="date" aria-label={`Productiedatum ${row.name}`} aria-invalid={dateInvalid||undefined} aria-describedby={`preparation-date-${row.recipeId}`} disabled={!row.included} max={row.latestDate} value={row.date} onChange={e=>updateChoice(row.recipeId,{date:e.target.value})}/></label>
-                    <small id={`preparation-date-${row.recipeId}`}>Uiterlijk {dateLabel(row.latestDate,true)}</small>
-                    {dateInvalid&&<button type="button" className={s.dateRepair} onClick={()=>updateChoice(row.recipeId,{date:row.latestDate})}>Zet op {dateLabel(row.latestDate,true)}</button>}
-                  </div>
-                  <label className={s.field}>Afdeling<select aria-label={`Afdeling ${row.name}`} disabled={!row.included} value={row.departmentId} onChange={e=>updateChoice(row.recipeId,{departmentId:e.target.value as DepartmentId})}>{DEPARTMENTS.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
+                  <button type="button" className={s.textLink} disabled={saving} aria-label={`Recept aanpassen ${row.name}`} onClick={()=>editRecipe(row.itemId)}><Icon name="book" size={13}/>Recept aanpassen</button>
                   {row.included&&<div className={s.preparationWork}>
                     <TaskOperationOptions label={`Extra handelingen ${row.name}`} value={splitTaskOperation(row.operation).extras} onChange={extras=>updateChoice(row.recipeId,{operation:combineTaskOperation(splitTaskOperation(row.operation).base,extras)})}/>
                     <label className={s.field}>Geschatte tijd (min)<input aria-label={`Geschatte tijd ${row.name}`} type="number" min="0" max="1440" step="any" value={row.minutes??""} onChange={event=>updateChoice(row.recipeId,{minutes:event.target.value===""?null:Number(event.target.value)})} placeholder="Optioneel"/></label>
                   </div>}
-                </div>;
-              })}</div>
-            </details>
-            {proposal.rows.some(row=>row.included&&row.date<today)&&<p className={s.planWarning}>Voorbereiding staat vóór vandaag. Pas zo nodig de datums aan bij ‘Onderdelen aanpassen’.</p>}
+                </details>
+                {dateInvalid&&<button type="button" className={s.dateRepair} onClick={()=>updateChoice(row.recipeId,{date:undefined,daysBefore:0})}>Zet op {dateLabel(row.latestDate,true)}</button>}
+              </div>;
+            })}</div>
+            {combineDefault&&<details className={s.planDetails}><summary>Batchinstellingen</summary><label className={s.checkboxRow}><input type="checkbox" checked={combine} onChange={event=>setCombine(event.target.checked)}/><span>Gelijke onderdelen op dezelfde dag samen maken</span></label></details>}
+            {proposal.rows.some(row=>row.included&&row.date<today)&&<p className={s.planWarning}>Een halffabricaat staat vóór vandaag. Controleer het aantal dagen ervoor.</p>}
           </>}
         </section>}
         <details className={s.planDetails}>

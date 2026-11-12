@@ -1,5 +1,6 @@
+const {productionConcurrencyImports}=require('./helpers/production-concurrency.cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
-function load(file,imports={}){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:name=>{assert(name in imports,`Missing ${name}`);return imports[name];},Date,Intl,Map,Set,structuredClone,Request,Response,URL});return exports;}
+function load(file,imports={}){ imports={...productionConcurrencyImports(imports),...imports};const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:name=>{assert(name in imports,`Missing ${name}`);return imports[name];},Date,Intl,Map,Set,structuredClone,Request,Response,URL});return exports;}
 const planning=load('app/productie/planning.ts'),recipePlanning=load('app/productie/recipePlanning.ts',{'./planning':planning,'./materialPlanning':load('app/productie/materialPlanning.ts',{'./planning':planning})}),work=load('app/productie/productionWork.ts',{'./planning':planning,'./recipePlanning':recipePlanning}),commands=load('app/productie/workCommands.ts',{'./productionWork':work}),workspace=load('app/productie/workspaceData.ts',{'./planning':planning}),access=load('app/lib/auth/access.ts'),rights=load('app/productie/access.ts',{'../lib/auth/access':access,'./planning':planning});
 const recipeData={ingredients:[],recipes:[],manualProductionPlanningItems:[]},recipes=[];
 const fixture=()=>({version:1,items:[{id:'cake',name:'Taart zonder recept',kind:'product',departmentId:'dessert',unit:'stuks',stock:0,note:''}],tasks:[{id:'task',itemId:'cake',date:'2026-11-06',departmentId:'dessert',operation:'Maken',status:'planned',quantity:1000,source:'manual',note:'',batchId:'batch',recordsOutput:true}],productionRequests:[]});
@@ -196,4 +197,69 @@ test('overproduction and a later correction count the actual output once on the 
  assert.equal(workspace.validWorkspace(corrected,[]),true);
  const retried=apply(corrected,{kind:'correct-output',taskId:'task',who:'Bakker B',quantity:900,expectedQuantity:600},'correct-extra','2026-11-07T08:00:00Z');
  assert.equal(retried,corrected);assert.equal(planning.completedOutput(retried.items,retried.tasks).get('cake'),900);
+});
+
+
+test('unmeasured completion stores actual output and authenticated registration while retaining unknown work as missing', () => {
+ const original=fixture(),before=JSON.stringify(original);
+ const command={kind:'complete',taskId:'task',quantity:600,unmeasured:true};
+ const saved=apply(original,command,'unknown-work-100');
+ assert.equal(JSON.stringify(original),before);
+ assert.equal(saved.tasks[0].status,'done');assert.equal(saved.tasks[0].quantity,1000);assert.equal(saved.tasks[0].completedQuantity,600);
+ assert.equal(planning.completedOutput(saved.items,saved.tasks).get('cake'),600);
+ const completion=saved.productionWork.completions.task;
+ assert.equal(completion.unmeasured,true);assert.equal(completion.actorId,baker.id);assert.equal(completion.at,at);
+ for(const key of ['who','minutes','crewSize','laborMinutes','measuredMs'])assert.equal(completion[key],undefined);
+ assert.equal(saved.productionWork.work.length,0);
+ assert.equal(saved.productionWork.history[0].actorId,baker.id);assert.match(saved.productionWork.history[0].summary,/onbekend/);
+ assert.equal(work.learnedWorkEstimate(work.workView(saved,[]),'cake','Maken',600),null);
+ assert(workspace.validWorkspace(saved,[]));
+ const retried=apply(saved,command,'unknown-work-100');
+ assert.deepEqual(retried.tasks,saved.tasks);
+ assert.deepEqual(retried.productionWork.completions,saved.productionWork.completions);
+ assert.deepEqual(retried.productionWork.history,saved.productionWork.history);
+ assert.equal(retried.productionWork.work.length,0);
+ assert.throws(()=>apply(saved,command,'other-completion'),/al afgerond/);
+ const corrected=apply(saved,{kind:'correct-output',taskId:'task',who:'Bakker B',quantity:700,expectedQuantity:600},'fix-unknown-output');
+ assert.equal(corrected.productionWork.completions.task.quantity,700);
+ assert.equal(corrected.productionWork.completions.task.unmeasured,true);
+ const reopened=apply(saved,{kind:'reopen',taskId:'task'},'reopen-unknown');
+ assert.equal(reopened.tasks[0].status,'planned');assert.equal(reopened.productionWork.completions.task,undefined);
+});
+
+test('unmeasured completion retains dependency, quantity, timer and department checks', () => {
+ const command={kind:'complete',taskId:'task',quantity:600,unmeasured:true};
+ for(const quantity of [0,-1,Infinity,1000001])assert.throws(()=>apply(fixture(),{...command,quantity}));
+ for(const unexpected of [{minutes:30},{crewSize:1},{who:'Bakker'}])assert.throws(()=>apply(fixture(),{...command,...unexpected}));
+ const blocked=fixture();blocked.tasks[0].dependsOn='prior';
+ blocked.tasks.push({...blocked.tasks[0],id:'prior',dependsOn:undefined,recordsOutput:false});
+ assert.throws(()=>apply(blocked,command));
+ assert.throws(()=>commands.applyWorkCommand(fixture(),[],command,['ijs'],baker.id,'denied-unknown',at),/toegang/);
+ let started=apply(fixture(),{kind:'start',taskId:'task',who:'Bakker A',crewSize:2});
+ assert.throws(()=>apply(started,{...command,timerId:'action-100'},'unknown-completion'),/Stop de timer/);
+ started=apply(started,{kind:'pause',taskId:'task'},'pause-unknown','2026-11-06T08:10:00Z');
+ assert.throws(()=>apply(started,command,'unknown-completion'),/timer/);
+ const saved=apply(started,{...command,timerId:'action-100'},'unknown-completion');
+ assert.equal(saved.productionWork.timers.task.elapsedMs,600000);
+ assert.equal(saved.productionWork.completions.task.minutes,undefined);
+ assert.equal(saved.productionWork.completions.task.crewSize,undefined);
+ assert.equal(saved.productionWork.work.length,0);
+});
+
+
+test('unmeasured completion saves and reads back through the work API with replay-safe identity and actual output',async()=>{
+ const e=endpoint(),command={kind:'complete',taskId:'task',quantity:600,unmeasured:true};
+ const response=await e.route.POST(post(command,'complete-unknown-api'));
+ assert.equal(response.status,200);
+ const payload=await response.json(),completion=payload.state.productionWork.completions.task;
+ assert.equal(payload.revision,2);assert.equal(payload.state.tasks[0].completedQuantity,600);
+ assert.equal(completion.unmeasured,true);assert.equal(completion.actorId,baker.id);
+ assert.equal(completion.who,undefined);assert.equal(completion.minutes,undefined);assert.equal(completion.crewSize,undefined);
+ assert.equal(payload.state.productionWork.work.length,0);
+ assert.equal(e.writes.length,1);
+ const retry=await e.route.POST(post(command,'complete-unknown-api'));
+ assert.equal(retry.status,200);assert.equal(e.writes.length,1);
+ assert.equal((await retry.json()).state.productionWork.completions.task.id,completion.id);
+ const denied=endpoint();denied.store.planner.data.tasks[0].departmentId='ijs';
+ assert.notEqual((await denied.route.POST(post(command,'complete-denied-api'))).status,200);assert.equal(denied.writes.length,0);
 });

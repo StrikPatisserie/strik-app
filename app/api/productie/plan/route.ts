@@ -1,3 +1,5 @@
+import {readEditBase, retryConcurrentSave, assertRecipeCurrent} from "@/app/productie/concurrentEditing.server";
+import {ConcurrentChangeError, assertUnchanged, mergeConcurrentChanges} from "@/app/productie/concurrentChanges";
 import { getCurrentProfile } from "@/app/lib/auth/session";
 import { canManageProduction } from "@/app/lib/auth/access";
 import {productionDepartments,mergeWorkspaceForEmployee} from "@/app/productie/access";
@@ -16,16 +18,35 @@ export async function POST(request:Request) {
   try {
     const text=await request.text();if(text.length>100000)throw new ProductionStoreError("De productieopdracht is te groot.",413);
     const incoming=JSON.parse(text);
-    const [recipes,planner]=await Promise.all([readDocument<RecepturenData>("recipes"),readDocument<PreviewState>("planner")]);
-    if(!recipes || !planner)throw new ProductionStoreError("De gedeelde opslag is nog niet ingericht.");
-    if(incoming.revision!==planner.revision || incoming.recipeRevision!==recipes.revision)throw new ProductionStoreError("De planning of recepten zijn intussen gewijzigd. Ververs het voorstel eerst; er is niets opgeslagen.",409);
-    const views=recipeViews(recipes.data);
-    const current=syncRecipeCatalog(planner.data,recipes.data,views);
-    let next=incoming.action === "combine" ? combineMaterialTasks(current,views,incoming.taskIds) : incoming.replaceTaskId?refreshRecipePlan(current,views,incoming.replaceTaskId,incoming.command):buildRecipePlan(current,views,incoming.command);
-    try{mergeWorkspaceForEmployee(current,next,productionDepartments(profile));}catch(error){throw new ProductionStoreError((error as Error).message,403);}
-    if(incoming.replaceTaskId)next={...next,removedTasks:[...(current.removedTasks || []),...current.tasks.filter(t=>!next.tasks.some(n=>n.id===t.id)).map(task=>({task,removedAt:new Date().toISOString(),removedBy:profile.id}))]};
-    if(!validWorkspace(next,views))throw new ProductionStoreError("Het voorstel bevat een ongeldige hoeveelheid, koppeling of planning.",400);
-    const revision=await saveRecipePlanDocument(planner.revision,recipes.revision,next,profile.id);
-    return Response.json({state:next,revision,updatedAt:new Date().toISOString()},{headers});
-  }catch(error){return Response.json({message:error instanceof Error?error.message:"Inplannen is mislukt."},{status:error instanceof ProductionStoreError?error.status:400,headers});}
+    return await retryConcurrentSave(async () => {
+      const [recipes,planner]=await Promise.all([readDocument<RecepturenData>("recipes"),readDocument<PreviewState>("planner")]);
+      if(!recipes || !planner)throw new ProductionStoreError("De gedeelde opslag is nog niet ingericht.");
+      const [basePlanner, baseRecipes] = await Promise.all([
+        readEditBase(planner, "planner", incoming.revision), readEditBase(recipes, "recipes", incoming.recipeRevision)
+      ]);
+      const itemIds = incoming.action === "combine" ? basePlanner.tasks.filter(task => incoming.taskIds?.includes(task.id)).map(task => task.itemId) : [incoming.command?.task?.itemId];
+      for (const itemId of itemIds) {
+        const item = basePlanner.items.find(item => item.id === itemId);
+        assertUnchanged(item, planner.data.items.find(row => row.id === itemId));
+        if (item?.recipeId) {
+          const dependencies = assertRecipeCurrent(baseRecipes, recipes.data, item.recipeId);
+          for (const recipeId of dependencies) {
+            assertUnchanged(basePlanner.productionWork?.preparation?.[recipeId], planner.data.productionWork?.preparation?.[recipeId]);
+            const component = basePlanner.items.find(row => row.recipeId === recipeId);
+            assertUnchanged(component, planner.data.items.find(row => row.recipeId === recipeId));
+          }
+        }
+      }
+      const views=recipeViews(recipes.data);
+      const current=syncRecipeCatalog(planner.data,recipes.data,views);
+      const base = syncRecipeCatalog(basePlanner, recipes.data, views);
+      let next=incoming.action === "combine" ? combineMaterialTasks(base,views,incoming.taskIds) : incoming.replaceTaskId?refreshRecipePlan(base,views,incoming.replaceTaskId,incoming.command):buildRecipePlan(base,views,incoming.command);
+      next = mergeConcurrentChanges(base, next, current);
+      try{mergeWorkspaceForEmployee(current,next,productionDepartments(profile));}catch(error){throw new ProductionStoreError((error as Error).message,403);}
+      if(incoming.replaceTaskId)next={...next,removedTasks:[...(current.removedTasks || []),...current.tasks.filter(t=>!next.tasks.some(n=>n.id===t.id)).map(task=>({task,removedAt:new Date().toISOString(),removedBy:profile.id}))]};
+      if(!validWorkspace(next,views))throw new ProductionStoreError("Het voorstel bevat een ongeldige hoeveelheid, koppeling of planning.",400);
+      const revision=await saveRecipePlanDocument(planner.revision,recipes.revision,next,profile.id);
+      return Response.json({state:next,revision,updatedAt:new Date().toISOString()},{headers});
+    });
+  }catch(error){return Response.json({message:error instanceof Error?error.message:"Inplannen is mislukt."},{status:error instanceof ProductionStoreError?error.status:error instanceof ConcurrentChangeError?409:400,headers});}
 }

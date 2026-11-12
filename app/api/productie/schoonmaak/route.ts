@@ -1,3 +1,5 @@
+import {readEditBase, retryConcurrentSave} from "@/app/productie/concurrentEditing.server";
+import {ConcurrentChangeError, assertUnchanged} from "@/app/productie/concurrentChanges";
 import { getCurrentProfile } from "@/app/lib/auth/session";
 import { canManageProduction,canAccessBakkerijPatisserie } from "@/app/lib/auth/access";
 import { ProductionStoreError,readDocument,saveDocument } from "@/app/productie/documents.server";
@@ -15,11 +17,16 @@ export async function POST(request:Request){
     const input=JSON.parse(text),command=input?.command as CleaningCommand;
     if(!command || !["check","plan","remove","move"].includes(command.kind))throw new ProductionStoreError("Kies een geldige schoonmaakactie.",400);
     if(command.kind!=="check" && !canManageProduction(profile))throw new ProductionStoreError("Alleen management kan de schoonmaakplanning aanpassen.",403);
-    const [planner,recipes]=await Promise.all([readDocument<PreviewState>("planner"),readDocument<RecepturenData>("recipes")]);
-    if(!planner || !recipes)throw new ProductionStoreError("De productieopslag is nog niet ingericht.");
-    if(input.revision!==planner.revision)throw new ProductionStoreError("De planning is intussen gewijzigd. Ververs eerst; er is niets opgeslagen.",409);
-    const now=new Date().toISOString(),state=syncRecipeCatalog({...planner.data,cleaning:applyCleaningCommand(planner.data.cleaning || [],command,profile.id,now,()=>`cleaning-check:${crypto.randomUUID()}`)},recipes.data);
-    const revision=await saveDocument("planner",planner.revision,state,profile.id,command.kind==="check"?`Schoonmaak ${command.date}: taak ${command.done?"afgevinkt":"heropend"}`:command.kind==="remove"?`Schoonmaakplanning ${command.date} verwijderd`:command.kind==="move"?`Schoonmaak verplaatst van ${command.date} naar ${command.to}`:`Schoonmaakplanning ${command.date} bijgewerkt`);
-    return Response.json({state,revision,updatedAt:now},{headers});
-  }catch(e){return Response.json({message:e instanceof Error?e.message:"De schoonmaakwijziging kon niet worden opgeslagen."},{status:e instanceof ProductionStoreError?e.status:400,headers});}
+    return await retryConcurrentSave(async () => {
+      const [planner,recipes]=await Promise.all([readDocument<PreviewState>("planner"),readDocument<RecepturenData>("recipes")]);
+      if(!planner || !recipes)throw new ProductionStoreError("De productieopslag is nog niet ingericht.");
+      const base = await readEditBase(planner, "planner", input.revision);
+      for (const date of [command.date, ...(command.kind === "move" ? [command.to] : []), ...(command.kind === "plan" ? command.repeatDates : [])]) {
+        assertUnchanged(base.cleaning?.find(row => row.date === date), planner.data.cleaning?.find(row => row.date === date));
+      }
+      const now=new Date().toISOString(),state=syncRecipeCatalog({...planner.data,cleaning:applyCleaningCommand(planner.data.cleaning || [],command,profile.id,now,()=>`cleaning-check:${crypto.randomUUID()}`)},recipes.data);
+      const revision=await saveDocument("planner",planner.revision,state,profile.id,command.kind==="check"?`Schoonmaak ${command.date}: taak ${command.done?"afgevinkt":"heropend"}`:command.kind==="remove"?`Schoonmaakplanning ${command.date} verwijderd`:command.kind==="move"?`Schoonmaak verplaatst van ${command.date} naar ${command.to}`:`Schoonmaakplanning ${command.date} bijgewerkt`);
+      return Response.json({state,revision,updatedAt:now},{headers});
+    });
+  }catch(e){return Response.json({message:e instanceof Error?e.message:"De schoonmaakwijziging kon niet worden opgeslagen."},{status:e instanceof ProductionStoreError?e.status:e instanceof ConcurrentChangeError?409:400,headers});}
 }

@@ -4,7 +4,7 @@ import { buildRecipePlan, type PlanCommand } from "./recipePlanning";
 export type Change = { id:string; itemId:string; taskId?:string; who:string; at:string; actorId?:string; kind:"recipe"|"time"|"preparation"|"stock"|"output";quantityBefore?:number;quantityAfter?:number; scope:"once"|"permanent"; summary:string; before?:DemoRecipe; after?:DemoRecipe };
 export type WorkTime = { id:string; taskId:string; itemId:string; operation:string; quantity:number; minutes:number; who:string; at:string; actorId?:string; timerId?:string; measuredMs?:number; plannedQuantity?:number;crewSize?:number;laborMinutes?:number;recipeKey?:string;estimateEligible?:boolean };
 export type WorkTimer = {id:string;who:string;startedAt:string;runningSince?:string;elapsedMs:number;actorId?:string;crewSize?:number;recipeKey?:string;operation?:string};
-export type Completion = {id:string;who:string;at:string;minutes:number;quantity:number;plannedQuantity:number;measuredMs?:number;timerId?:string;actorId?:string;crewSize?:number;laborMinutes?:number;measuredCrewSize?:number};
+export type Completion = {id:string;who?:string;at:string;minutes?:number;unmeasured?:true;quantity:number;plannedQuantity:number;measuredMs?:number;timerId?:string;actorId?:string;crewSize?:number;laborMinutes?:number;measuredCrewSize?:number};
 export type StockFulfillment = { id:string; taskId:string; itemId:string; unit:ItemUnit; countedQuantity:number; quantity:number; remainingQuantity:number; who:string; at:string; actorId?:string };
 export type ScreenState = { version:1; planner:PreviewState; recipes:DemoRecipe[]; overrides:Record<string,DemoRecipe>; preparation:Record<string,number>; history:Change[]; work:WorkTime[];timers?:Record<string,WorkTimer>;completions?:Record<string,Completion>;stockFulfillments?:Record<string,StockFulfillment> };
 function validCrew(value:number|undefined){if(value!==undefined&&(!Number.isInteger(value)||value<1||value>20))throw Error("Kies 1 tot 20 medewerkers.");return value;}
@@ -28,20 +28,49 @@ export function pauseWorkTimer(state:ScreenState,taskId:string,at:string):Screen
   const paused:WorkTimer={...timer,elapsedMs:elapsedMilliseconds(timer,now)};delete paused.runningSince;
   return {...state,timers:{...state.timers,[taskId]:paused}};
 }
-export function confirmTaskCompletion(state:ScreenState,input:{taskId:string;who:string;minutes:number;quantity:number;timerId?:string;crewSize?:number},id:string,at:string):ScreenState{
-  const who=actor(input.who);timestamp(at);const task=state.planner.tasks.find(t=>t.id===input.taskId),existing=state.completions?.[input.taskId];
-  if(!task)throw Error("Deze taak bestaat niet meer.");
-  if(task.status==="done"){if(existing&&(existing.id===id||input.timerId&&existing.timerId===input.timerId))return state;throw Error("Deze productie is al afgerond.");}
-  if(!Number.isFinite(input.minutes)||input.minutes<=0||input.minutes>1440)throw Error("Controleer de werktijd: meer dan 0 en maximaal 1440 minuten.");
-  if(!Number.isFinite(input.quantity)||input.quantity<=0||input.quantity>1000000)throw Error("Controleer de gemaakte hoeveelheid.");
-  const timer=state.timers?.[task.id];if(timer?.runningSince)throw Error("Stop de timer eerst en controleer de gemeten tijd.");
-  if(timer?.id!==input.timerId)throw Error("De timer is intussen gewijzigd. Open de controle opnieuw.");
-  const crewSize=validCrew(input.crewSize??timer?.crewSize),laborMinutes=crewSize===undefined?undefined:Math.round(input.minutes*crewSize*1000000)/1000000;
-  const tasks=transitionTask(state.planner.tasks,task.id,"done",state.planner.items).map(t=>t.id===task.id?{...t,completedQuantity:input.quantity}:t);
-  const completion:Completion={id,who,at,minutes:input.minutes,quantity:input.quantity,plannedQuantity:task.quantity,crewSize,laborMinutes,...(timer?{timerId:timer.id,measuredMs:timer.elapsedMs,measuredCrewSize:timer.crewSize}:{})};
-  const recipeKey=productionRecipeKey(state,task.itemId);
-  const log:WorkTime={...completion,taskId:task.id,itemId:task.itemId,operation:task.operation,recipeKey,estimateEligible:crewSize!==undefined&&!state.overrides[task.id]&&(!timer||timer.recipeKey===recipeKey&&timer.operation?.trim().toLowerCase()===task.operation.trim().toLowerCase())};
-  return {...state,planner:{...state.planner,tasks},completions:{...state.completions,[task.id]:completion},work:[...state.work,log],history:[...state.history,{id,itemId:task.itemId,taskId:task.id,who,at,kind:"time",scope:"once",summary:`Afgerond: ${input.minutes.toLocaleString("nl-NL")} min${crewSize?` × ${crewSize} medewerkers = ${laborMinutes!.toLocaleString("nl-NL")} arbeidsmin`:""} · ${input.quantity.toLocaleString("nl-NL")} ${state.planner.items.find(i=>i.id===task.itemId)?.unit} gemaakt (gepland ${task.quantity.toLocaleString("nl-NL")}).`}]};
+export type TaskCompletionInput = { taskId: string; quantity: number; timerId?: string } & (
+  { unmeasured: true; who?: never; minutes?: never; crewSize?: never }
+  | { unmeasured?: false; who: string; minutes: number; crewSize?: number }
+);
+
+export function confirmTaskCompletion(state: ScreenState, input: TaskCompletionInput, id: string, at: string): ScreenState {
+  timestamp(at);
+  const task = state.planner.tasks.find(task => task.id === input.taskId);
+  const existing = state.completions?.[input.taskId];
+  if (!task) throw Error("Deze taak bestaat niet meer.");
+  if (task.status === "done") {
+    if (existing && (existing.id === id || input.timerId && existing.timerId === input.timerId)) return state;
+    throw Error("Deze productie is al afgerond.");
+  }
+  if (!Number.isFinite(input.quantity) || input.quantity <= 0 || input.quantity > 1000000) throw Error("Controleer de gemaakte hoeveelheid.");
+  const timer = state.timers?.[task.id];
+  if (timer?.runningSince) throw Error("Stop de timer eerst en controleer de gemeten tijd.");
+  if (timer?.id !== input.timerId) throw Error("De timer is intussen gewijzigd. Open de controle opnieuw.");
+  const unit = state.planner.items.find(item => item.id === task.itemId)!.unit;
+  let completion: Completion = { id, at, quantity: input.quantity, plannedQuantity: task.quantity, ...(timer ? { timerId: timer.id } : {}) };
+  let work = state.work;
+  let who = "Maker onbekend";
+  let summary = `Snel afgerond · ${input.quantity.toLocaleString("nl-NL")} ${unit} gemaakt · naam en tijd onbekend.`;
+  if (input.unmeasured === true) {
+    if (input.who !== undefined || input.minutes !== undefined || input.crewSize !== undefined) throw Error("Laat onbekende naam en tijd leeg bij snel afvinken.");
+    completion = { ...completion, unmeasured: true };
+  } else {
+    who = actor(input.who);
+    if (!Number.isFinite(input.minutes) || input.minutes <= 0 || input.minutes > 1440) throw Error("Controleer de werktijd: meer dan 0 en maximaal 1440 minuten.");
+    const crewSize = validCrew(input.crewSize ?? timer?.crewSize);
+    const laborMinutes = crewSize === undefined ? undefined : Math.round(input.minutes * crewSize * 1000000) / 1000000;
+    const measured = { who, minutes: input.minutes, crewSize, laborMinutes, ...(timer ? { measuredMs: timer.elapsedMs, measuredCrewSize: timer.crewSize } : {}) };
+    completion = { ...completion, ...measured };
+    const recipeKey = productionRecipeKey(state, task.itemId);
+    const log: WorkTime = { ...completion, ...measured, taskId: task.id, itemId: task.itemId, operation: task.operation, recipeKey,
+      estimateEligible: crewSize !== undefined && !state.overrides[task.id] && (!timer || timer.recipeKey === recipeKey && timer.operation?.trim().toLowerCase() === task.operation.trim().toLowerCase()) };
+    work = [...work, log];
+    summary = `Afgerond: ${input.minutes.toLocaleString("nl-NL")} min${crewSize ? ` × ${crewSize} medewerkers = ${laborMinutes!.toLocaleString("nl-NL")} arbeidsmin` : ""} · ${input.quantity.toLocaleString("nl-NL")} ${unit} gemaakt (gepland ${task.quantity.toLocaleString("nl-NL")}).`;
+  }
+  const tasks = transitionTask(state.planner.tasks, task.id, "done", state.planner.items)
+    .map(task => task.id === input.taskId ? { ...task, completedQuantity: input.quantity } : task);
+  return { ...state, planner: { ...state.planner, tasks }, completions: { ...state.completions, [task.id]: completion }, work,
+    history: [...state.history, { id, itemId: task.itemId, taskId: task.id, who, at, kind: "time", scope: "once", summary }] };
 }
 export function correctCompletedQuantity(state: ScreenState, input: {
   taskId: string; who: string; quantity: number; expectedQuantity: number;
@@ -176,7 +205,7 @@ export type ProductionWorkState = Pick<ScreenState,"overrides"|"preparation"|"hi
 export type WorkCommand =
  | {kind:"start";taskId:string;who:string;crewSize?:number}
  | {kind:"pause";taskId:string}
- | {kind:"complete";taskId:string;who:string;minutes:number;quantity:number;timerId?:string;crewSize?:number}
+ | ({kind:"complete"} & TaskCompletionInput)
  | {kind:"correct-output";taskId:string;who:string;quantity:number;expectedQuantity:number}
  | {kind:"reopen";taskId:string}
  | {kind:"stock";taskId:string;who:string;countedQuantity:number;confirmed:true}

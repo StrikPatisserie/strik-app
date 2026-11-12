@@ -3,7 +3,7 @@ import {buildRecipePlan} from './recipePlanning';
 import {combineTaskOperation} from './taskOperations';
 export type ProductionRequest={id:string;itemId:string;quantity:number;departmentId?:DepartmentId|null;neededBy?:string;note:string;createdBy:string;createdAt:string;updatedBy?:string;updatedAt?:string;cancelledAt?:string;plannedTaskId?:string};
 type RequestDetails={itemId:string;quantity:number;departmentId?:DepartmentId|null;neededBy?:string;note:string;newItem?:{name:string;unit:ItemUnit;kind:ItemKind;departmentId?:DepartmentId}};
-export type RequestCommand=({kind:'create'}&RequestDetails)|({kind:'edit';id:string}&RequestDetails)|{kind:'cancel';id:string}|{kind:'plan';id:string;date:string;departmentId:DepartmentId;minutes?:number;pour?:boolean};
+export type RequestCommand=({kind:'create'}&RequestDetails)|({kind:'edit';id:string}&RequestDetails)|{kind:'cancel';id:string}|{kind:'move';id:string;departmentId:DepartmentId|null}|{kind:'plan';id:string;date:string;departmentId:DepartmentId;minutes?:number;pour?:boolean};
 export function requestDepartmentId(request:ProductionRequest,item?:Pick<Item,'departmentId'>):DepartmentId|null{
  // Older requests inherited the product's department. Null is explicitly unassigned.
  return request.departmentId===undefined?item?.departmentId??null:request.departmentId;
@@ -61,6 +61,10 @@ export function applyProductionRequest(state:PreviewState,recipes:DemoRecipe[],c
  const request=requests.find(r=>r.id===command.id);
  if(!request||request.cancelledAt)throw Error('Dit verzoek bestaat niet meer of is ingetrokken. Ververs de lijst.');
  if(!canEditProductionRequest(state,request))throw Error('Dit verzoek staat al in de planning of heeft productieregistraties. Open de weekplanning.');
+ if(command.kind==='move'){
+  if(command.departmentId!==null&&!DEPARTMENTS.some(department=>department.id===command.departmentId))throw Error('Kies een geldige afdeling of nog geen afdeling.');
+  return {...state,productionRequests:requests.map(row=>row.id===request.id?{...row,departmentId:command.departmentId,updatedBy:actor,updatedAt:now}:row)};
+ }
  if(command.kind==='cancel')return {...state,productionRequests:requests.map(r=>r.id===request.id?{...r,cancelledAt:now}:r)};
  if(command.kind!=='plan'||!DEPARTMENTS.some(d=>d.id===command.departmentId))throw Error('Kies een geldige productiedag en afdeling.');
  if(command.pour!==undefined&&typeof command.pour!=='boolean')throw Error('Controleer de keuze voor storten.');

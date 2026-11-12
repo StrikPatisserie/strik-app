@@ -1,6 +1,7 @@
+const {productionConcurrencyImports}=require('./helpers/production-concurrency.cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript'),crypto=require('node:crypto');
-function load(file,imports={},extra=''){
+function load(file,imports={},extra=''){ imports={...productionConcurrencyImports(imports),...imports};
  const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText+extra,{exports,require:name=>{if(!(name in imports))throw Error(`Unmocked ${name}`);return imports[name];},Response,Request,URL,Buffer,Date,Intl,structuredClone,AbortSignal});return exports;
 }
 const access=load('app/lib/auth/access.ts'),planning=load('app/productie/planning.ts');

@@ -198,3 +198,5 @@
     min-height:44px;
   }
 }
+
+.panel .notice { margin:6px 10px; color:#315a44; font-size:12px; }

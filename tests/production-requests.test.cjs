@@ -1,5 +1,6 @@
+const {productionConcurrencyImports}=require('./helpers/production-concurrency.cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
-function load(file,imports={},globals={}){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{exports,require:name=>{assert(name in imports,`Unmocked ${name}`);return imports[name];},Date,Intl,Set,Map,structuredClone,Request,Response,URL,URLSearchParams,crypto:require('node:crypto').webcrypto,...globals});return exports;}
+function load(file,imports={},globals={}){ imports={...productionConcurrencyImports(imports),...imports};const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{exports,require:name=>{assert(name in imports,`Unmocked ${name}`);return imports[name];},Date,Intl,Set,Map,structuredClone,Request,Response,URL,URLSearchParams,crypto:require('node:crypto').webcrypto,...globals});return exports;}
 const planning=load('app/productie/planning.ts'),recipe=load('app/productie/recipePlanning.ts',{'./planning':planning,'./materialPlanning':load('app/productie/materialPlanning.ts',{'./planning':planning})}),requests=load('app/productie/requestPlanning.ts',{'./planning':planning,'./recipePlanning':recipe,'./taskOperations':load('app/productie/taskOperations.ts')}),access=load('app/lib/auth/access.ts'),rights=load('app/productie/access.ts',{'../lib/auth/access':access,'./planning':planning});
 const state=()=>({version:1,items:[{id:'cake',name:'Testtaart',kind:'product',departmentId:'dessert',unit:'stuks',note:'',stock:0}],tasks:[]});
 const now='2026-11-01T12:00:00.000Z',create={kind:'create',itemId:'cake',quantity:20,neededBy:'2026-11-06',note:'Voor de winkels'};
@@ -425,8 +426,8 @@ test('compact requests keep quantities beside the product name, omit stuks and r
   assert(!/\bstuks\b/i.test(requestText(article)));
   const row=ui.find(article,node=>node.props?.className==='row');
   const buttons=ui.nodes(row).filter(node=>node.type==='button');
-  assert.equal(buttons.length,1,'only the planning action occupies the compact request row');
-  assert.deepEqual(buttons.map(button=>button.props['aria-label']),[`Inplannen: ${items[index].name}`]);
+  assert.equal(buttons.length,2,'moving and planning stay directly accessible in the compact request row');
+  assert.deepEqual(buttons.map(button=>button.props['aria-label']),[`Verplaats verzoek: ${items[index].name}`,`Inplannen: ${items[index].name}`]);
   for(const button of buttons){assert.equal(requestText(button),'','row actions stay icon-only');assert(button.props.title);assert.equal(button.props.type,'button');}
  }
 });
@@ -531,4 +532,118 @@ test('a read-only source preview enables local planning explicitly while keeping
  assert.equal(previewState.tasks[0].quantity,20);
  assert.equal(ui.posted.length,0);
  assert(requestText(tree).includes('Ingepland (1)'));
+});
+
+
+test('moving an open request switches boards while preserving details, the catalog and creator',()=>{
+ const initial=apply(state(),{...create,departmentId:'dessert'});
+ const original=initial.productionRequests[0];
+ const moved=requests.applyProductionRequest(initial,[],{kind:'move',id:original.id,departmentId:'bak'},'editor','2026-11-12T09:00:00.000Z','unused');
+ assert.equal(moved.productionRequests.length,1);
+ for(const key of ['id','itemId','quantity','neededBy','note','createdAt','createdBy'])assert.equal(moved.productionRequests[0][key],original[key]);
+ assert.equal(moved.productionRequests[0].departmentId,'bak');
+ assert.equal(moved.productionRequests[0].updatedBy,'editor');
+ assert.equal(moved.productionRequests[0].updatedAt,'2026-11-12T09:00:00.000Z');
+ assert.equal(requests.requestsForBoard(moved.productionRequests,moved.items,'patisserie').length,0);
+ assert.equal(requests.requestsForBoard(moved.productionRequests,moved.items,'bak').length,1);
+ assert.equal(moved.items,initial.items);
+ assert.equal(moved.tasks,initial.tasks);
+ assert.equal(initial.productionRequests[0].departmentId,'dessert');
+ assert(planning.validProductionRequests(moved.productionRequests));
+ const unassigned=apply(moved,{kind:'move',id:original.id,departmentId:null});
+ for(const board of ['patisserie','bak','chocolade'])assert.equal(requests.requestsForBoard(unassigned.productionRequests,unassigned.items,board).length,1);
+ const blocked={...initial,items:[{...initial.items[0],productionBlocked:true}]};
+ assert.equal(apply(blocked,{kind:'move',id:original.id,departmentId:'brood'}).productionRequests[0].departmentId,'brood');
+ const before=JSON.stringify(initial);
+ for(const departmentId of ['unknown','',undefined,false,12])assert.throws(()=>apply(initial,{kind:'move',id:original.id,departmentId}),/afdeling/);
+ assert.equal(JSON.stringify(initial),before);
+ const planned=apply(initial,{kind:'plan',id:original.id,date:'2026-11-05',departmentId:'dessert'},'task-1');
+ assert.throws(()=>apply(planned,{kind:'move',id:original.id,departmentId:'bak'}),/weekplanning/);
+ const cancelled=apply(initial,{kind:'cancel',id:original.id});
+ assert.throws(()=>apply(cancelled,{kind:'move',id:original.id,departmentId:'bak'}),/ingetrokken/);
+});
+
+test('move API uses existing editor rights and audit fields and rejects stale or unauthorized saves',async()=>{
+ const current=apply(state(),create);
+ const command={kind:'move',id:'request-1',departmentId:'bak',quantity:999,updatedBy:'forged'};
+ for(const profile of [manager,logistics,baker]){
+  const h=harness(profile,current);
+  assert.equal((await h.route.POST(post(command))).status,200);
+  const saved=h.saves[0][2].productionRequests[0];
+  assert.equal(saved.departmentId,'bak');
+  assert.equal(saved.quantity,20);
+  assert.equal(saved.updatedBy,profile.id);
+  assert.equal(saved.createdBy,'actor');
+  assert.equal(h.saves[0][4],'Productieverzoek gewijzigd');
+ }
+ for(const profile of [null,shop,{...baker,active:false}]){
+  const h=harness(profile,current);
+  assert.equal((await h.route.POST(post(command))).status,403);
+  assert.equal(h.saves.length,0);
+ }
+ const stale=harness(manager,current);
+ assert.equal((await stale.route.POST(post(command,2))).status,409);
+ assert.equal(stale.saves.length,0);
+ const foreign=harness(manager,current);
+ assert.equal((await foreign.route.POST(post(command,3,'https://foreign.invalid'))).status,403);
+ assert.equal(foreign.saves.length,0);
+ const planned=apply(current,{kind:'plan',id:'request-1',date:'2026-11-05',departmentId:'dessert'},'task-1');
+ const locked=harness(manager,planned);
+ assert.equal((await locked.route.POST(post(command))).status,400);
+ assert.equal(locked.saves.length,0);
+});
+
+test('compact requests move directly to another board using only a department choice',async()=>{
+ const source=apply(state(),{...create,departmentId:'dessert'});
+ let remote={revision:3,canCreate:true,departments:['dessert','bak','brood'],items:source.items,requests:source.productionRequests};
+ let refreshed=0;
+ const ui=requestUi(remote,{fetchImpl:async(url,options)=>{
+  if(options?.method==='POST'){
+   const {command}=JSON.parse(options.body);
+   remote={...remote,revision:4,requests:apply(source,command).productionRequests};
+   return Response.json({revision:4});
+  }
+  return Response.json(remote);
+ }});
+ const props={compact:true,board:'patisserie',onPlanned:async()=>{refreshed++;}};
+ let tree=ui.render(props);
+ ui.find(tree,node=>node.props?.['aria-label']==='Verplaats verzoek: Testtaart').props.onClick();
+ tree=ui.render(props);
+ const selector=ui.find(tree,node=>node.type==='select'&&node.props.name==='departmentId');
+ assert.equal(selector.props.value,'dessert');
+ assert.equal(ui.find(selector,node=>node.type==='option'&&node.props.value==='bak').props.children,'Bakkant');
+ assert(!ui.nodes(tree).some(node=>node.props?.name==='quantity'||node.props?.name==='date'));
+ selector.props.onChange({target:{value:'bak'}});
+ tree=ui.render(props);
+ const form=ui.find(tree,node=>node.type==='form');
+ form.props.onSubmit({preventDefault(){}});
+ form.props.onSubmit({preventDefault(){}});
+ await new Promise(setImmediate);
+ assert.equal(ui.posted.length,1);
+ assert.deepEqual(ui.posted[0],{revision:3,command:{kind:'move',id:'request-1',departmentId:'bak'}});
+ assert.equal(refreshed,1);
+ tree=ui.render(props);
+ assert(requestText(tree).includes('Verplaatst naar Bakkant.'));
+ assert(!ui.nodes(tree).some(node=>node.props?.['aria-label']==='Inplannen: Testtaart'));
+ assert(ui.nodes(ui.render({...props,board:'bak'})).some(node=>node.props?.['aria-label']==='Inplannen: Testtaart'));
+ const readonly=requestUi({...remote,canCreate:false});
+ assert(!readonly.nodes(readonly.render({compact:true,board:'bak'})).some(node=>node.props?.['aria-label']?.startsWith('Verplaats verzoek')));
+});
+
+test('a conflicted move retains its destination and original revision for safe recovery',async()=>{
+ const source=apply(state(),{...create,departmentId:'dessert'});
+ const data={revision:3,canCreate:true,departments:['dessert'],items:source.items,requests:source.productionRequests};
+ const ui=requestUi(data,{fetchImpl:async()=>Response.json({message:'Intussen gewijzigd'},{status:409})});
+ let tree=ui.render({compact:true});
+ ui.find(tree,node=>node.props?.['aria-label']==='Verplaats verzoek: Testtaart').props.onClick();
+ tree=ui.render({compact:true});
+ ui.find(tree,node=>node.props?.name==='departmentId').props.onChange({target:{value:'bak'}});
+ tree=ui.render({compact:true});
+ ui.find(tree,node=>node.type==='form').props.onSubmit({preventDefault(){}});
+ await new Promise(setImmediate);
+ tree=ui.render({compact:true});
+ assert.equal(ui.posted[0].revision,3);
+ assert.equal(ui.find(tree,node=>node.props?.name==='departmentId').props.value,'bak');
+ assert(requestText(ui.find(tree,node=>node.props?.role==='alert')).includes('intussen gewijzigd'));
+ assert.equal(tree.props['data-production-update-block'],true);
 });

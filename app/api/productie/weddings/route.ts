@@ -1,3 +1,5 @@
+import {readEditBase, retryConcurrentSave} from "@/app/productie/concurrentEditing.server";
+import {ConcurrentChangeError, assertUnchanged} from "@/app/productie/concurrentChanges";
 import { getCurrentProfile } from "@/app/lib/auth/session";
 import { canAccessBakkerijPatisserie, canManageProduction } from "@/app/lib/auth/access";
 import { ProductionStoreError, readDocument, saveDocument } from "@/app/productie/documents.server";
@@ -24,7 +26,7 @@ export async function GET(request:Request){
   for(let offset=0;offset<linked.length;offset+=7){const extra=await Promise.all(linked.slice(offset,offset+7).map(async code=>weddingOrders(await readCakes(code)).find(o=>o.code.toLowerCase()===code.toLowerCase())));orders.push(...extra.filter((o):o is NonNullable<typeof o>=>!!o));}
   orders=orders.filter((o,index)=>orders.findIndex(n=>n.code.toLowerCase()===o.code.toLowerCase())===index);
   return Response.json({orders},{headers});
- }catch(error){return Response.json({message:error instanceof Error?error.message:"Bruidstaarten laden is mislukt."},{status:error instanceof ProductionStoreError?error.status:400,headers});}
+ }catch(error){return Response.json({message:error instanceof Error?error.message:"Bruidstaarten laden is mislukt."},{status:error instanceof ProductionStoreError?error.status:error instanceof ConcurrentChangeError?409:400,headers});}
 }
 export async function POST(request:Request){
  const profile=await getCurrentProfile();if(!profile?.active || !canAccessBakkerijPatisserie(profile))return Response.json({message:"Geen toegang tot bruidstaartproductie."},{status:403,headers});
@@ -32,14 +34,17 @@ export async function POST(request:Request){
  try{
   const text=await request.text();if(text.length>10000)throw new ProductionStoreError("De wijziging is te groot.",413);
   const incoming=JSON.parse(text);if(typeof incoming.code!=="string" || incoming.code.length>100)throw new ProductionStoreError("Kies een geldige bruidstaart.",400);
-  const planner=await readDocument<PreviewState>("planner");if(!planner)throw new ProductionStoreError("De productieplanning is niet beschikbaar.");
-  if(incoming.revision!==planner.revision)throw new ProductionStoreError("De planning is intussen gewijzigd. Ververs eerst; er is niets opgeslagen.",409);
-  const order=weddingOrders(await readCakes(incoming.code)).find(o=>o.code.toLowerCase()===incoming.code.toLowerCase());
-  if(!order)throw new ProductionStoreError("Deze definitieve bruidstaart is niet meer beschikbaar. Ververs de planning.",409);
-  const current=planner.data.tasks.find(t=>t.weddingCode?.toLowerCase()===order.code.toLowerCase());
-  if(!canManageProduction(profile) && (incoming.date!==(current?.date || order.date) || (current && current.departmentId!=="bruidstaarten")))throw new ProductionStoreError("Alleen managers kunnen de productiedatum wijzigen.",403);
-  const next=scheduleWedding(planner.data,order,incoming.date,incoming.status);
-  const revision=await saveDocument("planner",planner.revision,next,profile.id,`Bruidstaart ${order.code}: productieplanning bijgewerkt`);
-  return Response.json({state:next,revision,updatedAt:new Date().toISOString()},{headers});
- }catch(error){return Response.json({message:error instanceof Error?error.message:"Opslaan is mislukt."},{status:error instanceof ProductionStoreError?error.status:400,headers});}
+  return await retryConcurrentSave(async () => {
+    const planner=await readDocument<PreviewState>("planner");if(!planner)throw new ProductionStoreError("De productieplanning is niet beschikbaar.");
+    const base = await readEditBase(planner, "planner", incoming.revision);
+    assertUnchanged(base.tasks.filter(task => task.weddingCode?.toLowerCase() === incoming.code.toLowerCase()), planner.data.tasks.filter(task => task.weddingCode?.toLowerCase() === incoming.code.toLowerCase()));
+    const order=weddingOrders(await readCakes(incoming.code)).find(o=>o.code.toLowerCase()===incoming.code.toLowerCase());
+    if(!order)throw new ProductionStoreError("Deze definitieve bruidstaart is niet meer beschikbaar. Ververs de planning.",409);
+    const current=planner.data.tasks.find(t=>t.weddingCode?.toLowerCase()===order.code.toLowerCase());
+    if(!canManageProduction(profile) && (incoming.date!==(current?.date || order.date) || (current && current.departmentId!=="bruidstaarten")))throw new ProductionStoreError("Alleen managers kunnen de productiedatum wijzigen.",403);
+    const next=scheduleWedding(planner.data,order,incoming.date,incoming.status);
+    const revision=await saveDocument("planner",planner.revision,next,profile.id,`Bruidstaart ${order.code}: productieplanning bijgewerkt`);
+    return Response.json({state:next,revision,updatedAt:new Date().toISOString()},{headers});
+  });
+ }catch(error){return Response.json({message:error instanceof Error?error.message:"Opslaan is mislukt."},{status:error instanceof ProductionStoreError?error.status:error instanceof ConcurrentChangeError?409:400,headers});}
 }

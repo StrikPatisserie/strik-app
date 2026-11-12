@@ -1,5 +1,6 @@
+const {productionConcurrencyImports}=require('./helpers/production-concurrency.cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
-function load(file,imports={}){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:name=>{assert(name in imports,`Unmocked ${name}`);return imports[name];},Date,Intl,Set,Map,Response,Request,URL,crypto:require('node:crypto').webcrypto});return exports;}
+function load(file,imports={}){ imports={...productionConcurrencyImports(imports),...imports};const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:name=>{assert(name in imports,`Unmocked ${name}`);return imports[name];},Date,Intl,Set,Map,Response,Request,URL,crypto:require('node:crypto').webcrypto});return exports;}
 const planning=load('app/productie/planning.ts'),access=load('app/lib/auth/access.ts'),workspace=load('app/productie/workspaceData.ts',{'./planning':planning});
 let sequence=0;const now='2026-10-28T10:00:00.000Z',make=()=>`check-${++sequence}`;
 const plan=(date='2026-10-28',extra={})=>({kind:'plan',date,main:'Koelcel reinigen',daily:['Werkbanken reinigen','Vloer schoonmaken'],repeatDates:[],...extra});

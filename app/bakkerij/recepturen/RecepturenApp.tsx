@@ -1,7 +1,8 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { createRecipeSaveQueue } from "../../productie/recipeSynchronization";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { strikIcons } from "../../StrikUI";
@@ -653,11 +654,17 @@ export default function RecepturenApp({
     [recipeItems, scope]
   );
 
-  const storageRevisionRef = useRef<number | undefined>(undefined);
-  async function saveRecepturenData(data: RecepturenData) {
-    const result = await saveSharedRecepturenData({ ...data, storageRevision: storageRevisionRef.current });
-    if (result.ok) storageRevisionRef.current = result.data.storageRevision;
-    return result;
+  const [recipeSaveQueue] = useState(() => createRecipeSaveQueue(saveSharedRecepturenData, data => {
+    setIngredientItems(data.ingredients);
+    setRecipeItems(data.recipes);
+    setPackagingItems(data.packagingItems || []);
+    setInvoiceItems(data.invoiceImports);
+    setHefeOrderHistory(data.hefeOrderHistory || []);
+    setBakeryHome(normalizeBakeryHomeData(data.bakeryHome));
+    setManualPlanningItems(data.manualProductionPlanningItems || []);
+  }));
+  function saveRecepturenData(data: RecepturenData) {
+    return recipeSaveQueue.save(data);
   }
 
   function persistRecepturenData(
@@ -782,7 +789,7 @@ export default function RecepturenApp({
 
       const result = await fetchRecepturenData();
       if (ignoreResult) return;
-      if (result.ok) storageRevisionRef.current = result.data.storageRevision;
+      if (result.ok) recipeSaveQueue.initialize(result.data);
       setFinancialAccess(result.ok && result.data.financialAccess === true);
 
       if (result.ok && hasStoredRecepturenData(result.data)) {
@@ -831,7 +838,7 @@ export default function RecepturenApp({
     return () => {
       ignoreResult = true;
     };
-  }, []);
+  }, [recipeSaveQueue]);
 
   function saveRecipe(updatedRecipe: Recipe) {
     const exists = recipeItems.some((recipe) => recipe.id === updatedRecipe.id);

@@ -3,6 +3,7 @@
 
 import Image from "next/image";
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { groupMailingHistory, mailingHistoryLabel, type SentMail } from "./mailingHistory";
 
 type TemplateKey = "hours" | "product" | "cheesecake";
 type OccasionKey = "christmas" | "sinterklaas" | "easter" | "kingsday" | "ascension" | "pentecost" | "vierdaagse" | "other";
@@ -34,6 +35,7 @@ type MailingApiResponse = {
   customers?: Recipient[];
   draft?: MailingDraft;
   sent?: number;
+  lastSent?: SentMail[];
   message?: string;
 };
 
@@ -434,6 +436,8 @@ export default function HorecaMailingPreview() {
   const [sending, setSending] = useState(false);
   const [sendProgress, setSendProgress] = useState(0);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [lastSent, setLastSent] = useState<SentMail[] | null>(null);
+  const mailingHistory = useMemo(() => groupMailingHistory(lastSent || []), [lastSent]);
 
   const content = activeTemplate === "hours" ? contentByOccasion[occasion] : contentByTemplate[activeTemplate];
   const meta = activeTemplate === "hours"
@@ -470,6 +474,7 @@ export default function HorecaMailingPreview() {
             setPhotoName("Opgeslagen foto");
           }
         }
+        setLastSent(Array.isArray(data.lastSent) ? data.lastSent : []);
         setPreviewMessage(data.message || "");
       })
       .catch((error) => {
@@ -565,6 +570,7 @@ export default function HorecaMailingPreview() {
   }
 
   function applyServerData(data: MailingApiResponse) {
+    if (Array.isArray(data.lastSent)) setLastSent(data.lastSent);
     if (Array.isArray(data.customers) && data.customers.length > 0) setRecipients(data.customers);
     if (data.draft?.photoUrl) {
       setPhoto(data.draft.photoUrl);
@@ -835,6 +841,22 @@ export default function HorecaMailingPreview() {
           <button type="button" disabled={sending || saving || priceMissing || selected.length === 0} onClick={() => setConfirmOpen(true)} className="rounded-full bg-[#315c46] px-5 py-3 text-xs font-black text-white shadow-md disabled:cursor-not-allowed disabled:opacity-40">{sending ? `Versturen ${sendProgress}/${selectedAddressCount}...` : "Controleren & versturen →"}</button>
         </div>
       </section>
+
+      {mailingHistory.length > 0 ? (
+        <details className="px-2 text-xs leading-relaxed text-[#44564a]">
+          <summary className="cursor-pointer rounded-sm py-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#315c46]">
+            <span className="font-semibold">Verzendgeschiedenis{lastSent && lastSent.length >= 200 ? " (laatste 200 mails)" : ""}</span> · {mailingHistoryLabel(mailingHistory[0])}
+          </summary>
+          <ol className="mt-2 max-h-56 space-y-1.5 overflow-y-auto border-l border-[#9eb59f] pl-3">
+            {mailingHistory.map((entry) => <li key={entry.key}>{mailingHistoryLabel(entry)}</li>)}
+          </ol>
+          {lastSent && lastSent.length >= 200 && <p className="mt-2">De laatste 200 geregistreerde mails worden getoond.</p>}
+        </details>
+      ) : (
+        <p className="px-2 text-xs leading-relaxed text-[#44564a]">
+          {loading ? "Verzendgeschiedenis laden…" : lastSent === null ? "Verzendgeschiedenis kon niet worden geladen." : "Verzendgeschiedenis · nog geen verzending geregistreerd."}
+        </p>
+      )}
 
       {confirmOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#263b2b]/55 p-3 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="horeca-send-title">

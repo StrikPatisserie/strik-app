@@ -16,6 +16,30 @@ export type PreparationProposal = { quantity: number; recipeCount?: number; rows
 
 const stableQuantity=(n:number)=>Math.round(n*1e9)/1e9;
 
+/** Daily whipped cream stays in the recipe but is optional as a separate task. */
+function separatelyPlannedByDefault(name: string): boolean {
+  const words = name.toLocaleLowerCase("nl-NL").split(/[^\p{L}]+/u);
+  return !(words.includes("slagroom") && words.some(word => /^(gezoet|opgeklopt)e?$/.test(word)));
+}
+
+/** New orders start on the same day, including nested preparations. */
+export function defaultPreparationChoices(recipes: DemoRecipe[], recipeId?: string): Record<string, PreparationChoice> {
+  const choices: Record<string, PreparationChoice> = {};
+  const catalog = new Map(recipes.map(recipe => [recipe.id, recipe]));
+  const pending = recipeId ? [recipeId] : [];
+  const seen = new Set<string>();
+  while (pending.length && seen.size <= 250) {
+    const id = pending.pop()!;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    for (const child of catalog.get(id)?.semiFinishedItems || []) {
+      choices[child.recipeId] = { daysBefore: 0, include: separatelyPlannedByDefault(catalog.get(child.recipeId)?.name || "") };
+      pending.push(child.recipeId);
+    }
+  }
+  return choices;
+}
+
 /** Exact recipe requirements, without assuming stock, density or whole batches.
  * Repeated references are summed by recipe ID. Every level can be dated and
  * assigned separately; excluded preparation is explicitly already available.
@@ -56,12 +80,13 @@ export function preparationProposal(state:PreviewState,recipes:DemoRecipe[],comm
         if(typeof choice!=="object" || choice===null || (choice.include!==undefined && typeof choice.include!=="boolean"))throw Error("Ongeldige keuze voor een halffabricaat.");
         if (choice.operation !== undefined && (typeof choice.operation !== "string" || !choice.operation.trim() || choice.operation.length > 100)) throw Error("Kies een geldige handeling voor het halffabricaat.");
         if (choice.minutes !== undefined && choice.minutes !== null && (!Number.isFinite(choice.minutes) || choice.minutes < 0 || choice.minutes > 1440)) throw Error("Vul een geschatte tijd tussen 0 en 1440 minuten in.");
-        const included=choice.include!==false;
+        if (choice.daysBefore !== undefined && (!Number.isInteger(choice.daysBefore) || choice.daysBefore < 0 || choice.daysBefore > 30)) throw Error("Kies nul tot dertig dagen vóór gebruik.");
+        const included=choice.include ?? separatelyPlannedByDefault(child.name);
         if(included && (!(child.yield>0) || child.reviewRequired || item.productionBlocked))throw Error(`Controleer de basisopbrengst en grondstofkoppelingen van ${child.name}.`);
         const needed=convertRecipeQuantity(line.quantity*amount/recipe.yield,line.unit,child.unit);
         if(!Number.isFinite(needed) || needed<=0 || needed>1000000)throw Error(`Ongeldige benodigde hoeveelheid bij ${child.name}.`);
         const savedDays=state.productionWork?.preparation?.[child.id];
-        const plannedDate=choice.date || addDays(date,-(savedDays ?? daysBefore));addDays(plannedDate,0);
+        const plannedDate=choice.date || addDays(date,-(choice.daysBefore ?? savedDays ?? daysBefore));addDays(plannedDate,0);
         const componentDepartment=item.departmentUnconfirmed ? defaultComponentDepartment(child.name) : undefined;
         const departmentId=choice.departmentId || componentDepartment || (item.departmentUnconfirmed ? command.task.departmentId : item.departmentId);
         if(!DEPARTMENTS.some(d=>d.id===departmentId))throw Error("Kies een geldige afdeling voor ieder halffabricaat.");
@@ -115,7 +140,7 @@ export function buildRecipePlan(state:PreviewState,recipes:DemoRecipe[],command:
     note:draft.note,source:draft.source,batchId:draft.batchId,recordsOutput:draft.recordsOutput,
     ...(draft.minutes!==undefined?{minutes:draft.minutes}:{}),...(draft.dueDate?{dueDate:draft.dueDate}:{}),...(draft.dependsOn?{dependsOn:draft.dependsOn}:{}),
     ...(included.length?{requires:included.filter(r=>directIds.has(r.recipeId)).map(r=>taskIds.get(r.recipeId)!)}:{}),
-    recipePlan:{amount:command.amount,amountMode:command.amountMode,...(command.preparation?{preparation:{daysBefore:command.preparation.daysBefore,...(command.preparation.combine!==undefined?{combine:command.preparation.combine}:{}),choices:Object.fromEntries(proposal.rows.filter(r=>command.preparation!.choices[r.recipeId]).map(r=>{const c=command.preparation!.choices[r.recipeId];return [r.recipeId,{...(c.include!==undefined?{include:c.include}:{}),...(c.date?{date:c.date}:{}),...(c.departmentId?{departmentId:c.departmentId}:{}),...(c.operation!==undefined?{operation:c.operation}:{}),...(c.minutes!==undefined?{minutes:c.minutes}:{})}];}))}}:{})}};
+    recipePlan:{amount:command.amount,amountMode:command.amountMode,...(command.preparation?{preparation:{daysBefore:command.preparation.daysBefore,...(command.preparation.combine!==undefined?{combine:command.preparation.combine}:{}),choices:Object.fromEntries(proposal.rows.filter(r=>command.preparation!.choices[r.recipeId]).map(r=>{const c=command.preparation!.choices[r.recipeId];return [r.recipeId,{...(c.include!==undefined?{include:c.include}:{}),...(c.date?{date:c.date}:{}),...(c.daysBefore!==undefined?{daysBefore:c.daysBefore}:{}),...(c.departmentId?{departmentId:c.departmentId}:{}),...(c.operation!==undefined?{operation:c.operation}:{}),...(c.minutes!==undefined?{minutes:c.minutes}:{})}];}))}}:{})}};
   root.materialNeeds=recipeMaterialNeeds(next,recipes,root);
   next=addTask(next,root);
   return command.preparation?.combine ? combineNewPreparations(next,recipes,new Set([...taskIds.values()])) : next;

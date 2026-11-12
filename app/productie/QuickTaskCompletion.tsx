@@ -24,6 +24,7 @@ export default function QuickTaskCompletion({ state, task, item, recipes, busy, 
   const [crew, setCrew] = useState(String(timer?.crewSize ?? 1));
   const [quantity, setQuantity] = useState(String(task.quantity));
   const [error, setError] = useState("");
+  const [unmeasured, setUnmeasured] = useState(false);
   const madeQuantity = Number(quantity.replace(",", "."));
   const recipe = state.productionWork?.overrides?.[task.id] || recipes.find(recipe => recipe.id === item.recipeId);
   let baseQuantity: number | undefined;
@@ -36,21 +37,25 @@ export default function QuickTaskCompletion({ state, task, item, recipes, busy, 
   const suggestedMinutes = measuredMinutes ?? estimate?.minutes ?? task.minutes;
   const minutes = enteredMinutes ?? (suggestedMinutes !== undefined && suggestedMinutes > 0 ? String(suggestedMinutes) : "");
   const amount = Number(minutes.replace(",", "."));
-  const valid = who.trim().length >= 2 && who.trim().length <= 80 && Number.isFinite(amount) && amount > 0 && amount <= 1440
-    && Number.isFinite(madeQuantity) && madeQuantity > 0 && madeQuantity <= 1000000
-    && Number.isInteger(Number(crew)) && Number(crew) >= 1 && Number(crew) <= 20;
+  const validQuantity = Number.isFinite(madeQuantity) && madeQuantity > 0 && madeQuantity <= 1000000;
+  const valid = validQuantity && (unmeasured || who.trim().length >= 2 && who.trim().length <= 80
+    && Number.isFinite(amount) && amount > 0 && amount <= 1440
+    && Number.isInteger(Number(crew)) && Number(crew) >= 1 && Number(crew) <= 20);
 
   return <form className={`${styles.panel} ${styles.quick}`} onSubmit={async event => {
     event.preventDefault();
     if (!valid || busy || readOnly) return;
-    const result = await onCommand({ kind: "complete", taskId: task.id, who,
-      minutes: amount, crewSize: Number(crew), quantity: madeQuantity, timerId: timer?.id });
+    const command: WorkCommand = unmeasured
+      ? { kind: "complete", taskId: task.id, quantity: madeQuantity, timerId: timer?.id, unmeasured: true }
+      : { kind: "complete", taskId: task.id, who, minutes: amount, crewSize: Number(crew), quantity: madeQuantity, timerId: timer?.id };
+    const result = await onCommand(command);
     if (result) setError(result);
     else onClose();
   }}>
     <p className={styles.quickQuantity}>Gepland · {task.quantity.toLocaleString("nl-NL")} {item.unit}</p>
+    <label className={styles.quickUnknown}><input type="checkbox" checked={unmeasured} disabled={busy || readOnly} onChange={event => { setUnmeasured(event.target.checked); setError(""); }}/><span>Snel afvinken zonder naam en tijd</span></label>
     <div className={styles.numbers}>
-      <label>Naam<input autoFocus required minLength={2} maxLength={80} value={who} disabled={busy} onChange={event => setWho(event.target.value)} /></label>
+      {!unmeasured && <label>Naam<input autoFocus required minLength={2} maxLength={80} value={who} disabled={busy} onChange={event => setWho(event.target.value)} /></label>}
       <label>Werkelijk gemaakt ({item.unit})<input required inputMode="decimal" value={quantity} disabled={busy} onChange={event => setQuantity(event.target.value)} /></label>
     </div>
     {baseQuantity !== undefined && <div className={styles.batchButtons}>
@@ -58,12 +63,12 @@ export default function QuickTaskCompletion({ state, task, item, recipes, busy, 
         {index + 1}× basisrecept · {batchQuantity.toLocaleString("nl-NL", { maximumFractionDigits: 2 })} {item.unit}
       </button>)}
     </div>}
-    <div className={styles.numbers}>
+    {!unmeasured && <div className={styles.numbers}>
       <label>Tijd (minuten)<input required inputMode="decimal" value={minutes} disabled={busy} onChange={event => setMinutes(event.target.value)} /></label>
       <label>Aantal mensen<input required type="number" min="1" max="20" step="1" value={crew} disabled={busy} onChange={event => setCrew(event.target.value)} /></label>
-    </div>
-    {!timer && estimate && <p className={styles.estimate}>Advies ± {estimate.minutes.toLocaleString("nl-NL", { maximumFractionDigits: 1 })} min · {crew} {Number(crew) === 1 ? "persoon" : "personen"} · {estimate.measurements} eerdere {estimate.measurements === 1 ? "productie" : "producties"}</p>}
-    {!timer && !estimate && task.minutes !== undefined && task.minutes > 0 && <p className={styles.estimate}>Geplande tijd · {task.minutes.toLocaleString("nl-NL")} min</p>}
+    </div>}
+    {!unmeasured && !timer && estimate && <p className={styles.estimate}>Advies ± {estimate.minutes.toLocaleString("nl-NL", { maximumFractionDigits: 1 })} min · {crew} {Number(crew) === 1 ? "persoon" : "personen"} · {estimate.measurements} eerdere {estimate.measurements === 1 ? "productie" : "producties"}</p>}
+    {!unmeasured && !timer && !estimate && task.minutes !== undefined && task.minutes > 0 && <p className={styles.estimate}>Geplande tijd · {task.minutes.toLocaleString("nl-NL")} min</p>}
     {readOnly && <small>Alleen-lezen preview</small>}
     {error && <p role="alert" className={styles.error}>{error}</p>}
     <div className={`${styles.buttons} ${styles.completionActions}`}>

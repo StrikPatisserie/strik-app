@@ -1,6 +1,7 @@
+const {productionConcurrencyImports}=require('./helpers/production-concurrency.cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
-function load(file,imports={},globals={}){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:n=>{if(!(n in imports))throw Error(`Unmocked ${n}`);return imports[n];},Date,Intl,Error,Map,Set,URL,Request,Response,AbortSignal,...globals});return exports;}
+function load(file,imports={},globals={}){ imports={...productionConcurrencyImports(imports),...imports};const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:n=>{if(!(n in imports))throw Error(`Unmocked ${n}`);return imports[n];},Date,Intl,Error,Map,Set,URL,Request,Response,AbortSignal,...globals});return exports;}
 const planning=load('app/productie/planning.ts'),data=load('app/bruidstaart-studio/data.ts'),pricing=load('app/bruidstaart-studio/pricing.ts',{'./data':data});
 const wedding=load('app/productie/weddingPlanning.ts',{'./planning':planning,'../bruidstaart-studio/pricing':pricing}),workspace=load('app/productie/workspaceData.ts',{'./planning':planning});
 const access=load('app/lib/auth/access.ts');

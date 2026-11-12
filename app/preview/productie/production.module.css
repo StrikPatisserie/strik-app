@@ -239,7 +239,14 @@
 .preparationSection { margin:18px 0; padding:15px 0; border-top:1px solid #dfe6d4; border-bottom:1px solid #dfe6d4; }
 .preparationSection > .field { width:160px; margin:12px 0 8px; }
 .preparationList { display:grid; gap:0; }
-.preparationRow { display:grid; grid-template-columns:minmax(0,1fr) 122px 145px; gap:10px; align-items:start; padding:12px 0; border-top:1px solid #e1e6d9; }
+.preparationRow { position:relative; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px 12px; align-items:center; padding:9px 28px 9px 6px; border-top:1px solid #e1e6d9; }
+.preparationDays { display:flex; align-items:center; gap:6px; color:#526951; font-size:11px; white-space:nowrap; }
+.preparationDays input { width:52px; min-height:36px; padding:6px; border:1px solid #c3d3bc; border-radius:5px; background:#fff; color:#1b3344; }
+.preparationOptions { grid-column:1/-1; }
+.preparationOptions > summary { position:absolute; right:0; top:9px; display:grid; place-items:center; width:26px; height:36px; cursor:pointer; list-style:none; color:#607154; }
+.preparationOptions > summary::-webkit-details-marker { display:none; }
+.preparationOptions[open] { padding-top:8px; }
+.preparationRow .dateRepair { grid-column:1/-1; }
 .preparationName { display:flex; align-items:start; gap:8px; min-width:0; font-size:11px; line-height:1.5; }
 .preparationName > input { width:19px; height:19px; flex-shrink:0; margin:1px 0 0; accent-color:#36583e; }
 .preparationName span { min-width:0; overflow-wrap:anywhere; }
@@ -258,8 +265,8 @@
 .planDetails .field { margin-bottom:12px; }
 @media(max-width:800px) {
   .amountChoice { display:block; }.amountChoice > button { margin-top:4px; }
-  .preparationRow { grid-template-columns:1fr 1fr; gap:9px; }
-  .preparationName { grid-column:1 / -1; font-size:12px; }
+  .preparationRow { grid-template-columns:minmax(0,1fr) auto; gap:6px; }
+  .preparationName { font-size:12px; }
   .preparationName > input { width:24px; height:24px; }
   .preparationName small { font-size:11px; }.preparationRow .field input { width:100%; min-width:0; }
 }

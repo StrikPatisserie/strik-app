@@ -1,5 +1,6 @@
+const {productionConcurrencyImports}=require('./helpers/production-concurrency.cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
-function load(file,imports={},globals={}){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText,{exports,Date,JSON,URL,Response,Request,File,Buffer,process,console,...globals,require:name=>imports[name]||{}});return exports;}
+function load(file,imports={},globals={}){imports={...productionConcurrencyImports(imports),...imports};const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText,{exports,Date,JSON,URL,Response,Request,File,Buffer,process,console,...globals,require:name=>imports[name]||{}});return exports;}
 const access=load('app/lib/auth/access.ts');
 const rights=load('app/lib/auth/weeklyOffers.ts',{'./access':access});
 const owner={id:'owner',email:'feline@strik-patisserie.nl',active:true,role:'admin'};

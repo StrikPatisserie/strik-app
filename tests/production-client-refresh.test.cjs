@@ -5,7 +5,7 @@ function harness(){
  const slot=initial=>{const i=index++;if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial;return i;};
  const same=(a,b)=>a?.length===b?.length&&a.every((x,i)=>Object.is(x,b[i]));
  const react={useRef:v=>slots[slot(()=>({current:v}))],useState:initial=>{const i=slot(initial);return[slots[i],value=>{slots[i]=typeof value==='function'?value(slots[i]):value;}];},useCallback:(fn,deps)=>{const i=slot(()=>({fn,deps}));if(!same(slots[i].deps,deps))slots[i]={fn,deps};return slots[i].fn;},useEffect:(fn,deps)=>{const i=slot(()=>({deps:undefined}));if(!same(slots[i].deps,deps)){slots[i].deps=deps;fn();}}};
- const imports={'react':react,'react/jsx-runtime':jsx,'./ProductionLoading':{__esModule:true,default:function Loading(){}},'./ProductionResourceFrame':{__esModule:true,default:function Frame(){}},'./ProductionSession':{useProductionSession:()=>({canManageData:false})},'../preview/productie/ProductionPreview':{__esModule:true,default:function Preview(){}},'../preview/productie/production.module.css':{__esModule:true,default:{}}};
+ const imports={'./useProductionUpdates':{pageIsBeingEdited:()=>documentState.editing===true},'react':react,'react/jsx-runtime':jsx,'./ProductionLoading':{__esModule:true,default:function Loading(){}},'./ProductionResourceFrame':{__esModule:true,default:function Frame(){}},'./ProductionSession':{useProductionSession:()=>({canManageData:false})},'../preview/productie/ProductionPreview':{__esModule:true,default:function Preview(){}},'../preview/productie/production.module.css':{__esModule:true,default:{}}};
  const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync('app/productie/ProductionClient.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{exports,require:name=>{assert(name in imports,`Missing ${name}`);return imports[name];},fetch:(url,init)=>new Promise((resolve,reject)=>{requests.push({url,init,resolve});init.signal?.addEventListener('abort',()=>reject(Error('Request aborted')));}),AbortController,setTimeout:callback=>{timeouts.set(++timeoutId,callback);return timeoutId;},clearTimeout:id=>timeouts.delete(id),setInterval:callback=>{intervals.set(++intervalId,callback);return intervalId;},clearInterval:id=>intervals.delete(id),document:documentState,navigator:network});
  const render=()=>{index=0;return exports.default({canManage:false,appVersion:'release-on-page'});};
  const view=()=>render().props.children.at(-1).props;
@@ -39,4 +39,13 @@ test('a stalled read times out without losing the last workspace and later backg
  const h=harness();h.render();h.respond(0,workspace(5));await h.flush();const initial=h.view().live;
  h.tick();assert.equal(h.requests.length,2);h.expireReads();await h.flush();assert.equal(h.requests[1].init.signal.aborted,true);assert.equal(h.view().live,initial);
  h.tick();assert.equal(h.requests.length,3,'timed-out reads must not keep automatic polling blocked');h.respond(2,workspace(6));await h.flush();assert.equal(h.view().live.revision,6);
+});
+
+
+test('background refresh preserves an open form including a response already in flight',async()=>{
+ const h=harness();h.render();h.respond(0,workspace(5));await h.flush();h.view();
+ h.document.editing=true;h.tick();assert.equal(h.requests.length,1);
+ h.document.editing=false;h.tick();assert.equal(h.requests.length,2);
+ h.document.editing=true;h.respond(1,workspace(6));await h.flush();assert.equal(h.view().live.revision,5);
+ h.document.editing=false;h.tick();h.respond(2,workspace(7));await h.flush();assert.equal(h.view().live.revision,7);
 });

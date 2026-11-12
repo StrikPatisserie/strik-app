@@ -10,6 +10,7 @@ import s from "./requests.module.css";
 type ComponentRow = Omit<WorkRecipeComponent, "quantity"> & { key: number; quantity: string };
 type LoadedRecipe = {
   draft: WorkRecipeInput;
+  revision: number;
   recipeRevision: number;
   semiFinished: { id: string; name: string }[];
   notice?: string;
@@ -27,6 +28,8 @@ type Props = {
 
 export default function QuickRecipeForm({ item, ingredients, getRevision, recipeRevision, onSaved, onClose, taskId }: Props) {
   const editing = Boolean(item.recipeId);
+  const revisionAtOpen = useRef(getRevision());
+  const recipesAtOpen = useRef(recipeRevision);
   const nextRow = useRef(1);
   const [rows, setRows] = useState<ComponentRow[]>([{ key: 0, kind: "ingredient", linkedId: "", quantity: "", unit: "gram" }]);
   const [error, setError] = useState("");
@@ -116,7 +119,7 @@ export default function QuickRecipeForm({ item, ingredients, getRevision, recipe
       const response = await fetch("/api/productie/snel-recept", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ who: String(form.get("who")), scope, taskId, revision: getRevision(), recipeRevision: editing ? loaded!.recipeRevision : recipeRevision, command }),
+        body: JSON.stringify({ who: String(form.get("who")), scope, taskId, revision: loaded?.revision ?? revisionAtOpen.current, recipeRevision: editing ? loaded!.recipeRevision : recipesAtOpen.current, command }),
       });
       const data = await response.json();
       if (!response.ok) throw Error(data.message || "Recept opslaan mislukt.");

@@ -36,7 +36,7 @@ export type Task = {
   weddingCode?: string; weddingDeliveryDate?: string; completedQuantity?:number;
   stockFulfillmentId?:string;
 };
-export type PreparationChoice = { include?: boolean; date?: string; departmentId?: DepartmentId; operation?: string; minutes?: number | null };
+export type PreparationChoice = { include?: boolean; date?: string; daysBefore?: number; departmentId?: DepartmentId; operation?: string; minutes?: number | null };
 export type RecipePlanSettings = {
   amount: number; amountMode: "quantity" | "batches";
   preparation?: { daysBefore: number; choices: Record<string, PreparationChoice>; combine?: boolean };
@@ -363,7 +363,7 @@ export function validRecipePlan(value:RecipePlanSettings):boolean {
   const prep=value.preparation;if(!prep)return true;
   if(prep.combine!==undefined && typeof prep.combine!=="boolean")return false;
   if(!Number.isInteger(prep.daysBefore) || prep.daysBefore<0 || prep.daysBefore>30 || !prep.choices || typeof prep.choices!=="object" || Array.isArray(prep.choices) || Object.keys(prep.choices).length>250)return false;
-  return Object.values(prep.choices).every(c=>{if(!c || typeof c!=="object" || (c.include!==undefined && typeof c.include!=="boolean") || (c.departmentId!==undefined && !DEPARTMENTS.some(d=>d.id===c.departmentId)) || (c.operation!==undefined && (typeof c.operation!=="string" || !c.operation.trim() || c.operation.length>100)) || (c.minutes!==undefined && c.minutes!==null && (!Number.isFinite(c.minutes) || c.minutes<0 || c.minutes>1440)))return false;try{if(c.date)addDays(c.date,0);return true;}catch{return false;}});
+  return Object.values(prep.choices).every(c=>{if(!c || typeof c!=="object" || (c.include!==undefined && typeof c.include!=="boolean") || (c.daysBefore!==undefined && (!Number.isInteger(c.daysBefore) || c.daysBefore<0 || c.daysBefore>30)) || (c.departmentId!==undefined && !DEPARTMENTS.some(d=>d.id===c.departmentId)) || (c.operation!==undefined && (typeof c.operation!=="string" || !c.operation.trim() || c.operation.length>100)) || (c.minutes!==undefined && c.minutes!==null && (!Number.isFinite(c.minutes) || c.minutes<0 || c.minutes>1440)))return false;try{if(c.date)addDays(c.date,0);return true;}catch{return false;}});
 }
 
 export function matchesProductionSearch(query:string,values:(string|undefined)[]):boolean {

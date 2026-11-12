@@ -436,23 +436,25 @@ test('the compact planning form foregrounds product, quantity and day while opti
  assert(button(view,'Zonder recept toevoegen'));
  picker.props.onChange('fruit');view=render();visible=visibleNodes(view);
  const more=find(view,node=>node.type==='details'&&nodes(node).some(child=>child.type==='summary'&&text(child)==='Meer opties'));
- const parts=find(view,node=>node.type==='details'&&nodes(node).some(child=>child.type==='summary'&&text(child)==='Onderdelen aanpassen'));
- for(const details of [more,parts])assert.equal(details.props.open,undefined,'Optional sections start closed');
+ const parts=find(view,node=>node.props?.className==='preparationList');
+ assert.equal(more.props.open,undefined,'Optional sections start closed');
  for(const name of ['dueDate','operation','minutes','source','note','output']){
   const field=find(more,node=>node.props?.name===name);
   assert(!visible.includes(field),`${name} is optional and stays outside the initial compact form`);
  }
  assert(visible.some(node=>node.type==='select'&&node.props.value==='batches'),'New recipe production starts with an explicit base-recipe multiplier');
- assert(visible.some(node=>node.type==='label'&&text(node)==='Onderdelen meeplannen'));
- const outline=find(view,node=>node.props?.['aria-label']==='Productiestappen Fruitdesserttaart');
- assert(visible.includes(outline));assert(text(outline).includes('Vanillecrème'));assert(text(outline).includes(sample.demoRecipes.find(recipe=>recipe.id==='demo-kapsel').name));assert(text(outline).includes('Fruitdesserttaart afwerken'));
+ assert(visible.some(node=>node.type==='label'&&text(node)==='Halffabricaten apart meenemen'));
+ assert(visible.includes(parts));assert(text(parts).includes('Vanillecrème'));assert(text(parts).includes(sample.demoRecipes.find(recipe=>recipe.id==='demo-kapsel').name));
+ const leadInputs=visible.filter(node=>node.type==='input'&&node.props['aria-label']?.startsWith('Dagen ervoor '));
+ assert(leadInputs.length>0);assert(leadInputs.every(node=>node.props.value===0&&node.props.min==='0'));
+ assert(!visible.some(node=>node.type==='input'&&node.props.type==='date'&&node.props['aria-label']?.startsWith('Productiedatum ')));
  const preparationDate=find(parts,node=>node.type==='input'&&node.props['aria-label']?.startsWith('Productiedatum '));
  assert(!visible.includes(preparationDate));assert(preparationDate.props.value);
  const primaryDate=find(view,node=>node.type==='label'&&text(node)==='Productiedatum').props.children.find(node=>node?.type==='input');
  assert.equal(primaryDate.props.value,sample.DEMO_TODAY);
  const submit=find(view,node=>node.type==='button'&&node.props.type==='submit');assert.equal(text(submit),'Inplannen');assert.equal(submit.props.disabled,false);
  await find(view,node=>node.type==='form').props.onSubmit({preventDefault:()=>{},currentTarget:{source:'manual',note:'',dueDate:'',output:'on'}});
- assert.equal(submitted[0].task.operation,'Afwerken');assert.equal(submitted[0].task.date,sample.DEMO_TODAY);assert.equal(submitted[0].preparation.daysBefore,1);
+ assert.equal(submitted[0].task.operation,'Afwerken');assert.equal(submitted[0].task.date,sample.DEMO_TODAY);assert.equal(submitted[0].preparation.daysBefore,0);
  const result=recipePlanning.buildRecipePlan(form.props.state,sample.demoRecipes,submitted[0]);
  assert(result.tasks.some(task=>task.generatedFor===submitted[0].task.id),'The compact outline still schedules actual preparation tasks');
 });
@@ -991,7 +993,7 @@ test('the completion square opens the fast name, output, time and crew form and 
  assert(!nodes(tree).some(node=>typeof node.type==='function'&&node.props.onMove));
  const quick=find(tree,node=>typeof node.type==='function'&&node.type.name==='QuickTaskCompletion');
  let form=h.render(quick.type,quick.props);
- assert.equal(nodes(form).filter(node=>node.type==='input').length,4);
+ assert.equal(nodes(form).filter(node=>node.type==='input').length,5);
  assert.equal(nodes(form).filter(node=>node.type==='details').length,0);
  inputByLabel(form,'Naam').props.onChange({target:{value:'Bakker test'}});
  inputByLabel(form,'Tijd (minuten)').props.onChange({target:{value:'12,5'}});
@@ -1128,7 +1130,7 @@ test('next production prefills learned time in the quick check and adapts to qua
   const commands = [], before = JSON.stringify(state);
   const quickProps = { ...quick.props, onCommand: async command => { commands.push(command); } };
   let form = h.render(quick.type, quickProps);
-  assert.equal(nodes(form).filter(node => node.type === 'input').length, 4);
+  assert.equal(nodes(form).filter(node => node.type === 'input').length, 5);
   assert.equal(inputByLabel(form,'Tijd (minuten)').props.value, '80');
   assert(text(form).includes('1 eerdere productie'));
   assert.equal(commands.length, 0);
@@ -1612,5 +1614,40 @@ test('quick and retrospective completion can select two base recipes using the a
   assert.equal(changed.completedQuantity,actual*1.5);assert.equal(changed.quantity,task.quantity);assert.equal(changed.status,'done');
   assert.equal(corrected.productionWork.completions[task.id].at,completed.productionWork.completions[task.id].at);
   assert.equal(corrected.productionWork.history.at(-1).quantityBefore,done.completedQuantity);
+ }
+});
+
+
+test('quick completion explicitly records unknown work without invented names, crew or times in both layouts', async () => {
+ for (const initialLayout of ['current', 'new']) {
+  const h = harness(), state = sample.initialPreviewState();
+  const task = state.tasks.find(row => row.status === 'planned' && !row.dependsOn && !row.requires?.length && !row.weddingCode);
+  const props = {live:{state,today:sample.DEMO_TODAY,recipes:sample.demoRecipes,ingredients:[],canManage:true,departments:planning.DEPARTMENTS.map(row=>row.id),revision:1},initialLayout};
+  let tree = h.render(h.Component, props);
+  const card = find(tree,node=>node.type==='article'&&node.props['data-task-id']===task.id);
+  await find(card,node=>node.props.className===(initialLayout==='new'?'check':'taskCheck')).props.onClick();
+  tree = h.render(h.Component, props);
+  const quick = find(tree,node=>typeof node.type==='function'&&node.type.name==='QuickTaskCompletion');
+  const commands=[];let closes=0;
+  const quickProps={...quick.props,onCommand:async command=>{commands.push(command);},onClose:()=>closes++};
+  const render=()=>h.render(quick.type,quickProps);
+  let form=render();
+  inputByLabel(form,'Snel afvinken zonder naam en tijd').props.onChange({target:{checked:true}});
+  form=render();
+  assert(!nodes(form).some(node=>node.type==='label'&&text(node)==='Naam'));
+  assert(!nodes(form).some(node=>node.type==='label'&&text(node)==='Tijd (minuten)'));
+  assert(!nodes(form).some(node=>node.type==='label'&&text(node)==='Aantal mensen'));
+  inputByLabel(form,'Werkelijk gemaakt').props.onChange({target:{value:'0'}});form=render();
+  assert.equal(button(form,'Opslaan & klaar').props.disabled,true);
+  await form.props.onSubmit({preventDefault(){}});assert.equal(commands.length,0);
+  inputByLabel(form,'Werkelijk gemaakt').props.onChange({target:{value:'600'}});form=render();
+  assert.equal(button(form,'Opslaan & klaar').props.disabled,false);
+  await form.props.onSubmit({preventDefault(){}});
+  assert.equal(closes,1);assert.equal(commands.length,1);
+  assert.equal(commands[0].unmeasured,true);assert.equal(commands[0].quantity,600);
+  for(const key of ['who','minutes','crewSize'])assert.equal(commands[0][key],undefined);
+  const saved=workCommands.applyWorkCommand(state,sample.demoRecipes,commands[0],planning.DEPARTMENTS.map(row=>row.id),'account-baker','unknown-work','2026-10-28T08:00:00Z');
+  assert.equal(saved.tasks.find(row=>row.id===task.id).completedQuantity,600);
+  assert.equal(saved.productionWork.work.length,0);
  }
 });
