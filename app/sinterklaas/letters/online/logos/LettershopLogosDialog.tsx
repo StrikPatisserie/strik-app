@@ -51,7 +51,7 @@ export default function LettershopLogosDialog({ onClose }: Props) {
   const visible = orders.filter(order => pendingLogoItems(order, showPrinted).length > 0);
   const chosen = visible.filter(order => selected.includes(order.id));
   const itemIds = chosen.flatMap(order => pendingLogoItems(order, showPrinted).map(item => item.id));
-  const hasReprint = chosen.some(order => pendingLogoItems(order, true).length !== pendingLogoItems(order).length);
+  const hasReprint = showPrinted && chosen.some(order => pendingLogoItems(order, true).length !== pendingLogoItems(order).length);
   const count = chosen.reduce((sum, order) => sum + pendingLogoItems(order, showPrinted).reduce((n, item) => n + item.quantity, 0), 0);
 
   function close() {
