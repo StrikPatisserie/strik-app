@@ -3,7 +3,7 @@ import { PDFDocument, PrintScaling, type PDFImage, type PDFEmbeddedPage } from "
 import { createCanvas, loadImage, DOMMatrix, ImageData, Path2D } from "@napi-rs/canvas";
 import { logoPrintLayout, type PrintLogo } from "./model";
 
-type FileLogo = { id: string; name?: string; content_type: string; bytes_base64: string };
+type FileLogo = { id: string; name?: string; customer?: string; summary?: string; content_type: string; bytes_base64: string };
 const cm = 72 / 2.54;
 
 async function logoThumbnail(file: FileLogo, bytes: Buffer) {
@@ -49,7 +49,7 @@ async function printHeader(customer: string, file: FileLogo, thumbnail: Buffer) 
   context.fillRect(0, 0, canvas.width, canvas.height);
   context.drawImage(await loadImage(thumbnail), 0, 2, 100, 100);
   context.fillStyle = "#111";
-  const title = customer.replace(/\s+/g, " ").trim();
+  const title = (file.customer || customer).replace(/\s+/g, " ").trim();
   let size = 44;
   do {
     context.font = `bold ${size}px sans-serif`;
@@ -58,7 +58,24 @@ async function printHeader(customer: string, file: FileLogo, thumbnail: Buffer) 
   } while (size > 14);
   context.fillText(title, 125, 52);
   context.font = "22px sans-serif";
-  context.fillText(file.name || "Logo", 125, 86, 1450);
+  const subtitle = file.summary || file.name || "Logo";
+  const words = subtitle.split(/\s+/);
+  let line = "";
+  let baseline = 82;
+  for (let index = 0; index < words.length; index++) {
+    const next = `${line} ${words[index]}`.trim();
+    if (context.measureText(next).width > 1450 && line) {
+      context.fillText(line, 125, baseline);
+      baseline += 24;
+      line = words[index];
+      if (baseline > 106) break;
+    } else line = next;
+    if (baseline === 106 && index < words.length - 1 && context.measureText(`${line} ${words[index + 1]}…`).width > 1450) {
+      line += "…";
+      break;
+    }
+  }
+  if (baseline <= 106) context.fillText(line, 125, baseline, 1450);
   context.fillRect(0, 115, 1600, 2);
   return canvas.toBuffer("image/png");
 }

@@ -7,7 +7,7 @@ const productionRelease=process.env.VERCEL_DEPLOYMENT_ID || process.env.VERCEL_G
 
 const nextConfig: NextConfig = {
   env:{NEXT_PUBLIC_STRIK_RELEASE:productionRelease},
-  serverExternalPackages: ["@napi-rs/canvas", "pdf-parse", "pdfjs-dist"],
+  serverExternalPackages: ["@napi-rs/canvas", "pdf-parse", "pdfjs-dist", "heic-decode"],
   experimental: {
     serverActions: {
       bodySizeLimit: "10mb",

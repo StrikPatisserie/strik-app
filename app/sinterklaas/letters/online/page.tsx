@@ -4,6 +4,7 @@ import { requireAdminProfile } from "@/app/lib/auth/session";
 import { requireSupabasePublicConfig, requireSupabaseServiceRoleKey } from "@/app/lib/supabase/config";
 import { StrikShell } from "@/app/StrikUI";
 import OnlineLetterOrdersClient from "./OnlineLetterOrdersClient";
+import { loadLogoReceipts } from "./logos/data.server";
 import type { OnlineLetterOrder } from "./onlineOrders";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +16,7 @@ export default async function OnlineLetterOrdersPage() {
     auth: { autoRefreshToken: false, persistSession: false },
   });
   const { data, error } = await supabase.from("letter_orders")
-    .select("id,revision,order_number,customer_name,customer_email,phone,notes,requested_date,pickup_location,gift_wrap,gift_wrap_price_cents,fulfillment_status,created_at,letter_order_items(id,quantity,logo,logo_storage_path,unit_price_cents,logo_price_cents,letter_products(letter,flavour,size,style))")
+    .select("id,revision,order_number,customer_name,customer_email,phone,notes,requested_date,pickup_location,gift_wrap,gift_wrap_price_cents,fulfillment_status,created_at,letter_order_items(id,product_id,quantity,logo,logo_storage_path,unit_price_cents,logo_price_cents,letter_products(letter,flavour,size,style))")
     .eq("channel", "ONLINE").order("created_at", { ascending: false }).limit(100);
   const orders = (data || []) as unknown as OnlineLetterOrder[];
   if (orders.length) {
@@ -27,6 +28,7 @@ export default async function OnlineLetterOrdersPage() {
   const seasons=[...new Set(orders.map(order=>order.requested_date.slice(0,4)))];
   const ready=new Set((await Promise.all(seasons.map(season=>loadReadyProductionRecipients(season).catch(()=>new Set<string>())))).flatMap(set=>[...set]));
   for(const order of orders)if(order.fulfillment_status==="NEW" && ready.has(`central:${order.id}`))order.fulfillment_status="READY";
+  const receipts = await loadLogoReceipts(supabase, orders.flatMap(order => order.letter_order_items.filter(item => item.logo).map(item => item.id)));
   const photoUrls = new Map<string, string>();
   for (const order of orders) {
     for (const item of order.letter_order_items) {
@@ -38,6 +40,6 @@ export default async function OnlineLetterOrdersPage() {
   }
 
   return <StrikShell wide>
-    <OnlineLetterOrdersClient orders={orders} photoUrls={Object.fromEntries(photoUrls)} error={error?.message} />
+    <OnlineLetterOrdersClient orders={orders} receipts={receipts} photoUrls={Object.fromEntries(photoUrls)} error={error?.message} />
   </StrikShell>;
 }

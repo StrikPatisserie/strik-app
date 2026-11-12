@@ -1,4 +1,5 @@
 export type OnlineOrderItem = {
+  product_id?: string;
   id: string;
   quantity: number;
   logo: boolean;
