@@ -1,6 +1,7 @@
 import { preparationProposal } from "../../../productie/recipePlanning";
 import type { DemoRecipe, DepartmentId, ItemUnit, PreviewState } from "../../../productie/planning";
 import type { StockCategory } from "./assortment";
+import { salesArticleCodes, usableSalesArticle } from "./salesArticles";
 
 export type SalesProduct = {
   id: string; name: string; group: StockCategory; department: "patisserie" | "bak" | "chocolade";
@@ -74,15 +75,25 @@ export function productFor2026(product: SalesProduct, choice: ProductChoice): Sa
 }
 
 export function mappedProductsFor2026(products: SalesProduct[], choices: Record<string, ProductChoice>, growth: number): SalesProduct[] {
-  const mapped = products.map(product => productFor2026(product, choices[product.id] || emptyChoice()));
+  const current = products.map(product => productFor2026(product, choices[product.id] || emptyChoice()));
+  // Stored groups may predate daily article mapping. Validate their complete
+  // member list, including formats outside the group that reuse an article.
+  const articles = current.map(salesArticleCodes);
+  const mapped = current.map((product, index) => product.members ? {
+    ...product,
+    articleAmbiguous: articles[index].some(code => !usableSalesArticle(code))
+      || current.some((other, otherIndex) => otherIndex !== index
+        && !choices[other.id]?.adjustment?.hidden
+        && articles[otherIndex].some(code => articles[index].includes(code))),
+  } : product);
   const counts = new Map<string, number>();
   for (const [index, product] of mapped.entries()) {
     if (choices[product.id]?.adjustment?.hidden) continue;
     const period = productProjection(products[index], choices[product.id] || emptyChoice(), growth).period;
-    if (!product.cashCode || product.cashCode === "9999999999" || period === null || period <= 0) continue;
-    for (const code of new Set(product.combinedFlan?.cashCodes || [product.cashCode])) counts.set(code, (counts.get(code) || 0) + 1);
+    if (period === null || period <= 0) continue;
+    for (const code of salesArticleCodes(product).filter(usableSalesArticle)) counts.set(code, (counts.get(code) || 0) + 1);
   }
-  return mapped.map(product => (product.combinedFlan?.cashCodes || [product.cashCode]).some(code => (counts.get(code) || 0) > 1) ? { ...product, articleAmbiguous: true } : product);
+  return mapped.map(product => salesArticleCodes(product).some(code => (counts.get(code) || 0) > 1) ? { ...product, articleAmbiguous: true } : product);
 }
 
 export function forecastRow(product: SalesProduct, choice: ProductChoice, growth: number): ForecastRow {

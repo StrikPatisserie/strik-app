@@ -10,7 +10,7 @@ import { buildForecastPlan, emptyChoice, mappedProductsFor2026, productFor2026, 
 import { ADJUSTMENTS_STORAGE_KEY, parseForecastSettings, type ForecastMapping } from "./adjustments";
 import { choicesFromSettings, forecastProductSettings, type ForecastCommand, type SharedForecastSettings } from "./sharedSettings";
 import { exampleChoices, exampleRecipes } from "./examples";
-import { includeInStockOverview, salesVolume, stockCategories } from "./assortment";
+import { combinePetitFours, includeInStockOverview, salesVolume, stockCategories } from "./assortment";
 import { CAMPAIGN_START, campaignWindow, exampleCampaignReceipts, remainingNeed, todayInAmsterdam, validCampaignDays, type CampaignReceipts, type CampaignWindow, type RemainingNeed } from "./campaignNeed";
 import { exampleProduction, productInventory, stockDisplay, productionRequirement, type ProductionRequirement, type ProductionReading, type StockRow, type StockOverview } from "./productionOverview";
 import { allocateAssortedSales } from "./assortedPastries";
@@ -137,7 +137,7 @@ function ProductDetails({ row, source, recipes, growth, shared, onSave, onCount,
       <div className={s.countSummary}><span><b>{row.toMake.quantity === null ? "Nog te maken na telling" : `${row.toMake.provisional ? "ca. " : ""}${number(row.toMake.quantity)} nog te maken`}</b><small>{row.toMake.quantity === null ? row.toMake.note : row.toMake.excess ? `${number(row.toMake.excess)} boven resterende prognose` : `Stand t/m ${dateLabel(row.toMake.through!)}`}</small></span><button type="button" className={s.secondary} disabled={!stock || source.mode !== "live"} onClick={onCount}><Icon name="stock" size={18} />Voorraad tellen</button></div>
       {!stock && <p className={s.small}>Koppel eerst het productieartikel voor een telling in stuks.</p>}
       <p className={s.small}>Dit is bakkerijvoorraad. Een productietaak geeft de gemaakte hoeveelheid; een telling geeft de voorraadstand. Dagstartbonnen registreren uitgifte aan winkels en klanten.</p>
-      {row.product.members && <details className={s.recipeBox}><summary>{row.product.members.length} samengevoegde varianten</summary><div className={s.variantList}>{row.product.members.map(member => <div key={member.id}><span>{member.name}</span><b>{member.cash === null && member.bake === null ? "Nog geen verkoop gekoppeld" : number((member.cash ?? 0) + (member.bake ?? 0))}</b></div>)}</div></details>}
+      {row.product.members && <details className={s.recipeBox}><summary>{row.product.members.length} samengevoegde varianten</summary><div className={s.variantList}>{row.product.members.map(member => <div key={member.id}><span>{member.name}<small>Cash-it {member.cashCode || "onbekend"} · Bake-it {member.bakeCode || "onbekend"}</small></span><b>{member.cash === null && member.bake === null ? "Nog geen verkoop gekoppeld" : number((member.cash ?? 0) + (member.bake ?? 0))}</b></div>)}</div></details>}
       {source.mode === "live" && !currentProduct.members && <SearchableChoice label="Productieartikel" value={stock?.itemId || draft.productionItemId || ""}
         choices={source.overview.rows.filter(item => item.kind === "product" && item.unit === "stuks").map(item => ({ id: item.itemId, name: item.name, description: item.link?.article ? `Artikel ${item.link.article}` : "Nog geen verkoopartikel gekoppeld" }))}
         onChange={id => setDraft(current => ({ ...current, productionItemId: id, recipeId: source.items.find(item => item.id === id)?.recipeId || "", checked: false }))}
@@ -228,7 +228,7 @@ export default function ChristmasStockPreview({
   products: sourceProducts, today, error, week52Error, production, campaignReceipts, productionError, sharedSettings,
   returnHref = "/preview/productie?view=feestdagen", planningHref = "/preview/productie",
 }: Props) {
-  const products = useMemo(() => combineLargeFlans(allocateAssortedSales(sourceProducts)), [sourceProducts]);
+  const products = useMemo(() => combinePetitFours(combineLargeFlans(allocateAssortedSales(sourceProducts))), [sourceProducts]);
   const shared = !!sharedSettings;
   const sharedRef = useRef(sharedSettings);
   const savingRef = useRef(false);

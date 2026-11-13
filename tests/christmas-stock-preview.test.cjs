@@ -17,14 +17,15 @@ function load(file, imports = {}, globals = {}) {
 const planning = load('app/productie/planning.ts');
 const materials = load('app/productie/materialPlanning.ts', { './planning': planning });
 const expansion = load('app/productie/recipePlanning.ts', { './planning': planning, './materialPlanning': materials });
-const forecast = load('app/preview/productie/kerstvoorraad/forecast.ts', { '../../../productie/recipePlanning': expansion });
+const salesArticles = load('app/preview/productie/kerstvoorraad/salesArticles.ts');
+const forecast = load('app/preview/productie/kerstvoorraad/forecast.ts', { '../../../productie/recipePlanning': expansion, './salesArticles': salesArticles });
 const examples = load('app/preview/productie/kerstvoorraad/examples.ts', { './forecast': forecast });
 const inventory = load('app/productie/inventory.ts', { './planning': planning });
 const variants = load('app/preview/productie/kerstvoorraad/variants.ts');
 const assortment = load('app/preview/productie/kerstvoorraad/assortment.ts', { './forecast': forecast, './variants': variants });
 const assorted = load('app/preview/productie/kerstvoorraad/assortedPastries.ts');
 const flans = load('app/preview/productie/kerstvoorraad/flanVariants.ts');
-const campaign = load('app/preview/productie/kerstvoorraad/campaignNeed.ts', { '../../../productie/planning': planning, '../../../productie/inventory': inventory, './assortedPastries': assorted });
+const campaign = load('app/preview/productie/kerstvoorraad/campaignNeed.ts', { '../../../productie/planning': planning, '../../../productie/inventory': inventory, './assortedPastries': assorted, './salesArticles': salesArticles });
 const overview = load('app/preview/productie/kerstvoorraad/productionOverview.ts', { '../../../productie/inventory': inventory, '../../../productie/planning': planning, './campaignNeed': campaign });
 const stockCount = load('app/preview/productie/kerstvoorraad/stockCount.ts');
 const weekly = load('app/preview/productie/kerstvoorraad/week52.ts', { './variants': variants });
@@ -1059,4 +1060,111 @@ test('unavailable storage, changed products and persistent conflicts leave the c
     return response(409,{message:'Nieuwe wijziging'});
   }), /Nieuwe wijziging/);
   assert.equal(attempts, 3);
+});
+
+
+const petitFour = (code, cash, bake = 0, extra = {}) => ({ ...product(`petit:${code}`),
+  name: { '65300': 'Petit Four (p.s.)', '65301': 'Petit Four met tekst', '65302': 'Petit Four met logo' }[code],
+  cashCode: code, bakeCode: { '65300': '550', '65301': '551', '65302': '552' }[code],
+  group: 'overig', cash, bake, week52: { cash: 10, bake: 1 }, ...extra,
+});
+
+test('petit fours combine all three per-piece articles before uplift and keep the existing plain article ID', () => {
+  const input = [petitFour('65302',300,3), petitFour('65301',200,2), petitFour('65300',100,1)];
+  const before = JSON.stringify(input);
+  const combined = assortment.combinePetitFours(input);
+  assert.equal(combined.length,1);
+  const p = combined[0];
+  assert.equal(p.name,'Petit fours'); assert.equal(p.id,'petit:65300');
+  assert.equal(p.cash,600); assert.equal(p.bake,6);
+  assert.equal(p.week52.cash,30); assert.equal(p.week52.bake,3);
+  assert.equal(p.members.length,3);
+  assert.equal(forecast.productProjection(p,forecast.emptyChoice(),10).period,667);
+  assert.equal(forecast.productProjection(p,forecast.emptyChoice(),10).week52,37);
+  for (const query of ['65300','65301','65302','550','551','552','logo','tekst']) assert(planning.matchesProductionSearch(query,p.searchNames),query);
+  assert.equal(JSON.stringify(input),before);
+  assert.equal(JSON.stringify(assortment.combinePetitFours(combined)),JSON.stringify(combined));
+});
+
+test('petit-four packs and special subcodes remain separate, and incomplete quantities stay unknown', () => {
+  const pack = { ...product('pack'), name:'Petit Four (6st)', cashCode:'65001' };
+  const special = petitFour('65300',10,0,{id:'special',salesVariant:'doos 6 stuks'});
+  const source = [pack,special,petitFour('65300',null,null),petitFour('65301',null,null)];
+  const result = assortment.combinePetitFours(source);
+  assert.equal(result.length,3); assert.equal(result[0],pack); assert.equal(result[1],special);
+  assert.equal(result[2].cash,null); assert.equal(result[2].bake,null);
+  assert.equal(forecast.productProjection(result[2],forecast.emptyChoice(),10).period,null);
+  const noWeek = assortment.combinePetitFours([petitFour('65300',20),petitFour('65301',30,0,{week52:undefined})])[0];
+  assert.match(noWeek.week52.issue,/ontbreekt/);
+  const unknown = assortment.combinePetitFours([petitFour('65300',20),petitFour('65301',30,0,{unitUnconfirmed:true})])[0];
+  assert.equal(unknown.unitUnconfirmed,true);
+});
+
+test('petit-four daily receipts use all three current articles and exclude old Bake-it numbers', () => {
+  const products = assortment.combinePetitFours([petitFour('65300',100),petitFour('65301',100),petitFour('65302',100)]);
+  const p = forecast.mappedProductsFor2026(products,{},10)[0];
+  assert.equal(p.articleAmbiguous,false);
+  const receipts = campaignReceipts([{ ...receiptDay('2026-11-16',0), lines: [
+    {article:'65300',description:'Petit Four',quantity:3}, {article:'65301',description:'Tekst',quantity:4},
+    {article:'65302',description:'Logo',quantity:5}, {article:'550',description:'Other article namespace',quantity:999},
+  ] }]);
+  const need = campaign.remainingNeed(p,330,receipts,'2026-11-17');
+  assert.equal(need.issued,12); assert.equal(need.remaining,318);
+  const repeated = campaign.remainingNeed(p,330,{...receipts,days:[...receipts.days,{...receipts.days[0],importedAt:'2026-11-16T20:00:00Z'}]},'2026-11-17');
+  assert.equal(repeated.issued,12);
+  const returned = campaign.remainingNeed(p,330,campaignReceipts([{...receipts.days[0],lines:[{article:'65302',description:'Retour',quantity:-2}]}]),'2026-11-17');
+  assert.equal(returned.remaining,332);
+});
+
+test('stored marzipan groups retain every article for daily demand without subtracting repeated codes twice', () => {
+  const rows = [
+    {...product('a'), name:'Marsepeintaart Bloemetjes', group:'taart',cashCode:'25201'},
+    {...product('b'), name:'Marsepeintaart Kleurrijk', group:'taart',cashCode:'25202'},
+    {...product('c'), name:'Marsepeintaart Blauw', group:'taart',cashCode:'25202'},
+  ];
+  const grouped = assortment.aggregateMarzipanCakes(rows);
+  assert.equal(grouped[0].articleAmbiguous,true,'stored historical groups require validation against the complete current overview');
+  const p = forecast.mappedProductsFor2026(grouped,{},10)[0];
+  assert.equal(p.articleAmbiguous,false);
+  assert.deepEqual(Array.from(salesArticles.salesArticleCodes(p)),['25201','25202']);
+  const receipts = campaignReceipts([{...receiptDay('2026-11-16',0),lines:[
+    {article:'25201',description:'Bloemetjes',quantity:3}, {article:'25202',description:'Kleurrijk',quantity:4},
+  ]}]);
+  assert.equal(campaign.remainingNeed(p,100,receipts,'2026-11-17').issued,7);
+});
+
+test('a shared small-cake article and incomplete grouped codes remain unresolved in daily demand', () => {
+  const large = {...product('a'),name:'Marsepeintaart 10–12p',cashCode:'25200',group:'taart'};
+  const small = {...product('small'),name:'Marsepeintaart 6–8p',cashCode:'25200',group:'taart'};
+  const mapped = forecast.mappedProductsFor2026(assortment.aggregateMarzipanCakes([large,small]),{},10);
+  const group = mapped.find(row=>row.members);
+  assert.equal(group.articleAmbiguous,true);
+  assert.equal(campaign.remainingNeed(group,100,campaignReceipts([receiptDay('2026-11-16',1)]),'2026-11-17').remaining,null);
+  const incomplete = {...group,members:[large,{...large,id:'unknown',cashCode:''}]};
+  const missing = forecast.mappedProductsFor2026([incomplete],{},10)[0];
+  assert.equal(missing.articleAmbiguous,true);
+  assert(salesArticles.salesArticleCodes(missing).includes(''));
+});
+
+test('a replacement cannot reuse any grouped petit-four article while a hidden replacement does not consume it', () => {
+  const p = assortment.combinePetitFours([petitFour('65300',100),petitFour('65301',100),petitFour('65302',100)])[0];
+  const other = {...product('other'),cashCode:'55555'};
+  const choice = {...forecast.emptyChoice(),adjustment:{name2026:'Ander product',cashCode2026:'65302'}};
+  const choices = {other:choice};
+  const mapped = forecast.mappedProductsFor2026([p,other],choices,10);
+  assert.equal(mapped[0].articleAmbiguous,true); assert.equal(mapped[1].articleAmbiguous,true);
+  const hidden = forecast.mappedProductsFor2026([p,other],{other:{...choice,adjustment:{...choice.adjustment,hidden:true}}},10);
+  assert.equal(hidden[0].articleAmbiguous,false);
+  const replacement = forecast.productFor2026(p,{...forecast.emptyChoice(),adjustment:{name2026:'Petit fours nieuw',cashCode2026:'65399'}});
+  assert.deepEqual(Array.from(salesArticles.salesArticleCodes(replacement)),['65399']);
+});
+
+test('nested grouped article lists remain complete and use one occurrence of each receipt article', () => {
+  const a=petitFour('65300',100),b=petitFour('65301',100),c=petitFour('65302',100);
+  const p={...a,id:'outer',members:[{...a,id:'inner',members:[a,b]},b,c],articleAmbiguous:false};
+  assert.deepEqual(Array.from(salesArticles.salesArticleCodes(p)),['65300','65301','65302']);
+  const receipts=campaignReceipts([{...receiptDay('2026-11-16',0),lines:[
+    {article:'65300',description:'A',quantity:3},{article:'65301',description:'B',quantity:4},{article:'65302',description:'C',quantity:5},
+  ]}]);
+  assert.equal(campaign.remainingNeed(p,300,receipts,'2026-11-17').issued,12);
 });

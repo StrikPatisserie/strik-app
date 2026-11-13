@@ -1,6 +1,7 @@
 import { addDays } from "../../../productie/planning";
 import { articleKey, mergeDispatchDays, type DispatchDay } from "../../../productie/inventory";
 import type { SalesProduct } from "./forecast";
+import { salesArticleCodes, usableSalesArticle } from "./salesArticles";
 import { ASSORTED_ARTICLE, ASSORTED_PASTRIES, assortedShares } from "./assortedPastries";
 
 export const CAMPAIGN_START = "2026-11-16";
@@ -57,16 +58,16 @@ export function remainingNeed(product: SalesProduct, forecast: number | null, re
   if (forecast === null) return unknown("Prognose controleren");
   if (today <= CAMPAIGN_START) return { remaining: forecast, issued: 0, through: null, note: "Start 16 nov" };
   if (window.problem) return unknown(window.problem);
-  if (product.members && !product.combinedFlan) return unknown("Varianten op bon koppelen");
+  if (product.members && product.articleAmbiguous !== false) return unknown(product.combinedFlan ? "Vlaaiformaat op bon controleren" : "Varianten op bon koppelen");
   if (product.articleAmbiguous) return unknown(product.combinedFlan ? "Vlaaiformaat op bon controleren" : "Artikel/formaat koppelen");
   if (product.unitUnconfirmed) return unknown("Eenheid op bon controleren");
-  if (!product.cashCode || product.cashCode === "9999999999" || product.cashCode === "-") return unknown("Bonartikel koppelen");
-  const article = articleKey(product.cashCode);
-  if (article === ASSORTED_ARTICLE) return unknown("Verdeling gesorteerd controleren");
-  const articles = product.combinedFlan?.cashCodes || [article];
-  const issued = Math.round([...new Set(articles)].reduce((total, code) => total + (window.quantities.get(code) ?? 0), 0) * 1e6) / 1e6;
+  const codes = salesArticleCodes(product);
+  if (!codes.length || codes.some(code => !usableSalesArticle(code))) return unknown("Bonartikel koppelen");
+  const articles = [...new Set(codes.map(articleKey))];
+  if (articles.includes(ASSORTED_ARTICLE)) return unknown("Verdeling gesorteerd controleren");
+  const issued = Math.round(articles.reduce((total, code) => total + (window.quantities.get(code) ?? 0), 0) * 1e6) / 1e6;
   const remaining = Math.max(0, Math.ceil(Math.round((forecast - issued) * 1e6) / 1e6));
-  const assortedIssued = window.assortedQuantities?.get(article) ?? 0;
+  const assortedIssued = articles.reduce((total, article) => total + (window.assortedQuantities?.get(article) ?? 0), 0);
   const provisional = !!window.unresolvedLines || assortedIssued !== 0;
   const note = window.unresolvedLines ? `${window.unresolvedLines} bonregels controleren · voorlopig aantal`
     : issued > forecast ? `${Math.round((issued - forecast) * 1e6) / 1e6} boven prognose` : "Afgeronde bondagen verwerkt";
