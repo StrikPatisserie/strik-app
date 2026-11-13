@@ -141,12 +141,31 @@ test('the holiday submenu retains the existing B2B destination and only offers t
   assert.equal(previewLinks[1].props.href, '/preview/productie?view=kerstvoorraad');
 });
 
-test('the holiday forecast route rejects production before reading the local Excel', async () => {
+test('the holiday forecast uses shared sales in production and checks access before reading them', async () => {
+  let allowed = false, reads = 0;
+  const settings = { version: 1, revision: 0, growth: 10, adjustments: {}, mappings: {} };
   const page = load('app/bakkerij/productie/feestdagen/kerstvoorraad/page.tsx', {
+    'react/jsx-runtime': require('react/jsx-runtime'),
     'next/navigation': { notFound: () => { throw Error('not-found'); } },
+    '@/app/lib/auth/session': { requireCurrentProfile: async () => ({ id: 'operator' }) },
+    '@/app/productie/access': { productionDepartments: () => allowed ? ['dessert'] : [] },
+    '@/app/preview/productie/kerstvoorraad/ChristmasStockPreview': 'ChristmasStockPreview',
+    '@/app/preview/productie/kerstvoorraad/campaignNeed': { todayInAmsterdam: () => '2026-11-16' },
+    '@/app/preview/productie/kerstvoorraad/liveSource.server': { christmasProductionSource: async () => ({ production: { mode: 'live', items: [], recipes: [] } }) },
+    '@/app/preview/productie/kerstvoorraad/store.server': {
+      readForecastSales: async () => { reads++; return { products: [{ id: 'real-sales' }] }; },
+      readForecastSettings: async () => settings,
+    },
     '@/app/preview/productie/kerstvoorraad/source.server': { christmasForecastSource: () => assert.fail('Local Excel must not be read in production') },
   }, '', 'production');
   await assert.rejects(() => page.default(), /not-found/);
+  assert.equal(reads, 0);
+  allowed = true;
+  const result = await page.default();
+  assert.equal(result.props.products[0].id, 'real-sales');
+  assert.equal(result.props.sharedSettings, settings);
+  assert.equal(result.props.production.mode, 'live');
+  assert.equal(reads, 1);
 });
 
 

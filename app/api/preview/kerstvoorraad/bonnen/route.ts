@@ -6,7 +6,6 @@ import { CAMPAIGN_START, CAMPAIGN_END, validCampaignDays } from "@/app/preview/p
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "private, no-store" };
 export async function GET() {
-  if (process.env.NODE_ENV !== "development") return new Response(null, { status: 404, headers });
   if (!productionDepartments(await getCurrentProfile()).length) return Response.json({ message: "Geen toegang tot de productiebonnen." }, { status: 403, headers });
   try {
     const days = (await inventoryDispatchDays()).filter(day => day.date >= CAMPAIGN_START && day.date <= CAMPAIGN_END);

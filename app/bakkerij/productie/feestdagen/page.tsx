@@ -10,6 +10,6 @@ export default async function Holidays() {
   const departments = productionDepartments(profile);
   if (!departments.length) notFound();
   return <ProductionResourceFrame title="Feestdagen" active="holidays" departments={departments} canManage={hasFullAccess(profile)}>
-    <HolidayMenu forecastHref={process.env.NODE_ENV === "development" ? "/bakkerij/productie/feestdagen/kerstvoorraad" : undefined} />
+    <HolidayMenu forecastHref="/bakkerij/productie/feestdagen/kerstvoorraad" />
   </ProductionResourceFrame>;
 }

@@ -12,7 +12,7 @@ export default function HolidayMenu({ forecastHref }: { forecastHref?: string })
     </Link>
     {forecastHref && <Link href={forecastHref} className={s.card}>
       <span className={`${s.icon} ${s.forecastIcon}`}><Icon name="stock" size={25} /></span>
-      <span><strong>Feestdagenplanning</strong><small>Kerstvoorraad & prognose · preview</small></span>
+      <span><strong>Feestdagenplanning</strong><small>Kerstvoorraad & prognose</small></span>
       <Icon name="arrow" size={21} />
     </Link>}
   </nav>;

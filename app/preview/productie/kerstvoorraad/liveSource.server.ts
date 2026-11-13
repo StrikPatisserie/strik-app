@@ -14,10 +14,9 @@ import type { ProductionReading } from "./productionOverview";
 
 type ProductionSource = { production: ProductionReading; campaignReceipts: CampaignReceipts; productionError?: string };
 
-/** The authenticated local overview reads the same recipes, output and stock
+/** The authenticated overview reads the same recipes, output and stock
  * as the bakery. Missing source data stays unavailable, without sample totals. */
 export async function christmasProductionSource(): Promise<ProductionSource> {
-  if (process.env.NODE_ENV !== "development") notFound();
   if (!productionDepartments(await requireCurrentProfile()).length) notFound();
   const today = todayAmsterdam();
   const emptyPlanner: PreviewState = { version: 1, items: [], tasks: [] };

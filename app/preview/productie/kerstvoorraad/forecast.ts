@@ -58,7 +58,8 @@ export function productProjection(product: SalesProduct, choice: ProductChoice, 
   const week52 = adjustment.week52Total ?? (product.unitUnconfirmed ? null : projectedSales(weekBase, uplift));
   const issue = period !== null && week52 !== null && week52 > period
     ? "Week 52 is groter dan de prognose voor de hele periode" : null;
-  return { historical, period, week52: issue ? null : week52, growth: uplift, issue };
+  const weeklyTarget = period === null ? null : Math.ceil(period / 4);
+  return { historical, period, week52: issue ? null : week52, weeklyTarget, growth: uplift, issue };
 }
 
 /** A replacement keeps its historical basis but needs its own receipt and

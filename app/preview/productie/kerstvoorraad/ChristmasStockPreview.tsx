@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ProductionWordmark } from "../../../StrikUI";
 import Icon from "../../../productie/ProductionIcon";
 import SearchableChoice from "../../../productie/SearchableChoice";
 import { matchesProductionSearch, type DemoRecipe, type PreviewState } from "../../../productie/planning";
 import { buildForecastPlan, emptyChoice, mappedProductsFor2026, productFor2026, productProjection, type ProductChoice, type SalesProduct } from "./forecast";
 import { ADJUSTMENTS_STORAGE_KEY, parseForecastSettings, type ForecastMapping } from "./adjustments";
+import { choicesFromSettings, forecastProductSettings, type ForecastCommand, type SharedForecastSettings } from "./sharedSettings";
 import { exampleChoices, exampleRecipes } from "./examples";
 import { includeInStockOverview, salesVolume, stockCategories } from "./assortment";
 import { CAMPAIGN_START, campaignWindow, exampleCampaignReceipts, remainingNeed, todayInAmsterdam, validCampaignDays, type CampaignReceipts, type RemainingNeed } from "./campaignNeed";
@@ -27,6 +28,7 @@ type OverviewRow = {
   choice: ProductChoice;
   projection: number | null;
   week52: number | null;
+  weeklyTarget: number | null;
   stock: StockRow | null;
   recipeId: string;
   recipeIssue: string | null;
@@ -49,16 +51,16 @@ function Dialog({ title, children, onClose }: { title: string; children: ReactNo
     onCancel={event => { event.preventDefault(); onClose(); }}
     onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
     <header className={s.dialogHeader}>
-      <div><small>KERSTVOORRAAD · LOKALE PREVIEW</small><h2>{title}</h2></div>
+      <div><small>KERSTVOORRAAD</small><h2>{title}</h2></div>
       <button type="button" className={s.iconButton} onClick={onClose} aria-label="Sluiten"><Icon name="close" size={24} /></button>
     </header>
     {children}
   </dialog>;
 }
 
-function ProductDetails({ row, source, recipes, growth, onSave, onClose }: {
+function ProductDetails({ row, source, recipes, growth, shared, onSave, onClose }: {
   row: OverviewRow; source: ProductionReading; recipes: DemoRecipe[]; growth: number;
-  onSave: (choice: ProductChoice) => void; onClose: () => void;
+  shared: boolean; onSave: (choice: ProductChoice, previous: ProductChoice) => Promise<void>; onClose: () => void;
 }) {
   const [draft, setDraft] = useState({ ...row.choice, recipeId: row.recipeId });
   const [inputs, setInputs] = useState({
@@ -67,6 +69,8 @@ function ProductDetails({ row, source, recipes, growth, onSave, onClose }: {
     week: String(row.choice.adjustment?.week52Total ?? ""),
   });
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const previous = useRef(row.choice);
   const adjustment = { ...draft.adjustment,
     growthPercent: readAmount(inputs.growth) ?? undefined,
     periodTotal: readAmount(inputs.period) ?? undefined,
@@ -80,7 +84,7 @@ function ProductDetails({ row, source, recipes, growth, onSave, onClose }: {
   const selected = recipes.find(recipe => recipe.id === draft.recipeId);
   const stock = productInventory(currentProduct, draft, source);
   const balance = stockDisplay(stock);
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     for (const [field, text] of Object.entries(inputs)) {
       if (!text.trim()) continue;
@@ -94,14 +98,17 @@ function ProductDetails({ row, source, recipes, growth, onSave, onClose }: {
     if (adjustment.cashCode2026 && (!adjustment.name2026?.trim() || !/^\d{1,20}$/.test(adjustment.cashCode2026) || adjustment.cashCode2026 === "9999999999")) {
       setError("Vul de productnaam en een uniek artikelnummer voor 2026 in."); return;
     }
-    onSave({ ...draft, adjustment: { ...adjustment, name2026: adjustment.name2026?.trim() || undefined } });
+    setSaving(true); setError("");
+    try { await onSave({ ...draft, adjustment: { ...adjustment, name2026: adjustment.name2026?.trim() || undefined } }, previous.current); }
+    catch (failure) { setError(failure instanceof Error ? failure.message : "Opslaan mislukt. Je invoer blijft staan."); }
+    finally { setSaving(false); }
   }
   function replaceProduct(field: "name2026" | "cashCode2026", value: string) {
     setDraft(current => ({ ...current, checked: false, recipeId: "", productionItemId: undefined,
       adjustment: { ...current.adjustment, [field]: value } }));
   }
   return <Dialog title={row.currentProduct.name} onClose={onClose}>
-    <form onSubmit={submit} className={s.editor}>
+    <form onSubmit={event => void submit(event)} className={s.editor}>
       <div className={s.forecastEditor}>
         <label>Opslag voor dit product<input aria-label="Opslag voor dit product (%)" inputMode="decimal" value={inputs.growth} onChange={event => setInputs(current => ({ ...current, growth: event.target.value }))} placeholder={`Algemeen +${growth}%`} /><small>Leeg = algemene groei gebruiken</small></label>
         <label>Totaal · week 47–53<input aria-label="Prognose hele periode" inputMode="numeric" value={inputs.period} onChange={event => setInputs(current => ({ ...current, period: event.target.value }))} placeholder={number(productProjection(row.product, { ...draft, adjustment: { ...adjustment, periodTotal: undefined } }, growth).period)} /><small>{inputs.period ? "Handmatig totaal" : "Automatisch uit verkoopbasis en opslag"} · uitkomst <b>{number(projection.period)}</b></small></label>
@@ -144,7 +151,7 @@ function ProductDetails({ row, source, recipes, growth, onSave, onClose }: {
       <p className={s.small}>Verkoopbasis 2025 · {number(row.product.cash)} Cash-it + {number(row.product.bake)} debiteuren · opslag {projection.growth}%.</p>
       <p className={s.small}>{row.product.note}{!row.product.members && <> · Cash-it {row.product.cashCode || "onbekend"} · Bake-it {row.product.bakeCode || "onbekend"}</>}</p>
       {error && <p role="alert" className={s.formError}>{error}</p>}
-      <footer className={s.dialogFooter}><button type="button" className={s.secondary} onClick={onClose}>Sluiten</button><button type="submit" className={s.primary}>Proef bewaren</button></footer>
+      <footer className={s.dialogFooter}><button type="button" className={s.secondary} onClick={onClose}>Sluiten</button><button type="submit" disabled={saving} className={s.primary}>{saving ? "Opslaan…" : shared ? "Opslaan" : "Proef bewaren"}</button></footer>
     </form>
   </Dialog>;
 }
@@ -166,13 +173,21 @@ type Props = {
   production?: ProductionReading;
   campaignReceipts?: CampaignReceipts;
   productionError?: string;
+  sharedSettings?: SharedForecastSettings;
 };
 
 export default function ChristmasStockPreview({
-  products, today, error, week52Error, production, campaignReceipts, productionError,
+  products, today, error, week52Error, production, campaignReceipts, productionError, sharedSettings,
   returnHref = "/preview/productie?view=feestdagen", planningHref = "/preview/productie",
 }: Props) {
-  const [choices, setChoices] = useState(() => production ? Object.fromEntries(products.map(product => [product.id, emptyChoice()])) : exampleChoices(products));
+  const shared = !!sharedSettings;
+  const sharedRef = useRef(sharedSettings);
+  const savingRef = useRef(false);
+  const [saving, setSaving] = useState(false);
+  const [choices, setChoices] = useState(() => {
+    const initial = production ? Object.fromEntries(products.map(product => [product.id, emptyChoice()])) : exampleChoices(products);
+    return sharedSettings ? choicesFromSettings(products, sharedSettings, initial) : initial;
+  });
   const [recipes, setRecipes] = useState(production?.recipes || exampleRecipes);
   const [source, setSource] = useState(() => production || exampleProduction(products, exampleChoices(products), exampleRecipes));
   const [receipts, setReceipts] = useState<CampaignReceipts>(() => campaignReceipts || (production ? { mode: "live", available: false, days: [] } : exampleCampaignReceipts(products)));
@@ -180,7 +195,7 @@ export default function ChristmasStockPreview({
   const viewDate = source.mode === "example" ? demoDate || actualDate : actualDate;
   const [group, setGroup] = useState("all"), [department, setDepartment] = useState("all");
   const [query, setQuery] = useState(""), [status, setStatus] = useState("all"), [volume, setVolume] = useState("high");
-  const [growth, setGrowth] = useState(10), [page, setPage] = useState(0), [pageSize, setPageSize] = useState(9);
+  const [growth, setGrowth] = useState(sharedSettings?.growth ?? 10), [page, setPage] = useState(0), [pageSize, setPageSize] = useState(9);
   const [xl, setXl] = useState(true), [productId, setProductId] = useState<string | null>(null);
   const [removeId, setRemoveId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(productionError || "");
@@ -188,6 +203,7 @@ export default function ChristmasStockPreview({
   const controller = useRef<AbortController | null>(null);
   const savedMappings = useRef<Record<string, ForecastMapping>>({});
   useEffect(() => {
+    if (shared) return;
     try {
       const settings = parseForecastSettings(localStorage.getItem(ADJUSTMENTS_STORAGE_KEY));
       setGrowth(settings.growth);
@@ -198,9 +214,9 @@ export default function ChristmasStockPreview({
       }])));
     } catch { setMessage("Browseropslag niet bereikbaar. Bijstellingen blijven deze sessie zichtbaar."); }
     setSettingsReady(true);
-  }, [production]);
+  }, [production, shared]);
   useEffect(() => {
-    if (!settingsReady) return;
+    if (shared || !settingsReady) return;
     try {
       if (source.mode === "live") savedMappings.current = Object.fromEntries(Object.entries(choices).map(([id, choice]) => [id, {
         recipeId: choice.recipeId, productionItemId: choice.productionItemId, checked: choice.checked,
@@ -208,7 +224,7 @@ export default function ChristmasStockPreview({
       localStorage.setItem(ADJUSTMENTS_STORAGE_KEY, JSON.stringify({ version: 1, growth, mappings: savedMappings.current,
         adjustments: Object.fromEntries(Object.entries(choices).filter(([, choice]) => choice.adjustment).map(([id, choice]) => [id, choice.adjustment])) }));
     } catch { setMessage("Bijstellingen konden niet worden bewaard. Houd deze pagina open."); }
-  }, [choices, growth, settingsReady, source.mode]);
+  }, [choices, growth, settingsReady, source.mode, shared]);
   useEffect(() => {
     const resize = () => setPageSize(window.innerHeight < 820 ? 6 : window.innerHeight < 1050 ? 8 : window.innerHeight < 1500 ? 9 : 15);
     resize(); window.addEventListener("resize", resize);
@@ -219,7 +235,7 @@ export default function ChristmasStockPreview({
     return () => window.clearInterval(timer);
   }, []);
   useEffect(() => {
-    if (source.mode !== "live") return;
+    if (source.mode !== "live" || shared) return;
     let pending: AbortController | null = null;
     const refresh = async () => {
       if (pending || document.visibilityState !== "visible" || !navigator.onLine) return;
@@ -232,7 +248,75 @@ export default function ChristmasStockPreview({
     const visible = () => { if (document.visibilityState === "visible") void refresh(); };
     document.addEventListener("visibilitychange", visible); window.addEventListener("online", visible);
     return () => { window.clearInterval(timer); pending?.abort(); document.removeEventListener("visibilitychange", visible); window.removeEventListener("online", visible); };
-  }, [source.mode]);
+  }, [source.mode, shared]);
+  const acceptSharedSettings = useCallback((next: SharedForecastSettings) => {
+    if (next.version !== 1 || next.revision <= (sharedRef.current?.revision ?? -1)) return;
+    sharedRef.current = next;
+    setGrowth(next.growth);
+    setChoices(current => choicesFromSettings(products, next, current));
+  }, [products]);
+  const refreshShared = useCallback(async (signal: AbortSignal, settingsOnly: boolean) => {
+    const response = await fetch(`/api/productie/kerstvoorraad${settingsOnly ? "?settings=1" : ""}`, { cache: "no-store", signal });
+    if (!response.ok) throw Error("Verbinding onderbroken. Ververs om de actuele gegevens te laden.");
+    const next = await response.json();
+    if (signal.aborted) return;
+    acceptSharedSettings(next.sharedSettings);
+    setMessage(current => current.startsWith("Verbinding onderbroken") ? "" : current);
+    if (!settingsOnly) {
+      if (!next.productionError || next.production?.items?.length) {
+        setSource(next.production); setRecipes(next.production.recipes);
+      }
+      setReceipts(next.campaignReceipts);
+      setActualDate(todayInAmsterdam());
+      if (next.productionError) setMessage(next.productionError);
+    }
+  }, [acceptSharedSettings]);
+  useEffect(() => {
+    if (!shared) return;
+    let pending: AbortController | null = null;
+    let lastProduction = 0;
+    const refresh = async () => {
+      if (pending || savingRef.current || document.visibilityState !== "visible" || !navigator.onLine) return;
+      const abort = new AbortController(); pending = abort;
+      const settingsOnly = Date.now() - lastProduction < 60_000;
+      try {
+        await refreshShared(abort.signal, settingsOnly);
+        if (!settingsOnly) lastProduction = Date.now();
+      } catch {
+        if (!abort.signal.aborted) {
+          setMessage("Verbinding onderbroken · actuele gegevens worden opnieuw opgehaald");
+          setReceipts(current => ({ ...current, available: false, error: "Bonnen niet bereikbaar" }));
+        }
+      }
+      finally { pending = null; }
+    };
+    const timer = window.setInterval(() => void refresh(), 15_000);
+    const visible = () => { if (document.visibilityState === "visible") void refresh(); };
+    document.addEventListener("visibilitychange", visible); window.addEventListener("online", visible);
+    return () => { window.clearInterval(timer); pending?.abort(); document.removeEventListener("visibilitychange", visible); window.removeEventListener("online", visible); };
+  }, [shared, refreshShared]);
+  async function saveShared(command: ForecastCommand) {
+    if (savingRef.current) throw Error("Wacht tot de vorige bijstelling is opgeslagen.");
+    savingRef.current = true; setSaving(true); setMessage("Opslaan…");
+    try {
+      const response = await fetch("/api/productie/kerstvoorraad", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(command) });
+      const data = await response.json();
+      if (!response.ok) throw Error(data.message || "Opslaan mislukt. Je invoer blijft staan.");
+      acceptSharedSettings(data.sharedSettings);
+      setMessage("Opgeslagen · gedeeld met de bakkerij");
+    } catch (failure) {
+      setMessage(failure instanceof Error ? failure.message : "Opslaan mislukt.");
+      throw failure;
+    } finally { savingRef.current = false; setSaving(false); }
+  }
+  async function saveProduct(id: string, choice: ProductChoice, previous: ProductChoice) {
+    if (shared) await saveShared({ kind: "product", productId: id, value: forecastProductSettings(choice), previous: forecastProductSettings(previous) });
+    else { setChoices(current => ({ ...current, [id]: choice })); setMessage("Proef aangepast · alleen lokaal bewaard"); }
+  }
+  async function changeGrowth(value: number) {
+    if (shared) await saveShared({ kind: "growth", value, previous: growth }).catch(() => undefined);
+    else setGrowth(value);
+  }
   const rows = useMemo<OverviewRow[]>(() => {
     const receiptWindow = campaignWindow(receipts, viewDate);
     const currentProducts = mappedProductsFor2026(products, choices, growth);
@@ -243,7 +327,7 @@ export default function ChristmasStockPreview({
     const recipeId = choice.recipeId || source.items.find(item => item.id === stock?.itemId)?.recipeId || "";
     const projection = productProjection(product, choice, growth);
     const mappingValid = source.mode === "example" || !!stock?.link && stock.link.article === currentProduct.cashCode && stock.link.unit === "stuks" && stock.link.factor === 1;
-    return { product, currentProduct, choice, stock, recipeId, projection: projection.period, projectionIssue: projection.issue,
+    return { product, currentProduct, choice, stock, recipeId, projection: projection.period, weeklyTarget: projection.weeklyTarget, projectionIssue: projection.issue,
       need: remainingNeed(currentProduct, projection.period, receipts, viewDate, mappingValid, receiptWindow), recipeIssue: recipeIssue(currentProduct, recipeId, recipes), week52: projection.week52 };
     });
   }, [products, choices, source, recipes, growth, receipts, viewDate]);
@@ -264,10 +348,13 @@ export default function ChristmasStockPreview({
   const removing = rows.find(row => row.product.id === removeId);
   const hiddenCount = rows.filter(row => row.choice.adjustment?.hidden).length;
   const changeFilter = (action: () => void) => { action(); setPage(0); };
-  function hideProduct(id: string, hidden: boolean) {
-    setChoices(current => ({ ...current, [id]: { ...(current[id] || emptyChoice()), adjustment: { ...current[id]?.adjustment, hidden } } }));
-    setRemoveId(null);
-    setMessage(hidden ? "Product weggelaten · terugzetten via ‘Weggelaten’" : "Product teruggezet");
+  async function hideProduct(id: string, hidden: boolean) {
+    const previous = choices[id] || emptyChoice();
+    try {
+      await saveProduct(id, { ...previous, adjustment: { ...previous.adjustment, hidden } }, previous);
+      setRemoveId(null);
+      setMessage(hidden ? "Product weggelaten · terugzetten via ‘Weggelaten’" : "Product teruggezet");
+    } catch { /* Keep the confirmation visible when saving fails. */ }
   }
   function reset() {
     controller.current?.abort();
@@ -284,9 +371,10 @@ export default function ChristmasStockPreview({
     controller.current?.abort(); const abort = new AbortController(); controller.current = abort;
     setBusy(true); setMessage("");
     try {
+      if (shared) { await refreshShared(abort.signal, false); setMessage("Productie en bonnen bijgewerkt"); return; }
       const receiptReading = readCampaignReceipts(abort.signal).catch((): CampaignReceipts => ({ mode: "live", available: false, days: [], error: "Bonnen niet bereikbaar" }));
       const responses = await Promise.all([fetch("/api/productie/voorraad", { cache: "no-store", signal: abort.signal }), fetch("/api/productie", { cache: "no-store", signal: abort.signal })]);
-      if (responses.some(response => response.status === 401 || response.status === 403)) throw Error("Log in op deze lokale app om productiegegevens te lezen.");
+      if (responses.some(response => response.status === 401 || response.status === 403)) throw Error("Log in om productiegegevens te lezen.");
       if (responses.some(response => !response.ok)) throw Error("Productiegegevens zijn nu niet bereikbaar. De huidige gegevens blijven staan.");
       const [inventory, production] = await Promise.all(responses.map(response => response.json())) as [StockOverview, { state: PreviewState; recipes: DemoRecipe[] }];
       if (!Array.isArray(inventory.rows) || !Array.isArray(production.state?.items) || !Array.isArray(production.recipes)) throw Error("De productiegegevens hebben geen herkenbaar formaat.");
@@ -314,7 +402,7 @@ export default function ChristmasStockPreview({
       <div className={s.topReserve} aria-hidden="true" />
       <header className={s.header}>
         <div className={s.title}>{xl && <ProductionWordmark className={s.miniLogo} />}<div><span>STRAK VOOR KERST</span><h1>Kerstvoorraad <small>2026</small></h1></div></div>
-        <div className={s.headerDate}>16 november–31 december</div><span className={s.previewBadge}>Lokale preview</span>
+        <div className={s.headerDate}>16 november–31 december</div><span className={s.previewBadge}>{shared ? "Gedeeld" : "Lokale preview"}</span>
       </header>
       <div className={s.sourceBar}><span>Basis 2025 zonder Wijchen · {source.mode === "example" ? "bonnen, productie en voorraad zijn voorbeelden" : `voorraad uit productie t/m ${dateLabel(source.overview.asOf)}`}</span>{source.mode === "example" && <label className={s.demoDate}>Proefdatum<input aria-label="Proefdatum voor bonnenteller" type="date" min="2026-11-01" max="2027-01-01" value={viewDate} onInput={event => { setDemoDate(event.currentTarget.value || null); setPage(0); }} onChange={event => { setDemoDate(event.target.value || null); setPage(0); }} /></label>}<span>{week52Error || "Week 52 · Excel ingelezen"}</span></div>
       <section className={s.board} aria-label="Kerstvoorraad overzicht">
@@ -324,18 +412,19 @@ export default function ChristmasStockPreview({
           <select aria-label="Afdeling" value={department} onChange={event => changeFilter(() => setDepartment(event.target.value))}><option value="all">Alle afdelingen</option><option value="patisserie">Patisserie</option><option value="bak">Bak</option><option value="chocolade">Chocolade</option></select>
           <select aria-label="Controlefilter" value={status} onChange={event => changeFilter(() => { setStatus(event.target.value); if (event.target.value === "hidden") { setGroup("all"); setDepartment("all"); setVolume("all"); setQuery(""); } })}><option value="all">Alle statussen</option><option value="recipe">Recept controleren</option><option value="stock">Voorraad onbekend</option><option value="week52">Week 52 controleren</option><option value="hidden">Weggelaten ({hiddenCount})</option></select>
           <select aria-label="Verkoopvolume" value={volume} onChange={event => changeFilter(() => setVolume(event.target.value))}><option value="all">Alle volumes</option><option value="high">Hardlopers</option><option value="medium">Gemiddeld</option><option value="low">Klein volume</option></select>
-          <label className={s.growth}>Groei<select aria-label="Groei" value={growth} onChange={event => setGrowth(Number(event.target.value))}><option value={0}>0%</option><option value={5}>+5%</option><option value={8}>+8%</option><option value={10}>+10%</option><option value={15}>+15%</option></select></label>
+          <label className={s.growth}>Groei<select aria-label="Groei" value={growth} disabled={saving} onChange={event => void changeGrowth(Number(event.target.value))}><option value={0}>0%</option><option value={5}>+5%</option><option value={8}>+8%</option><option value={10}>+10%</option><option value={15}>+15%</option></select></label>
         </div>
         <div className={s.tableWrap}><table className={s.table}>
-          <colgroup><col className={s.productCol} /><col className={s.forecastCol} /><col className={s.forecastCol} /><col className={s.remainingCol} /><col className={s.historyCol} /><col className={s.historyCol} /><col className={s.stockCol} /><col className={s.recipeCol} /></colgroup>
-          <thead><tr><th scope="col">Product</th><th scope="col" className={s.periodHeading}><span className={s.forecastLabel}>Totaalprognose 2026</span><strong>Week 47–53</strong><small>16 nov–31 dec</small></th><th scope="col" className={s.christmasHeading}><span className={s.forecastLabel}>Kerstweek 2026</span><strong>Week 52</strong><small>21–27 dec</small></th><th scope="col" title="Totaalprognose min de uitgeleverde aantallen op verwerkte bonnen. De bakkerijvoorraad staat apart.">Nog uit te leveren<small>vanaf {dateLabel(viewDate < CAMPAIGN_START ? CAMPAIGN_START : viewDate)}</small></th><th scope="col">Laatst gemaakt<small>datum · hoeveelheid</small></th><th scope="col">Laatste telling<small>datum · voorraad</small></th><th scope="col">Voorraadprognose<small>in de bakkerij</small></th><th scope="col">Recept</th></tr></thead>
+          <colgroup><col className={s.productCol} /><col className={s.forecastCol} /><col className={s.forecastCol} /><col className={s.weeklyCol} /><col className={s.remainingCol} /><col className={s.historyCol} /><col className={s.historyCol} /><col className={s.stockCol} /><col className={s.recipeCol} /></colgroup>
+          <thead><tr><th scope="col">Product</th><th scope="col" className={s.periodHeading}><span className={s.forecastLabel}>Totaalprognose 2026</span><strong>Week 47–53</strong><small>16 nov–31 dec</small></th><th scope="col" className={s.christmasHeading}><span className={s.forecastLabel}>Kerstweek 2026</span><strong>Week 52</strong><small>21–27 dec</small></th><th scope="col" className={s.weeklyHeading} title="Totaalprognose week 47–53 verdeeld over vier productieweken, naar boven afgerond.">Weekdoel<small>Week 47–50</small><small>totaal ÷ 4</small></th><th scope="col" title="Totaalprognose min de uitgeleverde aantallen op verwerkte bonnen. De bakkerijvoorraad staat apart.">Nog uit te leveren<small>vanaf {dateLabel(viewDate < CAMPAIGN_START ? CAMPAIGN_START : viewDate)}</small></th><th scope="col">Laatst gemaakt<small>datum · hoeveelheid</small></th><th scope="col">Laatste telling<small>datum · voorraad</small></th><th scope="col">Voorraadprognose<small>in de bakkerij</small></th><th scope="col">Recept</th></tr></thead>
           <tbody>{filtered.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(row => {
             const balance = stockDisplay(row.stock);
             const band = { high: "Hardloper", medium: "Gemiddeld", low: "Klein volume", unknown: row.product.unitUnconfirmed ? "Eenheid controleren" : "Verkoop nog koppelen" }[salesVolume(row.product)];
             return <tr key={row.product.id}>
-              <td><div className={s.productCell}><button type="button" className={s.productButton} onClick={() => setProductId(row.product.id)}><b>{row.currentProduct.name}</b><span>{row.choice.adjustment?.name2026 ? `Basis 2025 · ${row.product.name}` : `${stockCategories.find(category => category.id === row.product.group)?.name} · ${band}`}{source.mode === "example" && row.stock ? " · voorbeeldproductie" : ""}</span></button><button type="button" className={s.removeButton} aria-label={`${row.choice.adjustment?.hidden ? "Terugzetten" : "Weglaten"} ${row.currentProduct.name}`} title={row.choice.adjustment?.hidden ? "Terugzetten" : "Product weglaten"} onClick={() => row.choice.adjustment?.hidden ? hideProduct(row.product.id, false) : setRemoveId(row.product.id)}><Icon name={row.choice.adjustment?.hidden ? "refresh" : "trash"} size={16} /></button></div></td>
+              <td><div className={s.productCell}><button type="button" className={s.productButton} onClick={() => setProductId(row.product.id)}><b>{row.currentProduct.name}</b><span>{row.choice.adjustment?.name2026 ? `Basis 2025 · ${row.product.name}` : `${stockCategories.find(category => category.id === row.product.group)?.name} · ${band}`}{source.mode === "example" && row.stock ? " · voorbeeldproductie" : ""}</span></button><button type="button" className={s.removeButton} aria-label={`${row.choice.adjustment?.hidden ? "Terugzetten" : "Weglaten"} ${row.currentProduct.name}`} title={row.choice.adjustment?.hidden ? "Terugzetten" : "Product weglaten"} disabled={saving} onClick={() => row.choice.adjustment?.hidden ? void hideProduct(row.product.id, false) : setRemoveId(row.product.id)}><Icon name={row.choice.adjustment?.hidden ? "refresh" : "trash"} size={16} /></button></div></td>
               <td className={s.projectionNumber}><button type="button" className={s.numberButton} onClick={() => setProductId(row.product.id)} aria-label={`Prognose week 47–53 ${row.currentProduct.name}`}><strong className={s.forecastValue}>{number(row.projection)}</strong>{row.choice.adjustment && Object.entries(row.choice.adjustment).some(([field, value]) => field !== "hidden" && value !== undefined && value !== "") && <small className={s.adjusted}>Bijgesteld</small>}{row.product.unitUnconfirmed && row.choice.adjustment?.periodTotal == null && <small className={s.warningText}>Eenheid?</small>}</button></td>
               <td className={s.christmasNumber}><button type="button" className={row.week52 === null ? s.missingButton : s.numberButton} onClick={() => setProductId(row.product.id)} aria-label={`Prognose kerstweek 52 ${row.currentProduct.name}`}>{row.week52 === null ? "Controleren" : <strong className={s.forecastValue}>{number(row.week52)}</strong>}{(row.projectionIssue || row.choice.adjustment?.week52Total != null || row.product.week52?.issue || row.week52 === null) && <small>{row.projectionIssue || (row.choice.adjustment?.week52Total != null ? "Handmatig" : row.product.week52?.issue || "Weekbasis/eenheid controleren")}</small>}</button></td>
+              <td className={s.weeklyNumber}><strong>{number(row.weeklyTarget)}</strong></td>
               <td className={s.remainingNumber}><button type="button" className={row.need.remaining === null ? s.missingButton : s.numberButton} onClick={() => setProductId(row.product.id)} aria-label={`Nog uit te leveren ${row.currentProduct.name}`}>{row.need.remaining === null ? "Controleren" : number(row.need.remaining)}<small>{row.need.issued === null || row.need.through === null ? row.need.note : `${number(row.need.issued)} uitgeleverd t/m ${dateLabel(row.need.through)}`}</small></button></td>
               <td>{row.stock?.latest ? <><b>{dateLabel(row.stock.latest.date)}</b><small>{number(row.stock.latest.quantity)} {row.stock.unit}</small></> : <span className={s.muted}>—</span>}</td>
               <td>{row.stock?.count ? <><b>{dateLabel(row.stock.count.date)}</b><small>{number(row.stock.count.stockUse?.countedQuantity ?? row.stock.count.quantity)} {row.stock.unit}</small></> : <span className={s.muted}>Nog niet geteld</span>}</td>
@@ -348,13 +437,13 @@ export default function ChristmasStockPreview({
       </section>
       <footer className={s.bottomBar}>
         <Link href={returnHref}><Icon name="back" size={17} />Feestdagen</Link>
-        <span role="status">{error || message || "Klik op een product of prognose om bij te stellen · bijstellingen bewaard op deze browser"}</span>
+        <span role="status">{error || message || (shared ? "Bijstellingen gedeeld · automatisch bijgewerkt" : "Klik op een product of prognose om bij te stellen · bijstellingen bewaard op deze browser")}</span>
         <button type="button" className={s.secondary} disabled={busy} onClick={() => void loadProduction()}><Icon name="refresh" size={17} />{busy ? "Inlezen…" : "Productie ophalen"}</button>
         <button type="button" className={s.secondary} aria-pressed={xl} onClick={() => setXl(value => !value)}><Icon name="screen" size={17} />XL weergave</button>
         {source.mode === "example" && <button type="button" className={s.iconButton} onClick={reset} aria-label="Proef herstellen" title="Proef herstellen"><Icon name="refresh" size={17} /></button>}
       </footer>
     </section>
-    {selected && <ProductDetails key={selected.product.id} row={selected} source={source} recipes={recipes} growth={growth} onClose={() => setProductId(null)} onSave={choice => { setChoices(current => ({ ...current, [selected.product.id]: choice })); setProductId(null); setMessage("Proef aangepast · alleen lokaal bewaard"); }} />}
-    {removing && <Dialog title="Product weglaten?" onClose={() => setRemoveId(null)}><div className={s.editor}><p><b>{removing.currentProduct.name}</b></p><p className={s.small}>Dit product verdwijnt uit je kerstvoorraadoverzicht. Je kunt het via het filter ‘Weggelaten’ terugzetten.</p><footer className={s.dialogFooter}><button type="button" className={s.secondary} onClick={() => setRemoveId(null)}>Annuleren</button><button type="button" className={s.primary} onClick={() => hideProduct(removing.product.id, true)}>Product weglaten</button></footer></div></Dialog>}
+    {selected && <ProductDetails key={selected.product.id} row={selected} source={source} recipes={recipes} growth={growth} shared={shared} onClose={() => setProductId(null)} onSave={async (choice, previous) => { await saveProduct(selected.product.id, choice, previous); setProductId(null); }} />}
+    {removing && <Dialog title="Product weglaten?" onClose={() => setRemoveId(null)}><div className={s.editor}><p><b>{removing.currentProduct.name}</b></p><p className={s.small}>Dit product verdwijnt uit je kerstvoorraadoverzicht. Je kunt het via het filter ‘Weggelaten’ terugzetten.</p><footer className={s.dialogFooter}><button type="button" className={s.secondary} onClick={() => setRemoveId(null)}>Annuleren</button><button type="button" className={s.primary} disabled={saving} onClick={() => void hideProduct(removing.product.id, true)}>Product weglaten</button></footer></div></Dialog>}
   </main>;
 }

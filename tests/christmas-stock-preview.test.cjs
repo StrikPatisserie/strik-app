@@ -160,6 +160,29 @@ test('per-product growth and direct totals apply once and keep source sales inta
   assert(forecast.productProjection(p,{...choice,adjustment:{periodTotal:100}},10).issue);
 });
 
+test('weekly production target spreads the full forecast over weeks 47 through 50', () => {
+  const p = { ...product('a'), cash: 400, bake: 100 };
+  const choice = forecast.emptyChoice();
+  const projection = forecast.productProjection(p, choice, 10);
+  assert.equal(projection.period, 550);
+  assert.equal(projection.weeklyTarget, 138);
+  assert(projection.weeklyTarget * 4 >= projection.period);
+  assert.equal(forecast.productProjection(p, choice, 5).weeklyTarget, 132);
+  assert.equal(forecast.productProjection(p, {
+    ...choice, adjustment: { growthPercent: 15 },
+  }, 5).weeklyTarget, 144);
+  assert.equal(forecast.productProjection(p, {
+    ...choice, adjustment: { periodTotal: 600, week52Total: 100 },
+  }, 10).weeklyTarget, 150);
+  assert.equal(forecast.productProjection(p, {
+    ...choice, adjustment: { periodTotal: 0 },
+  }, 10).weeklyTarget, 0);
+  assert.equal(forecast.productProjection({ ...p, cash: null, bake: null }, choice, 10).weeklyTarget, null);
+  assert.equal(forecast.productProjection({ ...p, unitUnconfirmed: true }, choice, 10).weeklyTarget, null);
+  assert.equal(p.cash, 400);
+  assert.equal(p.bake, 100);
+});
+
 test('2026 replacement keeps a stable history ID and requires its own current article mapping', () => {
   const p={...product('original'),name:'Kerstgebak 2025',members:[product('member')],articleAmbiguous:true};
   const choice={...forecast.emptyChoice(),adjustment:{name2026:'Kerstgebak 2026'}};
@@ -487,7 +510,7 @@ test('returns, zero sales and exceeding the forecast stay distinct from missing 
   assert.equal(campaign.validCampaignDays([receiptDay('2026-11-16',NaN)]), false);
 });
 
-test('preview receipt endpoint rejects production and unauthorized sessions before reading data', async () => {
+test('receipt endpoint rejects unauthorized sessions in development and production before reading data', async () => {
   let reads = 0;
   const imports = {
     '@/app/lib/auth/session': {getCurrentProfile:async()=>null}, '@/app/productie/access': {productionDepartments:()=>[]},
@@ -495,7 +518,7 @@ test('preview receipt endpoint rejects production and unauthorized sessions befo
     '@/app/preview/productie/kerstvoorraad/campaignNeed': campaign,
   };
   const route = env => load('app/api/preview/kerstvoorraad/bonnen/route.ts', imports, {process:{env:{NODE_ENV:env}}, Response});
-  assert.equal((await route('production').GET()).status, 404);
+  assert.equal((await route('production').GET()).status, 403);
   assert.equal((await route('development').GET()).status, 403);
   assert.equal(reads, 0);
 });
@@ -571,8 +594,8 @@ test('the authenticated local forecast starts from real output and recipes, coun
   assert.equal(source.campaignReceipts.days[0].date,'2026-11-16');
 });
 
-test('local forecast data rejects production and unauthorized access, and failures never supply examples', async () => {
-  await assert.rejects(liveForecastSource('production').christmasProductionSource(), /not found/);
+test('live forecast data works in production, rejects unauthorized access and never supplies examples on failure', async () => {
+  assert.equal((await liveForecastSource('production').christmasProductionSource()).production.mode, 'live');
   await assert.rejects(liveForecastSource('development',{allowed:false}).christmasProductionSource(), /not found/);
   const failed = await liveForecastSource('development',{fail:true}).christmasProductionSource();
   assert.equal(failed.production.mode,'live');
@@ -584,4 +607,101 @@ test('local forecast data rejects production and unauthorized access, and failur
   const missingReceipts = await liveForecastSource('development',{receiptsFail:true}).christmasProductionSource();
   assert.equal(missingReceipts.campaignReceipts.available,false);
   assert.match(missingReceipts.productionError,/bonnen/);
+});
+
+
+const sharedForecast = load('app/preview/productie/kerstvoorraad/sharedSettings.ts', {'./adjustments':adjustments});
+const forecastValue = choice => sharedForecast.forecastProductSettings(choice);
+const forecastChange = (id, choice, previous = {}) => ({kind:'product',productId:id,value:forecastValue(choice),previous:forecastValue(previous)});
+const applyShared = (state, command) => sharedForecast.applyForecastCommand(state,command,new Set(['a','b']),'employee','2026-11-13T11:00:00Z');
+
+test('shared forecast merges independent product edits and rejects an overlapping stale edit', () => {
+  const original = sharedForecast.emptySharedSettings();
+  const first = applyShared(original,forecastChange('a',{adjustment:{periodTotal:1001}}));
+  const second = applyShared(first,forecastChange('b',{adjustment:{growthPercent:15}}));
+  assert.equal(second.adjustments.a.periodTotal,1001);
+  assert.equal(second.adjustments.b.growthPercent,15);
+  assert.equal(second.revision,2);
+  assert.equal(second.updatedBy,'employee');
+  assert.throws(()=>applyShared(second,forecastChange('a',{adjustment:{periodTotal:2000}})),sharedForecast.ForecastConflictError);
+  assert.equal(second.adjustments.a.periodTotal,1001);
+});
+
+test('shared forecast retries are idempotent and invalid adjustments never erase data', () => {
+  const command = forecastChange('a',{adjustment:{hidden:true,periodTotal:1001},recipeId:'real-recipe',checked:true});
+  const saved = applyShared(sharedForecast.emptySharedSettings(),command);
+  assert.equal(applyShared(saved,command),saved);
+  assert.throws(()=>applyShared(saved,{...command,value:{...command.value,adjustment:{periodTotal:-1}}}),/Controleer/);
+  assert.throws(()=>applyShared(saved,{...command,productId:'unknown'}),/verkoopbasis/);
+  assert.equal(saved.adjustments.a.periodTotal,1001);
+  assert.equal(saved.mappings.a.recipeId,'real-recipe');
+});
+
+test('shared growth is compared independently and shared choices never introduce demo values', () => {
+  let state = applyShared(sharedForecast.emptySharedSettings(),{kind:'growth',previous:10,value:15});
+  assert.equal(state.growth,15);
+  assert.throws(()=>applyShared(state,{kind:'growth',previous:10,value:5}),sharedForecast.ForecastConflictError);
+  state = applyShared(state,forecastChange('a',{adjustment:{periodTotal:1001}}));
+  const choices = sharedForecast.choicesFromSettings([product('a')],state,{a:{...forecast.emptyChoice(),recipeId:'demo',checked:true}});
+  assert.equal(choices.a.recipeId,'');
+  assert.equal(choices.a.checked,false);
+  assert.equal(forecast.productProjection(product('a'),choices.a,state.growth).weeklyTarget,251);
+});
+
+function sharedRoute(allowed, overrides = {}) {
+  return load('app/api/productie/kerstvoorraad/route.ts', {
+    '@/app/lib/auth/session':{getCurrentProfile:async()=>allowed?{id:'employee'}:null},
+    '@/app/productie/access':{productionDepartments:()=>allowed?['luxe']:[]},
+    '@/app/productie/documents.server':{ProductionStoreError:class extends Error{}},
+    '@/app/preview/productie/kerstvoorraad/liveSource.server':{christmasProductionSource:async()=>({production:{mode:'live'}})},
+    '@/app/preview/productie/kerstvoorraad/store.server':{
+      readForecastSettings:async()=>sharedForecast.emptySharedSettings(),
+      saveForecastCommand:async()=>sharedForecast.emptySharedSettings(),...overrides,
+    },
+    '@/app/preview/productie/kerstvoorraad/sharedSettings':sharedForecast,
+  }, {Response,URL});
+}
+
+test('shared API authorizes reads and writes before touching storage and enforces request origin', async () => {
+  const unavailable = async()=>{throw Error('storage must not be reached');};
+  const route = sharedRoute(false,{readForecastSettings:unavailable,saveForecastCommand:unavailable});
+  assert.equal((await route.GET(new Request('https://app.test/api/productie/kerstvoorraad'))).status,403);
+  assert.equal((await route.PATCH(new Request('https://app.test/api/productie/kerstvoorraad',{method:'PATCH',body:'{}'}))).status,403);
+  const authorized = sharedRoute(true,{saveForecastCommand:unavailable});
+  assert.equal((await authorized.PATCH(new Request('https://app.test/api/productie/kerstvoorraad',{method:'PATCH',headers:{origin:'https://evil.test'},body:'{}'}))).status,403);
+});
+
+test('shared API serves private fresh settings and preserves conflict messages', async () => {
+  const route = sharedRoute(true,{saveForecastCommand:async()=>{throw new sharedForecast.ForecastConflictError('Je invoer blijft staan.');}});
+  const response = await route.GET(new Request('https://app.test/api/productie/kerstvoorraad?settings=1'));
+  assert.equal(response.status,200);
+  assert.equal(response.headers.get('cache-control'),'private, no-store');
+  const data = await response.json();
+  assert.equal(data.sharedSettings.growth,10);
+  assert.equal(data.production,undefined);
+  const conflict = await route.PATCH(new Request('https://app.test/api/productie/kerstvoorraad',{method:'PATCH',headers:{origin:'https://app.test'},body:'{}'}));
+  assert.equal(conflict.status,409);
+  assert.equal((await conflict.json()).message,'Je invoer blijft staan.');
+});
+
+test('shared storage retries a lost CAS write while preserving another product', async () => {
+  class StoreError extends Error { constructor(message,status){super(message);this.status=status;} }
+  let current = sharedForecast.emptySharedSettings(), writes = 0;
+  const store = load('app/preview/productie/kerstvoorraad/store.server.ts',{
+    'server-only':{},
+    '@/app/productie/documents.server':{ProductionStoreError:StoreError},
+    '@/app/productie/operationalStore.server':{
+      readOperational:async(key)=>key===sharedForecast.SALES_KEY?{version:1,products:[product('a'),product('b')]}:current,
+      saveOperational:async(key,revision,next)=>{
+        writes++;
+        if(writes===1){current=applyShared(current,forecastChange('b',{adjustment:{growthPercent:15}}));throw new StoreError('race',409);}
+        assert.equal(revision,current.revision);current=next;
+      },
+    },
+    './sharedSettings':sharedForecast,
+  });
+  const saved = await store.saveForecastCommand(forecastChange('a',{adjustment:{periodTotal:1001}}),'employee');
+  assert.equal(writes,2);
+  assert.equal(saved.adjustments.a.periodTotal,1001);
+  assert.equal(saved.adjustments.b.growthPercent,15);
 });
