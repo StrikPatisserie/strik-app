@@ -5,8 +5,8 @@ import type { SalesProduct } from "./forecast";
 export const CAMPAIGN_START = "2026-11-16";
 export const CAMPAIGN_END = "2026-12-31";
 export type CampaignReceipts = { mode: "example" | "live"; available: boolean; days: DispatchDay[]; checkedAt?: string; error?: string };
-export type RemainingNeed = { remaining: number | null; issued: number | null; through: string | null; note: string };
-export type CampaignWindow = { through: string | null; problem: string | null; quantities: Map<string, number> };
+export type RemainingNeed = { remaining: number | null; issued: number | null; through: string | null; note: string; provisional?: boolean };
+export type CampaignWindow = { through: string | null; problem: string | null; quantities: Map<string, number>; unresolvedLines?: number };
 export function todayInAmsterdam() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Amsterdam", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 }
@@ -26,7 +26,7 @@ export function campaignWindow(receipts: CampaignReceipts, today: string): Campa
   if (!receipts.available) return { through: null, problem: "Bonnen niet bereikbaar", quantities };
   const through = [addDays(today, -1), CAMPAIGN_END].sort()[0];
   const days = mergeDispatchDays([], receipts.days).filter(day => day.date >= CAMPAIGN_START && day.date <= through);
-  const covered = new Set(days.filter(day => day.unknownLines === 0).map(day => day.date));
+  const covered = new Set(days.map(day => day.date));
   let missing = 0;
   for (let date = CAMPAIGN_START; date <= through; date = addDays(date, 1)) if (!covered.has(date)) missing++;
   if (missing) return { through, problem: `${missing} bondag${missing === 1 ? "" : "en"} controleren`, quantities };
@@ -34,23 +34,28 @@ export function campaignWindow(receipts: CampaignReceipts, today: string): Campa
     const article = articleKey(line.article);
     quantities.set(article, (quantities.get(article) ?? 0) + line.quantity);
   }
-  return { through, problem: null, quantities };
+  return { through, problem: null, quantities, unresolvedLines: days.reduce((total, day) => total + day.unknownLines, 0) };
 }
 
 /** Remaining dispatch demand, not a stock balance. Today's requirement is
- * still needed today; missing days and unverified units never become zero. */
-export function remainingNeed(product: SalesProduct, forecast: number | null, receipts: CampaignReceipts, today: string, mappingValid: boolean, window = campaignWindow(receipts, today)): RemainingNeed {
+ * still needed today. Recipe/stock links are independent of receipt articles.
+ * Incomplete lines keep a visibly provisional total; missing days stay unknown. */
+export function remainingNeed(product: SalesProduct, forecast: number | null, receipts: CampaignReceipts, today: string, window = campaignWindow(receipts, today)): RemainingNeed {
   const unknown = (note: string): RemainingNeed => ({ remaining: null, issued: null, through: null, note });
   if (forecast === null) return unknown("Prognose controleren");
   if (today <= CAMPAIGN_START) return { remaining: forecast, issued: 0, through: null, note: "Start 16 nov" };
   if (window.problem) return unknown(window.problem);
   if (product.members) return unknown("Varianten op bon koppelen");
   if (product.articleAmbiguous) return unknown("Artikel/formaat koppelen");
-  if (!mappingValid || !product.cashCode || product.cashCode === "9999999999" || product.cashCode === "-") return unknown("Bonartikel koppelen");
+  if (product.unitUnconfirmed) return unknown("Eenheid op bon controleren");
+  if (!product.cashCode || product.cashCode === "9999999999" || product.cashCode === "-") return unknown("Bonartikel koppelen");
   const article = articleKey(product.cashCode);
   const issued = Math.round((window.quantities.get(article) ?? 0) * 1e6) / 1e6;
   const remaining = Math.max(0, Math.ceil(Math.round((forecast - issued) * 1e6) / 1e6));
-  return { remaining, issued, through: window.through, note: issued > forecast ? `${Math.round((issued - forecast) * 1e6) / 1e6} boven prognose` : "Afgeronde bondagen verwerkt" };
+  const provisional = !!window.unresolvedLines;
+  const note = provisional ? `${window.unresolvedLines} bonregels controleren · voorlopig aantal`
+    : issued > forecast ? `${Math.round((issued - forecast) * 1e6) / 1e6} boven prognose` : "Afgeronde bondagen verwerkt";
+  return { remaining, issued, through: window.through, note, provisional };
 }
 
 /** Deliberately future-dated fixtures for the preview date selector. */

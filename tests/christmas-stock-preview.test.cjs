@@ -465,46 +465,50 @@ const receiptDay = (date, quantity, importedAt = `${date}T18:00:00Z`) => ({date,
 const campaignReceipts = days => ({mode:'live', available:true, days});
 test('remaining demand subtracts elapsed campaign deliveries once from the uplifted total', () => {
   const receipts = campaignReceipts([receiptDay('2026-11-15',999), receiptDay('2026-11-16',100), receiptDay('2026-11-17',120), receiptDay('2026-11-18',80), receiptDay('2026-11-19',500)]);
-  const result = campaign.remainingNeed(product('a'), 4829, receipts, '2026-11-19', true);
+  const result = campaign.remainingNeed(product('a'), 4829, receipts, '2026-11-19');
   assert.equal(result.issued, 300);
   assert.equal(result.remaining, 4529);
   assert.equal(result.through, '2026-11-18');
-  assert.equal(campaign.remainingNeed(product('a'), 4610, receipts, '2026-11-19', true).remaining, 4310);
-  assert.equal(campaign.remainingNeed(product('a'), 4829, receipts, '2026-11-17', true).issued, 100);
+  assert.equal(campaign.remainingNeed(product('a'), 4610, receipts, '2026-11-19').remaining, 4310);
+  assert.equal(campaign.remainingNeed(product('a'), 4829, receipts, '2026-11-17').issued, 100);
 });
 
 test('reimported daily snapshots replace old quantities instead of accumulating', () => {
   const receipts = campaignReceipts([receiptDay('2026-11-16',100),receiptDay('2026-11-16',120,'2026-11-16T19:00:00Z')]);
-  const result = campaign.remainingNeed(product('a'), 1000, receipts, '2026-11-17', true);
+  const result = campaign.remainingNeed(product('a'), 1000, receipts, '2026-11-17');
   assert.equal(result.issued, 120);
   assert.equal(result.remaining, 880);
 });
 
 test('before the campaign the whole forecast remains, afterwards missing and unreadable days are explicit', () => {
   const receipts = campaignReceipts([receiptDay('2026-11-16',100),receiptDay('2026-11-18',80)]);
-  assert.equal(campaign.remainingNeed(product('a'), 4829, {...receipts,available:false}, '2026-11-10', true).remaining, 4829);
-  assert.equal(campaign.remainingNeed(product('a'), 4829, receipts, '2026-11-16', true).issued, 0);
-  assert.equal(campaign.remainingNeed(product('a'), 4829, receipts, '2026-11-19', true).remaining, null);
-  assert.match(campaign.remainingNeed(product('a'), 4829, receipts, '2026-11-19', true).note, /1 bondag/);
+  assert.equal(campaign.remainingNeed(product('a'), 4829, {...receipts,available:false}, '2026-11-10').remaining, 4829);
+  assert.equal(campaign.remainingNeed(product('a'), 4829, receipts, '2026-11-16').issued, 0);
+  assert.equal(campaign.remainingNeed(product('a'), 4829, receipts, '2026-11-19').remaining, null);
+  assert.match(campaign.remainingNeed(product('a'), 4829, receipts, '2026-11-19').note, /1 bondag/);
   const unreadable = campaignReceipts([{...receiptDay('2026-11-16',100),unknownLines:1}]);
-  assert.equal(campaign.remainingNeed(product('a'), 4829, unreadable, '2026-11-17', true).remaining, null);
+  const partial = campaign.remainingNeed(product('a'), 4829, unreadable, '2026-11-17');
+  assert.equal(partial.issued, 100);
+  assert.equal(partial.remaining, 4729);
+  assert.equal(partial.provisional, true);
+  assert.match(partial.note, /1 bonregels controleren/);
 });
 
-test('remaining demand requires a verified unit and article, including format-specific and family rows', () => {
+test('remaining demand uses the sales article independently of recipe and stock links, preserving unit and format checks', () => {
   const receipts = campaignReceipts([receiptDay('2026-11-16',100)]);
-  for (const row of [{...product('a'), articleAmbiguous:true},{...product('a'), members:[product('b')]},{...product('a'), cashCode:'9999999999'}]) assert.equal(campaign.remainingNeed(row, 1000, receipts, '2026-11-17', true).remaining, null);
-  assert.equal(campaign.remainingNeed(product('a'), 1000, receipts, '2026-11-17', false).remaining, null);
-  assert.equal(campaign.remainingNeed(product('a'), null, receipts, '2026-11-17', true).remaining, null);
-  assert.equal(campaign.remainingNeed(product('a'), 1000, {...receipts,available:false}, '2026-11-17', true).remaining, null);
+  for (const row of [{...product('a'), articleAmbiguous:true},{...product('a'), members:[product('b')]},{...product('a'), cashCode:'9999999999'}]) assert.equal(campaign.remainingNeed(row, 1000, receipts, '2026-11-17').remaining, null);
+  assert.equal(campaign.remainingNeed({...product('a'), unitUnconfirmed:true}, 1000, receipts, '2026-11-17').remaining, null);
+  assert.equal(campaign.remainingNeed(product('a'), null, receipts, '2026-11-17').remaining, null);
+  assert.equal(campaign.remainingNeed(product('a'), 1000, {...receipts,available:false}, '2026-11-17').remaining, null);
 });
 
 test('returns, zero sales and exceeding the forecast stay distinct from missing data', () => {
-  const zero = campaign.remainingNeed(product('a'), 50, campaignReceipts([receiptDay('2026-11-16',0)]), '2026-11-17', true);
+  const zero = campaign.remainingNeed(product('a'), 50, campaignReceipts([receiptDay('2026-11-16',0)]), '2026-11-17');
   assert.equal(zero.remaining, 50);
-  const excess = campaign.remainingNeed(product('a'), 50, campaignReceipts([receiptDay('2026-11-16',70)]), '2026-11-17', true);
+  const excess = campaign.remainingNeed(product('a'), 50, campaignReceipts([receiptDay('2026-11-16',70)]), '2026-11-17');
   assert.equal(excess.remaining, 0);
   assert.match(excess.note, /20 boven/);
-  assert.equal(campaign.remainingNeed(product('a'), 50, campaignReceipts([receiptDay('2026-11-16',-2)]), '2026-11-17', true).remaining, 52);
+  assert.equal(campaign.remainingNeed(product('a'), 50, campaignReceipts([receiptDay('2026-11-16',-2)]), '2026-11-17').remaining, 52);
   assert.equal(campaign.validCampaignDays([receiptDay('2026-11-16',100)]), true);
   assert.equal(campaign.validCampaignDays([receiptDay('2026-02-31',100)]), false);
   assert.equal(campaign.validCampaignDays([receiptDay('2026-11-16',NaN)]), false);
@@ -704,4 +708,22 @@ test('shared storage retries a lost CAS write while preserving another product',
   assert.equal(writes,2);
   assert.equal(saved.adjustments.a.periodTotal,1001);
   assert.equal(saved.adjustments.b.growthPercent,15);
+});
+
+
+test('a coded product without a recipe or stock count still subtracts finalized dispatch', () => {
+  const row = {...product('no-recipe'), name:'Product zonder recept'};
+  const result = campaign.remainingNeed(row, 500, campaignReceipts([receiptDay('2026-11-16',80)]), '2026-11-17');
+  assert.equal(result.remaining, 420);
+  assert.equal(result.issued, 80);
+  assert.equal(result.provisional, false);
+});
+
+test('incomplete lines cannot masquerade as a complete zero or a definitive forecast', () => {
+  const days = [{...receiptDay('2026-11-16',0), unknownLines:4}];
+  const result = campaign.remainingNeed(product('a'), 500, campaignReceipts(days), '2026-11-17');
+  assert.equal(result.remaining, 500);
+  assert.equal(result.provisional, true);
+  const missingDay = campaign.remainingNeed(product('a'), 500, campaignReceipts(days), '2026-11-18');
+  assert.equal(missingDay.remaining, null);
 });
