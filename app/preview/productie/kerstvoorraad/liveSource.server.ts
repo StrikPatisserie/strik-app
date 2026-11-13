@@ -37,7 +37,7 @@ export async function christmasProductionSource(): Promise<ProductionSource> {
     const campaignDays = days?.filter(day => day.date >= CAMPAIGN_START && day.date <= CAMPAIGN_END);
     const receiptsAvailable = validCampaignDays(campaignDays);
     return {
-      production: { mode: "live", items: state.items, recipes: views, overview: inventoryOverview(state, inventory, days || [], today) },
+      production: { mode: "live", items: state.items, recipes: views, inventoryRevision: inventory.revision, overview: inventoryOverview(state, inventory, days || [], today) },
       campaignReceipts: receiptsAvailable
         ? { mode: "live", available: true, days: campaignDays, checkedAt: new Date().toISOString() }
         : unavailable.campaignReceipts,

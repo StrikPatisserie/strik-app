@@ -1,12 +1,15 @@
 import { inventoryOverview, type InventoryState, type DispatchDay } from "../../../productie/inventory";
 import type { DemoRecipe, PreviewState } from "../../../productie/planning";
 import type { ProductChoice, SalesProduct } from "./forecast";
+import { addDays } from "../../../productie/planning";
+import { remainingNeed, type CampaignReceipts, type CampaignWindow } from "./campaignNeed";
 
 export type StockOverview = ReturnType<typeof inventoryOverview>;
 export type StockRow = StockOverview["rows"][number];
 export type ProductionReading = {
   mode: "example" | "live";
   overview: StockOverview;
+  inventoryRevision?: number;
   items: PreviewState["items"];
   recipes: DemoRecipe[];
 };
@@ -32,6 +35,29 @@ export function stockDisplay(row: StockRow | null) {
   if (row.balance !== null && row.balance < 0) return { quantity: null, note: "Telling controleren" };
   if (!row.known) return { quantity: null, note: row.missingDays ? `${row.missingDays} brondagen ontbreken` : "Verbruik nog koppelen" };
   return { quantity: row.balance, note: `t/m ${row.through}` };
+}
+
+export type ProductionRequirement = {
+  quantity: number | null;
+  stock: number | null;
+  excess: number;
+  through: string | null;
+  provisional: boolean;
+  note: string;
+};
+
+/** Inventory counts describe the end of a day. Subtract dispatch demand and
+ * stock at that same cutoff, including a count entered for today. Combining
+ * yesterday's demand with today's count would count today's dispatch twice. */
+export function productionRequirement(product: SalesProduct, forecast: number | null, row: StockRow | null, receipts: CampaignReceipts, window?: CampaignWindow): ProductionRequirement {
+  const balance = stockDisplay(row);
+  const unknown = (note: string): ProductionRequirement => ({ quantity: null, stock: balance.quantity, excess: 0, through: row?.through || null, provisional: false, note });
+  if (balance.quantity === null || !row) return unknown(balance.note);
+  const demand = remainingNeed(product, forecast, receipts, addDays(row.through, 1), window);
+  if (demand.remaining === null) return unknown(demand.note);
+  const difference = Math.round((demand.remaining - balance.quantity) * 1e6) / 1e6;
+  return { quantity: Math.max(0, Math.ceil(difference)), stock: balance.quantity, excess: Math.max(0, -difference), through: row.through,
+    provisional: !!demand.provisional, note: demand.provisional ? demand.note : "Resterende uitleverprognose min bakkerijvoorraad" };
 }
 
 /** Disposable fixture, deliberately constructed through the same inventory

@@ -20,12 +20,13 @@ const expansion = load('app/productie/recipePlanning.ts', { './planning': planni
 const forecast = load('app/preview/productie/kerstvoorraad/forecast.ts', { '../../../productie/recipePlanning': expansion });
 const examples = load('app/preview/productie/kerstvoorraad/examples.ts', { './forecast': forecast });
 const inventory = load('app/productie/inventory.ts', { './planning': planning });
-const overview = load('app/preview/productie/kerstvoorraad/productionOverview.ts', { '../../../productie/inventory': inventory });
 const variants = load('app/preview/productie/kerstvoorraad/variants.ts');
 const assortment = load('app/preview/productie/kerstvoorraad/assortment.ts', { './forecast': forecast, './variants': variants });
 const assorted = load('app/preview/productie/kerstvoorraad/assortedPastries.ts');
 const flans = load('app/preview/productie/kerstvoorraad/flanVariants.ts');
 const campaign = load('app/preview/productie/kerstvoorraad/campaignNeed.ts', { '../../../productie/planning': planning, '../../../productie/inventory': inventory, './assortedPastries': assorted });
+const overview = load('app/preview/productie/kerstvoorraad/productionOverview.ts', { '../../../productie/inventory': inventory, '../../../productie/planning': planning, './campaignNeed': campaign });
+const stockCount = load('app/preview/productie/kerstvoorraad/stockCount.ts');
 const weekly = load('app/preview/productie/kerstvoorraad/week52.ts', { './variants': variants });
 const adjustments = load('app/preview/productie/kerstvoorraad/adjustments.ts');
 const product = id => ({ id, name: id, group: 'gebak', department: 'patisserie', cash: 20, bake: 30, cashCode: '10', bakeCode: '20', needsSalesReview: false, note: '', folderProduct: false });
@@ -919,4 +920,143 @@ test('a replacement cannot silently reuse the secondary code of a combined flan'
   assert.equal(mapped[0].articleAmbiguous,true); assert.equal(mapped[1].articleAmbiguous,true);
   const hidden=forecast.mappedProductsFor2026([merged,other],{other:{...choices.other,adjustment:{...choices.other.adjustment,hidden:true}}},10);
   assert.equal(hidden[0].articleAmbiguous,false);
+});
+
+
+test('purchased bread is excluded by its inclusive current article range', () => {
+  for (const cashCode of ['145100', '145101', '148000', '150802', ' 150802 ']) {
+    assert.equal(assortment.includeInStockOverview({...product('bread'), group:'bak', cashCode, cash:1000}, 10), false, cashCode);
+  }
+  for (const cashCode of ['145099', '150803']) {
+    assert.equal(assortment.includeInStockOverview({...product('bread'), group:'bak', cashCode, cash:1000, bakeCode:'145100'}, 10), true, cashCode);
+  }
+});
+
+const countItem = {id:'finished', name:'Gebak', kind:'product', unit:'stuks', departmentId:'luxe', stock:0, note:''};
+const counted = (id, date, quantity) => ({id, itemId:countItem.id, unit:'stuks', date, quantity, who:'Bakker', actorId:'bakery', at:`${date}T19:00:00Z`});
+function countedRow(counts, days, date, tasks = []) {
+  return inventory.inventoryOverview({version:1, items:[countItem], tasks}, {
+    ...inventory.emptyInventory(), counts, links:[{itemId:countItem.id, article:'10', factor:1, unit:'stuks', leadDays:1}],
+  }, days, date).rows[0];
+}
+const campaignDaysThrough = (date, quantities = {}) => {
+  const days = [];
+  for (let current = campaign.CAMPAIGN_START; current <= date; current = planning.addDays(current, 1)) days.push(receiptDay(current, quantities[current] || 0));
+  return days;
+};
+
+test('a dated physical count produces remaining production at the same end-of-day cutoff', () => {
+  const days = campaignDaysThrough('2026-11-27', {'2026-11-16':150, '2026-11-27':50});
+  const row = countedRow([counted('count-27', '2026-11-27', 300)], days, '2026-11-27');
+  const result = overview.productionRequirement(product('a'), 1000, row, campaignReceipts(days));
+  assert.equal(row.count.date, '2026-11-27');
+  assert.equal(result.stock, 300);
+  assert.equal(result.quantity, 500);
+  assert.equal(result.through, '2026-11-27');
+  // The 50 already dispatched on the count day must not be demanded again.
+  assert.equal(campaign.remainingNeed(product('a'), 1000, campaignReceipts(days), '2026-11-27').remaining, 850);
+});
+
+test('later production lowers remaining work while dispatch is deducted only once', () => {
+  const days = campaignDaysThrough('2026-11-28', {'2026-11-16':150, '2026-11-27':50, '2026-11-28':40});
+  const task = {id:'output', itemId:countItem.id, batchId:'one-batch', departmentId:'luxe', date:'2026-11-28', quantity:80, completedQuantity:100, recordsOutput:true, status:'done'};
+  const row = countedRow([counted('count-27', '2026-11-27', 300)], days, '2026-11-28', [task, {...task, id:'duplicate-step'}]);
+  assert.equal(row.made, 100);
+  assert.equal(row.issued, 40);
+  assert.equal(row.balance, 360);
+  const result = overview.productionRequirement(product('a'), 1000, row, campaignReceipts(days));
+  assert.equal(result.quantity, 400);
+});
+
+test('a later count replaces previous assumptions and keeps prior production out of the new balance', () => {
+  const days = campaignDaysThrough('2026-11-28', {'2026-11-16':150, '2026-11-27':50, '2026-11-28':40});
+  const task = {id:'made-before-count', itemId:countItem.id, batchId:'one-batch', departmentId:'luxe', date:'2026-11-28', quantity:100, recordsOutput:true, status:'done'};
+  const row = countedRow([counted('old', '2026-11-27', 300), counted('new', '2026-11-28', 200)], days, '2026-11-28', [task]);
+  assert.equal(row.count.id, 'new');
+  assert.equal(row.made, 0);
+  assert.equal(row.issued, 0);
+  assert.equal(overview.productionRequirement(product('a'), 1000, row, campaignReceipts(days)).quantity, 560);
+});
+
+test('zero stock, excess stock and a missing count remain distinguishable', () => {
+  const days = campaignDaysThrough('2026-11-27', {'2026-11-16':200});
+  const input = quantity => countedRow([counted('count', '2026-11-27', quantity)], days, '2026-11-27');
+  assert.equal(overview.productionRequirement(product('a'), 1000, input(0), campaignReceipts(days)).quantity, 800);
+  const excess = overview.productionRequirement(product('a'), 1000, input(900), campaignReceipts(days));
+  assert.equal(excess.quantity, 0);
+  assert.equal(excess.excess, 100);
+  assert.equal(overview.productionRequirement(product('a'), 1000, null, campaignReceipts(days)).quantity, null);
+});
+
+test('today counts wait for complete same-day demand and ambiguous formats stay unresolved', () => {
+  const days = campaignDaysThrough('2026-11-26');
+  const row = countedRow([counted('today', '2026-11-27', 300)], days, '2026-11-27');
+  const missing = overview.productionRequirement(product('a'), 1000, row, campaignReceipts(days));
+  assert.equal(missing.stock, 300);
+  assert.equal(missing.quantity, null);
+  assert.match(missing.note, /1 bondag/);
+  const complete = [...days, receiptDay('2026-11-27',0)];
+  assert.equal(overview.productionRequirement({...product('a'),articleAmbiguous:true}, 1000, row, campaignReceipts(complete)).quantity, null);
+  const partial = complete.map(day => day.date === '2026-11-27' ? {...day, unknownLines:1} : day);
+  assert.equal(overview.productionRequirement(product('a'), 1000, row, campaignReceipts(partial)).provisional, true);
+});
+
+test('campaign windows can be shared across products without changing dated count calculations', () => {
+  const days = campaignDaysThrough('2026-11-27', {'2026-11-16':200});
+  const row = countedRow([counted('count', '2026-11-27',300)], days, '2026-11-27');
+  const receipts = campaignReceipts(days);
+  const window = campaign.campaignWindow(receipts, '2026-11-28');
+  assert.equal(JSON.stringify(overview.productionRequirement(product('a'), 1000, row, receipts, window)), JSON.stringify(overview.productionRequirement(product('a'), 1000, row, receipts)));
+});
+
+const stockCountInput = {id:'count-action', itemId:'finished', previousCountId:'previous', date:'2026-11-27', quantity:300, who:'Bakker'};
+const countResponse = (revision, countId = 'previous') => ({revision, rows:[{itemId:'finished', kind:'product', unit:'stuks', count:countId ? {id:countId} : null}]});
+const response = (status, value) => ({status, ok:status >= 200 && status < 300, json:async()=>value});
+
+test('dated counts use the normal shared inventory endpoint and retain their action ID', async () => {
+  const requests = [];
+  const saved = countResponse(8, 'count-action:finished');
+  const result = await stockCount.registerStockCount(stockCountInput, async (url, options) => {
+    requests.push({url, options});
+    return response(200, options.method === 'POST' ? saved : countResponse(7));
+  });
+  assert.equal(result, saved);
+  assert.equal(requests.length, 2);
+  assert(requests.every(request => request.url === '/api/productie/voorraad'));
+  assert.equal(requests[0].options.cache, 'no-store');
+  assert.deepEqual(JSON.parse(requests[1].options.body), {id:'count-action', revision:7, command:{kind:'count', date:'2026-11-27', who:'Bakker', entries:[{itemId:'finished',quantity:300}]}});
+});
+
+test('a concurrent count for another product retries against the current inventory revision', async () => {
+  let gets = 0, posts = 0;
+  const revisions = [];
+  await stockCount.registerStockCount(stockCountInput, async (_url, options) => {
+    if (options.method !== 'POST') return response(200, countResponse(7 + gets++));
+    revisions.push(JSON.parse(options.body).revision);
+    return posts++ ? response(200, countResponse(9, 'count-action:finished')) : response(409, {message:'Andere telling'});
+  });
+  assert.deepEqual(revisions, [7,8]);
+});
+
+test('a newer count for the same product is preserved and a lost success is recovered', async () => {
+  let posts = 0;
+  await assert.rejects(stockCount.registerStockCount(stockCountInput, async (_url, options) => {
+    if (options.method === 'POST') posts++;
+    return response(200, countResponse(8, 'another-baker:finished'));
+  }), /intussen opnieuw geteld/);
+  assert.equal(posts, 0);
+  const result = await stockCount.registerStockCount(stockCountInput, async () => response(200, countResponse(8, 'count-action:finished')));
+  assert.equal(result.revision, 8);
+});
+
+test('unavailable storage, changed products and persistent conflicts leave the count unconfirmed', async () => {
+  await assert.rejects(stockCount.registerStockCount(stockCountInput, async () => response(503,{message:'Voorraad niet bereikbaar'})), /Voorraad niet bereikbaar/);
+  await assert.rejects(stockCount.registerStockCount(stockCountInput, async () => response(200,{revision:8,rows:[]})), /productieartikel is gewijzigd/);
+  let attempts = 0;
+  await assert.rejects(stockCount.registerStockCount(stockCountInput, async (_url, options) => {
+    if (options.method !== 'POST') return response(200, countResponse(8));
+    attempts++;
+    return response(409,{message:'Nieuwe wijziging'});
+  }), /Nieuwe wijziging/);
+  assert.equal(attempts, 3);
 });

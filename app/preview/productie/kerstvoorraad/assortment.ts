@@ -167,6 +167,8 @@ export function aggregateMarzipanCakes(products: SalesProduct[]): SalesProduct[]
 }
 
 export function includeInStockOverview(product: SalesProduct, growth: number): boolean {
+  const articleNumber = /^\d+$/.test(product.cashCode.trim()) ? Number(product.cashCode) : null;
+  if (articleNumber !== null && articleNumber >= 145100 && articleNumber <= 150802) return false;
   const names = normalize([product.name, ...(product.searchNames || [])].join(" "));
   if (/olieboll|appelbeignet|poedersuikersticks/.test(names)) return false;
   if (product.group === "overig" && /choco(?:lade)?[-\s]*letter|spuit[-\s]*letter|vorm[-\s]*letter|luxe\s+letter/.test(names)) return false;

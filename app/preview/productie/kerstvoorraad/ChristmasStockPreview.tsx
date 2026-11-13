@@ -5,16 +5,17 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 import { ProductionWordmark } from "../../../StrikUI";
 import Icon from "../../../productie/ProductionIcon";
 import SearchableChoice from "../../../productie/SearchableChoice";
-import { matchesProductionSearch, type DemoRecipe, type PreviewState } from "../../../productie/planning";
+import { addDays, matchesProductionSearch, type DemoRecipe, type PreviewState } from "../../../productie/planning";
 import { buildForecastPlan, emptyChoice, mappedProductsFor2026, productFor2026, productProjection, type ProductChoice, type SalesProduct } from "./forecast";
 import { ADJUSTMENTS_STORAGE_KEY, parseForecastSettings, type ForecastMapping } from "./adjustments";
 import { choicesFromSettings, forecastProductSettings, type ForecastCommand, type SharedForecastSettings } from "./sharedSettings";
 import { exampleChoices, exampleRecipes } from "./examples";
 import { includeInStockOverview, salesVolume, stockCategories } from "./assortment";
-import { CAMPAIGN_START, campaignWindow, exampleCampaignReceipts, remainingNeed, todayInAmsterdam, validCampaignDays, type CampaignReceipts, type RemainingNeed } from "./campaignNeed";
-import { exampleProduction, productInventory, stockDisplay, type ProductionReading, type StockRow, type StockOverview } from "./productionOverview";
+import { CAMPAIGN_START, campaignWindow, exampleCampaignReceipts, remainingNeed, todayInAmsterdam, validCampaignDays, type CampaignReceipts, type CampaignWindow, type RemainingNeed } from "./campaignNeed";
+import { exampleProduction, productInventory, stockDisplay, productionRequirement, type ProductionRequirement, type ProductionReading, type StockRow, type StockOverview } from "./productionOverview";
 import { allocateAssortedSales } from "./assortedPastries";
 import { combineLargeFlans } from "./flanVariants";
+import { registerStockCount, type StockCountInput } from "./stockCount";
 import s from "./ChristmasStockPreview.module.css";
 
 const number = (value: number | null | undefined) => value == null ? "—" : value.toLocaleString("nl-NL", { maximumFractionDigits: 2 });
@@ -35,6 +36,7 @@ type OverviewRow = {
   recipeId: string;
   recipeIssue: string | null;
   need: RemainingNeed;
+  toMake: ProductionRequirement;
   projectionIssue: string | null;
 };
 
@@ -60,9 +62,9 @@ function Dialog({ title, children, onClose }: { title: string; children: ReactNo
   </dialog>;
 }
 
-function ProductDetails({ row, source, recipes, growth, shared, onSave, onClose }: {
+function ProductDetails({ row, source, recipes, growth, shared, onSave, onCount, onClose }: {
   row: OverviewRow; source: ProductionReading; recipes: DemoRecipe[]; growth: number;
-  shared: boolean; onSave: (choice: ProductChoice, previous: ProductChoice) => Promise<void>; onClose: () => void;
+  shared: boolean; onSave: (choice: ProductChoice, previous: ProductChoice) => Promise<void>; onCount: () => void; onClose: () => void;
 }) {
   const [draft, setDraft] = useState({ ...row.choice, recipeId: row.recipeId });
   const [inputs, setInputs] = useState({
@@ -132,6 +134,8 @@ function ProductDetails({ row, source, recipes, growth, shared, onSave, onClose 
         <div><span>Voorraadprognose</span><b>{balance.quantity !== null ? `ca. ${number(balance.quantity)} ${stock?.unit}` : "Onbekend"}</b><small>{balance.quantity !== null && stock ? `t/m ${dateLabel(stock.through)}` : balance.note}</small></div>
       </section>
       {stock?.count && <p className={s.formula}>{stock.count.stockUse ? <>{number(stock.count.stockUse.countedQuantity)} geteld − {number(stock.count.stockUse.quantity)} gebruikt = {number(stock.count.quantity)} over · nieuwe einde-dagtelling nodig</> : <>{number(stock.count.quantity)} geteld + {number(stock.made)} gemaakt − {number(stock.issued)} uitgeleverd</>}</p>}
+      <div className={s.countSummary}><span><b>{row.toMake.quantity === null ? "Nog te maken na telling" : `${row.toMake.provisional ? "ca. " : ""}${number(row.toMake.quantity)} nog te maken`}</b><small>{row.toMake.quantity === null ? row.toMake.note : row.toMake.excess ? `${number(row.toMake.excess)} boven resterende prognose` : `Stand t/m ${dateLabel(row.toMake.through!)}`}</small></span><button type="button" className={s.secondary} disabled={!stock || source.mode !== "live"} onClick={onCount}><Icon name="stock" size={18} />Voorraad tellen</button></div>
+      {!stock && <p className={s.small}>Koppel eerst het productieartikel voor een telling in stuks.</p>}
       <p className={s.small}>Dit is bakkerijvoorraad. Een productietaak geeft de gemaakte hoeveelheid; een telling geeft de voorraadstand. Dagstartbonnen registreren uitgifte aan winkels en klanten.</p>
       {row.product.members && <details className={s.recipeBox}><summary>{row.product.members.length} samengevoegde varianten</summary><div className={s.variantList}>{row.product.members.map(member => <div key={member.id}><span>{member.name}</span><b>{member.cash === null && member.bake === null ? "Nog geen verkoop gekoppeld" : number((member.cash ?? 0) + (member.bake ?? 0))}</b></div>)}</div></details>}
       {source.mode === "live" && !currentProduct.members && <SearchableChoice label="Productieartikel" value={stock?.itemId || draft.productionItemId || ""}
@@ -155,6 +159,47 @@ function ProductDetails({ row, source, recipes, growth, shared, onSave, onClose 
       <p className={s.small}>{row.product.note}{!row.product.members && <> · Cash-it {row.product.cashCode || "onbekend"} · Bake-it {row.product.bakeCode || "onbekend"}</>}</p>
       {error && <p role="alert" className={s.formError}>{error}</p>}
       <footer className={s.dialogFooter}><button type="button" className={s.secondary} onClick={onClose}>Sluiten</button><button type="submit" disabled={saving} className={s.primary}>{saving ? "Opslaan…" : shared ? "Opslaan" : "Proef bewaren"}</button></footer>
+    </form>
+  </Dialog>;
+}
+
+function StockCountDialog({ row, today, onSave, onClose }: {
+  row: OverviewRow; today: string; onSave: (input: StockCountInput) => Promise<void>; onClose: () => void;
+}) {
+  const [date, setDate] = useState(today);
+  const [amount, setAmount] = useState("");
+  const [who, setWho] = useState("");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const action = useRef({ signature: "", id: "" });
+  const initialCountId = useRef(row.stock?.count?.id || null);
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const quantity = readAmount(amount);
+    if (!row.stock || quantity === null || !Number.isInteger(quantity) || quantity < 0 || quantity > 1e6) {
+      setError("Vul het getelde aantal stuks in, ook als dit 0 is."); return;
+    }
+    if (!date || date > today || date < "2020-01-01") { setError("Controleer de teldatum, uiterlijk vandaag."); return; }
+    if (who.trim().length < 2) { setError("Vul je naam in."); return; }
+    const signature = JSON.stringify([date, quantity, who.trim()]);
+    if (action.current.signature !== signature) action.current = { signature, id: crypto.randomUUID() };
+    setSaving(true); setError("");
+    try {
+      await onSave({ id: action.current.id, itemId: row.stock.itemId, previousCountId: initialCountId.current, date, quantity, who: who.trim() });
+    } catch (failure) { setError(failure instanceof Error ? failure.message : "Opslaan mislukt. Je invoer blijft staan."); }
+    finally { setSaving(false); }
+  }
+  return <Dialog title={`Voorraad tellen · ${row.currentProduct.name}`} onClose={() => { if (!saving) onClose(); }}>
+    <form className={s.editor} onSubmit={event => void submit(event)}>
+      <fieldset className={s.countFields} disabled={saving}>
+        <label>Teldatum<input type="date" required min="2020-01-01" max={today} value={date} onChange={event => setDate(event.target.value)} /></label>
+        <label>Getelde voorraad (stuks)<input inputMode="numeric" required value={amount} onChange={event => setAmount(event.target.value)} placeholder="Bijv. 300" /></label>
+        <label>Jouw naam<input required maxLength={80} value={who} onChange={event => setWho(event.target.value)} autoComplete="name" /></label>
+      </fieldset>
+      <p className={s.small}>Tel de voorraad na alle productie en uitleveringen van deze dag. Latere productie en bonnen worden vanaf deze stand verwerkt.</p>
+      {row.stock?.count && <p className={s.small}>Vorige telling · {dateLabel(row.stock.count.date)} · {number(row.stock.count.stockUse?.countedQuantity ?? row.stock.count.quantity)} stuks</p>}
+      {error && <p role="alert" className={s.formError}>{error}</p>}
+      <footer className={s.dialogFooter}><button type="button" disabled={saving} className={s.secondary} onClick={onClose}>Annuleren</button><button type="submit" disabled={saving} className={s.primary}>{saving ? "Opslaan…" : "Telling opslaan"}</button></footer>
     </form>
   </Dialog>;
 }
@@ -201,6 +246,7 @@ export default function ChristmasStockPreview({
   const [query, setQuery] = useState(""), [status, setStatus] = useState("all"), [volume, setVolume] = useState("high");
   const [growth, setGrowth] = useState(sharedSettings?.growth ?? 10), [page, setPage] = useState(0), [pageSize, setPageSize] = useState(9);
   const [xl, setXl] = useState(true), [productId, setProductId] = useState<string | null>(null);
+  const [countId, setCountId] = useState<string | null>(null);
   const [removeId, setRemoveId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(productionError || "");
   const [settingsReady, setSettingsReady] = useState(false);
@@ -268,7 +314,7 @@ export default function ChristmasStockPreview({
     setMessage(current => current.startsWith("Verbinding onderbroken") ? "" : current);
     if (!settingsOnly) {
       if (!next.productionError || next.production?.items?.length) {
-        setSource(next.production); setRecipes(next.production.recipes);
+        setSource(current => (next.production.inventoryRevision ?? -1) >= (current.inventoryRevision ?? -1) ? next.production : current); setRecipes(next.production.recipes);
       }
       setReceipts(next.campaignReceipts);
       setActualDate(todayInAmsterdam());
@@ -317,22 +363,39 @@ export default function ChristmasStockPreview({
     if (shared) await saveShared({ kind: "product", productId: id, value: forecastProductSettings(choice), previous: forecastProductSettings(previous) });
     else { setChoices(current => ({ ...current, [id]: choice })); setMessage("Proef aangepast · alleen lokaal bewaard"); }
   }
+  async function saveCount(input: StockCountInput) {
+    if (savingRef.current) throw Error("Wacht tot de vorige wijziging is opgeslagen.");
+    savingRef.current = true; setSaving(true);
+    try {
+      const overview = await registerStockCount(input);
+      setSource(current => ({ ...current, overview, inventoryRevision: overview.revision }));
+      setCountId(null);
+      setMessage(`Opgeslagen · ${number(input.quantity)} stuks geteld op ${dateLabel(input.date)}`);
+    } finally { savingRef.current = false; setSaving(false); }
+  }
   async function changeGrowth(value: number) {
     if (shared) await saveShared({ kind: "growth", value, previous: growth }).catch(() => undefined);
     else setGrowth(value);
   }
   const rows = useMemo<OverviewRow[]>(() => {
     const receiptWindow = campaignWindow(receipts, viewDate);
+    const stockWindows = new Map<string, CampaignWindow>();
     const currentProducts = mappedProductsFor2026(products, choices, growth);
-    return products.map((product, index) => {
+    const result = products.map((product, index) => {
     const choice = choices[product.id] || emptyChoice();
     const currentProduct = currentProducts[index];
     const stock = productInventory(currentProduct, choice, source);
+    if (stock && !stockWindows.has(stock.through)) stockWindows.set(stock.through, campaignWindow(receipts, addDays(stock.through, 1)));
     const recipeId = choice.recipeId || source.items.find(item => item.id === stock?.itemId)?.recipeId || "";
     const projection = productProjection(product, choice, growth);
     return { product, currentProduct, choice, stock, recipeId, projection: projection.period, weeklyTarget: projection.weeklyTarget, projectionIssue: projection.issue,
+      toMake: productionRequirement(currentProduct, projection.period, stock, receipts, stock ? stockWindows.get(stock.through) : undefined),
       need: remainingNeed(currentProduct, projection.period, receipts, viewDate, receiptWindow), recipeIssue: recipeIssue(currentProduct, recipeId, recipes), week52: projection.week52 };
     });
+    const stockUses = new Map<string, number>();
+    for (const row of result) if (row.stock && !row.choice.adjustment?.hidden && includeInStockOverview(row.product, growth)) stockUses.set(row.stock.itemId, (stockUses.get(row.stock.itemId) || 0) + 1);
+    return result.map(row => row.stock && (stockUses.get(row.stock.itemId) || 0) > 1
+      ? { ...row, toMake: { ...row.toMake, quantity: null, note: "Voorraad over varianten verdelen" } } : row);
   }, [products, choices, source, recipes, growth, receipts, viewDate]);
   const filtered = rows.filter(row => {
     const balance = stockDisplay(row.stock);
@@ -348,6 +411,7 @@ export default function ChristmasStockPreview({
   });
   const lastPage = Math.max(0, Math.ceil(filtered.length / pageSize) - 1), currentPage = Math.min(page, lastPage);
   const selected = rows.find(row => row.product.id === productId);
+  const counting = rows.find(row => row.product.id === countId);
   const removing = rows.find(row => row.product.id === removeId);
   const hiddenCount = rows.filter(row => row.choice.adjustment?.hidden).length;
   const changeFilter = (action: () => void) => { action(); setPage(0); };
@@ -382,7 +446,7 @@ export default function ChristmasStockPreview({
       const [inventory, production] = await Promise.all(responses.map(response => response.json())) as [StockOverview, { state: PreviewState; recipes: DemoRecipe[] }];
       if (!Array.isArray(inventory.rows) || !Array.isArray(production.state?.items) || !Array.isArray(production.recipes)) throw Error("De productiegegevens hebben geen herkenbaar formaat.");
       if (abort.signal.aborted) return;
-      const next: ProductionReading = { mode: "live", overview: inventory, items: production.state.items, recipes: production.recipes };
+      const next: ProductionReading = { mode: "live", overview: inventory, items: production.state.items, recipes: production.recipes, inventoryRevision: (inventory as StockOverview & { revision?: number }).revision };
       const nextReceipts = await receiptReading;
       if (abort.signal.aborted) return;
       setReceipts(nextReceipts); setDemoDate(null); setActualDate(todayInAmsterdam());
@@ -419,7 +483,7 @@ export default function ChristmasStockPreview({
         </div>
         <div className={s.tableWrap}><table className={s.table}>
           <colgroup><col className={s.productCol} /><col className={s.forecastCol} /><col className={s.forecastCol} /><col className={s.weeklyCol} /><col className={s.remainingCol} /><col className={s.historyCol} /><col className={s.historyCol} /><col className={s.stockCol} /><col className={s.recipeCol} /></colgroup>
-          <thead><tr><th scope="col">Product</th><th scope="col" className={s.periodHeading}><span className={s.forecastLabel}>Totaalprognose 2026</span><strong>Week 47–53</strong><small>16 nov–31 dec</small></th><th scope="col" className={s.christmasHeading}><span className={s.forecastLabel}>Kerstweek 2026</span><strong>Week 52</strong><small>21–27 dec</small></th><th scope="col" className={s.weeklyHeading} title="Totaalprognose week 47–53 verdeeld over vier productieweken, naar boven afgerond.">Weekdoel<small>Week 47–50</small><small>totaal ÷ 4</small></th><th scope="col" title="Totaalprognose min de uitgeleverde aantallen op verwerkte bonnen. De bakkerijvoorraad staat apart.">Nog uit te leveren<small>vanaf {dateLabel(viewDate < CAMPAIGN_START ? CAMPAIGN_START : viewDate)}</small></th><th scope="col">Laatst gemaakt<small>datum · hoeveelheid</small></th><th scope="col">Laatste telling<small>datum · voorraad</small></th><th scope="col">Voorraadprognose<small>in de bakkerij</small></th><th scope="col">Recept</th></tr></thead>
+          <thead><tr><th scope="col">Product</th><th scope="col" className={s.periodHeading}><span className={s.forecastLabel}>Totaalprognose 2026</span><strong>Week 47–53</strong><small>16 nov–31 dec</small></th><th scope="col" className={s.christmasHeading}><span className={s.forecastLabel}>Kerstweek 2026</span><strong>Week 52</strong><small>21–27 dec</small></th><th scope="col" className={s.weeklyHeading} title="Totaalprognose week 47–53 verdeeld over vier productieweken, naar boven afgerond.">Weekdoel<small>Week 47–50</small><small>totaal ÷ 4</small></th><th scope="col" title="Totaalprognose min de uitgeleverde aantallen op verwerkte bonnen. De bakkerijvoorraad staat apart.">Nog uit te leveren<small>vanaf {dateLabel(viewDate < CAMPAIGN_START ? CAMPAIGN_START : viewDate)}</small></th><th scope="col">Laatst gemaakt<small>datum · hoeveelheid</small></th><th scope="col">Voorraad tellen<small>datum · geteld</small></th><th scope="col" title="Resterende uitleverprognose min de bakkerijvoorraad, op dezelfde peildatum.">Nog te maken<small>na voorraad</small></th><th scope="col">Recept</th></tr></thead>
           <tbody>{filtered.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(row => {
             const balance = stockDisplay(row.stock);
             const band = { high: "Hardloper", medium: "Gemiddeld", low: "Klein volume", unknown: row.product.unitUnconfirmed ? "Eenheid controleren" : "Verkoop nog koppelen" }[salesVolume(row.product)];
@@ -430,8 +494,8 @@ export default function ChristmasStockPreview({
               <td className={s.weeklyNumber}><strong>{number(row.weeklyTarget)}</strong></td>
               <td className={s.remainingNumber}><button type="button" className={row.need.remaining === null ? s.missingButton : s.numberButton} onClick={() => setProductId(row.product.id)} aria-label={`Nog uit te leveren ${row.currentProduct.name}`} title={row.need.note}>{row.need.remaining === null ? "Controleren" : `${row.need.provisional ? "ca. " : ""}${number(row.need.remaining)}`}<small>{row.need.issued === null || row.need.through === null ? row.need.note : `${number(row.need.issued)} uitgeleverd t/m ${dateLabel(row.need.through)}`}</small>{row.need.provisional && <small className={s.warningText}>{row.need.unresolvedLines ? "Bonregels controleren" : "Incl. geschatte verdeling"}</small>}</button></td>
               <td>{row.stock?.latest ? <><b>{dateLabel(row.stock.latest.date)}</b><small>{number(row.stock.latest.quantity)} {row.stock.unit}</small></> : <span className={s.muted}>—</span>}</td>
-              <td>{row.stock?.count ? <><b>{dateLabel(row.stock.count.date)}</b><small>{number(row.stock.count.stockUse?.countedQuantity ?? row.stock.count.quantity)} {row.stock.unit}</small></> : <span className={s.muted}>Nog niet geteld</span>}</td>
-              <td><button type="button" className={balance.quantity === null ? s.missingButton : s.stockButton} onClick={() => setProductId(row.product.id)} aria-label={`Voorraad ${row.product.name}`}>{balance.quantity === null ? <><Icon name="warning" size={15} />Onbekend</> : <>ca. {number(balance.quantity)}</>}<small>{balance.quantity === null ? balance.note : `t/m ${dateLabel(row.stock!.through)}`}</small></button></td>
+              <td><button type="button" className={s.countButton} onClick={() => row.stock && source.mode === "live" ? setCountId(row.product.id) : setProductId(row.product.id)} aria-label={`Voorraad tellen ${row.currentProduct.name}`} disabled={saving}><Icon name="stock" size={16} /><span>{row.stock?.count ? <><b>{number(row.stock.count.stockUse?.countedQuantity ?? row.stock.count.quantity)} geteld</b><small>{dateLabel(row.stock.count.date)}</small></> : row.stock ? "Tellen" : "Koppelen"}</span></button></td>
+              <td><button type="button" className={row.toMake.quantity === null ? s.missingButton : s.stockButton} onClick={() => setProductId(row.product.id)} aria-label={`Nog te maken ${row.product.name}`} title={row.toMake.note}>{row.toMake.quantity === null ? <><Icon name="warning" size={15} />Controleren</> : <strong>{row.toMake.provisional ? "ca. " : ""}{number(row.toMake.quantity)}</strong>}<small>{balance.quantity === null ? balance.note : `${number(balance.quantity)} op voorraad`}</small>{row.toMake.quantity === null ? <small>{row.toMake.note !== balance.note ? row.toMake.note : ""}</small> : <small>{row.toMake.excess ? `${number(row.toMake.excess)} boven prognose` : `t/m ${dateLabel(row.toMake.through!)}`}</small>}</button></td>
               <td><button type="button" className={row.recipeIssue || !row.choice.checked ? s.issueButton : s.linkButton} onClick={() => setProductId(row.product.id)} title={row.recipeIssue || "Bekijk recept en onderdelen"}><Icon name={row.recipeIssue || !row.choice.checked ? "warning" : "link"} size={17} />{!row.recipeId ? "Koppelen" : row.recipeIssue ? "Aanvullen" : !row.choice.checked ? "Controleren" : "Gekoppeld"}</button></td>
             </tr>;
           })}</tbody>
@@ -446,7 +510,8 @@ export default function ChristmasStockPreview({
         {source.mode === "example" && <button type="button" className={s.iconButton} onClick={reset} aria-label="Proef herstellen" title="Proef herstellen"><Icon name="refresh" size={17} /></button>}
       </footer>
     </section>
-    {selected && <ProductDetails key={selected.product.id} row={selected} source={source} recipes={recipes} growth={growth} shared={shared} onClose={() => setProductId(null)} onSave={async (choice, previous) => { await saveProduct(selected.product.id, choice, previous); setProductId(null); }} />}
+    {selected && <ProductDetails key={selected.product.id} row={selected} source={source} recipes={recipes} growth={growth} shared={shared} onCount={() => { setProductId(null); if (source.mode === "live") setCountId(selected.product.id); }} onClose={() => setProductId(null)} onSave={async (choice, previous) => { await saveProduct(selected.product.id, choice, previous); setProductId(null); }} />}
+    {counting?.stock && <StockCountDialog key={counting.product.id} row={counting} today={actualDate} onSave={saveCount} onClose={() => setCountId(null)} />}
     {removing && <Dialog title="Product weglaten?" onClose={() => setRemoveId(null)}><div className={s.editor}><p><b>{removing.currentProduct.name}</b></p><p className={s.small}>Dit product verdwijnt uit je kerstvoorraadoverzicht. Je kunt het via het filter ‘Weggelaten’ terugzetten.</p><footer className={s.dialogFooter}><button type="button" className={s.secondary} onClick={() => setRemoveId(null)}>Annuleren</button><button type="button" className={s.primary} disabled={saving} onClick={() => void hideProduct(removing.product.id, true)}>Product weglaten</button></footer></div></Dialog>}
   </main>;
 }
