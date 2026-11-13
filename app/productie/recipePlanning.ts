@@ -1,10 +1,12 @@
 import { combineNewPreparations, recipeMaterialNeeds } from "./materialPlanning";
-import { convertRecipeQuantity, addDays, addTask, dateLabel, defaultComponentDepartment, DEPARTMENTS, requiredTaskIds, type DemoRecipe, type DepartmentId, type PreviewState, type Task, type PreparationChoice } from "./planning";
+import { convertRecipeQuantity, addDays, addTask, dateLabel, mondayOf, defaultComponentDepartment, DEPARTMENTS, requiredTaskIds, type DemoRecipe, type DepartmentId, type PreviewState, type Task, type PreparationChoice } from "./planning";
 
 export type { PreparationChoice } from "./planning";
 export type PlanCommand = {
   task: Omit<Task,"quantity"|"requires"|"generatedFor">;
   amount: number; amountMode: "quantity" | "batches";
+  /** Repeat a new recipe production on selected days of the same week. */
+  dates?: string[];
   preparation?: { daysBefore: number; choices: Record<string,PreparationChoice>; combine?: boolean };
 };
 export type PreparationRow = {
@@ -114,6 +116,23 @@ export function preparationProposal(state:PreviewState,recipes:DemoRecipe[],comm
 }
 
 export function buildRecipePlan(state:PreviewState,recipes:DemoRecipe[],command:PlanCommand):PreviewState {
+  if(command.dates!==undefined) {
+    if(!Array.isArray(command.dates) || !command.dates.length || command.dates.length>7)throw Error("Kies één of meer dagen in deze week.");
+    const dates=[...new Set(command.dates)].sort();
+    if(dates.length!==command.dates.length || dates.some(date=>typeof date!=="string" || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0,10)!==date || mondayOf(date)!==mondayOf(command.task.date)) || !dates.includes(command.task.date))throw Error("Kies verschillende dagen binnen dezelfde week.");
+    if(dates.length>1 && command.task.dependsOn)throw Error("Plan een vervolgstap op één dag.");
+    const single:PlanCommand={...command,dates:undefined};
+    // Build every day first, then save the complete result in one existing API call.
+    // Separate batch IDs keep repeated productions and their output independent.
+    return dates.reduce((next,date,index)=>{
+      const offset=Math.round((Date.parse(date)-Date.parse(single.task.date))/86400000);
+      return buildRecipePlan(next,recipes,{
+        ...single,
+        task:{...single.task,date,id:index===0?single.task.id:`${single.task.id}:day:${date}`,batchId:index===0?single.task.batchId:`${single.task.batchId}:day:${date}`,...(single.task.dueDate?{dueDate:addDays(single.task.dueDate,offset)}:{})},
+        ...(single.preparation?{preparation:{...single.preparation,choices:Object.fromEntries(Object.entries(single.preparation.choices).map(([id,choice])=>[id,{...choice,...(choice.date?{date:addDays(choice.date,offset)}:{})}]))}}:{}),
+      });
+    },state);
+  }
   const proposal=preparationProposal(state,recipes,command);
   if(proposal.errors.length)throw Error(proposal.errors[0]);
   const rootItem=state.items.find(i=>i.id===command.task.itemId)!;
@@ -190,6 +209,7 @@ export function recipePlanUpdateBlock(state:PreviewState,task:Task):string|undef
   if(state.tasks.some(t=>!ids.has(t.id) && requiredTaskIds(t).some(id=>id!==task.id && ids.has(id))))return "Een halffabricaat wordt ook door een andere productie gebruikt. Controleer die koppeling eerst.";
 }
 export function refreshRecipePlan(state:PreviewState,recipes:DemoRecipe[],id:string,command:PlanCommand):PreviewState {
+  if(command.dates && (command.dates.length!==1 || command.dates[0]!==command.task.date))throw Error("Werk één bestaande productie tegelijk bij.");
   const root=state.tasks.find(t=>t.id===id);if(!root)throw Error("De oorspronkelijke productietaak ontbreekt.");
   const block=recipePlanUpdateBlock(state,root);if(block)throw Error(block);
   if(command.task.id!==id || command.task.itemId!==root.itemId || command.task.batchId!==root.batchId || command.task.recordsOutput!==root.recordsOutput || command.task.status!=="planned" || command.task.dependsOn)throw Error("De oorspronkelijke productietaak en batch moeten behouden blijven.");

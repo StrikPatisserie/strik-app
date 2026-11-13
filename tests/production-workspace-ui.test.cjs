@@ -175,9 +175,9 @@ test('a day-cell plus uses its date and department without asking for either aga
  find(view,node=>node.type===h.pickerWidget).props.onChange('creme');
  view=render();
  assert.equal(view.props.subtitle,'Luxe gebak · '+planning.dateLabel('2026-10-29',true));
- const date=find(find(view,node=>node.type==='label'&&text(node)==='Productiedatum'),node=>node.type==='input');
- assert.equal(date.props.value,'2026-10-29');
- assert(!visibleNodes(view).includes(date),'The chosen date is shown as context, with its input tucked under More options');
+ assert(!nodes(view).some(node=>node.type==='label'&&text(node)==='Productiedatum'));
+ assert(!nodes(view).some(node=>node.type==='label'&&text(node)==='Afdeling'));
+ assert(!nodes(view).some(node=>node.props?.className==='planDays'));
  const quantity=find(view,node=>node.type==='input'&&node.props.type==='number');
  quantity.props.onChange({target:{value:'7'}});
  view=render();
@@ -355,108 +355,65 @@ test('a late preparation can be repaired or cancelled in XL and its input never 
  button(formTree,'Annuleren').props.onClick();tree=h.render(h.Component);assert(!nodes(tree).some(n=>typeof n.type==='function' && !!n.props.onPlan));
 });
 
-test('adding through a department keeps that department and preserves the draft while editing its recipe',()=>{
- const h=harness();
- const live={state:sample.initialPreviewState(),today:sample.DEMO_TODAY,recipes:sample.demoRecipes,ingredients:[],canManage:true,departments:planning.DEPARTMENTS.map(d=>d.id),revision:1};
+test('day context and the draft survive opening the existing recipe editor',async()=>{
+ const h=harness(),live={state:sample.initialPreviewState(),today:sample.DEMO_TODAY,recipes:sample.demoRecipes,ingredients:[],canManage:true,departments:planning.DEPARTMENTS.map(d=>d.id),revision:1};
  let tree=xl(h,{live});
- find(tree,n=>n.type==='button' && n.props['aria-label']?.startsWith('Taak toevoegen · Luxe gebak ·')).props.onClick();
- tree=h.render(h.Component,{live});
- let form=find(tree,n=>typeof n.type==='function' && !!n.props.onPlan);
- const render=()=>h.render(form.type,form.props,tree.props.value);
- const field=(view,label,type)=>find(find(view,n=>n.type==='label' && text(n).startsWith(label) && (label!=='Afdeling'||nodes(n).some(child=>child.type==='select'&&!child.props['aria-label']))),n=>n.type===type);
- let view=render();
- const picker=find(view,n=>n.type===h.pickerWidget);
- assert(picker.props.items.some(item=>item.id==='fruit' && item.searchValues.includes('Vers fruit')));
- picker.props.onChange('fruit');
- view=render();
- assert.equal(field(view,'Afdeling','select').props.value,'luxe');
- find(view,node=>node.type==='select'&&node.props.value==='batches').props.onChange({target:{value:'quantity'}});view=render();
- field(view,'Aantal (','input').props.onChange({target:{value:'100'}});
- field(view,'Productiedatum','input').props.onChange({target:{value:'2026-11-05'}});
- find(view,n=>n.type==='input'&&n.props.name==='minutes').props.onChange({target:{value:'45'}});
- const extraOptions=find(view,n=>typeof n.type==='function'&&n.type.name==='TaskOperationOptions'&&!n.props.label);
- const options=h.render(extraOptions.type,extraOptions.props,tree.props.value);
- find(find(options,n=>n.type==='label'&&text(n)==='Storten'),n=>n.type==='input').props.onChange({target:{checked:true}});
- view=render();
- button(view,'Recept aanpassen').props.onClick();
- tree=h.render(h.Component,{live});
- // The draft must remain mounted underneath the recipe editor. The hook harness
- // deliberately does not simulate unmounting, so assert the mounting explicitly.
- assert(find(tree,n=>n.type===form.type && !!n.props.onPlan));
- const editor=find(tree,n=>typeof n.type==='function' && n.props.item?.id==='fruit' && !!n.props.getRevision);
- editor.props.onClose();
- tree=h.render(h.Component,{live});
- form=find(tree,n=>n.type===form.type && !!n.props.onPlan);
- view=render();
+ button(tree,'Taak toevoegen · Luxe gebak · do 29 okt').props.onClick();tree=h.render(h.Component,{live});
+ let form=find(tree,n=>typeof n.type==='function'&&!!n.props.onPlan),submitted=[];
+ const props={...form.props,onPlan:async command=>{submitted.push(command);}},render=()=>h.render(form.type,props,tree.props.value);
+ let view=render();const picker=find(view,n=>n.type===h.pickerWidget);
+ assert(picker.props.items.some(item=>item.id==='fruit'&&item.searchValues.includes('Vers fruit')));
+ picker.props.onChange('fruit');view=render();
+ find(view,n=>n.type==='select'&&n.props.value==='batches').props.onChange({target:{value:'quantity'}});view=render();
+ inputByLabel(view,'Aantal (').props.onChange({target:{value:'100'}});
+ find(view,n=>n.type==='input'&&n.props.name==='minutes').props.onChange({target:{value:'45'}});view=render();
+ button(view,'Recept aanpassen').props.onClick();tree=h.render(h.Component,{live});
+ assert(find(tree,n=>n.type===form.type&&!!n.props.onPlan),'Draft stays mounted behind recipe editor');
+ const editor=find(tree,n=>typeof n.type==='function'&&n.props.item?.id==='fruit'&&!!n.props.getRevision);editor.props.onClose();
+ tree=h.render(h.Component,{live});form=find(tree,n=>n.type===form.type&&!!n.props.onPlan);view=render();
  assert.equal(find(view,n=>n.type===h.pickerWidget).props.value,'fruit');
- assert.equal(field(view,'Afdeling','select').props.value,'luxe');
- assert.equal(field(view,'Aantal (','input').props.value,'100');
- assert.equal(field(view,'Productiedatum','input').props.value,'2026-11-05');
+ assert.equal(inputByLabel(view,'Aantal (').props.value,'100');
  assert.equal(find(view,n=>n.type==='input'&&n.props.name==='minutes').props.value,'45');
- const restored=find(view,n=>typeof n.type==='function'&&n.type.name==='TaskOperationOptions'&&!n.props.label);
- const restoredOptions=h.render(restored.type,restored.props,tree.props.value);
- assert.equal(find(find(restoredOptions,n=>n.type==='label'&&text(n)==='Storten'),n=>n.type==='input').props.checked,true);
+ await find(view,n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{note:'Bewaren'}});
+ assert.equal(submitted[0].task.departmentId,'luxe');assert.equal(submitted[0].task.date,'2026-10-29');assert.equal(submitted[0].task.note,'Bewaren');
 });
 
-test('normal task creation submits checked extra operations and an optional total time',async()=>{
- const h=harness();let tree=xl(h);
- button(tree,'Inplannen').props.onClick();tree=h.render(h.Component);
+test('quick planning keeps only optional time and note and records output automatically',async()=>{
+ const h=harness();let tree=xl(h);button(tree,'Inplannen').props.onClick();tree=h.render(h.Component);
  const form=find(tree,n=>typeof n.type==='function'&&!!n.props.onPlan),submitted=[];
- const props={...form.props,onPlan:async command=>{submitted.push(command);}};
- const render=()=>h.render(form.type,props,tree.props.value);
- let view=render();
- find(view,n=>n.type===h.pickerWidget).props.onChange('creme');view=render();
+ const props={...form.props,onPlan:async command=>{submitted.push(command);}},render=()=>h.render(form.type,props,tree.props.value);
+ let view=render();find(view,n=>n.type===h.pickerWidget).props.onChange('creme');view=render();
  const time=find(view,n=>n.type==='input'&&n.props.name==='minutes');
- const more=find(view,n=>n.type==='details'&&nodes(n).some(child=>child.type==='summary'&&text(child)==='Meer opties'));
- assert.equal(more.props.open,undefined);assert(nodes(more).includes(time),'Time stays mounted inside the closed optional controls');
- assert.equal(time.props.required,undefined);
- const options=find(view,n=>typeof n.type==='function'&&n.type.name==='TaskOperationOptions'&&!n.props.label);
- const optionsView=h.render(options.type,options.props,tree.props.value);
- find(find(optionsView,n=>n.type==='label'&&text(n)==='Storten'),n=>n.type==='input').props.onChange({target:{checked:true}});
+ const more=find(view,n=>n.type==='details'&&nodes(n).some(child=>child.type==='summary'&&text(child)==='Tijd & notitie'));
+ assert.equal(more.props.open,undefined);assert(nodes(more).includes(time));assert.equal(time.props.required,undefined);
+ for(const name of ['dueDate','operation','source','output'])assert(!nodes(view).some(n=>n.props?.name===name));
+ for(const label of ['Toon in keuzelijst','Handeling','Herkomst','Benodigd op'])assert(!text(view).includes(label));
  time.props.onChange({target:{value:'45'}});view=render();
- const submit=()=>find(view,n=>n.type==='form').props.onSubmit({preventDefault:()=>{},currentTarget:{source:'manual',note:'',dueDate:'',output:'on'}});
- await submit();
- assert.equal(submitted[0].task.operation,'Bereiden + storten');
- assert.equal(submitted[0].task.minutes,45);
- find(view,n=>n.type==='input'&&n.props.name==='minutes').props.onChange({target:{value:''}});view=render();
- await submit();
- assert.equal(submitted[1].task.operation,'Bereiden + storten');
+ const submit=()=>find(view,n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{note:''}});
+ await submit();assert.equal(submitted[0].task.operation,'Bereiden');assert.equal(submitted[0].task.minutes,45);assert.equal(submitted[0].task.recordsOutput,true);
+ find(view,n=>n.type==='input'&&n.props.name==='minutes').props.onChange({target:{value:''}});view=render();await submit();
  assert.equal(Object.hasOwn(submitted[1].task,'minutes'),false);
 });
 
-test('the compact planning form foregrounds product, quantity and day while optional inputs stay mounted in closed details',async()=>{
- const h=harness();let tree=xl(h);
- button(tree,'Inplannen').props.onClick();tree=h.render(h.Component);
- const form=find(tree,node=>typeof node.type==='function'&&!!node.props.onPlan),submitted=[];
+test('the quick form shows quantity and weekday choices and keeps recipe preparation optional',async()=>{
+ const h=harness();let tree=xl(h);button(tree,'Inplannen').props.onClick();tree=h.render(h.Component);
+ const form=find(tree,n=>typeof n.type==='function'&&!!n.props.onPlan),submitted=[];
  const props={...form.props,onPlan:async command=>{submitted.push(command);}},render=()=>h.render(form.type,props,tree.props.value);
- let view=render(),visible=visibleNodes(view);
- const picker=find(view,node=>node.type===h.pickerWidget);
+ let view=render(),visible=visibleNodes(view),picker=find(view,n=>n.type===h.pickerWidget);
  assert.equal(picker.props.label,'Wat wil je maken?');assert.equal(picker.props.required,true);
- assert.deepEqual(visible.filter(node=>node.type==='input').map(node=>node.props.type),['number','date']);
- assert(button(view,'Zonder recept toevoegen'));
+ assert(!visible.some(n=>n.type==='input'&&n.props.type==='date'));assert(button(view,'Zonder recept toevoegen'));
+ const days=find(view,n=>n.props?.className==='planDays');assert.equal(nodes(days).filter(n=>n.type==='input').length,6);
+ assert.equal(nodes(days).filter(n=>n.type==='input'&&n.props.checked).length,1);
  picker.props.onChange('fruit');view=render();visible=visibleNodes(view);
- const more=find(view,node=>node.type==='details'&&nodes(node).some(child=>child.type==='summary'&&text(child)==='Meer opties'));
- const parts=find(view,node=>node.props?.className==='preparationList');
- assert.equal(more.props.open,undefined,'Optional sections start closed');
- for(const name of ['dueDate','operation','minutes','source','note','output']){
-  const field=find(more,node=>node.props?.name===name);
-  assert(!visible.includes(field),`${name} is optional and stays outside the initial compact form`);
- }
- assert(visible.some(node=>node.type==='select'&&node.props.value==='batches'),'New recipe production starts with an explicit base-recipe multiplier');
- assert(visible.some(node=>node.type==='label'&&text(node)==='Halffabricaten apart meenemen'));
- assert(visible.includes(parts));assert(text(parts).includes('Vanillecrème'));assert(text(parts).includes(sample.demoRecipes.find(recipe=>recipe.id==='demo-kapsel').name));
- const leadInputs=visible.filter(node=>node.type==='input'&&node.props['aria-label']?.startsWith('Dagen ervoor '));
- assert(leadInputs.length>0);assert(leadInputs.every(node=>node.props.value===0&&node.props.min==='0'));
- assert(!visible.some(node=>node.type==='input'&&node.props.type==='date'&&node.props['aria-label']?.startsWith('Productiedatum ')));
- const preparationDate=find(parts,node=>node.type==='input'&&node.props['aria-label']?.startsWith('Productiedatum '));
- assert(!visible.includes(preparationDate));assert(preparationDate.props.value);
- const primaryDate=find(view,node=>node.type==='label'&&text(node)==='Productiedatum').props.children.find(node=>node?.type==='input');
- assert.equal(primaryDate.props.value,sample.DEMO_TODAY);
- const submit=find(view,node=>node.type==='button'&&node.props.type==='submit');assert.equal(text(submit),'Inplannen');assert.equal(submit.props.disabled,false);
- await find(view,node=>node.type==='form').props.onSubmit({preventDefault:()=>{},currentTarget:{source:'manual',note:'',dueDate:'',output:'on'}});
+ const parts=find(view,n=>n.props?.className==='preparationList');assert(visible.includes(parts));
+ assert(visible.some(n=>n.type==='select'&&n.props.value==='batches'));
+ assert(text(parts).includes('Vanillecrème'));assert(text(parts).includes(sample.demoRecipes.find(r=>r.id==='demo-kapsel').name));
+ const leadInputs=visible.filter(n=>n.type==='input'&&n.props['aria-label']?.startsWith('Dagen ervoor '));assert(leadInputs.length>0);assert(leadInputs.every(n=>n.props.value===0&&n.props.min==='0'));
+ const date=find(parts,n=>n.type==='input'&&n.props['aria-label']?.startsWith('Productiedatum '));assert(!visible.includes(date));
+ assert.equal(button(view,'Inplannen').props.disabled,false);
+ await find(view,n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{note:''}});
  assert.equal(submitted[0].task.operation,'Afwerken');assert.equal(submitted[0].task.date,sample.DEMO_TODAY);assert.equal(submitted[0].preparation.daysBefore,0);
- const result=recipePlanning.buildRecipePlan(form.props.state,sample.demoRecipes,submitted[0]);
- assert(result.tasks.some(task=>task.generatedFor===submitted[0].task.id),'The compact outline still schedules actual preparation tasks');
+ const result=recipePlanning.buildRecipePlan(form.props.state,sample.demoRecipes,submitted[0]);assert(result.tasks.some(t=>t.generatedFor===submitted[0].task.id));
 });
 
 test('preparation days can be cleared and retyped without resetting the input or hiding recipe rows',()=>{
@@ -484,20 +441,16 @@ test('preparation days can be cleared and retyped without resetting the input or
  find(view,node=>node.type===h.pickerWidget).props.onChange('fruit');view=render();assert.equal(input().props.value,0,'Selecting a recipe starts fresh');
 });
 
-test('global planning follows the selected product department while a day-cell plus keeps its chosen day and row',()=>{
- const live={state:sample.initialPreviewState(),today:sample.DEMO_TODAY,recipes:sample.demoRecipes,ingredients:[],canManage:true,departments:planning.DEPARTMENTS.map(department=>department.id),revision:1};
+test('global planning uses the recipe department but a clicked row keeps its category and date',async()=>{
+ const live={state:sample.initialPreviewState(),today:sample.DEMO_TODAY,recipes:sample.demoRecipes,ingredients:[],canManage:true,departments:planning.DEPARTMENTS.map(d=>d.id),revision:1};
  for(const clicked of [false,true]){
-  const h=harness();let tree=xl(h,{live});
-  if(clicked)find(tree,node=>node.type==='button'&&node.props['aria-label']==='Taak toevoegen · Luxe gebak · do 29 okt').props.onClick();
-  else button(tree,'Inplannen').props.onClick();
-  tree=h.render(h.Component,{live});
-  const form=find(tree,node=>typeof node.type==='function'&&!!node.props.onPlan),render=()=>h.render(form.type,form.props,tree.props.value);
-  let view=render();find(view,node=>node.type===h.pickerWidget).props.onChange('creme');view=render();
-  const more=find(view,node=>node.type==='details'&&nodes(node).some(child=>child.type==='summary'&&text(child)==='Meer opties'));
-  const department=find(find(more,node=>node.type==='label'&&text(node).startsWith('Afdeling')),node=>node.type==='select');
-  assert.equal(department.props.value,clicked?'luxe':live.state.items.find(item=>item.id==='creme').departmentId);
-  const date=find(find(view,node=>node.type==='label'&&text(node)==='Productiedatum'),node=>node.type==='input');
-  assert.equal(date.props.value,clicked?'2026-10-29':sample.DEMO_TODAY);
+  const h=harness();let tree=xl(h,{live});button(tree,clicked?'Taak toevoegen · Luxe gebak · do 29 okt':'Inplannen').props.onClick();tree=h.render(h.Component,{live});
+  const form=find(tree,n=>typeof n.type==='function'&&!!n.props.onPlan),commands=[],props={...form.props,onPlan:async c=>{commands.push(c);}},render=()=>h.render(form.type,props,tree.props.value);
+  let view=render();find(view,n=>n.type===h.pickerWidget).props.onChange('creme');view=render();
+  const department=nodes(view).find(n=>n.type==='label'&&text(n).startsWith('Afdeling'));assert.equal(!!department,!clicked);
+  if(department)assert.equal(find(department,n=>n.type==='select').props.value,live.state.items.find(i=>i.id==='creme').departmentId);
+  await find(view,n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}});
+  assert.equal(commands[0].task.date,clicked?'2026-10-29':sample.DEMO_TODAY);assert.equal(commands[0].task.departmentId,clicked?'luxe':live.state.items.find(i=>i.id==='creme').departmentId);
  }
 });
 
@@ -1570,30 +1523,42 @@ test('new planning offers one add button per day and category while task cells s
  assert.equal(cleaning.props.categoryActionsOnly,true);
 });
 
-test('day and category add buttons prefill only their selected context and submit the chosen date and category',async()=>{
+test('day plus fixes its day while category plus can repeat on several selected weekdays',async()=>{
  for(const fromDay of [true,false]){
-  const h=harness(),props={initialLayout:'new'};
-  let tree=h.render(h.Component,props);
-  button(tree,fromDay?'Productie toevoegen · do 29 okt':'Productie toevoegen · Luxe gebak').props.onClick();
-  tree=h.render(h.Component,props);
-  const form=find(tree,node=>typeof node.type==='function'&&!!node.props.onPlan),commands=[];
-  assert.equal(form.props.initial.date,fromDay?'2026-10-29':sample.DEMO_TODAY);
-  assert.equal(form.props.initial.departmentId,fromDay?undefined:'luxe');
-  assert.equal(!!form.props.initial.fromCell,fromDay);
-  const formProps={...form.props,onPlan:async command=>{commands.push(command);}};
-  const render=()=>h.render(form.type,formProps,tree.props.value);
-  let view=render();
-  assert.equal(view.props.subtitle,fromDay?'do 29 okt':'Luxe gebak');
-  find(view,node=>node.type===h.pickerWidget).props.onChange('creme');view=render();
-  const date=find(find(view,node=>node.type==='label'&&text(node)==='Productiedatum'),node=>node.type==='input');
-  assert.equal(visibleNodes(view).includes(date),!fromDay);
-  if(!fromDay){date.props.onChange({target:{value:'2026-10-30'}});view=render();}
-  await find(view,node=>node.type==='form').props.onSubmit({preventDefault(){},currentTarget:{output:'on'}});
-  assert.equal(commands[0].task.date,fromDay?'2026-10-29':'2026-10-30');
-  assert.equal(commands[0].task.departmentId,fromDay?'dessert':'luxe');
+  const h=harness(),pageProps={initialLayout:'new'};let tree=h.render(h.Component,pageProps);
+  button(tree,fromDay?'Productie toevoegen · do 29 okt':'Productie toevoegen · Luxe gebak').props.onClick();tree=h.render(h.Component,pageProps);
+  const form=find(tree,n=>typeof n.type==='function'&&!!n.props.onPlan),commands=[],props={...form.props,onPlan:async c=>{commands.push(c);}},render=()=>h.render(form.type,props,tree.props.value);
+  let view=render();assert.equal(view.props.subtitle,fromDay?'do 29 okt':'Luxe gebak');
+  find(view,n=>n.type===h.pickerWidget).props.onChange('creme');view=render();
+  assert(!nodes(view).some(n=>n.type==='label'&&text(n)==='Productiedatum'));
+  if(!fromDay){
+   assert(!nodes(view).some(n=>n.type==='label'&&text(n)==='Afdeling'));
+   for(const value of ['vr 30','ma 26']){inputByLabel(view,value).props.onChange();view=render();}
+   assert(text(view).includes('je plant dit recept 3 keer in'));
+   assert.equal(button(view,'3 dagen inplannen').props.disabled,false);
+  }
+  await find(view,n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}});
+  assert.equal(commands[0].task.date,fromDay?'2026-10-29':'2026-10-26');assert.equal(commands[0].task.departmentId,fromDay?'dessert':'luxe');
+  if(fromDay)assert.equal(commands[0].dates,undefined);
+  else{
+   assert.deepEqual(Array.from(commands[0].dates),['2026-10-26',sample.DEMO_TODAY,'2026-10-30']);
+   const result=recipePlanning.buildRecipePlan(form.props.state,sample.demoRecipes,commands[0]);
+   const added=result.tasks.filter(t=>!form.props.state.tasks.some(old=>old.id===t.id));assert.equal(added.length,3);assert.equal(new Set(added.map(t=>t.batchId)).size,3);
+  }
  }
 });
 
+test('category weekday choices follow the visible week and cannot submit with no day selected',async()=>{
+ const h=harness(),pageProps={initialLayout:'new'};let tree=h.render(h.Component,pageProps);
+ button(tree,'Volgende week').props.onClick();tree=h.render(h.Component,pageProps);
+ button(tree,'Productie toevoegen · Luxe gebak').props.onClick();tree=h.render(h.Component,pageProps);
+ const form=find(tree,n=>typeof n.type==='function'&&!!n.props.onPlan),commands=[],props={...form.props,onPlan:async c=>{commands.push(c);}},render=()=>h.render(form.type,props,tree.props.value);
+ let view=render();find(view,n=>n.type===h.pickerWidget).props.onChange('creme');view=render();
+ assert.equal(inputByLabel(view,'ma 2').props.checked,true);
+ inputByLabel(view,'ma 2').props.onChange();view=render();assert.equal(button(view,'Inplannen').props.disabled,true);
+ await find(view,n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}});assert.equal(commands.length,0);view=render();assert(text(view).includes('Kies een dag.'));
+ inputByLabel(view,'di 3').props.onChange();view=render();await find(view,n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}});assert.equal(commands[0].task.date,'2026-11-03');
+});
 
 test('quick completion accepts 600 made against 300 planned in both layouts and retains invalid input on failure', async () => {
  for (const initialLayout of ['current', 'new']) {

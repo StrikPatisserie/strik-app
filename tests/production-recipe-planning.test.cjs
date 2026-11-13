@@ -393,3 +393,37 @@ test('daily sweetened and whipped cream are unchecked but remain selectable with
  const {state,recipes,command}=fixture();recipes.find(row=>row.id==='foam').name='Slagroom-botercrème';
  assert.equal(rules.preparationProposal(state,recipes,command).rows.find(row=>row.recipeId==='foam').included,true);
 });
+
+test('selected weekdays create independent recipe batches with correctly shifted nested preparation',()=>{
+ const {state,recipes,command}=fixture();command.dates=['2026-11-02','2026-11-04','2026-11-06'];
+ command.preparation.choices.base={date:'2026-10-31'};
+ const next=rules.buildRecipePlan(state,recipes,command),roots=next.tasks.filter(t=>!t.generatedFor);
+ assert.equal(roots.length,3);assert.equal(next.tasks.length,18);assert.equal(new Set(roots.map(t=>t.batchId)).size,3);assert.equal(new Set(next.tasks.map(t=>t.id)).size,18);assert.equal(state.tasks.length,0);
+ for(const root of roots){
+  assert.equal(root.quantity,100);assert.equal(root.requires.length,4);
+  const parts=next.tasks.filter(t=>t.generatedFor===root.id);assert.equal(parts.length,5);
+  assert.equal(parts.find(t=>t.itemId==='recipe:base').date,planning.addDays(root.date,-2));
+  assert.equal(parts.find(t=>t.itemId==='recipe:mousse').date,planning.addDays(root.date,-1));
+  assert.equal(parts.find(t=>t.itemId==='recipe:caramel').date,planning.addDays(root.date,-2));
+  assert.equal(root.recipePlan.amount,100);
+ }
+ assert(workspace.validWorkspace(next,recipes));
+});
+
+test('repeat validation rejects invalid dates, other weeks, duplicate days and repeated follow-up steps',()=>{
+ const {state,recipes,command}=fixture();const before=JSON.stringify(state);
+ for(const dates of [[],['2026-11-02','2026-11-02'],['2026-11-09'],['2026-11-04'],['2026-11-02','2026-02-30'],['2026-11-02',null],Array(8).fill('2026-11-02')])assert.throws(()=>rules.buildRecipePlan(state,recipes,{...command,dates}));
+ assert.throws(()=>rules.buildRecipePlan(state,recipes,{...command,dates:['2026-11-02','2026-11-04'],task:{...command.task,dependsOn:'existing'}}),/vervolgstap/);
+ const existing=rules.buildRecipePlan(state,recipes,command);
+ assert.throws(()=>rules.refreshRecipePlan(existing,recipes,command.task.id,{...command,dates:['2026-11-02','2026-11-04']}),/bestaande productie/);
+ assert.equal(JSON.stringify(state),before);
+});
+
+test('multiple weekdays commit through the guarded API in one save and errors leave no partial production',async()=>{
+ const a=api({id:'baker',active:true,role:'bakkerij'});a.command.dates=['2026-11-02','2026-11-04','2026-11-06'];
+ const response=await a.route.POST(request(a.command));assert.equal(response.status,200);const body=await response.json();assert.equal(body.state.tasks.length,18);assert.equal(a.writes(),1);assert.equal(body.revision,4);
+ const b=api({id:'baker',active:true,role:'bakkerij'});b.command.dates=['2026-11-02','2026-11-09'];
+ assert.equal((await b.route.POST(request(b.command))).status,400);assert.equal(b.writes(),0);
+ const c=api({id:'baker',active:true,role:'bakkerij'},{conflict:true});c.command.dates=['2026-11-02','2026-11-04'];
+ assert.equal((await c.route.POST(request(c.command))).status,409);assert.equal(c.writes(),0);
+});

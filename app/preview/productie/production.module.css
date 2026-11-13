@@ -1444,3 +1444,16 @@
 .dayHeading .dayHeaderWork .dayHoursActual { color:#c3d3bc!important }
 .dayHeaderWork svg { flex-shrink:0 }
 .dayView .dayHeaderContent { flex-direction:row;gap:12px }
+
+/* Quick planning: only product, amount and the missing day/department. */
+.quickPlanBody { padding: 18px 22px; }
+.quickPlanBody .formGrid { gap: 10px; margin-bottom: 12px; }
+.planDays { border: 0; padding: 0; margin: 0 0 12px; min-width: 0; }
+.planDays legend { color: #4c644c; font-size: 12px; font-weight: 700; margin-bottom: 6px; }
+.planDays > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.planDays label { display: flex; align-items: center; justify-content: center; gap: 5px; min-height: 42px; padding: 6px 10px; border: 1px solid #c6d2c1; border-radius: 7px; background: #fff; cursor: pointer; font-size: 13px; color: #1b3342; }
+.planDays input { width: 15px; height: 15px; accent-color: #1b3342; margin: 0; }
+.planDays label.planDaySelected { background: #e4eddf; border-color: #78956d; }
+.planDays label:focus-within { outline: 2px solid #1b3342; outline-offset: 2px; }
+.planRepeatNotice { display: flex; align-items: flex-start; gap: 6px; color: #814620; background: #fff4e6; border-radius: 6px; padding: 8px 10px; font-size: 12px; margin: 0 0 12px; }
+.planRepeatNotice svg { flex: 0 0 auto; margin-top: 1px; }

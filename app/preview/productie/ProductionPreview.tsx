@@ -27,7 +27,6 @@ import ProductionWeekOffer from "../../productie/ProductionWeekOffer";
 import ProductionItemPicker from "../../productie/ProductionItemPicker";
 import SearchableChoice from "../../productie/SearchableChoice";
 import { recipeGroups, recipeLinks } from "../../productie/recipeGroups";
-import { EXTRA_TASK_OPERATIONS, combineTaskOperation, splitTaskOperation, type ExtraTaskOperation } from "../../productie/taskOperations";
 import CleaningWeekLane from "../../productie/CleaningWeekLane";
 import { scheduleWedding, type WeddingProductionOrder } from "../../productie/weddingPlanning";
 const OfferManager=dynamic(()=>import("../../bakkerij/recepturen/RecepturenApp"),{loading:()=> <p role="status">Aanbiedingbeheer laden…</p>});
@@ -40,7 +39,7 @@ import { productionDayRhythm, plannedOperation } from "../../productie/dayRhythm
 import { Fragment, createContext, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import {
   addDays, addItem, applyCleaningCommand, BOARDS, completedOutput, dateLabel, DEPARTMENTS,
-  departmentsFor, durationLabel, KIND_LABELS, linkRecipe, moveTask, removePlannedTask, recipeProductionTasks, removeRecipeProduction, SOURCE_LABELS,
+  departmentsFor, durationLabel, KIND_LABELS, linkRecipe, moveTask, removePlannedTask, recipeProductionTasks, removeRecipeProduction,
   STATUS_LABELS, taskIssues, transitionTask, weekLabel, weekNumber, requiredTaskIds,
   mondayOf, matchesProductionSearch, canonicalBoardId, type BoardId, type DepartmentId, type Item, type ItemKind, type ItemUnit,
   type PreviewState, type Task, type TaskStatus, type CleaningCommand,
@@ -681,7 +680,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
     {quickRecipeView&&<ModalFrame title={quickRecipeView.recipeId?"Werkrecept aanpassen":"Recept snel invoeren"} subtitle={quickRecipeView.name} onClose={()=>setQuickRecipeItem(null)}><div className={s.dialogBody}>{live?<QuickRecipeForm key={`${quickRecipeItem}:${quickRecipeTask}`} taskId={quickRecipeTask} item={quickRecipeView} ingredients={ingredientList} getRevision={()=>revisionRef.current} recipeRevision={live.recipeRevision} onSaved={onRefresh||(()=>Promise.resolve())} onClose={()=>setQuickRecipeItem(null)}/>:<p>In de live omgeving kun je hier de basisopbrengst, grondstoffen en werkwijze vastleggen.</p>}</div></ModalFrame>}
     {modal?.type==="offer" && <ModalFrame wide title={`Weekaanbieding · week ${weekNumber(modal.week)}`} subtitle={modal.label} onClose={()=>setModal(null)}><div className={s.dialogBody}><img className={s.offerFull} src={modal.imageUrl} alt={`Weekaanbieding week ${weekNumber(modal.week)}`}/></div><footer className={s.dialogFooter}><button className={s.primaryButton} onClick={()=>setModal(null)}>Terug naar het bord</button></footer></ModalFrame>}
     {modal?.type==="offer-manage" && canManageData && <ModalFrame wide title="Weekaanbieding beheren" onClose={()=>{setModal(null);void onRefresh?.();}}><div className={`${s.dialogBody} ${s.resourceSurface}`}><OfferManager embedded hideTopNav initialTab="beheer" lockedTab="beheer" initialBeheerView="voorpagina" initialOfferWeek={modal.week}/></div><footer className={s.dialogFooter}><button className={s.primaryButton} onClick={()=>{setModal(null);void onRefresh?.();}}>Terug naar het bord</button></footer></ModalFrame>}
-    {modal?.type === "task" && <TaskForm combineDefault={newLayout} onRecipe={itemId=>{setQuickRecipeTask(undefined);setQuickRecipeItem(itemId);}} onNewItem={()=>setModal({type:"item",returnTo:{date:modal.date,departmentId:modal.departmentId,fromCell:modal.fromCell}})} state={state} initial={modal} today={today} onClose={() => setModal(null)} onPlan={command=>plan(command,modal.refreshId)} />}
+    {modal?.type === "task" && <TaskForm week={week} showSunday={weekend} combineDefault={newLayout} onRecipe={itemId=>{setQuickRecipeTask(undefined);setQuickRecipeItem(itemId);}} onNewItem={()=>setModal({type:"item",returnTo:{date:modal.date,departmentId:modal.departmentId,fromCell:modal.fromCell}})} state={state} initial={modal} today={today} onClose={() => setModal(null)} onPlan={command=>plan(command,modal.refreshId)} />}
     {modal?.type === "item" && <ItemForm state={state} onClose={() => setModal(null)} onSave={async next => { const error=await persist(next,"Onderdeel toegevoegd. Je kunt het direct inplannen."); if (!error) setModal(modal.returnTo?{type:"task",...modal.returnTo,itemId:next.items.at(-1)?.id}:null); return error; }} />}
     {correctionTask && correctionItem && <ModalFrame title={correctionItem.name} subtitle="Gemaakt aantal corrigeren" onClose={()=>{if(!saving)setModal(null);}}><CompletedQuantityForm readOnly={live?.readOnlyPreview} key={correctionTask.id} task={correctionTask} item={correctionItem} recipe={state.productionWork?.overrides?.[correctionTask.id] || recipeList.find(recipe=>recipe.id===correctionItem.recipeId)} busy={saving} onCommand={work} onClose={()=>setModal(null)}/></ModalFrame>}
     {completionTask && completionItem && <ModalFrame title={completionItem.name} subtitle="Snel afronden" onClose={()=>{if(!saving)setModal(null);}}><QuickTaskCompletion readOnly={live?.readOnlyPreview} key={completionTask.id} state={state} task={completionTask} item={completionItem} recipes={recipeList} busy={saving} onCommand={work} onClose={()=>setModal(null)}/></ModalFrame>}
@@ -696,7 +695,7 @@ function Search({ value, onChange, placeholder }: { value: string; onChange: (v:
 function DepartmentSelect({ value, onChange }: { value: string; onChange: (v: DepartmentId | "all") => void }) { return <select aria-label="Afdeling" value={value} onChange={e => onChange(e.target.value as DepartmentId | "all")}><option value="all">Alle afdelingen</option>{DEPARTMENTS.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select>; }
 function Empty({ title, text }: { title: string; text: string }) { return <div className={s.empty}><Icon name="box" size={28} /><h2>{title}</h2><p>{text}</p></div>; }
 
-function TaskForm({ combineDefault=false, state, initial, today, onClose, onPlan, onNewItem, onRecipe }: { combineDefault?:boolean; onRecipe:(itemId:string)=>void; onNewItem:()=>void; state: PreviewState; initial: NonNullable<Extract<Modal, { type: "task" }>>; today:string; onClose: () => void; onPlan:(command:PlanCommand)=>Promise<string|undefined> }) {
+function TaskForm({ week, showSunday=false, combineDefault=false, state, initial, today, onClose, onPlan, onNewItem, onRecipe }: { week?:string; showSunday?:boolean; combineDefault?:boolean; onRecipe:(itemId:string)=>void; onNewItem:()=>void; state: PreviewState; initial: NonNullable<Extract<Modal, { type: "task" }>>; today:string; onClose: () => void; onPlan:(command:PlanCommand)=>Promise<string|undefined> }) {
   const {recipes:recipeList,saving}=useContext(WorkspaceContext);
   const refreshing=state.tasks.find(t=>t.id===initial.refreshId);
   const settings=refreshing?currentPlanCommand(state,refreshing):undefined;
@@ -705,17 +704,25 @@ function TaskForm({ combineDefault=false, state, initial, today, onClose, onPlan
   const initialRecipe=recipeList.find(recipe=>recipe.id===initialItem?.recipeId);
   const [error,setError]=useState("");
   const [itemId,setItemId]=useState(initial.itemId || "");
-  const [filter,setFilter]=useState("all");
   const [amount,setAmount]=useState(String(settings?.amount || prior?.quantity || 1));
   const [amountMode,setAmountMode]=useState<"quantity"|"batches">(settings?.amountMode || (!prior && initialItem?.kind!=="activity" && initialRecipe && initialRecipe.yield>0 ? "batches" : "quantity"));
-  const [date,setDate]=useState(initial.date || today);
+  const fixedDay=!!initial.fromCell&&!prior&&!refreshing;
+  const chooseDays=!fixedDay&&!prior&&!refreshing;
+  const selectedWeek=week || mondayOf(initial.date || today);
+  const initialDate=chooseDays && mondayOf(initial.date || today)!==selectedWeek ? selectedWeek : initial.date || today;
+  const [date,setDate]=useState(initialDate);
+  const [selectedDates,setSelectedDates]=useState<string[]>([initialDate]);
+  const repeats=chooseDays && selectedDates.length>1;
+  const dayOptions=Array.from({length:showSunday||selectedDates.includes(addDays(selectedWeek,6))?7:6},(_,index)=>addDays(selectedWeek,index));
+  function toggleDay(value:string) {
+    const next=(selectedDates.includes(value)?selectedDates.filter(day=>day!==value):[...selectedDates,value]).sort();
+    setSelectedDates(next);setDate(next[0] || selectedWeek);setError("");
+  }
   const [departmentId,setDepartmentId]=useState<DepartmentId>(initial.departmentId || "dessert");
   const [includePreparation,setIncludePreparation]=useState(()=>{
     const selected=state.items.find(i=>i.id===initial.itemId),recipe=recipeList.find(r=>r.id===selected?.recipeId);
     return refreshing?!!settings?.preparation:!initial.priorId && !!recipe?.semiFinishedItems?.length && recipe.yield>0;
   });
-  const [customOperation,setCustomOperation]=useState<string|null>(refreshing ? splitTaskOperation(refreshing.operation).base : null);
-  const [extraOperations, setExtraOperations] = useState<ExtraTaskOperation[]>(() => splitTaskOperation(refreshing?.operation || "").extras);
   const [estimatedMinutes, setEstimatedMinutes] = useState(refreshing?.minutes !== undefined ? String(refreshing.minutes) : "");
   const [combine,setCombine]=useState(settings?.preparation?.combine ?? combineDefault);
   const daysBefore=settings?.preparation?.daysBefore ?? 0;
@@ -724,11 +731,11 @@ function TaskForm({ combineDefault=false, state, initial, today, onClose, onPlan
   const item=state.items.find(i=>i.id===itemId),recipe=recipeList.find(r=>r.id===item?.recipeId);
   const pickerItems = useMemo(() => {
     const recipes = new Map(recipeList.map(candidate => [candidate.id, candidate]));
-    return state.items.filter(candidate => !candidate.id.startsWith("wedding:") && (filter === "all" || candidate.kind === filter || !!initial.priorId || !!initial.refreshId)).map(candidate => ({
+    return state.items.filter(candidate => !candidate.id.startsWith("wedding:")).map(candidate => ({
       ...candidate,
       searchValues: recipes.get(candidate.recipeId || "")?.ingredients.map(ingredient => ingredient.name),
     }));
-  }, [state.items, recipeList, filter, initial]);
+  }, [state.items, recipeList]);
   const repairTargets = useMemo(() => {
     const seen = new Set<string>();
     const canonical = item && recipeList.find(recipe => item.id === `recipe:${recipe.id}`);
@@ -746,13 +753,13 @@ function TaskForm({ combineDefault=false, state, initial, today, onClose, onPlan
       : candidate.id.startsWith("recipe:") && seen.has(candidate.id.slice(7)) && recipeList.some(recipe => recipe.id === candidate.id.slice(7)));
   }, [item, recipeList, state.items]);
   const hasPreparation=!!recipe?.semiFinishedItems?.length && !prior;
-  const baseOperation=customOperation ?? plannedOperation(item?.kind,hasPreparation,!!prior);
-  const operation=combineTaskOperation(baseOperation,extraOperations);
-  const preview=useMemo<PlanCommand>(()=>({task:{id:"preview-plan",itemId,departmentId,date,operation,status:"planned",note:"",source:"manual",batchId:"preview-batch",recordsOutput:item?.kind!=="activity",...(estimatedMinutes!==""?{minutes:Number(estimatedMinutes)}:{}),...(prior?{dependsOn:prior.id}:{})},amount:Number(amount),amountMode,
-    ...(includePreparation && hasPreparation?{preparation:{daysBefore,choices,...(combineDefault||settings?.preparation?.combine!==undefined?{combine}: {})}}:{})}),[itemId,departmentId,date,operation,item?.kind,estimatedMinutes,prior,amount,amountMode,includePreparation,hasPreparation,daysBefore,choices,combine,combineDefault,settings?.preparation?.combine]);
-  const proposal=useMemo(()=>preparationProposal(state,recipeList,preview),[state,recipeList,preview]);
+  const operation=refreshing?.operation || plannedOperation(item?.kind,hasPreparation,!!prior);
+  const priorId=prior?.id;
+  const preview:PlanCommand={task:{id:"preview-plan",itemId,departmentId,date,operation,status:"planned",note:"",source:"manual",batchId:"preview-batch",recordsOutput:item?.kind!=="activity",...(estimatedMinutes!==""?{minutes:Number(estimatedMinutes)}:{}),...(priorId?{dependsOn:priorId}:{})},amount:Number(amount),amountMode,...(repeats?{dates:[...selectedDates]}:{}),
+    ...(includePreparation && hasPreparation?{preparation:{daysBefore,choices,...(combineDefault||settings?.preparation?.combine!==undefined?{combine}: {})}}:{})};
+  const proposal=preparationProposal(state,recipeList,preview);
   const review=refreshing?recipePlanChanges(state,recipeList,refreshing,preview):undefined;
-  const fromCell=!!initial.fromCell&&!prior&&!refreshing;
+  const fromCell=fixedDay;
   const categoryContext=initial.departmentId ? departmentName(departmentId) : "";
   const formContext=fromCell ? [categoryContext,dateLabel(date,true)].filter(Boolean).join(" · ") : categoryContext || undefined;
   const dateField=<label className={s.field}>Productiedatum<input type="date" required value={date} min={prior?.date} onChange={e=>setDate(e.target.value)}/></label>;
@@ -788,7 +795,7 @@ function TaskForm({ combineDefault=false, state, initial, today, onClose, onPlan
     setDayInputs({});
     setAmount("1");
     setAmountMode(!prior && selected?.kind!=="activity" && recipe && recipe.yield>0 ? "batches" : "quantity");
-    setCustomOperation(null);setExtraOperations([]);setEstimatedMinutes("");setChoices(defaultPreparationChoices(recipeList, recipe?.id));setError("");
+    setEstimatedMinutes("");setChoices(defaultPreparationChoices(recipeList, recipe?.id));setError("");
     setIncludePreparation(!initial.priorId && !!recipe?.semiFinishedItems?.length && !!recipe && recipe.yield>0);
     if(!initial.departmentId && selected)setDepartmentId(selected.departmentId);
   }
@@ -797,15 +804,15 @@ function TaskForm({ combineDefault=false, state, initial, today, onClose, onPlan
     onRecipe(id);
   }
   async function submit(event:FormEvent<HTMLFormElement>) {
-    event.preventDefault();if(proposal.errors.length){setError(proposal.errors[0]);return;}
+    event.preventDefault();if(chooseDays&&!selectedDates.length){setError("Kies een dag.");return;}if(proposal.errors.length){setError(proposal.errors[0]);return;}
     const data=new FormData(event.currentTarget),id=refreshing?.id || newId("task");
-    const command:PlanCommand={...preview,task:{id,itemId,departmentId,date,operation,status:"planned",note:String(data.get("note")||""),source:(data.get("source")||"manual") as Task["source"],batchId:refreshing?.batchId || prior?.batchId || `batch-${id}`,recordsOutput:refreshing?refreshing.recordsOutput:item?.kind!=="activity" && data.get("output")==="on",
-      ...(estimatedMinutes!==""?{minutes:Number(estimatedMinutes)}:{}),...(String(data.get("dueDate")||"")?{dueDate:String(data.get("dueDate"))}:{}),...(prior?{dependsOn:prior.id}:{})}};
+    const command:PlanCommand={...preview,task:{id,itemId,departmentId,date,operation,status:"planned",note:String(data.get("note")||""),source:refreshing?.source||prior?.source||"manual",batchId:refreshing?.batchId || prior?.batchId || `batch-${id}`,recordsOutput:refreshing?refreshing.recordsOutput:item?.kind!=="activity" && !existingOutput,
+      ...(estimatedMinutes!==""?{minutes:Number(estimatedMinutes)}:{}),...(refreshing?.dueDate||prior?.dueDate?{dueDate:refreshing?.dueDate||prior?.dueDate}:{}),...(prior?{dependsOn:prior.id}:{})}};
     setError(await onPlan(command) || "");
   }
   return <ModalFrame title={refreshing?"Planning bijwerken":prior?"Volgende productiestap":"Productie inplannen"} subtitle={prior?`Na ${prior.operation} · ${dateLabel(prior.date,true)}`:formContext} onClose={onClose}>
     <form onSubmit={submit} onChangeCapture={()=>setError("")}>
-      <div className={s.dialogBody}>
+      <div className={`${s.dialogBody} ${s.quickPlanBody}`}>
         <ProductionItemPicker label="Wat wil je maken?" required value={itemId} onChange={chooseItem} disabled={!!prior || !!refreshing} items={pickerItems}/>
         <div className={s.planQuickLinks}>
           {item && item.kind!=="activity" && <button type="button" className={s.textLink} disabled={saving} onClick={()=>editRecipe(item.id)}><Icon name="book" size={14}/>{item.recipeId?"Recept aanpassen":"Recept snel invoeren"}</button>}
@@ -816,9 +823,12 @@ function TaskForm({ combineDefault=false, state, initial, today, onClose, onPlan
           {recipe.yield>0 && amountMode==="quantity" && <button type="button" className={s.textLink} onClick={()=>{setError("");setAmountMode("batches");setAmount("1");}}>1× basisrecept · {quantity(recipe.yield)} {recipe.unit}</button>}
         </div>}
         <div className={s.formGrid}>
-          <label className={s.field}>{amountMode==="batches"?"Aantal basisrecepten":`Aantal (${item?.unit || "eenheid"})`}<input type="number" min="0.000001" max="1000000" step="any" required value={amount} onChange={e=>setAmount(e.target.value)}/></label>
-          {!fromCell&&dateField}
+          <label className={s.field}>{amountMode==="batches"?`Basisrecept ×${repeats?" per dag":""}`:`Aantal${repeats?" per dag":""} (${item?.unit || "eenheid"})`}<input type="number" min="0.000001" max="1000000" step="any" required value={amount} onChange={e=>setAmount(e.target.value)}/></label>
+          {!initial.departmentId&&<label className={s.field}>Afdeling<select value={departmentId} onChange={e=>setDepartmentId(e.target.value as DepartmentId)}>{DEPARTMENTS.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>}
+          {!fromCell&&!chooseDays&&dateField}
         </div>
+        {chooseDays&&<fieldset className={s.planDays}><legend>Dagen</legend><div>{dayOptions.map(value=><label key={value} className={selectedDates.includes(value)?s.planDaySelected:undefined}><input type="checkbox" checked={selectedDates.includes(value)} onChange={()=>toggleDay(value)}/><span>{dateLabel(value)}</span></label>)}</div></fieldset>}
+        {repeats&&<p className={s.planRepeatNotice} role="status"><Icon name="warning" size={14}/>Let op, je plant dit recept {selectedDates.length} keer in, met dezelfde hoeveelheid per dag.</p>}
         {item && amountMode==="batches" && proposal.quantity>0 && !proposal.errors.length && <p className={s.calculatedAmount} role="status">{quantity(Number(amount))}× basisrecept = <strong>{quantity(proposal.quantity)} {item.unit}</strong></p>}
         {hasPreparation && <section className={s.preparationSection}>
           <label className={s.checkboxRow}><input type="checkbox" checked={includePreparation} disabled={!(recipe!.yield>0)} onChange={e=>setIncludePreparation(e.target.checked)}/><span>Halffabricaten apart meenemen</span></label>
@@ -837,7 +847,6 @@ function TaskForm({ combineDefault=false, state, initial, today, onClose, onPlan
                   </div>
                   <button type="button" className={s.textLink} disabled={saving} aria-label={`Recept aanpassen ${row.name}`} onClick={()=>editRecipe(row.itemId)}><Icon name="book" size={13}/>Recept aanpassen</button>
                   {row.included&&<div className={s.preparationWork}>
-                    <TaskOperationOptions label={`Extra handelingen ${row.name}`} value={splitTaskOperation(row.operation).extras} onChange={extras=>updateChoice(row.recipeId,{operation:combineTaskOperation(splitTaskOperation(row.operation).base,extras)})}/>
                     <label className={s.field}>Geschatte tijd (min)<input aria-label={`Geschatte tijd ${row.name}`} type="number" min="0" max="1440" step="any" value={row.minutes??""} onChange={event=>updateChoice(row.recipeId,{minutes:event.target.value===""?null:Number(event.target.value)})} placeholder="Optioneel"/></label>
                   </div>}
                 </details>
@@ -849,36 +858,16 @@ function TaskForm({ combineDefault=false, state, initial, today, onClose, onPlan
           </>}
         </section>}
         <details className={s.planDetails}>
-          <summary>Meer opties</summary>
-          {fromCell&&dateField}
-          {!prior&&!refreshing&&<label className={s.field}>Toon in keuzelijst<select value={filter} onChange={e=>{setFilter(e.target.value);if(e.target.value!=="all"&&item?.kind!==e.target.value)chooseItem("");}}><option value="all">Alle producten en onderdelen</option><option value="product">Eindproducten</option><option value="component">Halffabricaten</option><option value="activity">Werkzaamheden</option></select></label>}
-          <div className={s.formGrid}>
-            <label className={s.field}>Afdeling<select value={departmentId} onChange={e=>setDepartmentId(e.target.value as DepartmentId)}>{DEPARTMENTS.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
-            <label className={s.field}>Benodigd op (optioneel)<input name="dueDate" type="date" defaultValue={refreshing?.dueDate||prior?.dueDate}/></label>
-          </div>
-          {item&&<section className={s.taskWorkChoices} aria-label="Handelingen en tijdsinschatting">
-            <div className={s.formGrid}>
-              <label className={s.field}>Handeling<input name="operation" maxLength={80} required value={baseOperation} onChange={event=>setCustomOperation(event.target.value)}/></label>
-              <label className={s.field}>Geschatte tijd (min, optioneel)<input name="minutes" type="number" min="0" max="1440" step="any" value={estimatedMinutes} onChange={event=>setEstimatedMinutes(event.target.value)} placeholder="Bijv. 45"/></label>
-            </div>
-            {item.kind!=="activity"&&<TaskOperationOptions value={extraOperations} onChange={setExtraOperations}/>}
-          </section>}
-          <label className={s.field}>Herkomst<select name="source" defaultValue={refreshing?.source||prior?.source||"manual"}>{Object.entries(SOURCE_LABELS).map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></label>
-          <label className={s.field}>Korte opmerking<textarea name="note" rows={2} maxLength={1000} defaultValue={refreshing?.note||""}/></label>
-          {item&&item.kind!=="activity"&&<label className={s.checkboxRow}><input name="output" type="checkbox" defaultChecked={refreshing?refreshing.recordsOutput:!existingOutput} disabled={!!existingOutput||!!refreshing}/><span>Gemaakte hoeveelheid registreren</span></label>}
+          <summary>Tijd & notitie</summary>
+          {item&&<label className={s.field}>Geschatte tijd per dag (min)<input name="minutes" type="number" min="0" max="1440" step="any" value={estimatedMinutes} onChange={event=>setEstimatedMinutes(event.target.value)} placeholder="Optioneel"/></label>}
+          <label className={s.field}>Notitie<textarea name="note" rows={2} maxLength={1000} defaultValue={refreshing?.note||""}/></label>
         </details>
         {review&&<PlanChanges changes={review.changes}/>}
         {(error||!!item&&proposal.errors.length>0)&&<div className={s.formError} role="alert"><p>{error||proposal.errors[0]}</p>{repairTargets.length>0&&<div className={s.recipeRepairLinks}>{repairTargets.map(target=><button type="button" key={target.id} disabled={saving} onClick={()=>editRecipe(target.id)}><Icon name="book" size={14}/>{target.name}</button>)}</div>}</div>}
       </div>
-      <footer className={s.dialogFooter}><button type="button" className={s.secondaryButton} onClick={onClose}>Annuleren</button><button type="submit" className={s.primaryButton} disabled={saving||!item||proposal.errors.length>0}>{saving?"Opslaan…":refreshing?"Planning bijwerken":"Inplannen"}</button></footer>
+      <footer className={s.dialogFooter}><button type="button" className={s.secondaryButton} onClick={onClose}>Annuleren</button><button type="submit" className={s.primaryButton} disabled={saving||!item||chooseDays&&!selectedDates.length||proposal.errors.length>0}>{saving?"Opslaan…":refreshing?"Planning bijwerken":repeats?`${selectedDates.length} dagen inplannen`:"Inplannen"}</button></footer>
     </form>
   </ModalFrame>;
-}
-
-function TaskOperationOptions({ value, onChange, label = "Extra handelingen" }: { value: ExtraTaskOperation[]; onChange: (value: ExtraTaskOperation[]) => void; label?: string }) {
-  return <fieldset className={s.operationOptions}><legend>{label}</legend>{EXTRA_TASK_OPERATIONS.map(option => <label key={option.id}>
-    <input type="checkbox" checked={value.includes(option.id)} onChange={event => onChange(event.target.checked ? [...value, option.id] : value.filter(id => id !== option.id))}/>{option.label}
-  </label>)}</fieldset>;
 }
 
 function PlanChanges({changes}:{changes:ReturnType<typeof recipePlanChanges>["changes"]}) {
