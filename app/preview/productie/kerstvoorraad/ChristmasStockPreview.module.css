@@ -97,6 +97,7 @@
 .primary, .secondary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 14px; min-height: 40px; border-radius: 6px; font-weight: 700; font-size: .85em; text-decoration: none; }
 .primary { background: #1b3343; color: white; border: 1px solid #1b3343; }
 .secondary { background: white; color: #1b3343; border: 1px solid #b8c7b8; }
+.sourceNote { margin: 8px 0 0; color: #687466; font-size: .7em; line-height: 1.4; flex-shrink: 0; }
 .bottomBar { display: flex; gap: 12px; align-items: center; padding: 13px 0; margin-top: 12px; border-top: 1px solid var(--line); font-size: .8em; flex-shrink: 0; }
 .bottomBar a { display: flex; align-items: center; gap: 8px; color: #1b3343; text-decoration: none; font-weight: 700; white-space: nowrap; }
 .bottomBar > span { color: #71806e; font-size: .78em; margin-right: auto; line-height: 1.4; }

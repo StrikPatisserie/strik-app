@@ -508,6 +508,7 @@ export default function ChristmasStockPreview({
         </table>{!filtered.length && <p className={s.empty}>Geen producten in deze selectie.</p>}</div>
         <div className={s.pager}><span>{filtered.length} producten · aantallen in stuks, tenzij anders vermeld</span><div><button type="button" className={s.iconButton} disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)} aria-label="Vorige producten"><Icon name="back" /></button><b>{currentPage + 1} / {lastPage + 1}</b><button type="button" className={s.iconButton} disabled={currentPage === lastPage} onClick={() => setPage(currentPage + 1)} aria-label="Volgende producten"><Icon name="arrow" /></button></div></div>
       </section>
+      <p className={s.sourceNote}>* Dit zijn alle verkoopcijfers van 2025, exclusief Wijchen.</p>
       <footer className={s.bottomBar}>
         <Link href={returnHref}><Icon name="back" size={17} />Feestdagen</Link>
         <span role="status">{error || message || (shared ? "Bijstellingen gedeeld · automatisch bijgewerkt" : "Klik op een product of prognose om bij te stellen · bijstellingen bewaard op deze browser")}</span>
