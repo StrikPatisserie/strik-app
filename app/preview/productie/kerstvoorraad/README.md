@@ -146,6 +146,6 @@ De bestaande 10–12p-productcode blijft de sleutel voor receptkoppeling en bijs
 
 ### Categorieën en petiteenheden
 
-De handmatig gekozen categorieën gelden ook voor eerder opgeslagen bronregels: roomboter speculaasstaaf en amandelletter bij Bakkant; gewone kruidcake bij Taart; puddingbroodje bij Gebak; macarons, mergpijpjes, losse brownies/blondies en bokkepootjes bij Overig. Browniegebak, brownietaarten en kerstkruidcake houden hun eigen categorie. De bestaande artikelcodes en samenvoegingen blijven behouden.
+De handmatig gekozen categorieën gelden ook voor eerder opgeslagen bronregels: roomboter speculaasstaaf en amandelletter bij Bakkant; gewone kruidcake bij Taart; puddingbroodje bij Gebak; macarons, mergpijpjes, losse brownies/blondies en bokkepootjes bij Overig. Browniegebak en brownietaarten houden hun eigen categorie. Kerstkruidcake (Cash-it 40842, Bake-it 2519) telt mee in Kruidcake bij Taart, met behoud van alle vier de bronartikelen voor dagelijks verloop en week 52. De bestaande artikelcodes en samenvoegingen blijven behouden.
 
 Petit-DV-prognoses vermelden expliciet stuks (of zakjes bij petit chou). De bekende doosjes van 6 en 15 worden vóór de opslag naar losse stuks omgerekend. De productdetails tonen de controleberekening: oorspronkelijke doosjes × inhoud = verkochte losse stuks vóór groei.

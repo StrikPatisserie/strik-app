@@ -246,8 +246,8 @@ export function combineKruidcakes(products: SalesProduct[]): SalesProduct[] {
   return combineArticleFamily(products, {
     name: "Kruidcake",
     group: "taart",
-    codes: ["40350", "40821", "40861"],
-    note: "Kruidcake, Sint Pepernoten Kruidcake en Seizoens Kruidcake samengeteld. Alle drie de artikelnummers blijven meetellen in het dagelijkse verloop.",
+    codes: ["40350", "40821", "40861", "40842"],
+    note: "Kruidcake, Sint Pepernoten Kruidcake, Seizoens Kruidcake en Kerst Kruidcake samengeteld. Alle vier de artikelnummers blijven meetellen in het dagelijkse verloop.",
   });
 }
 
