@@ -31,6 +31,7 @@ const overview = load('app/preview/productie/kerstvoorraad/productionOverview.ts
 const stockCount = load('app/preview/productie/kerstvoorraad/stockCount.ts');
 const weekly = load('app/preview/productie/kerstvoorraad/week52.ts', { './variants': variants });
 const adjustments = load('app/preview/productie/kerstvoorraad/adjustments.ts');
+const debtorImport = load('app/preview/productie/kerstvoorraad/debtorImport.ts');
 const product = id => ({ id, name: id, group: 'gebak', department: 'patisserie', cash: 20, bake: 30, cashCode: '10', bakeCode: '20', needsSalesReview: false, note: '', folderProduct: false });
 const ready = (recipeId, target, stock = 0, phase = 'components') => ({ recipeId, target, stock, phase, checked: true, storageChecked: true });
 function run(products, choices, recipes = examples.exampleRecipes, stocks = examples.exampleStocks) {
@@ -1357,4 +1358,99 @@ test('specific brownie pastries and cakes, Christmas cake and all grouped articl
   assert.equal(result.group,'taart');
   assert.deepEqual(Array.from(salesArticles.salesArticleCodes(result)).sort(),['40350','40821','40861']);
   assert.equal(forecast.productProjection(result,forecast.emptyChoice(),10).period,1093);
+});
+
+
+test('delivery-date reports read net quantities despite shifted columns and skip category totals', () => {
+  const rows = [[], ['Afleverdatum van t/m', '17/11/2025'],
+    ['', '', '', 'Aantal', 'Aantal', 'Aantal', 'Omzet'],
+    ['Artikel', '', '', 'verkocht', 'Retour', 'Totaal', 'Totaal'],
+    ['    10100 000', null, 'Bossche Bol', 12, 2, 10, 345.67],
+    ['Gebak', null, null, 12, 2, 10, 345.67],
+    ['    40800 000', null, 'Speculaasjes', -6, 0, -6, -12],
+  ];
+  const lines = debtorImport.parseDebtorReport(rows);
+  assert.equal(lines.length, 2);
+  assert.equal(lines[0].quantity, 10);
+  assert.equal(lines[0].name, 'Bossche Bol');
+  assert.equal(lines[0].code, '10100');
+  assert.equal(lines[0].subcode, '000');
+  assert.equal(lines[0].row, 5);
+  assert.equal(lines[1].quantity, -6);
+  assert.throws(() => debtorImport.parseDebtorReport([...rows, rows[4]]), /Dubbele/);
+  assert.throws(() => debtorImport.parseDebtorReport([...rows.slice(0, 4), ['10100 000', null, 'Bossche Bol', 12, 0, null, 345.67]]), /afzet/);
+  assert.throws(() => debtorImport.parseDebtorReport([['Artikel', 'Bedrag']]));
+});
+
+const debtorLine = (code, name, quantity, subcode = '000') => ({ code, name, quantity, subcode, row: 12 });
+
+test('corrected debtor sales use current article numbers, stable IDs and precise sizes', () => {
+  const large = { ...product('large'), name: 'Red Velvet · 10–12p', salesVariant: '10–12p', cashCode: '20100', bakeCode: '201', cash: 80, bake: 26, week52: { cash: 20, bake: 1 } };
+  const small = { ...large, id: 'small', name: 'Red Velvet · 6–8p', salesVariant: '6–8p', cash: 60, bake: 14 };
+  const stale = { ...product('stale'), cashCode: '888', bakeCode: '20100', bake: 99 };
+  const input = [large, small, stale];
+  const period = [debtorLine('20100', 'Red Velvet 10-12 pers. (rond)', 21, '732'), debtorLine('20100', 'Red Velvet 6-8', 11, '731')];
+  const weekly = [debtorLine('20100', 'Red Velvet 10-12 pers. (rond)', 2, '732'), debtorLine('20100', 'Red Velvet 6-8', 5, '731')];
+  const updated = debtorImport.replaceDebtorSales(input, period, weekly);
+  assert.equal(updated.assignments.length, 2);
+  assert.equal(updated.products[0].bake, 21);
+  assert.equal(updated.products[1].bake, 11);
+  assert.equal(updated.products[2].bake, 0);
+  assert.equal(updated.products[0].cash, 80);
+  assert.equal(updated.products[0].week52.cash, 20);
+  assert.equal(updated.products[0].week52.bake, 2);
+  assert.equal(updated.products[0].id, large.id);
+  assert.equal(updated.products[0].debtorSources[0].subcode, '732');
+  assert.equal(large.bake, 26);
+  assert.equal(JSON.stringify(debtorImport.replaceDebtorSales(updated.products, period, weekly).products), JSON.stringify(updated.products));
+});
+
+test('seasonal aliases and placeholder articles never duplicate corrected debtor sales', () => {
+  const current = { ...product('current'), name: 'Seizoens Cheese Punt (Appel)', cashCode: '10430', cash: 100 };
+  const old = { ...current, id: 'old', name: 'Seizoens Cheese Punt (Framboos)', cash: null, bake: 43 };
+  const pp = { ...product('pp'), name: 'Marsepeintaart pp', cashCode: '9999999999' };
+  const unicorn = { ...pp, id: 'unicorn', name: 'Unicorn' };
+  const updated = debtorImport.replaceDebtorSales([current, old, pp, unicorn], [
+    debtorLine('10430', 'Seizoens Cheese Punt (Champagne-Aardbei)', 44),
+    debtorLine('9999999999', 'Marsepeintaart pp', 150),
+  ]).products;
+  assert.equal(updated[0].bake, 44);
+  assert.equal(updated[1].bake, 0);
+  assert.equal(updated[2].bake, 150);
+  assert.equal(updated[3].bake, 0);
+  assert.throws(() => debtorImport.replaceDebtorSales([pp, unicorn], [debtorLine('9999999999', 'Unknown cake', 5)]), /nog koppelen/);
+  assert.throws(() => debtorImport.replaceDebtorSales([current], [debtorLine('12345', 'Unknown cake', 5)]), /nog koppelen/);
+});
+
+test('family members retain their source articles, and boxed sales convert to pieces once', () => {
+  const memberA = { ...product('member-a'), name: 'Taart A', cashCode: '25001', cash: 5, bake: 2 };
+  const memberB = { ...memberA, id: 'member-b', name: 'Taart B', cashCode: '25002', cash: 7 };
+  const family = { ...memberA, id: 'family', name: 'Marsepeintaarten', cash: 12, bake: 4, members: [memberA, memberB] };
+  const boxed = { ...product('box'), name: 'Petit Fours (6st)', cashCode: '65100', cash: 10, bake: 55 };
+  const rows = debtorImport.replaceDebtorSales([family, boxed], [
+    debtorLine('25001', 'Taart A', 3), debtorLine('25002', 'Taart B', 4), debtorLine('65100', 'Petit Fours (6st)', 58),
+  ]).products;
+  assert.equal(rows[0].bake, 7);
+  assert.equal(rows[0].members[0].bake, 3);
+  assert.equal(rows[0].members[1].cashCode, '25002');
+  assert.equal(rows[0].debtorSources.length, 2);
+  const normalized = petitProducts.normalizePetitProducts(rows)[1];
+  assert.equal(normalized.unitsPerSale, 6);
+  assert.equal(forecast.productProjection(normalized, forecast.emptyChoice(), 0).period, (10 + 58) * 6);
+});
+
+test('weekly correction preserves unknown cash coverage and rejects mismatched weekly sources', () => {
+  const item = { ...product('bol'), name: 'Bossche Bol', cashCode: '10100', week52: { cash: 5, bake: 18 } };
+  const unknown = { ...product('unknown'), cash: null, bake: null, cashCode: 'unavailable' };
+  const line = debtorLine('10100', 'Bossche Bol', 100);
+  const rows = debtorImport.replaceDebtorSales([item, unknown], [line], [ { ...line, quantity: 20 } ]).products;
+  assert.equal(rows[0].week52.cash, 5);
+  assert.equal(rows[0].week52.bake, 20);
+  assert.equal(rows[1].week52, undefined);
+  assert.equal(debtorImport.replaceDebtorSales([item], [line]).products[0].week52.bake, 18);
+  assert.throws(() => debtorImport.replaceDebtorSales([item], [line], [ { ...line, quantity: 101 } ]), /groter/);
+  assert.throws(() => debtorImport.replaceDebtorSales([item], [line], [ { ...line, subcode: '999' } ]), /ontbreekt/);
+  const ignored = debtorImport.replaceDebtorSales([item], [line, debtorLine('310100', 'Bezorgkosten Standaard', 6)]);
+  assert.equal(ignored.ignored.length, 1);
+  assert.equal(ignored.products[0].bake, 100);
 });

@@ -15,6 +15,7 @@ export type SalesProduct = {
   articleAmbiguous?: boolean;
   members?: SalesProduct[];
   combinedFlan?: { cashCodes: string[] };
+  debtorSources?: { code: string; subcode: string; name: string; quantity: number; row: number }[];
   articleGroup?: string;
   salesVariant?: string;
   salesName?: string;

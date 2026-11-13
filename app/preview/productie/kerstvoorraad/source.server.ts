@@ -7,6 +7,7 @@ import { christmasProducts } from "../../../kerst-voor-bedrijven/christmasProduc
 import articleCatalog from "../../../data/strik-articles-2026.json";
 import type { SalesProduct } from "./forecast";
 import { buildSalesAssortment } from "./assortment";
+import { parseDebtorReport, replaceDebtorSales } from "./debtorImport";
 import { todayInAmsterdam } from "./campaignNeed";
 import { attachWeek52Sales, type WeeklySalesLine } from "./week52";
 
@@ -27,15 +28,27 @@ export async function christmasForecastSource(): Promise<{ products: SalesProduc
     }
     const cash = lines(workbook, "cash it week 47tm53 uitgesplits", "aantal verkocht");
     const bake = lines(workbook, "bake it debiteuren 47tm53 uitge", "netto productie aantallen verkocht 2025");
-    const products = buildSalesAssortment(cash, bake, articleCatalog, christmasProducts);
+    // The previous export supplies stable IDs and historical Cash-it names.
+    // Its debtor quantities are replaced below by the delivery-date report.
+    let products = buildSalesAssortment(cash, bake, articleCatalog, christmasProducts);
+    let week52Error: string | undefined;
     try {
       const weeklyBytes = await readFile(join(homedir(), "Downloads", "KERST 2025", "week 52 kerst.xlsx"));
       const weekly = XLSX.read(weeklyBytes, { type: "buffer" });
-      return { products: attachWeek52Sales(products, lines(weekly, "cash it week 52 kassa 2025", "aantal verkocht"), lines(weekly, "week 52 2025 bake it debiteuren", "netto productie aantallen verkocht 2025")), today };
+      products = attachWeek52Sales(products, lines(weekly, "cash it week 52 kassa 2025", "aantal verkocht"), []);
     } catch {
-      return { products, today, week52Error: "De week-52-Excel kon niet worden gelezen. Controleer week 52 kerst.xlsx." };
+      week52Error = "De week-52-Excel kon niet worden gelezen. Controleer week 52 kerst.xlsx.";
     }
+    const debtorBytes = await readFile(join(homedir(), "Downloads", "KERST 2025", "debiteuren 2025.xls"));
+    const debtors = XLSX.read(debtorBytes, { type: "buffer" });
+    const report = (name: string) => {
+      const sheet = debtors.Sheets[name];
+      if (!sheet) throw Error(`Debiteurentabblad ontbreekt: ${name}`);
+      return parseDebtorReport(XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: null }));
+    };
+    const corrected = replaceDebtorSales(products, report("Bake it debiteuren wk 47 tm 53"), report("Week van Kerst"));
+    return { products: corrected.products, today, ...(week52Error ? { week52Error } : {}) };
   } catch (error) {
-    return { products: [], today, error: error instanceof Error && error.message.includes("kolom") ? error.message : "De lokale verkoop-Excel kon niet worden gelezen. Controleer de map KERST 2025 in Downloads." };
+    return { products: [], today, error: error instanceof Error && /kolom|[Dd]ebiteur|Week.52/.test(error.message) ? error.message : "De lokale verkoop-Excel kon niet worden gelezen. Controleer de map KERST 2025 in Downloads." };
   }
 }
