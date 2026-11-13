@@ -24,6 +24,7 @@ const overview = load('app/preview/productie/kerstvoorraad/productionOverview.ts
 const variants = load('app/preview/productie/kerstvoorraad/variants.ts');
 const assortment = load('app/preview/productie/kerstvoorraad/assortment.ts', { './forecast': forecast, './variants': variants });
 const assorted = load('app/preview/productie/kerstvoorraad/assortedPastries.ts');
+const flans = load('app/preview/productie/kerstvoorraad/flanVariants.ts');
 const campaign = load('app/preview/productie/kerstvoorraad/campaignNeed.ts', { '../../../productie/planning': planning, '../../../productie/inventory': inventory, './assortedPastries': assorted });
 const weekly = load('app/preview/productie/kerstvoorraad/week52.ts', { './variants': variants });
 const adjustments = load('app/preview/productie/kerstvoorraad/adjustments.ts');
@@ -830,4 +831,92 @@ test('assorted dispatch honors dates, returns, unmapped replacements and hidden 
   const partial=campaign.remainingNeed(row,100,campaignReceipts([{...pastryDay('2026-11-16',15),unknownLines:2}]),'2026-11-17');
   assert.equal(partial.unresolvedLines,2);
   assert.match(partial.note,/bonregels controleren/);
+});
+
+const flan = (id, variant, cash, bake = 0, extra = {}) => ({ ...product(id), name: `Kersenvlaai · ${variant}`, salesName: 'Kersenvlaai', salesVariant: variant,
+  cashCode: '30103', bakeCode: '305', cash, bake, group: 'slof', articleAmbiguous: true, ...extra });
+
+test('large flans sum 10–12p and cut 14-point whole flans before forecast rounding; 8p stays separate', () => {
+  const large = flan('large','10–12p',60.9,65,{week52:{cash:7.25,bake:3}});
+  const cut = flan('cut','gesneden 14 punten',null,90,{week52:{cash:0,bake:4}});
+  const small = flan('small','8p',158,3,{week52:{cash:26,bake:0}});
+  const input=[cut,small,large], before=JSON.stringify(input);
+  const result=flans.combineLargeFlans(input), merged=result.find(p=>p.combinedFlan);
+  assert.equal(result.length,2); assert.equal(merged.id,'large');
+  assert.equal(merged.name,'Kersenvlaai · 10–12/14p');
+  assert.equal(merged.cash,60.9); assert.equal(merged.bake,155);
+  assert.equal(merged.week52.cash,7.25); assert.equal(merged.week52.bake,7);
+  assert.equal(merged.members.length,2); assert.equal(merged.articleAmbiguous,true);
+  assert.equal(result.find(p=>p.id==='small'),small);
+  assert.equal(forecast.productProjection(merged,forecast.emptyChoice(),10).period,238);
+  assert.equal(forecast.productProjection(merged,forecast.emptyChoice(),10).week52,16);
+  assert.equal(forecast.productProjection(merged,{...forecast.emptyChoice(),adjustment:{periodTotal:300,week52Total:50}},10).period,300);
+  assert.equal(JSON.stringify(input),before);
+  assert.equal(JSON.stringify(flans.combineLargeFlans(result)),JSON.stringify(result));
+});
+
+test('other flan flavors, unknown subcodes and smaller sizes do not get merged accidentally', () => {
+  const small=flan('small','8p',8), unknown=flan('unknown','per punt',5);
+  const special=flan('special','gesneden 14 punten glutenvrij',3);
+  const apple=flan('apple','14p',2,0,{salesName:'Appelvlaai 14p',name:'Appelvlaai 14p',cashCode:'30101'});
+  const cherry=flan('cherry','10–12p',3);
+  const single=flan('single','',null,1,{name:'Perenvlaai 10-12p',salesName:'Perenvlaai 10-12p',cashCode:'30107'});
+  const cut=flan('pear-cut','gesneden 14 punten',null,46,{name:'Perenvlaai 10-12p · gesneden 14 punten',salesName:'Perenvlaai 10-12p',cashCode:'30107'});
+  const result=flans.combineLargeFlans([small,unknown,special,apple,cherry,single,cut]);
+  assert.equal(result.find(p=>p.id==='small'),small); assert.equal(result.find(p=>p.id==='unknown'),unknown);
+  assert.equal(result.find(p=>p.id==='special'),special);
+  assert.equal(result.find(p=>p.id==='cherry'),cherry);
+  assert.equal(result.find(p=>p.id==='apple').cash,2);
+  assert.equal(result.find(p=>p.id==='single').bake,47);
+  assert.equal(result.find(p=>p.id==='single').cash,null);
+  assert.equal(result.find(p=>p.id==='single').name,'Perenvlaai · 10–12/14p');
+});
+
+test('an explicit small subcode overrides a large base name and seasonal aliases require the known article', () => {
+  const small=flan('small','8p',6,0,{salesName:'Kersenvlaai 10-12p',name:'Kersenvlaai 10-12p · 8p'});
+  const a=flan('autumn','10–12p',23.2,null,{salesName:'Herfstvlaai Caramel-Hazelnoot',cashCode:'30801'});
+  const b=flan('seasonal','10–12p',null,8,{salesName:'Seizoensvlaai Caramel-Hazelnoot',cashCode:'30801'});
+  const result=flans.combineLargeFlans([small,a,b]);
+  assert.equal(result.length,2); assert.equal(result[0],small);
+  assert.equal(result[1].cash,23.2); assert.equal(result[1].bake,8);
+  const unverified=flans.combineLargeFlans([{...a,cashCode:'99'},{...b,cashCode:'99'}]);
+  assert.equal(unverified.length,2);
+});
+
+test('incomplete weekly coverage and unknown flan units remain explicit', () => {
+  const a=flan('a','10–12p',5,0,{week52:{cash:1,bake:0}}),b=flan('b','14p',4);
+  const merged=flans.combineLargeFlans([a,b])[0];
+  assert.match(merged.week52.issue,/ontbreekt/);
+  assert.equal(forecast.productProjection(merged,forecast.emptyChoice(),10).week52,null);
+  const unknown=flans.combineLargeFlans([a,{...b,unitUnconfirmed:true}])[0];
+  assert.equal(unknown.unitUnconfirmed,true);
+  assert.equal(forecast.productProjection(unknown,forecast.emptyChoice(),10).period,null);
+});
+
+test('daily flan receipts sum unique codes once, but never subtract an indistinguishable 8p article', () => {
+  const a=flan('a','10–12p',20,0),b=flan('b','14p',30,0,{cashCode:'30109'});
+  const receipts={mode:'live',available:true,days:[{date:'2026-11-16',importedAt:'2026-11-16T18:00:00Z',unknownLines:0,lines:[
+    {article:'30103',description:'Kersenvlaai',quantity:3},{article:'30109',description:'Kersenvlaai gesneden',quantity:4}]}]};
+  const merged=flans.combineLargeFlans([a,b])[0];
+  const need=campaign.remainingNeed(merged,100,receipts,'2026-11-17');
+  assert.equal(need.issued,7); assert.equal(need.remaining,93);
+  const small=flan('small','8p',20);
+  const ambiguous=flans.combineLargeFlans([a,b,small]).find(p=>p.combinedFlan);
+  assert.equal(campaign.remainingNeed(ambiguous,100,receipts,'2026-11-17').remaining,null);
+  assert.match(campaign.remainingNeed(ambiguous,100,receipts,'2026-11-17').note,/Vlaaiformaat/);
+  const replacement=forecast.productFor2026(merged,{...forecast.emptyChoice(),adjustment:{name2026:'Nieuwe vlaai',cashCode2026:'88000'}});
+  assert.equal(replacement.members,undefined); assert.equal(replacement.combinedFlan,undefined);
+  assert.equal(campaign.remainingNeed(replacement,100,receipts,'2026-11-17').issued,0);
+});
+
+
+test('a replacement cannot silently reuse the secondary code of a combined flan', () => {
+  const a=flan('a','10–12p',20),b=flan('b','14p',30,0,{cashCode:'30109'});
+  const merged=flans.combineLargeFlans([a,b])[0];
+  const other={...product('other'),cashCode:'55555'};
+  const choices={other:{...forecast.emptyChoice(),adjustment:{name2026:'Ander product',cashCode2026:'30109'}}};
+  const mapped=forecast.mappedProductsFor2026([merged,other],choices,10);
+  assert.equal(mapped[0].articleAmbiguous,true); assert.equal(mapped[1].articleAmbiguous,true);
+  const hidden=forecast.mappedProductsFor2026([merged,other],{other:{...choices.other,adjustment:{...choices.other.adjustment,hidden:true}}},10);
+  assert.equal(hidden[0].articleAmbiguous,false);
 });

@@ -57,13 +57,14 @@ export function remainingNeed(product: SalesProduct, forecast: number | null, re
   if (forecast === null) return unknown("Prognose controleren");
   if (today <= CAMPAIGN_START) return { remaining: forecast, issued: 0, through: null, note: "Start 16 nov" };
   if (window.problem) return unknown(window.problem);
-  if (product.members) return unknown("Varianten op bon koppelen");
-  if (product.articleAmbiguous) return unknown("Artikel/formaat koppelen");
+  if (product.members && !product.combinedFlan) return unknown("Varianten op bon koppelen");
+  if (product.articleAmbiguous) return unknown(product.combinedFlan ? "Vlaaiformaat op bon controleren" : "Artikel/formaat koppelen");
   if (product.unitUnconfirmed) return unknown("Eenheid op bon controleren");
   if (!product.cashCode || product.cashCode === "9999999999" || product.cashCode === "-") return unknown("Bonartikel koppelen");
   const article = articleKey(product.cashCode);
   if (article === ASSORTED_ARTICLE) return unknown("Verdeling gesorteerd controleren");
-  const issued = Math.round((window.quantities.get(article) ?? 0) * 1e6) / 1e6;
+  const articles = product.combinedFlan?.cashCodes || [article];
+  const issued = Math.round([...new Set(articles)].reduce((total, code) => total + (window.quantities.get(code) ?? 0), 0) * 1e6) / 1e6;
   const remaining = Math.max(0, Math.ceil(Math.round((forecast - issued) * 1e6) / 1e6));
   const assortedIssued = window.assortedQuantities?.get(article) ?? 0;
   const provisional = !!window.unresolvedLines || assortedIssued !== 0;

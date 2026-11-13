@@ -14,6 +14,7 @@ import { includeInStockOverview, salesVolume, stockCategories } from "./assortme
 import { CAMPAIGN_START, campaignWindow, exampleCampaignReceipts, remainingNeed, todayInAmsterdam, validCampaignDays, type CampaignReceipts, type RemainingNeed } from "./campaignNeed";
 import { exampleProduction, productInventory, stockDisplay, type ProductionReading, type StockRow, type StockOverview } from "./productionOverview";
 import { allocateAssortedSales } from "./assortedPastries";
+import { combineLargeFlans } from "./flanVariants";
 import s from "./ChristmasStockPreview.module.css";
 
 const number = (value: number | null | undefined) => value == null ? "—" : value.toLocaleString("nl-NL", { maximumFractionDigits: 2 });
@@ -182,7 +183,7 @@ export default function ChristmasStockPreview({
   products: sourceProducts, today, error, week52Error, production, campaignReceipts, productionError, sharedSettings,
   returnHref = "/preview/productie?view=feestdagen", planningHref = "/preview/productie",
 }: Props) {
-  const products = useMemo(() => allocateAssortedSales(sourceProducts), [sourceProducts]);
+  const products = useMemo(() => combineLargeFlans(allocateAssortedSales(sourceProducts)), [sourceProducts]);
   const shared = !!sharedSettings;
   const sharedRef = useRef(sharedSettings);
   const savingRef = useRef(false);

@@ -10,6 +10,7 @@ export type SalesProduct = {
   searchNames?: string[];
   articleAmbiguous?: boolean;
   members?: SalesProduct[];
+  combinedFlan?: { cashCodes: string[] };
   articleGroup?: string;
   salesVariant?: string;
   salesName?: string;
@@ -68,7 +69,7 @@ export function productProjection(product: SalesProduct, choice: ProductChoice, 
 export function productFor2026(product: SalesProduct, choice: ProductChoice): SalesProduct {
   const adjustment = choice.adjustment;
   if (!adjustment?.name2026) return product;
-  return { ...product, name: adjustment.name2026, cashCode: adjustment.cashCode2026 || "", members: undefined,
+  return { ...product, name: adjustment.name2026, cashCode: adjustment.cashCode2026 || "", members: undefined, combinedFlan: undefined,
     articleAmbiguous: !adjustment.cashCode2026, searchNames: [...(product.searchNames || []), product.name] };
 }
 
@@ -79,9 +80,9 @@ export function mappedProductsFor2026(products: SalesProduct[], choices: Record<
     if (choices[product.id]?.adjustment?.hidden) continue;
     const period = productProjection(products[index], choices[product.id] || emptyChoice(), growth).period;
     if (!product.cashCode || product.cashCode === "9999999999" || period === null || period <= 0) continue;
-    counts.set(product.cashCode, (counts.get(product.cashCode) || 0) + 1);
+    for (const code of new Set(product.combinedFlan?.cashCodes || [product.cashCode])) counts.set(code, (counts.get(code) || 0) + 1);
   }
-  return mapped.map(product => (counts.get(product.cashCode) || 0) > 1 ? { ...product, articleAmbiguous: true } : product);
+  return mapped.map(product => (product.combinedFlan?.cashCodes || [product.cashCode]).some(code => (counts.get(code) || 0) > 1) ? { ...product, articleAmbiguous: true } : product);
 }
 
 export function forecastRow(product: SalesProduct, choice: ProductChoice, growth: number): ForecastRow {

@@ -136,3 +136,9 @@ are added once, and returns reverse the allocation. Remaining demand is marked
 approximate whenever its dispatch includes an estimated assorted share. Missing
 receipt lines remain a separate warning. This allocation does not assert a
 physical stock balance or write estimated stock movements.
+
+### Grote vlaaien samenvoegen
+
+Het kerstoverzicht telt per vlaaisoort 10–12 personen en 14 personen/"gesneden 14 punten" samen als hele vlaaien. Dit gebeurt in de weergave, vóór de groeifactor en afronding, voor de hele periode én week 52. De 8-persoonsvlaaien, andere smaken en onbekende subcodes blijven apart. De oorspronkelijke regels blijven onder de samengevoegde varianten zichtbaar; Excel en importopslag veranderen niet.
+
+De bestaande 10–12p-productcode blijft de sleutel voor receptkoppeling en bijstellingen; bijstellingen gelden voortaan voor het gecombineerde totaal. Het bekende seizoensalias van vlaai-artikel 30801 wordt meegenomen. Dagelijkse aftelling telt de unieke grote-vlaaicodes één keer. Wanneer hetzelfde bonartikel ook 8p of een onbekend formaat omvat, blijft de aftelling op "Vlaaiformaat op bon controleren" staan. Productievoorraad wordt niet op basis van een gedeeld artikelnummer over formaten verdeeld.
