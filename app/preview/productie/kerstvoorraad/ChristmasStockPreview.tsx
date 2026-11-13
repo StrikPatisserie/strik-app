@@ -10,7 +10,7 @@ import { buildForecastPlan, emptyChoice, mappedProductsFor2026, productFor2026, 
 import { ADJUSTMENTS_STORAGE_KEY, parseForecastSettings, type ForecastMapping } from "./adjustments";
 import { choicesFromSettings, forecastProductSettings, type ForecastCommand, type SharedForecastSettings } from "./sharedSettings";
 import { exampleChoices, exampleRecipes } from "./examples";
-import { combinePetitFours, includeInStockOverview, salesVolume, stockCategories } from "./assortment";
+import { combineKruidcakes, combinePetitFours, includeInStockOverview, salesVolume, stockCategories } from "./assortment";
 import { CAMPAIGN_START, campaignWindow, exampleCampaignReceipts, remainingNeed, todayInAmsterdam, validCampaignDays, type CampaignReceipts, type CampaignWindow, type RemainingNeed } from "./campaignNeed";
 import { exampleProduction, productInventory, stockDisplay, productionRequirement, type ProductionRequirement, type ProductionReading, type StockRow, type StockOverview } from "./productionOverview";
 import { allocateAssortedSales } from "./assortedPastries";
@@ -228,7 +228,9 @@ export default function ChristmasStockPreview({
   products: sourceProducts, today, error, week52Error, production, campaignReceipts, productionError, sharedSettings,
   returnHref = "/preview/productie?view=feestdagen", planningHref = "/preview/productie",
 }: Props) {
-  const products = useMemo(() => combinePetitFours(combineLargeFlans(allocateAssortedSales(sourceProducts))), [sourceProducts]);
+  const products = useMemo(() => combineKruidcakes(
+    combinePetitFours(combineLargeFlans(allocateAssortedSales(sourceProducts))),
+  ), [sourceProducts]);
   const shared = !!sharedSettings;
   const sharedRef = useRef(sharedSettings);
   const savingRef = useRef(false);

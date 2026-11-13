@@ -166,19 +166,23 @@ export function aggregateMarzipanCakes(products: SalesProduct[]): SalesProduct[]
   return [...products.filter(product => !ids.has(product.id)), merged];
 }
 
-/** The three approved per-piece articles share one production forecast.
- * Preserve the plain article ID and the source members, including both article
- * namespaces and weekly data. Other petit-four packs remain separate. */
-export function combinePetitFours(products: SalesProduct[]): SalesProduct[] {
-  const articles = new Set(["65300", "65301", "65302"]);
+/** Keep the original primary article ID for saved settings and preserve each
+ * source member for daily receipts, search and weekly historical data. */
+function combineArticleFamily(products: SalesProduct[], family: {
+  name: string;
+  group: StockCategory;
+  codes: string[];
+  note: string;
+}): SalesProduct[] {
+  const articles = new Set(family.codes);
   const members = products.filter(product => !product.members && articles.has(product.cashCode)
     && (!product.salesVariant || product.salesVariant === "standaard"));
   if (members.length < 2) return products;
-  const preferred = members.find(product => product.cashCode === "65300") || members[0];
+  const preferred = members.find(product => product.cashCode === family.codes[0]) || members[0];
   const sum = (channel: "cash" | "bake") => members.every(member => member[channel] === null)
     ? null : Math.round(members.reduce((total, member) => total + (member[channel] ?? 0), 0) * 1e6) / 1e6;
   const weeks = members.flatMap(member => member.week52 ? [member.week52] : []);
-  const issue = weeks.find(week => week.issue)?.issue || (weeks.length !== members.length ? "Week 52 ontbreekt voor een petit-fourartikel" : undefined);
+  const issue = weeks.find(week => week.issue)?.issue || (weeks.length !== members.length ? `Week 52 ontbreekt voor een variant van ${family.name}` : undefined);
   const week52 = weeks.length ? {
     cash: Math.round(weeks.reduce((total, week) => total + week.cash, 0) * 1e6) / 1e6,
     bake: Math.round(weeks.reduce((total, week) => total + week.bake, 0) * 1e6) / 1e6,
@@ -186,8 +190,8 @@ export function combinePetitFours(products: SalesProduct[]): SalesProduct[] {
   } : undefined;
   const merged: SalesProduct = {
     ...preferred,
-    name: "Petit fours",
-    group: "overig",
+    name: family.name,
+    group: family.group,
     cash: sum("cash"),
     bake: sum("bake"),
     week52,
@@ -196,12 +200,30 @@ export function combinePetitFours(products: SalesProduct[]): SalesProduct[] {
     articleAmbiguous: true,
     needsSalesReview: members.some(member => member.needsSalesReview),
     searchNames: [...new Set(members.flatMap(member => [member.name, member.cashCode, member.bakeCode, ...(member.searchNames || [])]).filter(Boolean))],
-    note: "Petit fours per stuk, met tekst en met logo samengeteld. Alle drie de artikelnummers blijven meetellen in het dagelijkse verloop.",
+    note: family.note,
   };
   const ids = new Set(members.map(member => member.id));
   return products
     .filter(product => product.id === preferred.id || !ids.has(product.id))
     .map(product => product.id === preferred.id ? merged : product);
+}
+
+export function combinePetitFours(products: SalesProduct[]): SalesProduct[] {
+  return combineArticleFamily(products, {
+    name: "Petit fours",
+    group: "overig",
+    codes: ["65300", "65301", "65302"],
+    note: "Petit fours per stuk, met tekst en met logo samengeteld. Alle drie de artikelnummers blijven meetellen in het dagelijkse verloop.",
+  });
+}
+
+export function combineKruidcakes(products: SalesProduct[]): SalesProduct[] {
+  return combineArticleFamily(products, {
+    name: "Kruidcake",
+    group: "bak",
+    codes: ["40350", "40821", "40861"],
+    note: "Kruidcake, Sint Pepernoten Kruidcake en Seizoens Kruidcake samengeteld. Alle drie de artikelnummers blijven meetellen in het dagelijkse verloop.",
+  });
 }
 
 export function includeInStockOverview(product: SalesProduct, growth: number): boolean {

@@ -1168,3 +1168,56 @@ test('nested grouped article lists remain complete and use one occurrence of eac
   ]}]);
   assert.equal(campaign.remainingNeed(p,300,receipts,'2026-11-17').issued,12);
 });
+
+
+const kruidcake = (code, cash, bake = 0, extra = {}) => ({
+  ...product(`kruidcake:${code}`),
+  name: { '40350': 'Kruidcake', '40821': 'Sint Pepernoten Kruidcake', '40861': 'Seizoens Kruidcake (Koningsdag)' }[code],
+  cashCode: code,
+  bakeCode: { '40350': '1034', '40821': '2307', '40861': '805608' }[code],
+  group: 'bak', department: 'bak', cash, bake, week52: { cash: 20, bake: 5 }, ...extra,
+});
+
+test('approved whole kruidcakes share one forecast and retain all source articles', () => {
+  const source = [kruidcake('40821',363), kruidcake('40861',335), kruidcake('40350',295)];
+  const original = JSON.stringify(source);
+  const grouped = assortment.combineKruidcakes(source);
+  assert.equal(grouped.length,1);
+  const combined = grouped[0];
+  assert.equal(combined.name,'Kruidcake');
+  assert.equal(combined.group,'bak');
+  assert.equal(combined.id,'kruidcake:40350');
+  assert.equal(combined.cash,993);
+  assert.equal(combined.week52.cash,60);
+  assert.equal(combined.week52.bake,15);
+  assert.equal(forecast.productProjection(combined,forecast.emptyChoice(),10).period,1093);
+  assert.deepEqual(Array.from(salesArticles.salesArticleCodes(combined)).sort(),['40350','40821','40861']);
+  for (const code of ['40350','40821','40861','1034','2307','805608']) assert(combined.searchNames.includes(code));
+  assert.equal(JSON.stringify(source),original);
+  assert.equal(JSON.stringify(assortment.combineKruidcakes(grouped)),JSON.stringify(grouped));
+});
+
+test('daily kruidcake receipts use every grouped code once and keep other cakes separate', () => {
+  const bite = {...product('bite'),name:'Kruidcake Bite',cashCode:'40800'};
+  const christmas = {...product('christmas'),name:'Kerst Kruidcake',cashCode:'40842'};
+  const special = kruidcake('40350',50,0,{id:'pack',salesVariant:'doos 6 stuks'});
+  const grouped = assortment.combineKruidcakes([bite,christmas,special,kruidcake('40350',100),kruidcake('40821',100),kruidcake('40861',100)]);
+  assert.equal(grouped.length,4);
+  assert.equal(grouped[0],bite);
+  assert.equal(grouped[1],christmas);
+  assert.equal(grouped[2],special);
+  const current = forecast.mappedProductsFor2026(grouped.slice(3),{},10)[0];
+  assert.equal(current.articleAmbiguous,false);
+  const receipts = campaignReceipts([{...receiptDay('2026-11-16',0),lines:[
+    {article:'40350',description:'Kruidcake',quantity:3},
+    {article:'40821',description:'Sint',quantity:4},
+    {article:'40861',description:'Seizoen',quantity:5},
+    {article:'40842',description:'Kerst',quantity:100},
+    {article:'1034',description:'Oud Bake-it nummer',quantity:100},
+  ]}]);
+  const need = campaign.remainingNeed(current,330,receipts,'2026-11-17');
+  assert.equal(need.issued,12);
+  assert.equal(need.remaining,318);
+  const collision = forecast.mappedProductsFor2026(grouped,{},10).find(row=>row.id===current.id);
+  assert.equal(collision.articleAmbiguous,true,'shared format codes remain subject to checking');
+});
