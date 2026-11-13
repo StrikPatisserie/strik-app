@@ -65,7 +65,7 @@ export function remainingNeed(product: SalesProduct, forecast: number | null, re
   if (!codes.length || codes.some(code => !usableSalesArticle(code))) return unknown("Bonartikel koppelen");
   const articles = [...new Set(codes.map(articleKey))];
   if (articles.includes(ASSORTED_ARTICLE)) return unknown("Verdeling gesorteerd controleren");
-  const issued = Math.round(articles.reduce((total, code) => total + (window.quantities.get(code) ?? 0), 0) * 1e6) / 1e6;
+  const issued = Math.round(articles.reduce((total, code) => total + (window.quantities.get(code) ?? 0) * (product.unitsPerSale ?? 1), 0) * 1e6) / 1e6;
   const remaining = Math.max(0, Math.ceil(Math.round((forecast - issued) * 1e6) / 1e6));
   const assortedIssued = articles.reduce((total, article) => total + (window.assortedQuantities?.get(article) ?? 0), 0);
   const provisional = !!window.unresolvedLines || assortedIssued !== 0;

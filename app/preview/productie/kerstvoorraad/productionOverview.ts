@@ -17,14 +17,17 @@ export type ProductionReading = {
 /** Article numbers are matched only in the current Cash-it namespace.
  * Old Bake-it numbers and names must not silently match another product. */
 export function productInventory(product: SalesProduct, choice: ProductChoice, source: ProductionReading): StockRow | null {
-  if (product.members) return null;
-  if (choice.productionItemId) return source.overview.rows.find(row => row.itemId === choice.productionItemId && row.kind === "product" && row.unit === "stuks") || null;
+  if (product.members || product.quantityLabel && product.quantityLabel !== "stuks") return null;
+  // Counts/production are in pieces. A pack article may only use a stock
+  // ledger with its matching conversion, never a one-pack-as-one-piece balance.
+  const compatible = (row: StockRow) => !product.unitsPerSale || row.link?.article === product.cashCode && row.link.factor === product.unitsPerSale;
+  if (choice.productionItemId) return source.overview.rows.find(row => row.itemId === choice.productionItemId && row.kind === "product" && row.unit === "stuks" && compatible(row)) || null;
   if (source.mode === "example") {
     const item = source.items.find(item => item.recipeId === choice.recipeId && item.kind === "product");
     return source.overview.rows.find(row => row.itemId === item?.id) || null;
   }
   if (product.articleAmbiguous || !product.cashCode || product.cashCode === "9999999999" || product.cashCode === "-") return null;
-  const matches = source.overview.rows.filter(row => row.kind === "product" && row.unit === "stuks" && row.link?.article === product.cashCode);
+  const matches = source.overview.rows.filter(row => row.kind === "product" && row.unit === "stuks" && row.link?.article === product.cashCode && compatible(row));
   return matches.length === 1 ? matches[0] : null;
 }
 

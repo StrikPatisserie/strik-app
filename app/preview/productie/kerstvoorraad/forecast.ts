@@ -8,6 +8,9 @@ export type SalesProduct = {
   cashCode: string; bakeCode: string; cash: number | null; bake: number | null;
   needsSalesReview: boolean; note: string; folderProduct: boolean;
   unitUnconfirmed?: boolean;
+  unitsPerSale?: number;
+  quantityLabel?: string;
+  overviewSubtitle?: string;
   searchNames?: string[];
   articleAmbiguous?: boolean;
   members?: SalesProduct[];
@@ -55,9 +58,9 @@ export function projectedSales(base: number | null, growth: number): number | nu
 export function productProjection(product: SalesProduct, choice: ProductChoice, growth: number) {
   const adjustment = choice.adjustment || {};
   const uplift = adjustment.growthPercent ?? growth;
-  const historical = product.cash === null && product.bake === null ? null : (product.cash ?? 0) + (product.bake ?? 0);
+  const historical = product.cash === null && product.bake === null ? null : ((product.cash ?? 0) + (product.bake ?? 0)) * (product.unitsPerSale ?? 1);
   const period = adjustment.periodTotal ?? (product.unitUnconfirmed ? null : projectedSales(historical, uplift));
-  const weekBase = choice.week52Base ?? (product.week52 && !product.week52.issue ? product.week52.cash + product.week52.bake : null);
+  const weekBase = choice.week52Base ?? (product.week52 && !product.week52.issue ? (product.week52.cash + product.week52.bake) * (product.unitsPerSale ?? 1) : null);
   const week52 = adjustment.week52Total ?? (product.unitUnconfirmed ? null : projectedSales(weekBase, uplift));
   const issue = period !== null && week52 !== null && week52 > period
     ? "Week 52 is groter dan de prognose voor de hele periode" : null;
@@ -70,7 +73,7 @@ export function productProjection(product: SalesProduct, choice: ProductChoice, 
 export function productFor2026(product: SalesProduct, choice: ProductChoice): SalesProduct {
   const adjustment = choice.adjustment;
   if (!adjustment?.name2026) return product;
-  return { ...product, name: adjustment.name2026, cashCode: adjustment.cashCode2026 || "", members: undefined, combinedFlan: undefined,
+  return { ...product, name: adjustment.name2026, cashCode: adjustment.cashCode2026 || "", members: undefined, combinedFlan: undefined, unitsPerSale: undefined, quantityLabel: undefined, overviewSubtitle: undefined,
     articleAmbiguous: !adjustment.cashCode2026, searchNames: [...(product.searchNames || []), product.name] };
 }
 

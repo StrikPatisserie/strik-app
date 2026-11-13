@@ -1,5 +1,6 @@
 import { projectedSales, type SalesProduct } from "./forecast";
 import { salesVariant } from "./variants";
+import { isPetitDV } from "./petitProducts";
 
 export const stockCategories = [
   { id: "kerst", name: "Kerst" },
@@ -7,6 +8,7 @@ export const stockCategories = [
   { id: "taart", name: "Taart" },
   { id: "slof", name: "Slof/schnitt/vlaai" },
   { id: "bak", name: "Bakkant" },
+  { id: "petit-dv", name: "Petit DV" },
   { id: "overig", name: "Overig" },
 ] as const;
 export type StockCategory = typeof stockCategories[number]["id"];
@@ -27,7 +29,8 @@ export function stockCategory(name: string, article?: CatalogArticle): StockCate
   if (article && !foodGroups.has(article.groupNumber)) return null;
   // Christmas wins over the usual department, including marzipan cakes.
   if (/kerst|xmas|noel|arrenslee|\bstol(?:len)?\b|amandelstaaf|amandelkrans/.test(text) || article?.newNumber && christmasCodes.has(article.newNumber)) return "kerst";
-  if (/petit\s*(?:fleur|creme|four|chou)|truffels?(?:\s|$)/.test(text)) return "overig";
+  if (isPetitDV(text)) return "petit-dv";
+  if (/truffels?(?:\s|$)/.test(text)) return "overig";
   if (article?.groupNumber === "10" || /petit\s*gateau|cheese\s*punt|slofje/.test(text)) return "gebak";
   if (article && ["30", "35"].includes(article.groupNumber) || /slof|schnitt|vlaai/.test(text)) return "slof";
   if (article && ["20", "25"].includes(article.groupNumber) || /taart|cheesecake/.test(text)) return "taart";
@@ -209,12 +212,14 @@ function combineArticleFamily(products: SalesProduct[], family: {
 }
 
 export function combinePetitFours(products: SalesProduct[]): SalesProduct[] {
-  return combineArticleFamily(products, {
-    name: "Petit fours",
-    group: "overig",
+  const combined = combineArticleFamily(products, {
+    name: "Petit fours wit",
+    group: "petit-dv",
     codes: ["65300", "65301", "65302"],
     note: "Petit fours per stuk, met tekst en met logo samengeteld. Alle drie de artikelnummers blijven meetellen in het dagelijkse verloop.",
   });
+  return combined.map(product => product.cashCode === "65300" && (!product.salesVariant || product.salesVariant === "standaard")
+    ? { ...product, name: "Petit fours wit", group: "petit-dv", overviewSubtitle: "Totaal inclusief foto- en tekstpetitfours" } : product);
 }
 
 export function combineKruidcakes(products: SalesProduct[]): SalesProduct[] {
@@ -233,7 +238,7 @@ export function includeInStockOverview(product: SalesProduct, growth: number): b
   if (/olieboll|appelbeignet|poedersuikersticks/.test(names)) return false;
   if (product.group === "overig" && /choco(?:lade)?[-\s]*letter|spuit[-\s]*letter|vorm[-\s]*letter|luxe\s+letter/.test(names)) return false;
   const base = product.cash === null && product.bake === null ? null : (product.cash ?? 0) + (product.bake ?? 0);
-  const projection = product.unitUnconfirmed ? null : projectedSales(base, growth);
+  const projection = product.unitUnconfirmed ? null : projectedSales(base === null ? null : base * (product.unitsPerSale ?? 1), growth);
   const chocolateWork = product.articleGroup === "70" || !product.articleGroup && product.department === "chocolade";
   if (projection === null || projection <= 0) return false;
   if (product.group === "kerst") return !chocolateWork;
@@ -243,6 +248,6 @@ export function includeInStockOverview(product: SalesProduct, growth: number): b
 
 export function salesVolume(product: SalesProduct): "high" | "medium" | "low" | "unknown" {
   if (product.unitUnconfirmed || product.cash === null && product.bake === null) return "unknown";
-  const base = (product.cash ?? 0) + (product.bake ?? 0);
+  const base = ((product.cash ?? 0) + (product.bake ?? 0)) * (product.unitsPerSale ?? 1);
   return base >= 1000 ? "high" : base >= 300 ? "medium" : "low";
 }

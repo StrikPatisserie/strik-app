@@ -22,7 +22,8 @@ const forecast = load('app/preview/productie/kerstvoorraad/forecast.ts', { '../.
 const examples = load('app/preview/productie/kerstvoorraad/examples.ts', { './forecast': forecast });
 const inventory = load('app/productie/inventory.ts', { './planning': planning });
 const variants = load('app/preview/productie/kerstvoorraad/variants.ts');
-const assortment = load('app/preview/productie/kerstvoorraad/assortment.ts', { './forecast': forecast, './variants': variants });
+const petitProducts = load('app/preview/productie/kerstvoorraad/petitProducts.ts');
+const assortment = load('app/preview/productie/kerstvoorraad/assortment.ts', { './forecast': forecast, './variants': variants, './petitProducts': petitProducts });
 const assorted = load('app/preview/productie/kerstvoorraad/assortedPastries.ts');
 const flans = load('app/preview/productie/kerstvoorraad/flanVariants.ts');
 const campaign = load('app/preview/productie/kerstvoorraad/campaignNeed.ts', { '../../../productie/planning': planning, '../../../productie/inventory': inventory, './assortedPastries': assorted, './salesArticles': salesArticles });
@@ -257,17 +258,17 @@ test('live matching uses the current article namespace and rejects duplicates an
 });
 
 const article = (name, groupNumber, newNumber = '10', previousNumber = '20') => ({ name, groupNumber, newNumber, previousNumber, groupName: groupNumber });
-test('six categories distinguish pastries, whole cakes and whole slofs, with Christmas taking priority', () => {
+test('seven categories distinguish pastries, whole cakes and whole slofs, with Christmas taking priority', () => {
   for (const [name, group, expected] of [
-    ['Petit Gateau (6st)', '10', 'gebak'], ['Seizoens Cheese Punt (Citroen-Merengue)', '10', 'gebak'],
+    ['Petit Gateau (6st)', '10', 'petit-dv'], ['Seizoens Cheese Punt (Citroen-Merengue)', '10', 'gebak'],
     ['Pistache Slofje', '10', 'gebak'], ['Pistache Slof', '35', 'slof'], ['Slagroomschnitt', '35', 'slof'], ['Kersenvlaai', '30', 'slof'], ['Kersenvlaaitje', '10', 'gebak'],
     ["Strik's Marsepeintaart 6-8p", '25', 'taart'], ['Seizoens Cheesecake', '20', 'taart'], ['Luxe taart', '20', 'taart'],
     ['Xmas marsepeintaart-chipolata', '25', 'kerst'], ['Luxe Kerst stol', '155', 'kerst'], ['Amandelstaaf', '50', 'kerst'],
     ['Saucijzenbroodje', '60', 'bak'], ['Worstenbroodje', '60', 'bak'], ['Oliebollen naturel', '90', 'bak'],
-    ['Petit Fleur', '65', 'overig'], ['Petit Creme', '65', 'overig'], ['Slagroomtruffels', '70', 'overig'],
+    ['Petit Fleur', '65', 'petit-dv'], ['Petit Creme', '65', 'petit-dv'], ['Slagroomtruffels', '70', 'overig'],
   ]) assert.equal(assortment.stockCategory(name, article(name, group)), expected, name);
-  assert.equal(assortment.stockCategories.length, 6);
-  assert.equal(assortment.stockCategory('Petit Fleur', article('Petit Fleur', '10')), 'overig');
+  assert.equal(assortment.stockCategories.length, 7);
+  assert.equal(assortment.stockCategory('Petit Fleur', article('Petit Fleur', '10')), 'petit-dv');
 });
 
 test('non-food services and shop supplies never appear as production demand', () => {
@@ -1075,7 +1076,7 @@ test('petit fours combine all three per-piece articles before uplift and keep th
   const combined = assortment.combinePetitFours(input);
   assert.equal(combined.length,1);
   const p = combined[0];
-  assert.equal(p.name,'Petit fours'); assert.equal(p.id,'petit:65300');
+  assert.equal(p.name,'Petit fours wit'); assert.equal(p.id,'petit:65300');
   assert.equal(p.cash,600); assert.equal(p.bake,6);
   assert.equal(p.week52.cash,30); assert.equal(p.week52.bake,3);
   assert.equal(p.members.length,3);
@@ -1220,4 +1221,90 @@ test('daily kruidcake receipts use every grouped code once and keep other cakes 
   assert.equal(need.remaining,318);
   const collision = forecast.mappedProductsFor2026(grouped,{},10).find(row=>row.id===current.id);
   assert.equal(collision.articleAmbiguous,true,'shared format codes remain subject to checking');
+});
+
+
+test('Petit DV restores saved packs and per-piece articles without changing raw sales or IDs', () => {
+  const rows = [
+    {...product('gateau6'),name:'Petit Gateau (6st)',cashCode:'10601',cash:331,bake:29,unitUnconfirmed:true,week52:{cash:121,bake:0}},
+    {...product('creme15'),name:'Petit Creme (15st)',cashCode:'65101',cash:136,bake:36,unitUnconfirmed:true,week52:{cash:30,bake:6}},
+    {...product('fours6'),name:'Petit Four (6st)',cashCode:'65100',cash:74,bake:55,unitUnconfirmed:true,week52:{cash:16,bake:12}},
+    {...product('fleur'),name:'Petit Fleur (p.s.)',cashCode:'65903',cash:null,bake:210},
+    {...product('creme'),name:'Petit Creme per stuk',cashCode:'65303',cash:30,bake:80},
+    {...product('chou'),name:'Petit Chou Slagroomsoesjes (±200gr)',cashCode:'65200',cash:110,bake:9},
+  ];
+  const before=JSON.stringify(rows);
+  const result=petitProducts.normalizePetitProducts(rows);
+  assert.equal(JSON.stringify(rows),before);
+  assert.equal(JSON.stringify(petitProducts.normalizePetitProducts(result)),JSON.stringify(result));
+  for(const row of result) {
+    assert.equal(row.group,'petit-dv');
+    assert(assortment.includeInStockOverview(row,10),row.name);
+    assert.equal(row.id,rows.find(old=>old.id===row.id).id);
+  }
+  for(const [id,period,week52,size] of [['gateau6',2376,799,6],['creme15',2838,594,15],['fours6',852,185,6]]) {
+    const row=result.find(p=>p.id===id), projection=forecast.productProjection(row,forecast.emptyChoice(),10);
+    assert.equal(projection.period,period,id);
+    assert.equal(projection.week52,week52,id);
+    assert.equal(row.unitsPerSale,size);
+    assert.equal(row.unitUnconfirmed,false);
+  }
+  assert.equal(result.find(p=>p.id==='chou').quantityLabel,'zakjes');
+  assert.equal(forecast.productProjection(result.find(p=>p.id==='chou'),forecast.emptyChoice(),10).period,131);
+});
+
+test('Petit DV preserves uncertain packages, nonstandard subcodes, weights and seasonal categories', () => {
+  const cases=[
+    {...product('fraction'),name:'Petit Four (6st)',cashCode:'65100',cash:2.5,unitUnconfirmed:true},
+    {...product('subcode'),name:'Petit Four (6st)',cashCode:'65100',salesVariant:'doos 12 stuks',unitUnconfirmed:true},
+    {...product('other-code'),name:'Petit Four (6st)',cashCode:'65199',unitUnconfirmed:true},
+    {...product('other-pack'),name:'Petit Four (12st)',cashCode:'65100',unitUnconfirmed:true},
+    {...product('unknown'),name:'Petit Fleur (8st)',cashCode:'9999999999',unitUnconfirmed:true},
+  ];
+  for(const row of petitProducts.normalizePetitProducts(cases)) {
+    assert.equal(row.unitsPerSale,undefined);
+    assert.equal(row.unitUnconfirmed,true);
+    assert.equal(assortment.includeInStockOverview(row,10),false);
+  }
+  assert.equal(assortment.stockCategory('Kerst Petit Four',article('Kerst Petit Four','65')),'kerst');
+  assert.equal(petitProducts.normalizePetitProducts([{...product('season'),name:'Kerst Petit Four',group:'kerst'}])[0].group,'kerst');
+  const small=petitProducts.normalizePetitProducts([{...product('small'),name:'Petit Creme per stuk',cash:1,bake:0}])[0];
+  assert(assortment.includeInStockOverview(small,10));
+  assert.equal(assortment.includeInStockOverview({...small,cash:0},10),false);
+});
+
+test('Petit DV receipt packs use the same piece conversion as the forecast, including returns', () => {
+  const p=petitProducts.normalizePetitProducts([{...product('pack'),name:'Petit Four (6st)',cashCode:'65100',cash:74,bake:55,unitUnconfirmed:true}])[0];
+  const receipts={mode:'live',available:true,days:[{date:'2026-11-16',importedAt:'2026-11-16T20:00:00Z',unknownLines:0,lines:[{article:'65100',description:'Doosjes',quantity:3},{article:'502',description:'Oud nummer',quantity:99}]}]};
+  let need=campaign.remainingNeed(p,852,receipts,'2026-11-17');
+  assert.equal(need.issued,18); assert.equal(need.remaining,834);
+  receipts.days[0].lines[0].quantity=-2;
+  need=campaign.remainingNeed(p,852,receipts,'2026-11-17');
+  assert.equal(need.issued,-12); assert.equal(need.remaining,864);
+  const choice={...forecast.emptyChoice(),adjustment:{periodTotal:600,week52Total:300}};
+  assert.equal(forecast.productProjection(p,choice,10).period,600);
+  assert.equal(forecast.productProjection(p,choice,10).week52,300);
+  const replacement=forecast.productFor2026(p,{...forecast.emptyChoice(),adjustment:{name2026:'Nieuwe losse petit four',cashCode2026:'65199'}});
+  assert.equal(replacement.unitsPerSale,undefined);
+});
+
+test('pack forecasts cannot borrow a stock balance with the wrong piece factor, or compare bags to pieces', () => {
+  const p=petitProducts.normalizePetitProducts([{...product('pack'),name:'Petit Four (6st)',cashCode:'65100',unitUnconfirmed:true}])[0];
+  const stock={itemId:'stock',kind:'product',unit:'stuks',link:{article:'65100',factor:1}};
+  const source={mode:'live',overview:{rows:[stock]},items:[],recipes:[]};
+  assert.equal(overview.productInventory(p,forecast.emptyChoice(),source),null);
+  assert.equal(overview.productInventory(p,{...forecast.emptyChoice(),productionItemId:'stock'},source),null);
+  stock.link.factor=6;
+  assert.equal(overview.productInventory(p,forecast.emptyChoice(),source).itemId,'stock');
+  assert.equal(overview.productInventory(p,{...forecast.emptyChoice(),productionItemId:'stock'},source).itemId,'stock');
+  assert.equal(overview.productInventory({...p,quantityLabel:'zakjes'},{...forecast.emptyChoice(),productionItemId:'stock'},source),null);
+});
+
+test('white petit fours keep the photo/text subtitle and original three receipt articles', () => {
+  const result=assortment.combinePetitFours(petitProducts.normalizePetitProducts([petitFour('65300',590),petitFour('65301',624),petitFour('65302',709)]));
+  assert.equal(result.length,1);
+  assert.equal(result[0].name,'Petit fours wit');
+  assert.equal(result[0].group,'petit-dv');
+  assert.equal(result[0].overviewSubtitle,'Totaal inclusief foto- en tekstpetitfours');
+  assert.deepEqual(Array.from(salesArticles.salesArticleCodes(result[0])).sort(),['65300','65301','65302']);
 });
