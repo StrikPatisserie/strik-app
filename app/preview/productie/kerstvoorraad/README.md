@@ -115,3 +115,24 @@ The underlying shared-preparation calculation remains available in `forecast.ts`
 for validation and later use, but the overview does not create a production plan.
 
 Checks: `node --test tests/christmas-stock-preview.test.cjs`.
+
+## Owner-selected assorted pastry allocation (13 November 2026)
+
+`assortedPastries.ts` distributes article 10000 over the owner's 15 pastry
+articles (10100–10431, explicit allowlist). This is an estimated equal mix,
+added to direct sales before growth and display thresholds. Period and week-52
+amounts are allocated independently. Whole-piece remainders continue across
+Cash-it and Bake-it, conserving each channel and the complete source total.
+The aggregate is removed from the derived view after allocation. Raw imports,
+recipes, production and shared overrides are unchanged. The two known seasonal
+name aliases for 10402 and 10430 merge into their confirmed main product row;
+unknown variants stop the allocation rather than guessing. The product detail
+shows its allocated share, while the table uses a short “incl. gesorteerd” note.
+
+Finalized campaign receipts use the same 15 recipients. Allocate the cumulative
+net article-10000 amount after deduplication/coverage validation, so repeated
+small daily quantities do not always go to the first product. Direct deliveries
+are added once, and returns reverse the allocation. Remaining demand is marked
+approximate whenever its dispatch includes an estimated assorted share. Missing
+receipt lines remain a separate warning. This allocation does not assert a
+physical stock balance or write estimated stock movements.

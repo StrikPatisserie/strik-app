@@ -23,7 +23,8 @@ const inventory = load('app/productie/inventory.ts', { './planning': planning })
 const overview = load('app/preview/productie/kerstvoorraad/productionOverview.ts', { '../../../productie/inventory': inventory });
 const variants = load('app/preview/productie/kerstvoorraad/variants.ts');
 const assortment = load('app/preview/productie/kerstvoorraad/assortment.ts', { './forecast': forecast, './variants': variants });
-const campaign = load('app/preview/productie/kerstvoorraad/campaignNeed.ts', { '../../../productie/planning': planning, '../../../productie/inventory': inventory });
+const assorted = load('app/preview/productie/kerstvoorraad/assortedPastries.ts');
+const campaign = load('app/preview/productie/kerstvoorraad/campaignNeed.ts', { '../../../productie/planning': planning, '../../../productie/inventory': inventory, './assortedPastries': assorted });
 const weekly = load('app/preview/productie/kerstvoorraad/week52.ts', { './variants': variants });
 const adjustments = load('app/preview/productie/kerstvoorraad/adjustments.ts');
 const product = id => ({ id, name: id, group: 'gebak', department: 'patisserie', cash: 20, bake: 30, cashCode: '10', bakeCode: '20', needsSalesReview: false, note: '', folderProduct: false });
@@ -726,4 +727,107 @@ test('incomplete lines cannot masquerade as a complete zero or a definitive fore
   assert.equal(result.provisional, true);
   const missingDay = campaign.remainingNeed(product('a'), 500, campaignReceipts(days), '2026-11-18');
   assert.equal(missingDay.remaining, null);
+});
+
+const pastryProducts = () => assorted.ASSORTED_PASTRIES.map(target => ({...product(target.id), cashCode:target.article, cash:100, bake:20, week52:{cash:10,bake:2}}));
+const assortedProduct = (cash=21,bake=24) => ({...product('bakery:gesorteerd gebak'), cashCode:'10000', cash, bake, week52:{cash:8,bake:3}});
+const sumChannel = (rows,channel) => rows.reduce((total,row)=>total+(row[channel]??0),0);
+
+test('assorted pastries use exactly the owner-selected 15 article numbers', () => {
+  assert.equal(assorted.ASSORTED_PASTRIES.length,15);
+  assert.equal(new Set(assorted.ASSORTED_PASTRIES.map(row=>row.article)).size,15);
+  assert.equal(Array.from(assorted.ASSORTED_PASTRIES,row=>row.article).join(','),'10100,10101,10102,10200,10301,10400,10401,10402,10403,10404,10405,10407,10409,10430,10431');
+});
+
+test('historical assorted sales are added to individual sales once before uplift, preserving both channel totals', () => {
+  const own=pastryProducts(), rows=[...own,assortedProduct()];
+  const before=JSON.stringify(rows), result=assorted.allocateAssortedSales(rows);
+  assert.equal(result.length,15);
+  assert.equal(JSON.stringify(rows),before);
+  assert.equal(sumChannel(result,'cash'),sumChannel(rows,'cash'));
+  assert.equal(sumChannel(result,'bake'),sumChannel(rows,'bake'));
+  assert(result.every(row=>row.cash+row.bake===123));
+  assert(result.every(row=>row.assortedSales.cash+row.assortedSales.bake===3));
+  assert.equal(JSON.stringify(assorted.allocateAssortedSales(result)),JSON.stringify(result));
+  const choice={...forecast.emptyChoice(),adjustment:{periodTotal:150}};
+  assert.equal(forecast.productProjection(result[0],choice,10).period,150);
+  assert.equal(forecast.productProjection(result[0],forecast.emptyChoice(),10).period,136);
+});
+
+test('week-52 allocation uses its own total and conserves pieces even when the total is not divisible by 15', () => {
+  const rows=assorted.allocateAssortedSales([...pastryProducts(),assortedProduct()]);
+  assert.equal(rows.reduce((n,row)=>n+row.week52.cash,0),158);
+  assert.equal(rows.reduce((n,row)=>n+row.week52.bake,0),33);
+  const shares=rows.map(row=>row.assortedSales.week52);
+  assert.equal(shares.reduce((a,b)=>a+b,0),11);
+  assert.equal(Math.max(...shares)-Math.min(...shares),1);
+  assert.equal(rows.filter(row=>row.week52.cash+row.week52.bake===13).length,11);
+});
+
+test('approved seasonal names merge into one article without duplicating sales or clearing other variant uncertainty', () => {
+  const rows=pastryProducts().map(row=>({...row,articleAmbiguous:true}));
+  const alias={...product('bakery:lente parel'),cashCode:'10402',cash:null,bake:7,week52:{cash:0,bake:1},articleAmbiguous:true};
+  const result=assorted.allocateAssortedSales([...rows,alias,assortedProduct()]);
+  const pear=result.find(row=>row.cashCode==='10402');
+  assert.equal(result.filter(row=>row.cashCode==='10402').length,1);
+  assert.equal(pear.cash+pear.bake,130);
+  assert.equal(pear.week52.cash+pear.week52.bake,14);
+  assert.equal(pear.articleAmbiguous,false);
+  assert(pear.searchNames.includes(alias.name));
+  const unknown={...product('unrecognized-size'),cashCode:'10402',cash:2};
+  const unsafe=assorted.allocateAssortedSales([...rows,unknown,assortedProduct()]);
+  assert.equal(unsafe.find(row=>row.cashCode==='10000').cash,21);
+  assert.match(unsafe.find(row=>row.cashCode==='10000').note,/nog niet verdeeld/);
+  assert.equal(unsafe[0].assortedSales,undefined);
+});
+
+test('missing recipient or unverified weekly source stays explicit instead of distributing over fewer pastries', () => {
+  const rows=pastryProducts(), source=assortedProduct();
+  const missing=assorted.allocateAssortedSales([...rows.slice(1),source]);
+  assert.equal(missing.length,15);
+  assert(missing.every(row=>!row.assortedSales));
+  const noWeek=assorted.allocateAssortedSales([...rows,{...source,week52:undefined}]);
+  assert.equal(forecast.productProjection(noWeek[0],forecast.emptyChoice(),10).week52,null);
+  assert.match(noWeek[0].week52.issue,/ontbreekt/);
+});
+
+test('equal allocations preserve fractional source quantities and reverse returns', () => {
+  for(const total of [0,1,14,15,16,161,1575,-1,-31,1.5]) {
+    const shares=Array.from(assorted.assortedShares(total));
+    assert(Math.abs(shares.reduce((a,b)=>a+b,0)-total)<1e-8);
+    assert(Math.max(...shares)-Math.min(...shares)<=1+1e-8);
+    assert.equal(shares.join(','),Array.from(assorted.assortedShares(-total),n=>-n).join(','));
+  }
+});
+
+const pastryDay=(date,quantity,extra=[])=>({...receiptDay(date,0),lines:[{article:'10000',description:'Gesorteerd gebak',quantity},...extra]});
+test('daily assorted demand includes direct sales and allocates the deduplicated cumulative total without double counting', () => {
+  const days=[pastryDay('2026-11-16',14),pastryDay('2026-11-16',1),pastryDay('2026-11-17',1,[{article:'10100',description:'Bossche Bol',quantity:5}])];
+  days[1].importedAt='2026-11-16T19:00:00Z';
+  const receipts=campaignReceipts(days), window=campaign.campaignWindow(receipts,'2026-11-18');
+  assert.equal(window.quantities.has('10000'),false);
+  assert.equal(Array.from(window.quantities.values()).reduce((a,b)=>a+b,0),7);
+  const results=pastryProducts().map(row=>campaign.remainingNeed(row,100,receipts,'2026-11-18',window));
+  assert.equal(results[0].issued,6);
+  assert.equal(results[1].issued,1);
+  assert.equal(results[2].issued,0);
+  assert.equal(results.reduce((n,row)=>n+row.issued,0),7);
+  assert.equal(results[0].remaining,94);
+  assert.equal(results[0].assortedIssued,1);
+  assert.equal(results[0].provisional,true);
+  assert.match(results[0].note,/gesorteerd gebak \(geschat\)/);
+  assert.equal(results[2].provisional,false);
+  assert.equal(campaign.remainingNeed(pastryProducts()[0],100,receipts,'2026-11-19').remaining,null);
+});
+
+test('assorted dispatch honors dates, returns, unmapped replacements and hidden recipients without redistributing shares', () => {
+  const receipts=campaignReceipts([pastryDay('2026-11-15',999),pastryDay('2026-11-16',-30),pastryDay('2026-11-17',100)]);
+  const row=pastryProducts()[0];
+  assert.equal(campaign.remainingNeed(row,100,receipts,'2026-11-16').remaining,100);
+  assert.equal(campaign.remainingNeed(row,100,receipts,'2026-11-17').remaining,102);
+  const replaced=forecast.productFor2026(row,{...forecast.emptyChoice(),adjustment:{name2026:'Nieuw gebakje',cashCode2026:'12345'}});
+  assert.equal(campaign.remainingNeed(replaced,100,receipts,'2026-11-17').issued,0);
+  const partial=campaign.remainingNeed(row,100,campaignReceipts([{...pastryDay('2026-11-16',15),unknownLines:2}]),'2026-11-17');
+  assert.equal(partial.unresolvedLines,2);
+  assert.match(partial.note,/bonregels controleren/);
 });

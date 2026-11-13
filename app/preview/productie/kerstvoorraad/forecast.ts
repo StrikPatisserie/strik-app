@@ -13,6 +13,7 @@ export type SalesProduct = {
   articleGroup?: string;
   salesVariant?: string;
   salesName?: string;
+  assortedSales?: { cash: number; bake: number; week52?: number };
   week52?: { cash: number; bake: number; issue?: string };
 };
 export type ProductAdjustment = {

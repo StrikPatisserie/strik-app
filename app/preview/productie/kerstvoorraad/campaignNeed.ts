@@ -1,12 +1,13 @@
 import { addDays } from "../../../productie/planning";
 import { articleKey, mergeDispatchDays, type DispatchDay } from "../../../productie/inventory";
 import type { SalesProduct } from "./forecast";
+import { ASSORTED_ARTICLE, ASSORTED_PASTRIES, assortedShares } from "./assortedPastries";
 
 export const CAMPAIGN_START = "2026-11-16";
 export const CAMPAIGN_END = "2026-12-31";
 export type CampaignReceipts = { mode: "example" | "live"; available: boolean; days: DispatchDay[]; checkedAt?: string; error?: string };
-export type RemainingNeed = { remaining: number | null; issued: number | null; through: string | null; note: string; provisional?: boolean };
-export type CampaignWindow = { through: string | null; problem: string | null; quantities: Map<string, number>; unresolvedLines?: number };
+export type RemainingNeed = { remaining: number | null; issued: number | null; through: string | null; note: string; provisional?: boolean; unresolvedLines?: number; assortedIssued?: number };
+export type CampaignWindow = { through: string | null; problem: string | null; quantities: Map<string, number>; unresolvedLines?: number; assortedQuantities?: Map<string, number> };
 export function todayInAmsterdam() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Amsterdam", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 }
@@ -34,7 +35,18 @@ export function campaignWindow(receipts: CampaignReceipts, today: string): Campa
     const article = articleKey(line.article);
     quantities.set(article, (quantities.get(article) ?? 0) + line.quantity);
   }
-  return { through, problem: null, quantities, unresolvedLines: days.reduce((total, day) => total + day.unknownLines, 0) };
+  const assortedQuantities = new Map<string, number>();
+  const assorted = quantities.get(ASSORTED_ARTICLE) ?? 0;
+  quantities.delete(ASSORTED_ARTICLE);
+  // Allocate the deduplicated campaign total, not each day separately. Small
+  // daily remainders must not always be assigned to the first pastry.
+  assortedShares(assorted).forEach((quantity, index) => {
+    if (!quantity) return;
+    const article = ASSORTED_PASTRIES[index].article;
+    assortedQuantities.set(article, quantity);
+    quantities.set(article, (quantities.get(article) ?? 0) + quantity);
+  });
+  return { through, problem: null, quantities, assortedQuantities, unresolvedLines: days.reduce((total, day) => total + day.unknownLines, 0) };
 }
 
 /** Remaining dispatch demand, not a stock balance. Today's requirement is
@@ -50,12 +62,14 @@ export function remainingNeed(product: SalesProduct, forecast: number | null, re
   if (product.unitUnconfirmed) return unknown("Eenheid op bon controleren");
   if (!product.cashCode || product.cashCode === "9999999999" || product.cashCode === "-") return unknown("Bonartikel koppelen");
   const article = articleKey(product.cashCode);
+  if (article === ASSORTED_ARTICLE) return unknown("Verdeling gesorteerd controleren");
   const issued = Math.round((window.quantities.get(article) ?? 0) * 1e6) / 1e6;
   const remaining = Math.max(0, Math.ceil(Math.round((forecast - issued) * 1e6) / 1e6));
-  const provisional = !!window.unresolvedLines;
-  const note = provisional ? `${window.unresolvedLines} bonregels controleren · voorlopig aantal`
+  const assortedIssued = window.assortedQuantities?.get(article) ?? 0;
+  const provisional = !!window.unresolvedLines || assortedIssued !== 0;
+  const note = window.unresolvedLines ? `${window.unresolvedLines} bonregels controleren · voorlopig aantal`
     : issued > forecast ? `${Math.round((issued - forecast) * 1e6) / 1e6} boven prognose` : "Afgeronde bondagen verwerkt";
-  return { remaining, issued, through: window.through, note, provisional };
+  return { remaining, issued, through: window.through, note: assortedIssued ? `${note} · ${assortedIssued} uit gesorteerd gebak (geschat)` : note, provisional, unresolvedLines: window.unresolvedLines, assortedIssued };
 }
 
 /** Deliberately future-dated fixtures for the preview date selector. */
