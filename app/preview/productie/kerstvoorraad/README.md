@@ -143,3 +143,9 @@ physical stock balance or write estimated stock movements.
 Het kerstoverzicht telt per vlaaisoort 10–12 personen en 14 personen/"gesneden 14 punten" samen als hele vlaaien. Dit gebeurt in de weergave, vóór de groeifactor en afronding, voor de hele periode én week 52. De 8-persoonsvlaaien, andere smaken en onbekende subcodes blijven apart. De oorspronkelijke regels blijven onder de samengevoegde varianten zichtbaar; Excel en importopslag veranderen niet.
 
 De bestaande 10–12p-productcode blijft de sleutel voor receptkoppeling en bijstellingen; bijstellingen gelden voortaan voor het gecombineerde totaal. Het bekende seizoensalias van vlaai-artikel 30801 wordt meegenomen. Dagelijkse aftelling telt de unieke grote-vlaaicodes één keer. Wanneer hetzelfde bonartikel ook 8p of een onbekend formaat omvat, blijft de aftelling op "Vlaaiformaat op bon controleren" staan. Productievoorraad wordt niet op basis van een gedeeld artikelnummer over formaten verdeeld.
+
+### Categorieën en petiteenheden
+
+De handmatig gekozen categorieën gelden ook voor eerder opgeslagen bronregels: roomboter speculaasstaaf en amandelletter bij Bakkant; gewone kruidcake bij Taart; puddingbroodje bij Gebak; macarons, mergpijpjes, losse brownies/blondies en bokkepootjes bij Overig. Browniegebak, brownietaarten en kerstkruidcake houden hun eigen categorie. De bestaande artikelcodes en samenvoegingen blijven behouden.
+
+Petit-DV-prognoses vermelden expliciet stuks (of zakjes bij petit chou). De bekende doosjes van 6 en 15 worden vóór de opslag naar losse stuks omgerekend. De productdetails tonen de controleberekening: oorspronkelijke doosjes × inhoud = verkochte losse stuks vóór groei.

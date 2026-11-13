@@ -1186,7 +1186,7 @@ test('approved whole kruidcakes share one forecast and retain all source article
   assert.equal(grouped.length,1);
   const combined = grouped[0];
   assert.equal(combined.name,'Kruidcake');
-  assert.equal(combined.group,'bak');
+  assert.equal(combined.group,'taart');
   assert.equal(combined.id,'kruidcake:40350');
   assert.equal(combined.cash,993);
   assert.equal(combined.week52.cash,60);
@@ -1307,4 +1307,52 @@ test('white petit fours keep the photo/text subtitle and original three receipt 
   assert.equal(result[0].group,'petit-dv');
   assert.equal(result[0].overviewSubtitle,'Totaal inclusief foto- en tekstpetitfours');
   assert.deepEqual(Array.from(salesArticles.salesArticleCodes(result[0])).sort(),['65300','65301','65302']);
+});
+
+
+test('owner-selected categories override imported groups without changing article identities or counts', () => {
+  const cases = [
+    ['90217', 'Roomboter speculaas staaf', 'overig', 'bak'],
+    ['90220', 'Roomboter Amandelletter', 'overig', 'bak'],
+    ['40350', 'Kruidcake', 'bak', 'taart'],
+    ['40821', 'Sint Pepernoten Kruidcake', 'bak', 'taart'],
+    ['40861', 'Seizoens Kruidcake (Koningsdag)', 'bak', 'taart'],
+    ['50200', 'Puddingbroodje', 'bak', 'gebak'],
+    ['50506', 'Macarons per stuk', 'bak', 'overig'],
+    ['50507', 'Macaron koker 7st', 'bak', 'overig'],
+    ['50508', 'Macaron koker 4st', 'bak', 'overig'],
+    ['50509', 'Macaron koker 6st', 'bak', 'overig'],
+    ['50108', 'Mergpijpje', 'bak', 'overig'],
+    ['40120', 'Mergpijpjes verpakt (3st)', 'bak', 'overig'],
+    ['50101', 'Blondie', 'bak', 'overig'],
+    ['50100', 'Vegan brownie', 'bak', 'overig'],
+    ['50900', 'Brownie Kipperij (16st)', 'bak', 'overig'],
+    ['50901', 'Blondie Kipperij (16st)', 'bak', 'overig'],
+    ['50114', 'Bokkepoot per stuk', 'bak', 'overig'],
+    ['40121', 'Bokkepootjes verpakt (4st)', 'bak', 'overig'],
+  ];
+  const source=cases.map(([cashCode,name,group])=>({...product(cashCode),cashCode,name,group}));
+  const before=JSON.stringify(source);
+  const result=assortment.normalizeStockCategories(source);
+  for(const [i,[cashCode,name,,group]] of cases.entries()) {
+    assert.equal(result[i].group,group,name);
+    assert.equal(result[i].id,source[i].id);
+    assert.equal(result[i].cash,source[i].cash);
+    assert.equal(result[i].bake,source[i].bake);
+    assert.equal(assortment.stockCategory(name,{...article(name,'50'),newNumber:cashCode}),group,name);
+  }
+  assert.equal(JSON.stringify(source),before);
+  assert.equal(JSON.stringify(assortment.normalizeStockCategories(result)),JSON.stringify(result));
+});
+
+test('specific brownie pastries and cakes, Christmas cake and all grouped article codes remain distinct', () => {
+  for(const [name,groupNumber,group] of [
+    ['Brownie Trésor','10','gebak'],['Choco Brownie Punt','10','gebak'],
+    ['Brownie Salty Caramel','20','taart'],['Brownie Salty Caramelslof','35','slof'],
+    ['Kerst Kruidcake','40','kerst'],
+  ]) assert.equal(assortment.stockCategory(name,article(name,groupNumber)),group,name);
+  const result=assortment.combineKruidcakes(assortment.normalizeStockCategories([kruidcake('40350',295),kruidcake('40821',363),kruidcake('40861',335)]))[0];
+  assert.equal(result.group,'taart');
+  assert.deepEqual(Array.from(salesArticles.salesArticleCodes(result)).sort(),['40350','40821','40861']);
+  assert.equal(forecast.productProjection(result,forecast.emptyChoice(),10).period,1093);
 });

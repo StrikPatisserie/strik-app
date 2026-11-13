@@ -21,7 +21,7 @@ export function normalizePetitProducts(products: SalesProduct[]): SalesProduct[]
     const wholeCounts = [product.cash, product.bake].every(value => value === null || Number.isInteger(value));
     if (pack && standard && pack.name.test(name) && wholeCounts) return {
       ...product, group, unitsPerSale: pack.size, unitUnconfirmed: false,
-      overviewSubtitle: `Per ${pack.size} verpakt · prognose in stuks`,
+      overviewSubtitle: `Doosjes van ${pack.size} · prognose in losse stuks`,
     };
     if (product.cashCode === "65200" && standard && /petit\s*chou.*200\s*gr/.test(name) && wholeCounts) return {
       ...product, group, quantityLabel: "zakjes", unitUnconfirmed: false,

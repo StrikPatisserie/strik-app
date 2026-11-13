@@ -23,10 +23,30 @@ const bakeryGroups = new Set(["40", "45", "50", "60", "120", "145", "150", "155"
 const christmasCodes = new Set(["20831", "20833", "65830", "65832"]);
 const placeholder = "9999999999";
 
+/** Owner-selected display categories apply to fresh imports and saved sources.
+ * Article IDs, recipe links and the underlying sales remain unchanged. */
+function categoryOverride(name: string, articleNumber = ""): StockCategory | null {
+  const text = normalize(name);
+  if (["90217", "90220"].includes(articleNumber) || /roomboter\s+(?:speculaas\s*staaf|amandelletter)/.test(text)) return "bak";
+  if (["40350", "40821", "40861"].includes(articleNumber) || /\bkruidcake\b/.test(text) && !/kerst|xmas|noel/.test(text)) return "taart";
+  if (/puddingbrood/.test(text)) return "gebak";
+  if (/macarons?|mergpijp|bokkepoot/.test(text)) return "overig";
+  // Brownie pastries, cakes, flans and ice cream keep their own category.
+  if (["50100", "50101", "50900", "50901"].includes(articleNumber)
+    || /\b(?:brownies?|blondies?)\b/.test(text) && !/tresor|punt|taart|slof|salty caramel|roomijs/.test(text)) return "overig";
+  return null;
+}
+
+export function normalizeStockCategories(products: SalesProduct[]): SalesProduct[] {
+  return products.map(product => ({ ...product, group: categoryOverride(product.name, product.cashCode) || product.group }));
+}
+
 export function stockCategory(name: string, article?: CatalogArticle): StockCategory | null {
   const text = normalize(`${name} ${article?.name || ""}`);
   if (/bezorg|bez\.kost|toeslag|korting|coupon|kadobon|cadeaubon|verpakking|winkelbenodigd|draagtas|cadeaupapier|statiegeld|emballage|^logo op /i.test(text)) return null;
   if (article && !foodGroups.has(article.groupNumber)) return null;
+  const selectedCategory = categoryOverride(name, article?.newNumber || "");
+  if (selectedCategory) return selectedCategory;
   // Christmas wins over the usual department, including marzipan cakes.
   if (/kerst|xmas|noel|arrenslee|\bstol(?:len)?\b|amandelstaaf|amandelkrans/.test(text) || article?.newNumber && christmasCodes.has(article.newNumber)) return "kerst";
   if (isPetitDV(text)) return "petit-dv";
@@ -225,7 +245,7 @@ export function combinePetitFours(products: SalesProduct[]): SalesProduct[] {
 export function combineKruidcakes(products: SalesProduct[]): SalesProduct[] {
   return combineArticleFamily(products, {
     name: "Kruidcake",
-    group: "bak",
+    group: "taart",
     codes: ["40350", "40821", "40861"],
     note: "Kruidcake, Sint Pepernoten Kruidcake en Seizoens Kruidcake samengeteld. Alle drie de artikelnummers blijven meetellen in het dagelijkse verloop.",
   });
