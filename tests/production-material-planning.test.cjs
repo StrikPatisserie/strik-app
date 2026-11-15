@@ -44,3 +44,83 @@ test('the document validator also rejects a forged active consumer with insuffic
  const forged={...next,tasks:next.tasks.map(t=>t.itemId==='cream'?{...t,status:'done',completedQuantity:7}:t.itemId==='base'?{...t,status:'done',completedQuantity:2}:t.id==='a'?{...t,status:'active'}:t)};
  assert.equal(w.validWorkspace(forged,recipes),false);
 });
+
+test('earlier preparations follow nested, shared and legacy links once, across departments and week boundaries', () => {
+ const task = (id, date, extra = {}) => ({ id, itemId: id, batchId: id, date, status: 'planned', departmentId: 'dessert', ...extra });
+ const end = task('end', '2026-11-20', { requires: ['cream', 'shared'] });
+ const state = { items: [], tasks: [end, task('cream', '2026-11-19', { requires: ['base', 'shared'] }), task('base', '2026-11-16', { departmentId: 'bak' }), task('shared', '2026-11-17'), task('legacy', '2026-11-15', { generatedFor: 'cream' }), task('same-day', '2026-11-20', { generatedFor: 'end' }), task('unrelated', '2026-11-14')] };
+ const before = JSON.stringify(state);
+ assert.deepEqual(Array.from(m.earlierPreparations(state, end), row => row.id), ['legacy', 'base', 'shared', 'cream']);
+ state.tasks.find(row => row.id === 'base').requires = ['end'];
+ assert.equal(m.earlierPreparations(state, end).length, 4, 'A cycle cannot duplicate or hang the overview');
+ state.tasks.find(row => row.id === 'cream').status = 'done';
+ state.tasks.find(row => row.id === 'cream').stockFulfillmentId = 'stock-check';
+ assert.deepEqual(Array.from(m.earlierPreparations(state, end), row => row.id), ['shared', 'cream']);
+ const stable = JSON.parse(before);
+ m.earlierPreparations(stable, stable.tasks[0]);
+ assert.equal(JSON.stringify(stable), before);
+});
+
+
+test('weekly material notices count consuming batches once, convert units and keep real preparation dates', () => {
+ const { state, recipes, command } = fixture();
+ let next = r.buildRecipePlan(r.buildRecipePlan(state, recipes, command('a')), recipes, command('b'));
+ next.tasks.push({ ...next.tasks.find(task => task.id === 'a'), id: 'finish-a', batchId: 'a', dependsOn: 'a', recordsOutput: false });
+ const before = JSON.stringify(next);
+ const uses = m.materialUsesByRecipe(next, recipes);
+ assert.deepEqual(Array.from(uses.get('cream'), use => [use.task.id, use.quantity, use.unit, use.week, Array.from(use.dates)]), [
+  ['a', 4.8, 'kg', '2026-11-16', ['2026-11-19']],
+  ['b', 3.2, 'kg', '2026-11-16', ['2026-11-19']],
+ ]);
+ assert.equal(uses.get('base').length, 1, 'A shared nested batch is a single consumer');
+ assert.equal(uses.get('base')[0].quantity, 2);
+ assert.equal(JSON.stringify(next), before);
+});
+
+test('separate dates remain visible and matching uses recipe identity across item aliases', () => {
+ const { state, recipes, command } = fixture();
+ let next = r.buildRecipePlan(state, recipes, command('a'));
+ const second = command('b'); second.preparation.choices.cream = { date: '2026-11-18' };
+ next = r.buildRecipePlan(next, recipes, second);
+ const creamB = next.tasks.find(task => task.generatedFor === 'b' && task.itemId === 'cream');
+ next.items.push({ ...next.items.find(item => item.id === 'cream'), id: 'cream-alias', unit: 'gram', name: 'Andere zichtbare naam' });
+ creamB.itemId = 'cream-alias'; creamB.quantity *= 1000;
+ next.tasks.find(task => task.id === 'b').materialNeeds[creamB.id] = 3200;
+ let uses = m.materialUsesByRecipe(next, recipes).get('cream');
+ assert.deepEqual(Array.from(uses, use => [use.task.id, use.quantity, use.dates[0]]), [['a', 4.8, '2026-11-19'], ['b', 3.2, '2026-11-18']]);
+ creamB.date = '2026-11-23';
+ uses = m.materialUsesByRecipe(next, recipes).get('cream');
+ assert.equal(uses.find(use => use.task.id === 'b').week, '2026-11-23');
+ next.items.find(item => item.id === 'cream-alias').recipeId = 'different-recipe';
+ assert.equal(m.materialUsesByRecipe(next, recipes).get('different-recipe')[0].quantity, 3200);
+});
+
+test('unplanned ingredients use scaled recipe demand and incompatible units stay unknown', () => {
+ const { state, recipes, command } = fixture();
+ const a = command('a'); a.preparation.choices.cream = { include: false };
+ const next = r.buildRecipePlan(state, recipes, a);
+ assert.equal(next.tasks.length, 1);
+ let use = m.materialUsesByRecipe(next, recipes).get('cream')[0];
+ assert.equal(use.quantity, 4.8); assert.equal(use.producerIds.length, 0); assert.equal(use.dates[0], '2026-11-20');
+ recipes[0].semiFinishedItems[0].unit = 'platen';
+ use = m.materialUsesByRecipe(next, recipes).get('cream')[0];
+ assert.equal(use.quantity, null);
+});
+
+test('saved material allocations survive recipe changes and split batches are never counted twice', () => {
+ const { state, recipes, command } = fixture();
+ const next = r.buildRecipePlan(state, recipes, command('a'));
+ const root = next.tasks.find(task => task.id === 'a'), first = next.tasks.find(task => task.itemId === 'cream');
+ const second = { ...first, id: 'cream-second', batchId: 'cream-second', date: '2026-11-18' };
+ next.tasks.push(second);
+ root.requires.push(second.id);
+ root.materialNeeds[first.id] = 3;
+ root.materialNeeds[second.id] = 1.8;
+ recipes[0].semiFinishedItems = [];
+ const use = m.materialUsesByRecipe(next, recipes).get('cream')[0];
+ assert.equal(use.quantity, 4.8);
+ assert.deepEqual(Array.from(use.dates), ['2026-11-18', '2026-11-19']);
+ assert.equal(use.producerIds.length, 2);
+ delete root.materialNeeds[second.id];
+ assert.equal(m.materialUsesByRecipe(next, recipes).get('cream')[0].quantity, null);
+});

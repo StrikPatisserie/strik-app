@@ -1,17 +1,19 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Icon from "./ProductionIcon";
 import TaskWorkPanel, { WorkClock } from "./TaskWorkPanel";
-import { convertRecipeQuantity, dateLabel, DEPARTMENTS, requiredTaskIds, STATUS_LABELS, taskIssues, type DemoRecipe, type PreviewState, type Task } from "./planning";
-import { materialBatchGroups, materialConsumers, recipeMaterialNeeds } from "./materialPlanning";
+import { convertRecipeQuantity, dateLabel, DEPARTMENTS, mondayOf, requiredTaskIds, STATUS_LABELS, taskIssues, type DemoRecipe, type PreviewState, type Task } from "./planning";
+import { earlierPreparations, materialBatchGroups, materialConsumers, materialUsesByRecipe } from "./materialPlanning";
+import { recipeLinks } from "./recipeGroups";
 import { taskWorkSummary } from "./workSummary";
 import type { WorkCommand } from "./productionWork";
 import s from "./PlanningInspector.module.css";
 const number = (value: number) => value.toLocaleString("nl-NL", { maximumFractionDigits: 2 });
 type Selection = { taskId?: string; recipeId?: string; amount: number };
 type Stock = { itemId: string; balance: number; known: boolean; count?: { date: string; quantity: number } | null };
-export default function PlanningInspector({ state, recipes, task, canManage, busy, revision, live, onClose, onWork, onComplete, onCorrect, onAdvanced, onRecipe, onCombine }: {
-  state: PreviewState; recipes: DemoRecipe[]; task: Task; canManage: boolean; busy: boolean; revision: number; live: boolean;
+const isImportNote = (line: string) => /^(Receptregels zijn overgenomen uit Halffabricaten Recepturen Strik|Werkwijze en kritieke temperaturen kunnen later per halffabricaat worden aangevuld)/i.test(line.trim());
+export default function PlanningInspector({ state, recipes, task, preparationDate, canManage, busy, revision, live, onClose, onWork, onComplete, onCorrect, onAdvanced, onRecipe, onCombine }: {
+  state: PreviewState; recipes: DemoRecipe[]; task: Task; preparationDate?: string; canManage: boolean; busy: boolean; revision: number; live: boolean;
   onClose: () => void; onWork: (command: WorkCommand) => Promise<string | undefined>; onComplete: (id: string) => void;
   onCorrect: (id: string) => void;
   onAdvanced: (id: string) => void; onRecipe: (itemId: string, taskId?: string) => void; onCombine: (ids: string[]) => Promise<string | undefined>;
@@ -22,6 +24,8 @@ export default function PlanningInspector({ state, recipes, task, canManage, bus
   const [combine, setCombine] = useState(false);
   const [error, setError] = useState("");
   const heading = useRef<HTMLHeadingElement>(null);
+  const links = useMemo(() => recipeLinks(state.tasks, state.items), [state.tasks, state.items]);
+  const materialUses = useMemo(() => materialUsesByRecipe(state, recipes), [state, recipes]);
   useEffect(() => { heading.current?.focus({ preventScroll: true }); }, [path.length]);
   useEffect(() => {
     if (!live) return;
@@ -40,76 +44,134 @@ export default function PlanningInspector({ state, recipes, task, canManage, bus
   const amount = currentTask?.quantity ?? selected?.amount ?? recipe?.yield ?? 0;
   const unit = currentTask ? item?.unit || "" : recipe?.unit || "";
   let recipeAmount: number | undefined;
-  try {
-    if (recipe) recipeAmount = convertRecipeQuantity(amount, unit, recipe.unit);
-  } catch { /* Show the original quantity until the recipe unit has been reviewed. */ }
+  try { if (recipe) recipeAmount = convertRecipeQuantity(amount, unit, recipe.unit); }
+  catch { /* Incompatible units remain explicit instead of inventing quantities. */ }
   const title = item?.name || recipe?.name || "Onderdeel niet gevonden";
   const stock = stocks.find(row => row.itemId === item?.id);
   const consumers = currentTask ? materialConsumers(state, recipes, currentTask.id) : [];
   const reserved = consumers.reduce((sum, row) => sum + (row.quantity || 0), 0);
-  const requirements = currentTask ? recipeMaterialNeeds(state, recipes, currentTask) : {};
   const issues = currentTask ? taskIssues(currentTask, state.tasks, state.items) : [];
   const steps = currentTask ? state.tasks.filter(row => row.batchId === currentTask.batchId).sort((a, b) => a.date.localeCompare(b.date)) : [];
+  const parents = currentTask ? (links.get(currentTask.id) || []).filter(link => state.tasks.find(row => row.id === link.rootId)?.batchId !== currentTask.batchId) : [];
+  const related = currentTask && !parents.length ? state.tasks.filter(row => row.batchId !== currentTask.batchId && links.get(row.id)?.some(link => state.tasks.find(root => root.id === link.rootId)?.batchId === currentTask.batchId)).sort((a, b) => a.date.localeCompare(b.date)) : [];
   const group = currentTask ? materialBatchGroups(state).find(group => group.some(row => row.id === currentTask.id)) : undefined;
   const completed = currentTask?.status === "done" ? taskWorkSummary(state, currentTask) : undefined;
+  const instructions = recipe?.steps.filter(line => !isImportNote(line)) || [];
+  const produced = currentTask?.status === "done" ? currentTask.stockFulfillmentId ? 0 : currentTask.completedQuantity ?? currentTask.quantity : 0;
+  const shortage = currentTask?.status === "done" && produced + 1e-6 < reserved && !currentTask.stockFulfillmentId;
+  const requiredIds = currentTask ? requiredTaskIds(currentTask) : [];
+  const relatedRecipeIds = new Set(related.map(row => state.items.find(item => item.id === row.itemId)?.recipeId));
+  const recipeParts = recipe?.semiFinishedItems?.filter(part => !relatedRecipeIds.has(part.recipeId)) || [];
+  const otherRequired = requiredIds.filter(id => !related.some(row => row.id === id) && !recipe?.semiFinishedItems?.some(part => state.items.find(item => item.id === state.tasks.find(task => task.id === id)?.itemId)?.recipeId === part.recipeId));
+  const focusDate = !selected ? preparationDate : undefined;
+  const visibleRelated = focusDate ? related.filter(row => row.date === focusDate) : related;
+  const visibleRecipeParts = focusDate ? [] : recipeParts;
+  const visibleRequired = focusDate ? otherRequired.filter(id => state.tasks.find(row => row.id === id)?.date === focusDate) : otherRequired;
+  const partCount = visibleRelated.length + visibleRecipeParts.length + visibleRequired.length;
+  const preparation = currentTask ? earlierPreparations(state, currentTask).filter(row => row.status !== "done") : [];
+  const preparationDates = [...new Set(preparation.map(row => row.date))];
+  function preparationDateLabel(row: Task) {
+    const days = currentTask ? Math.round((Date.parse(currentTask.date) - Date.parse(row.date)) / 86400000) : 0;
+    return `${dateLabel(row.date, true)}${days > 0 ? ` · ${days} ${days === 1 ? "dag" : "dagen"} ervoor` : ""}`;
+  }
+
   function open(selection: Selection) { setPath(current => [...current, selection]); setCombine(false); setError(""); }
   function openTask(row: Task) { open({ taskId: row.id, amount: row.quantity }); }
   function openComponent(recipeId: string, quantity: number, unit: string) {
-    const matches = state.tasks.filter(row => currentTask?.requires?.includes(row.id) && state.items.find(item => item.id === row.itemId)?.recipeId === recipeId);
+    const matches = state.tasks.filter(row => requiredIds.includes(row.id) && state.items.find(item => item.id === row.itemId)?.recipeId === recipeId);
     if (matches.length === 1) openTask(matches[0]);
     else {
       try { open({ recipeId, amount: convertRecipeQuantity(quantity, unit, recipes.find(row => row.id === recipeId)?.unit || unit) }); }
       catch { setError("Controleer de eenheid van dit halffabricaat in het recept."); }
     }
   }
-  const produced = currentTask?.status === "done" ? currentTask.stockFulfillmentId ? 0 : currentTask.completedQuantity ?? currentTask.quantity : 0;
+  function materialNotice(recipeId: string | undefined, date: string, ownProducer?: Task) {
+    if (!recipeId) return null;
+    const ownBatches = new Set([currentTask?.batchId, ...related.map(row => row.batchId)]);
+    if (ownProducer) {
+      for (const consumer of materialConsumers(state, recipes, ownProducer.id)) ownBatches.add(consumer.task.batchId);
+    }
+    const others = (materialUses.get(recipeId) || []).filter(use => use.week === mondayOf(date) && !ownBatches.has(use.task.batchId));
+    if (!others.length) return null;
+    const remaining = others.filter(use => use.producerIds.length
+      ? use.producerIds.some(id => state.tasks.find(row => row.id === id)?.status !== "done")
+      : use.task.status !== "done");
+    if (!remaining.length) return null;
+    return <details className={s.weekMaterial}>
+      <summary><Icon name="link" size={12}/><span>Ook deze week · {remaining.length} andere {remaining.length === 1 ? "productie" : "producties"}</span></summary>
+      {remaining.map(use => <button type="button" className={s.weekMaterialRow} key={`${use.task.batchId}:${use.week}`} onClick={() => openTask(use.task)}>
+        <span>{state.items.find(item => item.id === use.task.itemId)?.name || use.task.operation}<small>{use.dates.map(date => dateLabel(date, true)).join(" · ")}{use.producerIds.length > 0 && use.producerIds.every(id => state.tasks.find(row => row.id === id)?.status === "done") ? " · Gemaakt" : ""}</small></span>
+        <b>{use.quantity === null ? "Aantal controleren" : `${number(use.quantity)} ${use.unit}`}</b><Icon name="chevron" size={12}/>
+      </button>)}
+    </details>;
+  }
+  function taskRow(row: Task) {
+    const name = state.items.find(item => item.id === row.itemId)?.name || row.operation;
+    const portions = currentTask ? materialConsumers(state, recipes, row.id).filter(consumer => consumer.task.batchId === currentTask.batchId) : [];
+    const allocated = portions.length && portions.every(consumer => consumer.quantity !== null) ? portions.reduce((sum, consumer) => sum + (consumer.quantity || 0), 0) : undefined;
+    const shared = allocated !== undefined && Math.abs(allocated - row.quantity) > 1e-6;
+    const rowUnit = state.items.find(item => item.id === row.itemId)?.unit;
+    const earlier = !!currentTask && row.date < currentTask.date && row.status !== "done";
+    return <div key={row.id}><button type="button" className={`${s.linkRow} ${earlier ? s.earlier : ""}`} onClick={() => openTask(row)}>
+      <span className={`${s.dot} ${s[row.status]}`} aria-label={STATUS_LABELS[row.status]}>{earlier ? <Icon name="warning" size={13}/> : row.status === "done" ? <Icon name="check" size={12}/> : row.status === "active" ? <Icon name="play" size={10}/> : null}</span>
+      <span>{name}<small>{preparationDateLabel(row)}{steps.length > 1 && row.batchId === currentTask?.batchId ? ` · ${row.operation}` : ""}</small></span>
+      <b>{number(allocated ?? row.quantity)} {rowUnit}{shared && <small>batch {number(row.quantity)} {rowUnit}</small>}</b><Icon name="chevron" size={13}/>
+    </button>{materialNotice(state.items.find(item => item.id === row.itemId)?.recipeId, row.date)}</div>;
+  }
   return <section className={s.panel} aria-label="Productiedetails" onKeyDown={event => { if (event.key === "Escape" && !busy) { event.stopPropagation(); onClose(); } }}>
     <header className={s.heading}>
       {path.length > 0 && <button type="button" className={s.back} aria-label="Terug naar vorig product" disabled={busy} onClick={() => { setPath(path.slice(0, -1)); setCombine(false); setError(""); }}><Icon name="back" size={16}/>Terug</button>}
       <button type="button" className={s.close} aria-label="Productiedetails sluiten" disabled={busy} onClick={onClose}><Icon name="close" size={20}/></button>
       <h2 ref={heading} tabIndex={-1}>{title}</h2>
-      {currentTask && <small>{dateLabel(currentTask.date, true)} · {DEPARTMENTS.find(row => row.id === currentTask.departmentId)?.short}</small>}
+      {currentTask && <small>{focusDate ? `Voorbereiden ${dateLabel(focusDate, true)} · voor ${dateLabel(currentTask.date, true)}` : dateLabel(currentTask.date, true)} · {DEPARTMENTS.find(row => row.id === currentTask.departmentId)?.short}</small>}
       <div className={s.facts}><strong>{number(amount)} {unit}</strong>{currentTask ? <span className={s[currentTask.status]}>{STATUS_LABELS[currentTask.status]}</span> : <span>Recept · geen gekoppelde taak</span>}</div>
       {currentTask && <div className={s.time}>{currentTask.minutes !== undefined && <span><Icon name="clock" size={14}/>{number(currentTask.minutes)} min gepland</span>}<WorkClock state={state} taskId={currentTask.id}/>{completed && <span><Icon name="users" size={14}/>{completed.crewSize ?? "—"} · {completed.minutes === undefined ? "tijd onbekend" : `${number(completed.minutes)} min`}</span>}</div>}
+      {!focusDate && preparationDates.length > 0 && <p className={s.preparationNotice}><Icon name="warning" size={15}/><span>Voorbereiden {preparationDates.map(date => dateLabel(date, true)).join(" · ")}</span></p>}
     </header>
-    <div className={s.body}>
-      {!!issues.length && currentTask?.status !== "done" && <details className={s.warnings} open><summary><Icon name="warning" size={15}/>{issues.length} aandachtspunt{issues.length > 1 ? "en" : ""}</summary><ul>{issues.map(issue => <li key={issue}>{issue}</li>)}</ul></details>}
-      {consumers.length > 0 && currentTask && <details open><summary>Batch & afnemende producties</summary>
-        <div className={s.amounts}><span>Benodigd<strong>{consumers.some(row => row.quantity === null) ? "Deels onbekend" : `${number(reserved)} ${unit}`}</strong></span><span>{currentTask.stockFulfillmentId ? "Uit voorraad" : "Gemaakt"}<strong>{number(currentTask.stockFulfillmentId ? currentTask.quantity : produced)} {unit}</strong></span></div>
-        {currentTask.status === "done" && produced + 1e-6 < reserved && !currentTask.stockFulfillmentId &&
-          <p className={s.warnings}>{number(reserved)} {unit} gekoppeld · {number(produced)} {unit} gemaakt</p>}
-        <p className={s.stock}>{stockError ? "Voorraad tijdelijk niet beschikbaar" : stock?.known ? `Voorraadprognose ${number(stock.balance)} ${unit}` : stock?.count ? `Laatste telling ${number(stock.count.quantity)} ${unit} · ${dateLabel(stock.count.date, true)}` : "Actuele voorraad nog niet vastgesteld"}</p>
-        {consumers.map(row => <button type="button" className={s.linkRow} key={row.task.id} onClick={() => openTask(row.task)}><span>{row.item.name}<small>{dateLabel(row.task.date, true)} · {STATUS_LABELS[row.task.status]}</small></span><b>{row.quantity === null ? "Hoeveelheid?" : `${number(row.quantity)} ${unit}`}</b><Icon name="chevron" size={14}/></button>)}
-        {canManage && group && <div className={s.combine}>
-          {!combine ? <button type="button" disabled={busy} onClick={() => setCombine(true)}><Icon name="link" size={14}/>{group.length} batches bundelen</button> : <><p>{number(group.reduce((sum, row) => sum + row.quantity, 0))} {unit} op {dateLabel(currentTask.date, true)}. Alle gekoppelde producties gebruiken daarna deze batch.</p><button type="button" disabled={busy} onClick={async () => { const result = await onCombine(group.map(row => row.id)); setError(result || ""); if (!result) onClose(); }}>Bevestig gezamenlijke batch</button><button type="button" disabled={busy} onClick={() => setCombine(false)}>Annuleren</button></>}
-        </div>}
+    <div className={s.body} key={currentTask?.id || recipe?.id}>
+      {parents.length > 0 && <section className={s.forRecipes} aria-label="Bijbehorende recepten"><h3><Icon name="link" size={14}/>{parents.length === 1 ? "Voor" : "Gedeeld voor"}</h3>
+        {parents.map(link => {
+          const parent = state.tasks.find(row => row.id === link.rootId)!;
+          const portions = consumers.filter(row => row.task.batchId === parent.batchId);
+          const known = portions.length > 0 && portions.every(row => row.quantity !== null);
+          return <button type="button" className={s.linkRow} key={link.rootId} onClick={() => openTask(parent)}><span className={s.recipeDot} style={{ background: ["#50708f", "#81609b", "#b75676", "#987020", "#b55764", "#657b4f"][link.tone] }}/><span><strong>{link.name}</strong><small>{dateLabel(parent.date, true)}</small></span>{known && <b>{number(portions.reduce((sum, row) => sum + (row.quantity || 0), 0))} {unit}</b>}<Icon name="chevron" size={14}/></button>;
+        })}
+      </section>}
+      {currentTask && item?.kind === "component" && materialNotice(item.recipeId, currentTask.date, currentTask)}
+      {!!issues.length && currentTask?.status !== "done" && <details className={s.warnings}><summary><Icon name="warning" size={15}/>{issues.length} aandachtspunt{issues.length > 1 ? "en" : ""}</summary><ul>{issues.map(issue => <li key={issue}>{issue}</li>)}</ul></details>}
+      {shortage && <p className={s.warnings}>{number(reserved)} {unit} nodig · {number(produced)} {unit} gemaakt</p>}
+      {partCount > 0 && <details open={!parents.length || preparation.length > 0}><summary>{focusDate ? "Voorbereiden" : "Onderdelen"} <small>{partCount}</small>{!focusDate && preparation.length > 0 && <span className={s.preparationCount}><Icon name="warning" size={12}/>{preparation.length} eerder</span>}</summary>
+        {visibleRelated.map(taskRow)}
+          {visibleRecipeParts.length > 0 && recipeAmount === undefined && <p className={s.warnings}>Controleer de eenheid van de taak en het recept.</p>}
+          {recipeAmount !== undefined && visibleRecipeParts.map((part, index) => {
+            const child = recipes.find(row => row.id === part.recipeId);
+            const required = recipe && recipe.yield > 0 ? part.quantity * recipeAmount / recipe.yield : part.quantity;
+            const linked = requiredIds.filter(id => state.items.find(item => item.id === state.tasks.find(task => task.id === id)?.itemId)?.recipeId === part.recipeId);
+            if (linked.length === 1) return taskRow(state.tasks.find(row => row.id === linked[0])!);
+            return <div key={`${part.recipeId}:${index}`}><button type="button" className={s.linkRow} onClick={() => openComponent(part.recipeId, required, part.unit)}><span>{child?.name || "Receptkoppeling controleren"}<small>{linked.length ? linked.map(id => `${dateLabel(state.tasks.find(row => row.id === id)!.date, true)} · ${STATUS_LABELS[state.tasks.find(row => row.id === id)!.status]}`).join(" · ") : "Niet apart ingepland"}</small></span><b>{number(required)} {part.unit}</b><Icon name="chevron" size={14}/></button>{materialNotice(part.recipeId, currentTask?.date || task.date)}</div>;
+          })}
+          {visibleRequired.map(id => {
+            const row = state.tasks.find(task => task.id === id);
+            return row ? taskRow(row) : null;
+          })}
       </details>}
-      <details open><summary>Productiestappen</summary>
-        {steps.length ? steps.map(row => <button type="button" className={s.step} key={row.id} onClick={() => openTask(row)}><span className={`${s.dot} ${s[row.status]}`}>{row.status === "done" ? <Icon name="check" size={13}/> : row.status === "active" ? <Icon name="play" size={11}/> : null}</span><span><strong>{row.operation}</strong><small>{dateLabel(row.date, true)} · {STATUS_LABELS[row.status]}</small></span></button>) : <p className={s.muted}>Voor dit recept is geen productietaak gekoppeld.</p>}
-        {recipe?.steps.length ? <ol className={s.instructions}>{recipe.steps.map((step, index) => <li key={index}>{step}</li>)}</ol> : <p className={s.muted}>Werkwijze nog aanvullen.</p>}
-      </details>
-      <details open><summary>Halffabricaten & afhankelijkheden</summary>
-        {recipe && recipeAmount === undefined && <p className={s.warnings}>Controleer de eenheid van de taak en het recept om de benodigde hoeveelheden te berekenen.</p>}
-        {recipeAmount !== undefined && recipe?.semiFinishedItems?.map((part, index) => {
-          const child = recipes.find(row => row.id === part.recipeId);
-          const required = recipe.yield > 0 ? part.quantity * recipeAmount / recipe.yield : part.quantity;
-          const linked = currentTask?.requires?.filter(id => state.items.find(item => item.id === state.tasks.find(task => task.id === id)?.itemId)?.recipeId === part.recipeId) || [];
-          return <button type="button" key={`${part.recipeId}:${index}`} className={s.linkRow} onClick={() => openComponent(part.recipeId, required, part.unit)}><span>{child?.name || "Receptkoppeling controleren"}<small>{linked.length ? linked.map(id => `${dateLabel(state.tasks.find(row => row.id === id)!.date, true)} · ${STATUS_LABELS[state.tasks.find(row => row.id === id)!.status]}`).join(" · ") : "Geen productietaak gekoppeld"}</small></span><b>{number(required)} {part.unit}</b><Icon name="chevron" size={14}/></button>;
-        })}
-        {currentTask && requiredTaskIds(currentTask).filter(id => !recipe?.semiFinishedItems?.some(part => state.items.find(item => item.id === state.tasks.find(task => task.id === id)?.itemId)?.recipeId === part.recipeId)).map(id => {
-          const row = state.tasks.find(task => task.id === id); if (!row) return null;
-          return <button type="button" key={id} className={s.linkRow} onClick={() => openTask(row)}><span>{state.items.find(item => item.id === row.itemId)?.name}<small>{dateLabel(row.date, true)} · {STATUS_LABELS[row.status]}</small></span>{requirements[id] !== undefined && <b>{number(requirements[id])}</b>}<Icon name="chevron" size={14}/></button>;
-        })}
-        {!recipe?.semiFinishedItems?.length && !currentTask?.requires?.length && !currentTask?.dependsOn && <p className={s.muted}>Geen gekoppelde voorbereidingen.</p>}
-      </details>
-      <details><summary>Recept & ingrediënten</summary>
-        {recipe ? <><small>Basis {number(recipe.yield)} {recipe.unit}{recipe.yield > 0 ? ` · recept × ${recipeAmount === undefined ? "?" : number(recipeAmount / recipe.yield)}` : " · opbrengst controleren"}</small><div className={s.ingredients}>{recipe.ingredients.map((line, index) => <div key={index}><span>{line.name}</span><b>{recipe.yield > 0 && recipeAmount !== undefined ? number(line.quantity * recipeAmount / recipe.yield) : "Hoeveelheid controleren · basis " + number(line.quantity)} {line.unit}</b></div>)}</div><p className={s.muted}>Allergenen · {recipe.allergens.join(", ") || "Nog controleren"}</p></> : <p>Recept nog koppelen of aanvullen.</p>}
+      {focusDate && <button type="button" className={s.action} onClick={() => openTask(task)}><Icon name="book" size={14}/>Hele recept</button>}
+      {steps.length > 1 && !focusDate && <details><summary>Stappen <small>{steps.length}</small></summary>{steps.map(row => <button type="button" className={s.step} key={row.id} onClick={() => openTask(row)}><span className={`${s.dot} ${s[row.status]}`}>{row.status === "done" ? <Icon name="check" size={13}/> : row.status === "active" ? <Icon name="play" size={11}/> : null}</span><span><strong>{row.operation}</strong><small>{dateLabel(row.date, true)} · {STATUS_LABELS[row.status]}</small></span></button>)}</details>}
+      <details><summary>Recept</summary>
+        {recipe ? <><small>Basis {number(recipe.yield)} {recipe.unit}{recipe.yield > 0 ? ` · × ${recipeAmount === undefined ? "?" : number(recipeAmount / recipe.yield)}` : " · opbrengst controleren"}</small><div className={s.ingredients}>{recipe.ingredients.map((line, index) => <div key={index}><span>{line.name}</span><b>{recipe.yield > 0 && recipeAmount !== undefined ? number(line.quantity * recipeAmount / recipe.yield) : "Basis " + number(line.quantity)} {line.unit}</b></div>)}</div>{instructions.length > 0 && <ol className={s.instructions}>{instructions.map((step, index) => <li key={index}>{step}</li>)}</ol>}<p className={s.muted}>Allergenen · {recipe.allergens.join(", ") || "Nog controleren"}</p></> : <p>Recept nog koppelen of aanvullen.</p>}
         {canManage && item && <button type="button" className={s.action} disabled={busy} onClick={() => onRecipe(item.id, currentTask?.id)}><Icon name="edit" size={14}/>{recipe ? "Recept aanpassen" : "Recept toevoegen"}</button>}
       </details>
-      {(currentTask?.note || item?.note) && <details><summary>Opmerkingen</summary>{[currentTask?.note, item?.note].filter(Boolean).map((note, index) => <p className={s.note} key={index}>{note}</p>)}</details>}
-      {currentTask && canManage && <details><summary>Timer & voorraad gebruiken</summary><TaskWorkPanel key={currentTask.id} state={state} task={currentTask} item={item!} recipes={recipes} busy={busy} onCommand={onWork}/></details>}
+      {(currentTask || item?.note) && <details><summary>Meer</summary>
+        {consumers.length > 0 && currentTask && <div className={s.amounts}><span>Nodig<strong>{consumers.some(row => row.quantity === null) ? "Deels onbekend" : `${number(reserved)} ${unit}`}</strong></span><span>{currentTask.stockFulfillmentId ? "Uit voorraad" : "Gemaakt"}<strong>{number(currentTask.stockFulfillmentId ? currentTask.quantity : produced)} {unit}</strong></span></div>}
+        {(stockError || stock?.known || stock?.count) && <p className={s.stock}>{stockError ? "Voorraad tijdelijk niet beschikbaar" : stock?.known ? `Voorraadprognose ${number(stock.balance)} ${unit}` : `Geteld ${number(stock!.count!.quantity)} ${unit} · ${dateLabel(stock!.count!.date, true)}`}</p>}
+        {[currentTask?.note, item?.note].filter((note): note is string => !!note && !isImportNote(note)).map((note, index) => <p className={s.note} key={index}>{note}</p>)}
+        {canManage && group && currentTask && <div className={s.combine}>
+          {!combine ? <button type="button" disabled={busy} onClick={() => setCombine(true)}><Icon name="link" size={14}/>{group.length} batches bundelen</button> : <><p>{number(group.reduce((sum, row) => sum + row.quantity, 0))} {unit} op {dateLabel(currentTask.date, true)}.</p><button type="button" disabled={busy} onClick={async () => { const result = await onCombine(group.map(row => row.id)); setError(result || ""); if (!result) onClose(); }}>Bevestig gezamenlijke batch</button><button type="button" disabled={busy} onClick={() => setCombine(false)}>Annuleren</button></>}
+        </div>}
+        {currentTask && item && canManage && <TaskWorkPanel key={currentTask.id} state={state} task={currentTask} item={item} recipes={recipes} busy={busy} onCommand={onWork}/>}
+      </details>}
       {error && <p role="alert" className={s.warnings}>{error}</p>}
     </div>
-    {currentTask && canManage && <footer className={s.footer}><button type="button" disabled={busy || !!currentTask.stockFulfillmentId} onClick={() => currentTask.status === "done" ? onCorrect(currentTask.id) : onComplete(currentTask.id)}><Icon name={currentTask.status === "done" ? "edit" : "check"} size={16}/>{currentTask.status === "done" ? "Aantal corrigeren" : "Afronden"}</button><button type="button" className={s.secondary} disabled={busy} onClick={() => onAdvanced(currentTask.id)}><Icon name="settings" size={16}/>Aanpassen</button></footer>}
+    {currentTask && canManage && !focusDate && <footer className={s.footer}><button type="button" disabled={busy || !!currentTask.stockFulfillmentId} onClick={() => currentTask.status === "done" ? onCorrect(currentTask.id) : onComplete(currentTask.id)}><Icon name={currentTask.status === "done" ? "edit" : "check"} size={16}/>{currentTask.status === "done" ? "Aantal corrigeren" : "Afronden"}</button><button type="button" className={s.secondary} disabled={busy} onClick={() => onAdvanced(currentTask.id)}><Icon name="settings" size={16}/>Aanpassen</button></footer>}
   </section>;
 }

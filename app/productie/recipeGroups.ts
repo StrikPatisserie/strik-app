@@ -110,3 +110,60 @@ export function recipeLinks(tasks: Task[], items: Item[]): Map<string, RecipeLin
   for (const links of result.values()) links.sort((a, b) => a.name.localeCompare(b.name, "nl-NL") || a.rootId.localeCompare(b.rootId));
   return result;
 }
+
+
+export type RecipeTaskCluster = {
+  key: string;
+  name?: string;
+  links: RecipeLink[];
+  tasks: Task[];
+};
+
+/** Presentation only: keep a shared batch once, with all of its real consumers. */
+export function recipeTaskClusters(tasks: Task[], links: Map<string, RecipeLink[]>): RecipeTaskCluster[] {
+  const clusters = new Map<string, RecipeTaskCluster>();
+  for (const task of tasks) {
+    const family = links.get(task.id) || [];
+    const key = family.length ? JSON.stringify(family.map(link => link.rootId).sort()) : "unlinked";
+    const cluster = clusters.get(key) || { key, name: family.length === 1 ? family[0].name : undefined, links: family, tasks: [] };
+    cluster.tasks.push(task);
+    clusters.set(key, cluster);
+  }
+  for (const cluster of clusters.values()) {
+    const byId = new Map(cluster.tasks.map(task => [task.id, task]));
+    const depths = new Map<string, number>();
+    function depth(task: Task, visiting = new Set<string>()): number {
+      if (visiting.has(task.id)) return 0;
+      const cached = depths.get(task.id);
+      if (cached !== undefined) return cached;
+      const path = new Set(visiting).add(task.id);
+      const requirements = [...(task.requires || []), ...(task.dependsOn ? [task.dependsOn] : [])];
+      const value = requirements.reduce((result, id) => {
+        const before = byId.get(id);
+        return before ? Math.max(result, depth(before, path) + 1) : result;
+      }, 0);
+      depths.set(task.id, value);
+      return value;
+    }
+    // A recipe's preparation stays before its finishing steps, regardless of save order.
+    for (const task of cluster.tasks) depth(task);
+    cluster.tasks.sort((a, b) => depths.get(a.id)! - depths.get(b.id)!);
+  }
+  return [...clusters.values()].sort((a, b) => {
+    const rank = (cluster: RecipeTaskCluster) => !cluster.links.length ? 2 : cluster.links.length > 1 ? 0 : 1;
+    return rank(a) - rank(b) || (a.name || a.links.map(link => link.name).join(" · ")).localeCompare(b.name || b.links.map(link => link.name).join(" · "), "nl-NL") || a.key.localeCompare(b.key);
+  });
+}
+
+
+export type RecipeDayCluster = RecipeTaskCluster & { preparations: Task[] };
+
+/** Bundle only generated batches with a valid recipe link; manual and orphaned work stays visible. */
+export function recipeDayClusters(tasks: Task[], allTasks: Task[], links: Map<string, RecipeLink[]>): RecipeDayCluster[] {
+  const generatedBatches = new Set(allTasks.filter(task => task.generatedFor && links.get(task.id)?.some(link => link.rootId !== task.id)).map(task => task.batchId));
+  return recipeTaskClusters(tasks, links).map(cluster => ({
+    ...cluster,
+    tasks: cluster.tasks.filter(task => !generatedBatches.has(task.batchId) || !links.get(task.id)?.some(link => link.rootId !== task.id)),
+    preparations: cluster.tasks.filter(task => generatedBatches.has(task.batchId) && links.get(task.id)?.some(link => link.rootId !== task.id)),
+  }));
+}

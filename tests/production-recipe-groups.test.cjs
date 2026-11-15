@@ -8,7 +8,7 @@ const exportsObject = {};
 vm.runInNewContext(ts.transpileModule(fs.readFileSync('app/productie/recipeGroups.ts', 'utf8'), {
  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText, { exports: exportsObject, Map });
-const { recipeGroups, recipeLinks } = exportsObject;
+const { recipeGroups, recipeLinks, recipeTaskClusters, recipeDayClusters } = exportsObject;
 
 function task(id, changes = {}) {
  return { id, itemId: 'cake', batchId: `batch-${id}`, date: '2026-11-05', operation: 'Afmaken', ...changes };
@@ -93,4 +93,61 @@ test('missing and circular recipe relationships do not invent a recipe link', ()
  const links = recipeLinks([task('orphan', { generatedFor: 'missing' }),
   task('cycle-a', { generatedFor: 'cycle-b' }), task('cycle-b', { generatedFor: 'cycle-a' })], items);
  assert.equal(links.size, 0);
+});
+
+test('recipe clusters keep shared batches once and keep separate recipes and unlinked work separate', () => {
+ const tasks = [task('finish', { batchId: 'batch-root', dependsOn: 'root' }),
+  task('root', { requires: ['cream'] }), task('other', { requires: ['cream'] }),
+  task('cream', { itemId: 'cream', requires: ['nested'] }),
+  task('nested', { itemId: 'cream' }), task('unlinked')];
+ const before = JSON.stringify(tasks);
+ const clusters = recipeTaskClusters(tasks, recipeLinks(tasks, items));
+ assert.equal(clusters.length, 4);
+ const shared = clusters.find(cluster => cluster.links.length === 2);
+ assert.equal(shared.tasks.map(row => row.id).join(','), 'nested,cream');
+ assert.equal(clusters.find(cluster => cluster.links.length === 1 && cluster.links[0].rootId === 'root').tasks.map(row => row.id).join(','), 'root,finish');
+ assert.equal(clusters.find(cluster => !cluster.links.length).tasks[0].id, 'unlinked');
+ const flattened = clusters.flatMap(cluster => cluster.tasks);
+ assert.equal(flattened.length, tasks.length);
+ assert.equal(new Set(flattened.map(row => row.id)).size, tasks.length);
+ assert.equal(JSON.stringify(tasks), before);
+ assert(flattened.every(row => tasks.includes(row)), 'Grouping retains the actual tasks, quantities and statuses');
+});
+
+test('two batches of the same recipe remain separate even with the same displayed name', () => {
+ const tasks = [task('first'), task('first-prep', { generatedFor: 'first', itemId: 'cream' }),
+  task('second'), task('second-prep', { generatedFor: 'second', itemId: 'cream' })];
+ const clusters = recipeTaskClusters(tasks, recipeLinks(tasks, items));
+ assert.equal(clusters.length, 2);
+ assert.equal(new Set(clusters.map(cluster => cluster.key)).size, 2);
+ assert(clusters.every(cluster => cluster.tasks.length === 2));
+});
+
+
+test('day bundles hide only automatic batches, keeping manual work, follow-ups, orphans and every true task unchanged', () => {
+ const tasks = [
+  task('root', { date: '2026-11-06', requires: ['auto'] }),
+  task('other', { date: '2026-11-07', requires: ['auto'] }),
+  task('auto', { itemId: 'cream', date: '2026-11-05', generatedFor: 'root', quantity: 8, status: 'done' }),
+  task('auto-follow', { itemId: 'cream', batchId: 'batch-auto', dependsOn: 'auto' }),
+  task('manual', { itemId: 'cream' }),
+  task('orphan', { itemId: 'cream', generatedFor: 'absent' }),
+ ];
+ const before = JSON.stringify(tasks), links = recipeLinks(tasks, items);
+ const groups = recipeDayClusters(tasks.filter(row => row.date === '2026-11-05'), tasks, links);
+ const bundled = groups.flatMap(group => group.preparations);
+ assert.equal(bundled.map(row => row.id).sort().join(','), 'auto,auto-follow');
+ const shared = groups.find(group => group.preparations.includes(tasks[2]));
+ assert.equal(shared.links.length, 2);
+ assert.equal(shared.preparations[0].quantity, 8);
+ assert.equal(shared.preparations[0].status, 'done');
+ assert.equal(groups.flatMap(group => group.tasks).map(row => row.id).sort().join(','), 'manual,orphan');
+ const all = [...groups.flatMap(group => [...group.tasks, ...group.preparations])];
+ assert.equal(new Set(all.map(row => row.id)).size, 4);
+ assert(all.every(row => tasks.includes(row)));
+ assert.equal(JSON.stringify(tasks), before);
+ const filtered = recipeDayClusters([tasks[3]], tasks, links);
+ assert.equal(filtered[0].preparations[0].id, 'auto-follow', 'A generated follow-up remains bundled when its first step is outside the current filter');
+ const old = recipeTaskClusters(tasks, links);
+ assert.equal(old.flatMap(group => group.tasks).length, tasks.length, 'Existing non-bundled grouping stays available');
 });

@@ -1194,28 +1194,25 @@ test('quick completion prioritizes a measured timer and leaves unknown work blan
 });
 
 
-test('new planning uses small colour-coded edge links that open the complete original recipe', () => {
+test('recipe groups open the original recipe and keep quick completion and task identities intact', () => {
  const h = harness();
- const command = { task: { id: 'edge-root', itemId: 'fruit', date: sample.DEMO_TODAY, departmentId: 'dessert', operation: 'Afmaken', status: 'planned', note: '', source: 'manual', batchId: 'edge-batch', recordsOutput: true }, amount: 12, amountMode: 'quantity', preparation: { daysBefore: 1, choices: {} } };
+ const command = { task: { id: 'edge-root', itemId: 'fruit', date: sample.DEMO_TODAY, departmentId: 'dessert', operation: 'Afmaken', status: 'planned', note: '', source: 'manual', batchId: 'edge-batch', recordsOutput: true }, amount: 12, amountMode: 'quantity', preparation: { daysBefore: 0, choices: {} } };
  const state = recipePlanning.buildRecipePlan(sample.initialPreviewState(), sample.demoRecipes, command);
  const before = JSON.stringify(state);
- const live = { state, today: sample.DEMO_TODAY, recipes: sample.demoRecipes, ingredients: [], canManage: true, departments: planning.DEPARTMENTS.map(row => row.id), revision: 1 };
- const props = { live, initialLayout: 'new' };
+ const props = { initialLayout: 'new', live: { state, today: sample.DEMO_TODAY, recipes: sample.demoRecipes, ingredients: [], canManage: true, departments: planning.DEPARTMENTS.map(row => row.id), revision: 1 } };
  let tree = h.render(h.Component, props);
  const family = state.tasks.filter(task => task.id === 'edge-root' || task.generatedFor === 'edge-root');
- const colours = new Set();
- for (const task of family) {
+ const cluster = find(tree, node => node.type === 'section' && node.props['aria-label'] === 'Fruitdesserttaart');
+ for (const task of family.filter(row => !row.generatedFor)) {
   const card = find(tree, node => node.type === 'article' && node.props['data-task-id'] === task.id);
-  const link = find(card, node => node.type === 'button' && node.props['aria-label'] === 'Hele recept openen: Fruitdesserttaart');
-  colours.add(link.props.className);
-  assert.equal(text(link), '');
-  assert(!nodes(find(card, node => node.props?.className === 'openTask')).includes(link));
-  assert(!nodes(card).some(node => node.props?.className === 'cardMeta' && text(node).includes('Fruitdesserttaart')));
+  assert(nodes(card).some(node => node.type === 'button' && /^(Afronden|Aantal corrigeren):/.test(node.props['aria-label'])));
+  assert(!nodes(card).some(node => node.props?.className === 'recipeLinks'));
  }
- assert.equal(colours.size, 1);
- const preparation = family.find(task => task.generatedFor);
- const card = find(tree, node => node.type === 'article' && node.props['data-task-id'] === preparation.id);
- find(card, node => node.type === 'button' && node.props['aria-label'] === 'Hele recept openen: Fruitdesserttaart').props.onClick();
+ const bundledIds = nodes(tree).filter(node => node.props?.['data-preparation-ids']).flatMap(node => node.props['data-preparation-ids'].split(' '));
+ assert.deepEqual(bundledIds.sort(), Array.from(family.filter(row => row.generatedFor), row => row.id).sort());
+ const rootCard = find(cluster, node => node.type === 'article' && node.props['data-task-id'] === 'edge-root');
+ assert.equal(text(find(rootCard, node => node.props.className === 'openTask')), 'Afmaken');
+ button(cluster, 'Open recept Fruitdesserttaart').props.onClick();
  tree = h.render(h.Component, props);
  const inspector = find(tree, node => typeof node.type === 'function' && node.type.name === 'PlanningInspector');
  assert.equal(inspector.props.task.id, 'edge-root');
@@ -1226,7 +1223,7 @@ test('new planning uses small colour-coded edge links that open the complete ori
  assert(nodes(tree).some(node => typeof node.type === 'function' && node.props?.compact && 'onPlanned' in node.props));
 });
 
-test('a shared preparation offers each full recipe through its small edge menu', () => {
+test('a shared batch stays in one group and opens its own inspector with every consumer', () => {
  const h = harness(), state = sample.initialPreviewState();
  const base = state.tasks.find(task => task.departmentId === 'dessert' && !task.generatedFor && !task.dependsOn);
  state.tasks = [
@@ -1236,19 +1233,17 @@ test('a shared preparation offers each full recipe through its small edge menu',
  ];
  const props = { initialLayout: 'new', live: { state, today: sample.DEMO_TODAY, recipes: sample.demoRecipes, ingredients: [], canManage: true, departments: planning.DEPARTMENTS.map(row => row.id), revision: 1 } };
  let tree = h.render(h.Component, props);
- const card = find(tree, node => node.type === 'article' && node.props['data-task-id'] === 'shared-edge');
- assert(nodes(card).some(node => node.type === 'summary' && node.props['aria-label'] === '2 gekoppelde recepten bekijken'));
- const links = nodes(card).filter(node => node.type === 'button' && node.props['aria-label']?.startsWith('Hele recept openen:'));
- assert.equal(links.length, 2);
- for (const link of links) {
-  link.props.onClick({ currentTarget: { closest: () => ({ removeAttribute() {} }) } });
-  tree = h.render(h.Component, props);
-  const inspector = find(tree, node => typeof node.type === 'function' && node.type.name === 'PlanningInspector');
-  assert.equal(state.items.find(item => item.id === inspector.props.task.itemId).name, link.props['aria-label'].replace('Hele recept openen: ', ''));
- }
+ assert.equal(nodes(tree).filter(node => node.props?.['data-preparation-ids'] === 'shared-edge').length, 1);
+ assert(!nodes(tree).some(node => node.type === 'article' && node.props['data-task-id'] === 'shared-edge'));
+ const shared = button(tree, 'Voorbereiden gedeeld voor Citroen-meringuetaart, Fruitdesserttaart · ma 26 okt');
+ assert(text(shared).includes('2 recepten'));
+ shared.props.onClick();
+ tree = h.render(h.Component, props);
+ const inspector = find(tree, node => typeof node.type === 'function' && node.type.name === 'PlanningInspector');
+ assert.equal(inspector.props.task.id, 'shared-edge');
+ assert.equal(recipeGrouping.recipeLinks(state.tasks, state.items).get('shared-edge').length, 2);
  assert.equal(state.tasks.length, 3);
 });
-
 
 test('new planning uses icon abbreviations for every department while keeping full accessible names and collapse controls', () => {
  const h=harness(),props={initialLayout:'new'};
@@ -1680,4 +1675,29 @@ test('quick completion explicitly records unknown work without invented names, c
   assert.equal(saved.tasks.find(row=>row.id===task.id).completedQuantity,600);
   assert.equal(saved.productionWork.work.length,0);
  }
+});
+
+test('preparation is bundled on the actual work day and the final card keeps its earlier-date reminder', () => {
+ const h = harness(), state = sample.initialPreviewState();
+ const base = state.tasks.find(task => task.departmentId === 'dessert' && !task.generatedFor && !task.dependsOn);
+ state.tasks = [
+  { ...base, id: 'prep-root', batchId: 'prep-root', itemId: 'fruit', date: '2026-10-30', status: 'planned', requires: ['prep-before'] },
+  { ...base, id: 'prep-before', batchId: 'prep-before', itemId: 'creme', date: '2026-10-28', status: 'planned', generatedFor: 'prep-root', requires: [] },
+ ];
+ const before = JSON.stringify(state);
+ const props = { initialLayout: 'new', live: { state, today: sample.DEMO_TODAY, recipes: sample.demoRecipes, ingredients: [], canManage: true, departments: planning.DEPARTMENTS.map(row => row.id), revision: 1 } };
+ let tree = h.render(h.Component, props);
+ const root = find(tree, node => node.type === 'article' && node.props['data-task-id'] === 'prep-root');
+ const reminder = find(root, node => node.type === 'button' && node.props.className === 'preparation');
+ assert(text(reminder).includes('Voorbereiden wo 28 okt'));
+ const dayCell = find(tree, node => node.props?.onDrop && node.props['aria-label'] === 'Desserttaart & fruit · wo 28 okt');
+ const bundle = find(dayCell, node => node.props?.['data-preparation-ids'] === 'prep-before');
+ assert(!nodes(tree).some(node => node.props?.['data-task-id'] === 'prep-before'));
+ bundle.props.onClick(); tree = h.render(h.Component, props);
+ const focused = find(tree, node => typeof node.type === 'function' && node.type.name === 'PlanningInspector');
+ assert.equal(focused.props.task.id, 'prep-root');
+ assert.equal(focused.props.preparationDate, '2026-10-28');
+ reminder.props.onClick(); tree = h.render(h.Component, props);
+ assert.equal(find(tree, node => typeof node.type === 'function' && node.type.name === 'PlanningInspector').props.task.id, 'prep-root');
+ assert.equal(JSON.stringify(state), before);
 });

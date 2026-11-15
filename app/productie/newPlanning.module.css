@@ -249,3 +249,86 @@
   font-size:13px;
   text-decoration:underline;
 }
+
+
+.recipeCluster {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 3px;
+  margin-bottom: 4px;
+  border: 1px solid #dce4d8;
+  border-left: 2px solid var(--recipe-link-color);
+  border-radius: 8px;
+  background: #f7f9f5;
+}
+.recipeCluster[data-selected=true] { border-color: #78916b; }
+.clusterHeading {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  padding: 2px 1px 3px;
+  border: 0;
+  background: none;
+  color: #40574c;
+  font: inherit;
+  font-size: var(--task-detail-size, 11px);
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: left;
+  cursor: pointer;
+}
+.clusterHeading svg { flex-shrink: 0; margin-top: 1px; color: var(--recipe-link-color); }
+.clusterHeading span { min-width: 0; overflow-wrap: normal; word-break: normal; }
+.clusterHeading:focus-visible { outline: 2px solid #1b3344; outline-offset: 2px; }
+.sharedCluster { border-left-color: #50708f; background: #f2f6f8; }
+.sharedCluster .clusterHeading { color: #355568; }
+.recipeCluster .card { margin-right: 0; }
+.day .recipeCluster { margin-bottom: 3px; }
+@media (pointer: coarse) { .clusterHeading { min-height: 28px; align-items: center; } }
+
+.preparation {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: #fff0df;
+  color: #884521 !important;
+  text-align: left;
+  font-size: var(--task-detail-size, 10px) !important;
+  line-height: 1.3;
+}
+.preparation svg { flex-shrink: 0; }
+
+
+.preparationBundle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  min-width: 0;
+  padding: 5px 3px;
+  border: 0;
+  border-radius: 5px;
+  background: #fff4e6;
+  color: #884521;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.preparationBundle > span { flex: 1; min-width: 0; }
+.preparationBundle strong { display: block; font-size: var(--task-title-size, 13px); line-height: 1.2; overflow-wrap: normal; word-break: normal; }
+.preparationBundle small { display: block; margin-top: 1px; font-size: var(--task-detail-size, 11px); line-height: 1.3; }
+.preparationBundle > svg { flex-shrink: 0; }
+.preparationBundle.done { color: #3c5d3d; background: #e1eadb; }
+.preparationBundle.active { color: #943d32; background: #fff3ed; }
+.preparationBundle:focus-visible { outline: 2px solid #1b3344; outline-offset: 1px; }
+@media (pointer: coarse) { .preparationBundle { min-height: 40px; } }

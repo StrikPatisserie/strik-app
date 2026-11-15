@@ -1,4 +1,4 @@
-import { convertRecipeQuantity, requiredTaskIds, type DemoRecipe, type PreviewState, type Task } from "./planning";
+import { convertRecipeQuantity, mondayOf, requiredTaskIds, type DemoRecipe, type PreviewState, type Task } from "./planning";
 
 const round = (value: number) => Math.round(value * 1e9) / 1e9;
 
@@ -36,6 +36,100 @@ export function materialConsumers(state: PreviewState, recipes: DemoRecipe[], pr
     item: state.items.find(item => item.id === task.itemId)!,
     quantity: (task.materialNeeds || recipeMaterialNeeds(state, recipes, task))[producerId] ?? null,
   }));
+}
+
+export type MaterialWeekUse = {
+  task: Task;
+  week: string;
+  dates: string[];
+  quantity: number | null;
+  unit: string;
+  producerIds: string[];
+};
+
+/** One demand per consuming batch. Follow-up steps and shared output never multiply it. */
+export function materialUsesByRecipe(state: PreviewState, recipes: DemoRecipe[]): Map<string, MaterialWeekUse[]> {
+  const items = new Map(state.items.map(item => [item.id, item]));
+  const recipeMap = new Map(recipes.map(recipe => [recipe.id, recipe]));
+  const tasks = new Map(state.tasks.map(task => [task.id, task]));
+  const batches = new Map<string, Task[]>();
+  for (const task of state.tasks) batches.set(task.batchId, [...(batches.get(task.batchId) || []), task]);
+  const result = new Map<string, MaterialWeekUse[]>();
+
+  for (const batch of batches.values()) {
+    const task = batch.find(row => row.recipePlan)
+      || batch.find(row => row.requires?.length)
+      || batch.find(row => !row.dependsOn)
+      || batch[0];
+    const item = items.get(task.itemId);
+    const recipe = state.productionWork?.overrides?.[task.id] || recipeMap.get(item?.recipeId || "");
+    if (!item) continue;
+    const needs = task.materialNeeds || recipeMaterialNeeds(state, recipes, task);
+    const dependencies = [...new Set(task.requires || [])].map(id => tasks.get(id))
+      .filter((row): row is Task => !!row);
+    const partIds = new Set([
+      ...(recipe?.semiFinishedItems || []).map(part => part.recipeId),
+      ...dependencies.map(row => items.get(row.itemId)?.recipeId).filter((id): id is string => !!id),
+    ]);
+
+    for (const recipeId of partIds) {
+      const parts = recipe?.semiFinishedItems?.filter(part => part.recipeId === recipeId) || [];
+      const producers = dependencies.filter(row => items.get(row.itemId)?.recipeId === recipeId);
+      const unit = recipeMap.get(recipeId)?.unit || parts[0]?.unit || items.get(producers[0]?.itemId)?.unit;
+      if (!unit) continue;
+      let calculated: number | null = null;
+      try {
+        if (recipe && recipe.yield > 0 && parts.length) {
+          const scale = convertRecipeQuantity(task.quantity, item.unit, recipe.unit) / recipe.yield;
+          calculated = round(parts.reduce((sum, part) => sum + convertRecipeQuantity(part.quantity * scale, part.unit, unit), 0));
+        }
+      } catch { /* An unknown conversion stays visible as an unknown amount. */ }
+      const uses = producers.length ? producers.map(producer => {
+        let quantity: number | null = null;
+        try {
+          const reserved = needs[producer.id];
+          if (reserved !== undefined) quantity = convertRecipeQuantity(reserved, items.get(producer.itemId)!.unit, unit);
+          else if (producers.length === 1) quantity = calculated;
+        } catch { /* Incompatible legacy units need review. */ }
+        return { date: producer.date, quantity, producerId: producer.id };
+      }) : [{ date: task.date, quantity: calculated, producerId: undefined }];
+      const weeks = new Map<string, MaterialWeekUse>();
+      for (const use of uses) {
+        const week = mondayOf(use.date);
+        const entry = weeks.get(week) || { task, week, dates: [], quantity: 0, unit, producerIds: [] };
+        entry.dates = [...new Set([...entry.dates, use.date])].sort();
+        entry.quantity = entry.quantity === null || use.quantity === null ? null : round(entry.quantity + use.quantity);
+        if (use.producerId) entry.producerIds.push(use.producerId);
+        weeks.set(week, entry);
+      }
+      result.set(recipeId, [...(result.get(recipeId) || []), ...weeks.values()]);
+    }
+  }
+  return result;
+}
+
+/** Scheduled preparation follows the actual dependency graph, including nested and shared batches. */
+export function earlierPreparations(state: PreviewState, task: Task): Task[] {
+  const byId = new Map(state.tasks.map(row => [row.id, row]));
+  const generated = new Map<string, Task[]>();
+  for (const row of state.tasks) {
+    if (row.generatedFor) generated.set(row.generatedFor, [...(generated.get(row.generatedFor) || []), row]);
+  }
+  const seen = new Set([task.id]);
+  const queue = [task];
+  for (let index = 0; index < queue.length; index++) {
+    const consumer = queue[index];
+    if (consumer.stockFulfillmentId && consumer.status === "done") continue;
+    const ids = [...requiredTaskIds(consumer), ...(generated.get(consumer.id) || []).map(row => row.id)];
+    for (const id of ids) {
+      const producer = byId.get(id);
+      if (!producer || seen.has(id)) continue;
+      seen.add(id);
+      queue.push(producer);
+    }
+  }
+  return queue.slice(1).filter(row => row.date < task.date)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
 }
 
 export function canCombineMaterial(state: PreviewState, task: Task) {
