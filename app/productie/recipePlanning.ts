@@ -179,28 +179,66 @@ export function currentPlanCommand(state:PreviewState,task:Task):PlanCommand {
   return {task:{...task},amount:saved?.amount || task.quantity,amountMode:saved?.amountMode || "quantity",...(preparation?{preparation:{daysBefore:preparation.daysBefore,...(preparation.combine!==undefined?{combine:preparation.combine}:{}),choices}}:{})};
 }
 export type PlanChange={name:string;unit:string;before?:number;after?:number;detail?:string};
+/** Compare a recipe with its reserved share of a batch, never the batch total.
+ * Use saved reservations so a later recipe edit cannot hide a changed need. */
+function savedPreparationAllocations(state:PreviewState,root:Task) {
+  const tasks=new Map(state.tasks.map(task=>[task.id,task]));
+  const quantities=new Map<string,number>(),errors=new Set<string>();
+  const consumers=new Map<string,number>();
+  for(const task of state.tasks)for(const id of new Set(task.requires || []))consumers.set(id,(consumers.get(id) || 0)+1);
+  const visit=(consumer:Task,share:number,path:Set<string>)=>{
+    for(const id of new Set(consumer.requires || [])) {
+      const producer=tasks.get(id);if(!producer)continue;
+      if(path.has(id)){errors.add("Controleer de volgorde van de gekoppelde halffabricaten.");continue;}
+      const saved=consumer.materialNeeds?.[id];
+      const amount=saved!==undefined?saved:consumers.get(id)===1?producer.quantity:undefined;
+      if(amount===undefined || !Number.isFinite(amount) || amount<=0 || producer.quantity<=0) {
+        errors.add("De opgeslagen verdeling van een gezamenlijk halffabricaat ontbreekt. Controleer de hoeveelheden.");continue;
+      }
+      const allocation=stableQuantity(amount*share);
+      quantities.set(id,stableQuantity((quantities.get(id) || 0)+allocation));
+      visit(producer,allocation/producer.quantity,new Set([...path,id]));
+    }
+  };
+  visit(root,1,new Set([root.id]));
+  // Keep disconnected preparations visible in the review of older plans too.
+  for(const child of state.tasks.filter(task=>task.generatedFor===root.id)) {
+    if(quantities.has(child.id))continue;
+    if((consumers.get(child.id) || 0)>1){errors.add("Controleer de opgeslagen verdeling van het gezamenlijke halffabricaat.");continue;}
+    quantities.set(child.id,child.quantity);
+    visit(child,1,new Set([root.id,child.id]));
+  }
+  const byItem=new Map<string,{quantity:number;tasks:Task[]}>();
+  for(const [id,quantity] of quantities) {
+    const task=tasks.get(id)!;
+    const previous=byItem.get(task.itemId);
+    byItem.set(task.itemId,{quantity:stableQuantity((previous?.quantity || 0)+quantity),tasks:[...(previous?.tasks || []),task]});
+  }
+  return {byItem,errors:[...errors]};
+}
 export function recipePlanChanges(state:PreviewState,recipes:DemoRecipe[],task:Task,command=currentPlanCommand(state,task)) {
   const proposal=preparationProposal(state,recipes,command),changes:PlanChange[]=[];
-  const children=state.tasks.filter(t=>t.generatedFor===task.id);
+  const allocations=savedPreparationAllocations(state,task);
   const rows=proposal.rows.filter(r=>r.included);
   const item=state.items.find(i=>i.id===task.itemId);
   if(Math.abs(proposal.quantity-task.quantity)>1e-8)changes.push({name:item?.name || "Product",unit:item?.unit || "",before:task.quantity,after:proposal.quantity});
-  for(const child of children) {
-    const row=rows.find(r=>r.itemId===child.itemId),part=state.items.find(i=>i.id===child.itemId);
-    if(!row)changes.push({name:part?.name || "Halffabricaat",unit:part?.unit || "",before:child.quantity});
-    else if(Math.abs(row.quantity-child.quantity)>1e-8)changes.push({name:row.name,unit:row.unit,before:child.quantity,after:row.quantity});
+  for(const [itemId,allocation] of allocations.byItem) {
+    const row=rows.find(r=>r.itemId===itemId),part=state.items.find(i=>i.id===itemId);
+    if(!row)changes.push({name:part?.name || "Halffabricaat",unit:part?.unit || "",before:allocation.quantity});
+    else if(Math.abs(row.quantity-allocation.quantity)>1e-8)changes.push({name:row.name,unit:row.unit,before:allocation.quantity,after:row.quantity});
     else {
-      const oldRequires=requiredTaskIds(child).map(id=>state.tasks.find(t=>t.id===id)?.itemId).sort();
+      const oldRequires=[...new Set(allocation.tasks.flatMap(child=>requiredTaskIds(child).map(id=>state.tasks.find(t=>t.id===id)?.itemId)))].sort();
       const nextRequires=row.requires.map(id=>rows.find(r=>r.recipeId===id)?.itemId).sort();
-      if(JSON.stringify(oldRequires)!==JSON.stringify(nextRequires))changes.push({name:row.name,unit:row.unit,before:child.quantity,after:row.quantity,detail:"Benodigde halffabricaten gewijzigd"});
+      if(JSON.stringify(oldRequires)!==JSON.stringify(nextRequires))changes.push({name:row.name,unit:row.unit,before:allocation.quantity,after:row.quantity,detail:"Benodigde halffabricaten gewijzigd"});
     }
   }
-  for(const row of rows)if(!children.some(t=>t.itemId===row.itemId))changes.push({name:row.name,unit:row.unit,after:row.quantity});
+  for(const row of rows)if(!allocations.byItem.has(row.itemId))changes.push({name:row.name,unit:row.unit,after:row.quantity});
   const direct=recipes.find(r=>r.id===item?.recipeId)?.semiFinishedItems || [];
   const oldDirect=(task.requires || []).map(id=>state.tasks.find(t=>t.id===id)?.itemId).sort();
   const nextDirect=rows.filter(r=>direct.some(d=>d.recipeId===r.recipeId)).map(r=>r.itemId).sort();
   if(JSON.stringify(oldDirect)!==JSON.stringify(nextDirect) && !changes.length)changes.push({name:item?.name || "Product",unit:item?.unit || "",detail:"Volgorde van halffabricaten gewijzigd"});
-  return {changes,errors:proposal.errors,changed:!!changes.length || !!proposal.errors.length};
+  const errors=[...proposal.errors,...allocations.errors];
+  return {changes,errors,changed:!!changes.length || !!errors.length};
 }
 export function recipePlanUpdateBlock(state:PreviewState,task:Task):string|undefined {
   const group=state.tasks.filter(t=>t.id===task.id || t.generatedFor===task.id),ids=new Set(group.map(t=>t.id));

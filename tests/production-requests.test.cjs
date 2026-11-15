@@ -1,7 +1,7 @@
 const {productionConcurrencyImports}=require('./helpers/production-concurrency.cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
 function load(file,imports={},globals={}){ imports={...productionConcurrencyImports(imports),...imports};const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{exports,require:name=>{assert(name in imports,`Unmocked ${name}`);return imports[name];},Date,Intl,Set,Map,structuredClone,Request,Response,URL,URLSearchParams,crypto:require('node:crypto').webcrypto,...globals});return exports;}
-const planning=load('app/productie/planning.ts'),recipe=load('app/productie/recipePlanning.ts',{'./planning':planning,'./materialPlanning':load('app/productie/materialPlanning.ts',{'./planning':planning})}),requests=load('app/productie/requestPlanning.ts',{'./planning':planning,'./recipePlanning':recipe,'./taskOperations':load('app/productie/taskOperations.ts')}),access=load('app/lib/auth/access.ts'),rights=load('app/productie/access.ts',{'../lib/auth/access':access,'./planning':planning});
+const planning=load('app/productie/planning.ts'),recipe=load('app/productie/recipePlanning.ts',{'./planning':planning,'./materialPlanning':load('app/productie/materialPlanning.ts',{'./planning':planning})}),requests=load('app/productie/requestPlanning.ts',{'./planning':planning,'./recipePlanning':recipe,'./materialPlanning':load('app/productie/materialPlanning.ts',{'./planning':planning}),'./taskOperations':load('app/productie/taskOperations.ts')}),access=load('app/lib/auth/access.ts'),rights=load('app/productie/access.ts',{'../lib/auth/access':access,'./planning':planning});
 const state=()=>({version:1,items:[{id:'cake',name:'Testtaart',kind:'product',departmentId:'dessert',unit:'stuks',note:'',stock:0}],tasks:[]});
 const now='2026-11-01T12:00:00.000Z',create={kind:'create',itemId:'cake',quantity:20,neededBy:'2026-11-06',note:'Voor de winkels'};
 const apply=(s,c,id='request-1')=>requests.applyProductionRequest(s,[],c,'actor',now,id);
@@ -646,4 +646,66 @@ test('a conflicted move retains its destination and original revision for safe r
  assert.equal(ui.find(tree,node=>node.props?.name==='departmentId').props.value,'bak');
  assert(requestText(ui.find(tree,node=>node.props?.role==='alert')).includes('intussen gewijzigd'));
  assert.equal(tree.props['data-production-update-block'],true);
+});
+
+
+test('returning an unstarted task reuses its request and retains the operation when rescheduled',()=>{
+ const requested=apply(state(),create),planned=apply(requested,{kind:'plan',id:'request-1',date:'2026-11-05',departmentId:'dessert'},'task-1');
+ planned.tasks[0].operation='Alleen vullen';
+ const returned=apply(planned,{kind:'return',id:'task-1'},'new-request');
+ assert.equal(returned.tasks.length,0);assert.equal(returned.productionRequests.length,1);
+ assert.equal(returned.productionRequests[0].id,'request-1');assert.equal(returned.productionRequests[0].quantity,20);
+ assert.equal(returned.productionRequests[0].plannedTaskId,undefined);assert.equal(returned.removedTasks[0].task.id,'task-1');
+ const replanned=apply(returned,{kind:'plan',id:'request-1',date:'2026-11-06',departmentId:'dessert'},'task-2');
+ assert.equal(replanned.tasks[0].operation,'Alleen vullen');assert.equal(replanned.tasks[0].quantity,20);
+ assert.equal(replanned.items[0].stock,0);
+});
+test('returning shared preparation releases only its exact demand, regardless of which product owned the batch',()=>{
+ for(const owner of ['a','b']){
+  const initial={...state(),items:[{...state().items[0],id:'a'},{...state().items[0],id:'b'},{...state().items[0],id:'cream',kind:'component',unit:'kg'}],tasks:[
+   {id:'cream',itemId:'cream',departmentId:'dessert',date:'2026-11-03',quantity:8,operation:'Bereiden',status:'planned',note:'',source:'manual',batchId:'cream',recordsOutput:true,generatedFor:owner},
+   ...['a','b'].map((id,i)=>({id,itemId:id,departmentId:'dessert',date:'2026-11-04',quantity:10,operation:'Afwerken',status:'planned',note:'',source:'manual',batchId:id,recordsOutput:true,requires:['cream'],materialNeeds:{cream:i?3.2:4.8}}))]};
+  const returned=apply(initial,{kind:'return',id:'a'},'back-a');
+  assert.equal(returned.tasks.find(row=>row.id==='cream').quantity,3.2);
+  assert.equal(returned.tasks.find(row=>row.id==='cream').generatedFor,'b');
+  assert.equal(returned.tasks.find(row=>row.id==='b').materialNeeds.cream,3.2);
+  assert.equal(returned.tasks.some(row=>row.id==='a'),false);
+  assert.equal(initial.tasks[0].quantity,8);
+ }
+});
+test('return refuses started/completed work, shared batches with unknown allocations and forged cross-department actions',async()=>{
+ const planned=apply(apply(state(),create),{kind:'plan',id:'request-1',date:'2026-11-05',departmentId:'dessert'},'task-1');
+ for(const status of ['active','done','blocked'])assert.throws(()=>apply({...planned,tasks:planned.tasks.map(task=>({...task,status}))},{kind:'return',id:'task-1'}),/gestart/);
+ assert.throws(()=>apply({...planned,productionWork:{timers:{'task-1':{}}}},{kind:'return',id:'task-1'}),/gestart/);
+ const h=harness(baker,{...planned,tasks:planned.tasks.map(task=>({...task,departmentId:'ijs'}))});
+ assert.equal((await h.route.POST(post({kind:'return',id:'task-1'}))).status,403);assert.equal(h.saves.length,0);
+ const permitted=harness(manager,planned),response=await permitted.route.POST(post({kind:'return',id:'task-1'}));
+ assert.equal(response.status,200);assert.equal((await response.json()).state.tasks.length,0);
+});
+
+test('return and replan retain one output across multiple unstarted worksteps',()=>{
+ let planned=apply(apply(state(),create),{kind:'plan',id:'request-1',date:'2026-11-05',departmentId:'dessert'},'task-1');
+ planned.tasks[0].recordsOutput=false;
+ planned.tasks.push({...planned.tasks[0],id:'finish',date:'2026-11-06',operation:'Doorhalen',dependsOn:'task-1',recordsOutput:true});
+ const returned=apply(planned,{kind:'return',id:'task-1'},'back');
+ assert.equal(returned.tasks.length,0);
+ const result=apply(returned,{kind:'plan',id:'request-1',date:'2026-11-06',departmentId:'dessert'},'again');
+ assert.equal(result.tasks.length,2);assert.equal(result.tasks[0].recordsOutput,false);
+ assert.equal(result.tasks[1].date,'2026-11-07');assert.equal(result.tasks[1].recordsOutput,true);
+ assert.equal(result.tasks[1].dependsOn,'again');assert.equal(result.tasks[1].quantity,20);
+});
+
+test('return and replan shift nested preparation dates equally without adding extra lead days',()=>{
+ const recipes=[
+  {id:'cake',name:'Taart',yield:10,unit:'stuks',ingredients:[],steps:[],allergens:[],semiFinishedItems:[{recipeId:'cream',quantity:4,unit:'kg'}]},
+  {id:'cream',name:'Creme',yield:4,unit:'kg',ingredients:[],steps:[],allergens:[],type:'semiFinished',semiFinishedItems:[{recipeId:'caramel',quantity:1,unit:'kg'}]},
+  {id:'caramel',name:'Karamel',yield:1,unit:'kg',ingredients:[],steps:[],allergens:[],type:'semiFinished',semiFinishedItems:[]},
+ ];
+ const source={...state(),items:recipes.map(r=>({...state().items[0],id:r.id,recipeId:r.id,unit:r.unit,kind:r.id==='cake'?'product':'component'}))};
+ const original=recipe.buildRecipePlan(source,recipes,{task:{id:'root',itemId:'cake',date:'2026-11-20',departmentId:'dessert',operation:'Afwerken',status:'planned',source:'manual',note:'',batchId:'batch',recordsOutput:true},amount:10,amountMode:'quantity',preparation:{daysBefore:0,choices:{cream:{date:'2026-11-19'},caramel:{date:'2026-11-18'}}}});
+ const returned=requests.applyProductionRequest(original,recipes,{kind:'return',id:'root'},'actor',now,'back');
+ const again=requests.applyProductionRequest(returned,recipes,{kind:'plan',id:'back',date:'2026-11-23',departmentId:'dessert'},'actor',now,'again');
+ assert.equal(again.tasks.find(t=>t.itemId==='cream').date,'2026-11-22');
+ assert.equal(again.tasks.find(t=>t.itemId==='caramel').date,'2026-11-21');
+ assert.equal(again.tasks.find(t=>t.itemId==='cake').date,'2026-11-23');
 });

@@ -2,7 +2,7 @@ import {readEditBase, retryConcurrentSave, assertTaskCurrent} from "@/app/produc
 import {ConcurrentChangeError, assertUnchanged} from "@/app/productie/concurrentChanges";
 import {getCurrentProfile} from '@/app/lib/auth/session';
 import {canAccessLogistiek,canManageProduction} from '@/app/lib/auth/access';
-import {productionDepartments} from '@/app/productie/access';
+import {productionDepartments,visibleWorkspace} from '@/app/productie/access';
 import {readDocument,saveDocument,saveRecipePlanDocument,ProductionStoreError} from '@/app/productie/documents.server';
 import {validWorkspace,recipeViews,syncRecipeCatalog} from '@/app/productie/workspaceData';
 import {applyProductionRequest,canEditProductionRequest,requestPlanningTask,requestPlanningUrl,type RequestCommand} from '@/app/productie/requestPlanning';
@@ -25,14 +25,14 @@ export async function POST(request:Request){
  try{
   const raw=await request.text();if(raw.length>12000)throw new ProductionStoreError('Het verzoek is te groot.',413);
   const input=JSON.parse(raw),command=input.command as RequestCommand;
-  if(!command||!['create','edit','move','cancel','plan'].includes(command.kind))throw new ProductionStoreError('Ongeldige verzoekactie.',400);
+  if(!command||!['create','edit','move','cancel','plan','return'].includes(command.kind))throw new ProductionStoreError('Ongeldige verzoekactie.',400);
   if(command.kind==='plan'?!productionDepartments(profile).includes(command.departmentId):!canAccessLogistiek(profile)&&!canManageProduction(profile))throw new ProductionStoreError('Je hebt geen rechten voor deze actie of afdeling.',403);
   const requestId = `request:${crypto.randomUUID()}`;
   return await retryConcurrentSave(async () => {
     const [planner,recipes]=await Promise.all([readDocument<PreviewState>('planner'),readDocument<RecepturenData>('recipes')]);
     if(!planner||!recipes)throw new ProductionStoreError('De productieopslag is nog niet ingericht.');
     const base = await readEditBase(planner, "planner", input.revision);
-    if (command.kind !== "create") {
+    if (command.kind !== "create" && command.kind !== "return") {
       const previous = base.productionRequests?.find(row => row.id === command.id);
       assertUnchanged(previous, planner.data.productionRequests?.find(row => row.id === command.id));
       if (previous) {
@@ -42,9 +42,16 @@ export async function POST(request:Request){
     }
     const current=syncRecipeCatalog(planner.data,recipes.data),now=new Date().toISOString();
     const next=applyProductionRequest(current,recipeViews(recipes.data),command,profile.id,now,requestId);
+    if(command.kind==='return'){
+      const changed=current.tasks.filter(task=>JSON.stringify(task)!==JSON.stringify(next.tasks.find(row=>row.id===task.id)));
+      for(const task of changed){
+        if(!productionDepartments(profile).includes(task.departmentId))throw new ProductionStoreError('Je hebt geen rechten voor deze afdeling.',403);
+        assertTaskCurrent(base,planner.data,task.id);
+      }
+    }
     if(!validWorkspace(next,recipeViews(recipes.data)))throw new ProductionStoreError('Het verzoek bevat een ongeldige hoeveelheid of onderdeel. Er is niets opgeslagen.',400);
-    const revision=command.kind==='plan'?await saveRecipePlanDocument(planner.revision,recipes.revision,next,profile.id):await saveDocument('planner',planner.revision,next,profile.id,`Productieverzoek ${command.kind==='create'?'toegevoegd':command.kind==='edit'||command.kind==='move'?'gewijzigd':'ingetrokken'}`);
-    return Response.json({revision},{headers});
+    const revision=command.kind==='plan'||command.kind==='return'?await saveRecipePlanDocument(planner.revision,recipes.revision,next,profile.id):await saveDocument('planner',planner.revision,next,profile.id,`Productieverzoek ${command.kind==='create'?'toegevoegd':command.kind==='edit'||command.kind==='move'?'gewijzigd':'ingetrokken'}`);
+    return Response.json({revision,...(command.kind==='return'?{state:visibleWorkspace(next),updatedAt:now}:{})},{headers});
   });
  }catch(e){return Response.json({message:e instanceof Error?e.message:'Opslaan mislukt.'},{status:e instanceof ProductionStoreError?e.status:e instanceof ConcurrentChangeError?409:400,headers});}
 }

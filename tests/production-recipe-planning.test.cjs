@@ -427,3 +427,29 @@ test('multiple weekdays commit through the guarded API in one save and errors le
  const c=api({id:'baker',active:true,role:'bakkerij'},{conflict:true});c.command.dates=['2026-11-02','2026-11-04'];
  assert.equal((await c.route.POST(request(c.command))).status,409);assert.equal(c.writes(),0);
 });
+test('combined preparation review compares each recipe allocation, including shared nested ingredients',()=>{
+ const f=fixture();f.command.preparation.combine=true;
+ let state=rules.buildRecipePlan(f.state,f.recipes,f.command);
+ const second={...f.command,task:{...f.command.task,id:'order-2',batchId:'batch-2'},amount:50};
+ state=rules.buildRecipePlan(state,f.recipes,second);
+ assert.equal(state.tasks.filter(t=>t.itemId==='recipe:mousse').length,1);
+ assert.equal(state.tasks.find(t=>t.itemId==='recipe:caramel').quantity,6);
+ for(const id of ['order-1','order-2'])assert.equal(rules.recipePlanChanges(state,f.recipes,state.tasks.find(t=>t.id===id)).changed,false);
+ f.recipes.find(r=>r.id==='mousse').semiFinishedItems[0].quantity=3000;
+ assert.equal(rules.recipePlanChanges(state,f.recipes,state.tasks.find(t=>t.id==='order-1')).changes.find(c=>c.name==='Caramel').after,6);
+ assert.equal(rules.recipePlanChanges(state,f.recipes,state.tasks.find(t=>t.id==='order-2')).changes.find(c=>c.name==='Caramel').after,3);
+});
+test('combined nested preparations reached through two ingredients count only the root share on each path',()=>{
+ const f=fixture();f.recipes.find(r=>r.id==='foam').semiFinishedItems=[{recipeId:'caramel',quantity:1,unit:'kg'}];f.command.preparation.combine=true;
+ let state=rules.buildRecipePlan(f.state,f.recipes,f.command);
+ state=rules.buildRecipePlan(state,f.recipes,{...f.command,task:{...f.command.task,id:'order-2',batchId:'batch-2'},amount:50});
+ for(const id of ['order-1','order-2'])assert.equal(rules.recipePlanChanges(state,f.recipes,state.tasks.find(t=>t.id===id)).changed,false);
+});
+test('shared legacy preparation without a saved allocation requires review rather than guessing',()=>{
+ const f=fixture();f.command.preparation.combine=true;
+ let state=rules.buildRecipePlan(f.state,f.recipes,f.command);
+ state=rules.buildRecipePlan(state,f.recipes,{...f.command,task:{...f.command.task,id:'order-2',batchId:'batch-2'},amount:50});
+ delete state.tasks.find(t=>t.id==='order-2').materialNeeds;
+ const review=rules.recipePlanChanges(state,f.recipes,state.tasks.find(t=>t.id==='order-2'));
+ assert(review.changed);assert.match(review.errors.join(' '),/verdeling/i);
+});
