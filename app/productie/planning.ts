@@ -263,6 +263,14 @@ export function moveTask(tasks: Task[], id: string, date: string, departmentId: 
   if (task.dueDate && date > task.dueDate) throw Error("Deze datum ligt na de benodigde datum.");
   return tasks.map(t => t.id === id ? { ...t, date, departmentId } : t);
 }
+/** Validate a grouped move against its final dates, including internal dependencies. */
+export function moveTasks(tasks: Task[], ids: string[], date: string, departmentId: DepartmentId): Task[] {
+  const selected = new Set(ids);
+  if (!selected.size) throw Error("Kies een taak om te verplaatsen.");
+  const moved = tasks.map(task => selected.has(task.id) ? { ...task, date, departmentId } : task);
+  for (const id of selected) moveTask(moved, id, date, departmentId);
+  return moved;
+}
 export function removePlannedTask(tasks: Task[], id: string): Task[] {
   const task = tasks.find(t => t.id === id);
   if (!task) throw Error("Taak niet gevonden.");

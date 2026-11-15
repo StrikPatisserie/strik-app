@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Icon from "./ProductionIcon";
 import TaskWorkPanel, { WorkClock } from "./TaskWorkPanel";
-import { convertRecipeQuantity, dateLabel, DEPARTMENTS, mondayOf, requiredTaskIds, STATUS_LABELS, taskIssues, type DemoRecipe, type PreviewState, type Task } from "./planning";
+import { convertRecipeQuantity, dateLabel, DEPARTMENTS, mondayOf, requiredTaskIds, STATUS_LABELS, taskIssues, type DemoRecipe, type DepartmentId, type PreviewState, type Task } from "./planning";
 import { earlierPreparations, materialBatchGroups, materialConsumers, materialUsesByRecipe } from "./materialPlanning";
 import { recipeLinks } from "./recipeGroups";
 import { taskWorkSummary } from "./workSummary";
@@ -12,10 +12,12 @@ const number = (value: number) => value.toLocaleString("nl-NL", { maximumFractio
 type Selection = { taskId?: string; recipeId?: string; amount: number };
 type Stock = { itemId: string; balance: number; known: boolean; count?: { date: string; quantity: number } | null };
 const isImportNote = (line: string) => /^(Receptregels zijn overgenomen uit Halffabricaten Recepturen Strik|Werkwijze en kritieke temperaturen kunnen later per halffabricaat worden aangevuld)/i.test(line.trim());
-export default function PlanningInspector({ state, recipes, task, preparationDate, canManage, busy, revision, live, onClose, onWork, onComplete, onCorrect, onAdvanced, onRecipe, onCombine }: {
+export default function PlanningInspector({ state, recipes, task, preparationDate, canManage, busy, revision, live, onClose, onWork, onComplete, onCorrect, onAdvanced, onRecipe, onCombine, onMove, onReturn }: {
   state: PreviewState; recipes: DemoRecipe[]; task: Task; preparationDate?: string; canManage: boolean; busy: boolean; revision: number; live: boolean;
   onClose: () => void; onWork: (command: WorkCommand) => Promise<string | undefined>; onComplete: (id: string) => void;
   onCorrect: (id: string) => void;
+  onMove: (id: string, date: string, departmentId: DepartmentId) => Promise<string | undefined>;
+  onReturn: (id: string) => Promise<string | undefined>;
   onAdvanced: (id: string) => void; onRecipe: (itemId: string, taskId?: string) => void; onCombine: (ids: string[]) => Promise<string | undefined>;
 }) {
   const [path, setPath] = useState<Selection[]>([]);
@@ -23,6 +25,9 @@ export default function PlanningInspector({ state, recipes, task, preparationDat
   const [stockError, setStockError] = useState(false);
   const [combine, setCombine] = useState(false);
   const [error, setError] = useState("");
+  const [planningAction, setPlanningAction] = useState<"move" | "return" | null>(null);
+  const [moveDate, setMoveDate] = useState(task.date);
+  const [moveDepartment, setMoveDepartment] = useState<DepartmentId>(task.departmentId);
   const heading = useRef<HTMLHeadingElement>(null);
   const links = useMemo(() => recipeLinks(state.tasks, state.items), [state.tasks, state.items]);
   const materialUses = useMemo(() => materialUsesByRecipe(state, recipes), [state, recipes]);
@@ -75,7 +80,7 @@ export default function PlanningInspector({ state, recipes, task, preparationDat
     return `${dateLabel(row.date, true)}${days > 0 ? ` · ${days} ${days === 1 ? "dag" : "dagen"} ervoor` : ""}`;
   }
 
-  function open(selection: Selection) { setPath(current => [...current, selection]); setCombine(false); setError(""); }
+  function open(selection: Selection) { setPath(current => [...current, selection]); setCombine(false); setPlanningAction(null); setError(""); }
   function openTask(row: Task) { open({ taskId: row.id, amount: row.quantity }); }
   function openComponent(recipeId: string, quantity: number, unit: string) {
     const matches = state.tasks.filter(row => requiredIds.includes(row.id) && state.items.find(item => item.id === row.itemId)?.recipeId === recipeId);
@@ -120,7 +125,7 @@ export default function PlanningInspector({ state, recipes, task, preparationDat
   }
   return <section className={s.panel} aria-label="Productiedetails" onKeyDown={event => { if (event.key === "Escape" && !busy) { event.stopPropagation(); onClose(); } }}>
     <header className={s.heading}>
-      {path.length > 0 && <button type="button" className={s.back} aria-label="Terug naar vorig product" disabled={busy} onClick={() => { setPath(path.slice(0, -1)); setCombine(false); setError(""); }}><Icon name="back" size={16}/>Terug</button>}
+      {path.length > 0 && <button type="button" className={s.back} aria-label="Terug naar vorig product" disabled={busy} onClick={() => { setPath(path.slice(0, -1)); setCombine(false); setPlanningAction(null); setError(""); }}><Icon name="back" size={16}/>Terug</button>}
       <button type="button" className={s.close} aria-label="Productiedetails sluiten" disabled={busy} onClick={onClose}><Icon name="close" size={20}/></button>
       <h2 ref={heading} tabIndex={-1}>{title}</h2>
       {currentTask && <small>{focusDate ? `Voorbereiden ${dateLabel(focusDate, true)} · voor ${dateLabel(currentTask.date, true)}` : dateLabel(currentTask.date, true)} · {DEPARTMENTS.find(row => row.id === currentTask.departmentId)?.short}</small>}
@@ -129,6 +134,18 @@ export default function PlanningInspector({ state, recipes, task, preparationDat
       {!focusDate && preparationDates.length > 0 && <p className={s.preparationNotice}><Icon name="warning" size={15}/><span>Voorbereiden {preparationDates.map(date => dateLabel(date, true)).join(" · ")}</span></p>}
     </header>
     <div className={s.body} key={currentTask?.id || recipe?.id}>
+      {currentTask && canManage && !focusDate && currentTask.status !== "done" && <div className={s.planningActions}>
+        <div className={s.planningButtons}>
+          <button type="button" disabled={busy} aria-expanded={planningAction === "move"} onClick={() => { setMoveDate(currentTask.date); setMoveDepartment(currentTask.departmentId); setPlanningAction(planningAction === "move" ? null : "move"); setError(""); }}><Icon name="move" size={14}/>Verplaatsen</button>
+          {currentTask.status === "planned" && !currentTask.generatedFor && !currentTask.dependsOn && !currentTask.weddingCode && item?.kind !== "activity" && <button type="button" disabled={busy} aria-expanded={planningAction === "return"} onClick={() => { setPlanningAction(planningAction === "return" ? null : "return"); setError(""); }}><Icon name="back" size={14}/>Terug naar verzoeken</button>}
+        </div>
+        {planningAction === "move" && <form className={s.moveForm} onSubmit={async event => { event.preventDefault(); const result = await onMove(currentTask.id, moveDate, moveDepartment); setError(result || ""); if (!result) setPlanningAction(null); }}>
+          <label>Dag<input type="date" required value={moveDate} disabled={busy} onChange={event => setMoveDate(event.target.value)}/></label>
+          <label>Afdeling<select value={moveDepartment} disabled={busy} onChange={event => setMoveDepartment(event.target.value as DepartmentId)}>{DEPARTMENTS.filter(row => row.id !== "bruidstaarten").map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
+          <button type="submit" disabled={busy}>Verplaatsen</button>
+        </form>}
+        {planningAction === "return" && <div className={s.returnConfirm}><p>{title} terugzetten naar productieverzoeken?</p><button type="button" disabled={busy} onClick={async () => { const result = await onReturn(currentTask.id); setError(result || ""); if (!result) setPlanningAction(null); }}>Terugzetten</button><button type="button" disabled={busy} onClick={() => setPlanningAction(null)}>Annuleren</button></div>}
+      </div>}
       {parents.length > 0 && <section className={s.forRecipes} aria-label="Bijbehorende recepten"><h3><Icon name="link" size={14}/>{parents.length === 1 ? "Voor" : "Gedeeld voor"}</h3>
         {parents.map(link => {
           const parent = state.tasks.find(row => row.id === link.rootId)!;

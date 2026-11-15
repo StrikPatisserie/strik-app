@@ -69,9 +69,7 @@ function scrollNearEdge(element:HTMLElement|null,x:number,y:number){
   return scrolledX||scrolledY;
 }
 
-/** Touch/pen dragging starts from a dedicated touch-action:none handle. Desktop
- * mouse dragging and ordinary taps/scrolling elsewhere on the card stay native.
- */
+/** A dedicated handle supports mouse, touch and pen without taking over card scrolling. */
 export default function useTaskDrag(options:TaskDragOptions){
   const latest=useRef(options),session=useRef<DragSession|null>(null);
   const clickCleanup=useRef<{pointerId:number;remove:()=>void}|null>(null);
@@ -105,11 +103,12 @@ export default function useTaskDrag(options:TaskDragOptions){
       event.preventDefault();event.stopPropagation();pending.remove();
     },
     onPointerDown:(event:ReactPointerEvent<HTMLElement>)=>{
-      if(!latest.current.enabled||event.pointerType==="mouse"||event.button!==0||!event.isPrimary)return;
+      if(!latest.current.enabled||event.button!==0||!event.isPrimary)return;
       if(session.current){cancelDrag();return;}
       const handle=event.currentTarget,card=handle.closest<HTMLElement>("[data-task-id]"),frame=latest.current.frameRef.current;
       if(!card||!frame?.contains(card))return;
       const origin=card.closest<HTMLElement>(targetSelector);
+      event.preventDefault();
       event.stopPropagation();
       const rect=card.getBoundingClientRect();
       const drag:DragSession={id,pointerId:event.pointerId,handle,card,startX:event.clientX,startY:event.clientY,x:event.clientX,y:event.clientY,offsetX:event.clientX-rect.left,offsetY:event.clientY-rect.top,scale:rect.width/(card.offsetWidth||rect.width||1),active:false,ghost:null,target:null,frame:0,removeListeners:()=>{}};

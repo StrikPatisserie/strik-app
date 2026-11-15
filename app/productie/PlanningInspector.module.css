@@ -32,3 +32,15 @@
 .weekMaterialRow>span { flex:1;min-width:0; }
 .weekMaterialRow small { display:block;font-size:10px;color:#796b46;margin-top:2px; }
 .weekMaterialRow b { font-size:10px;max-width:95px;text-align:right; }
+
+.planningActions { padding:10px 0;border-bottom:1px solid #e3e9df; }
+.planningButtons { display:flex;gap:7px;flex-wrap:wrap; }
+.planningButtons button { display:inline-flex;align-items:center;gap:5px;border:0;background:none;padding:3px 0;font-size:12px; }
+.moveForm { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:8px;margin-top:10px; }
+.moveForm label { display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:600; }
+.moveForm input,.moveForm select { width:100%;min-width:0;padding:8px 5px;border:1px solid #b7c8b0;border-radius:5px;background:#fff;color:#1b3342;font:inherit;font-size:12px; }
+.moveForm>button,.returnConfirm button { padding:7px 10px;border:1px solid #aabc9f;border-radius:6px;background:#c3d3bc;font-size:12px; }
+.moveForm>button { grid-column:1 / -1;justify-self:end; }
+.returnConfirm { margin-top:9px;font-size:12px; }
+.returnConfirm p { margin:0 0 7px; }
+.returnConfirm button+button { margin-left:6px;background:#fff; }

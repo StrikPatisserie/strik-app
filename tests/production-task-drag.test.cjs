@@ -72,7 +72,7 @@ function harness({enabled=true,scale=1,scrollable=false}={}){
 
 test('a touch handle responds immediately, a tap does not move a task and tap/keyboard clicks remain available',()=>{
  const h=harness();
- h.start({pointerType:'mouse'});assert.equal(h.handle.dataset.taskDragPressed,undefined);assert.equal(h.listenerCount,0);
+ h.start({pointerType:'mouse',button:2});assert.equal(h.handle.dataset.taskDragPressed,undefined);assert.equal(h.listenerCount,0);
  h.start();assert.equal(h.handle.dataset.taskDragPressed,'true');assert.equal(h.handle.captured,1);assert.equal(h.ghost,undefined);
  h.move({clientX:58,clientY:72});assert.equal(h.pending,0);
  h.end();assert.equal(h.moves.length,0);assert.equal(h.listenerCount,0);assert.equal(h.handle.captured,null);
@@ -184,4 +184,19 @@ test('an overflowing frame scrolls toward mobile day tabs even when no drop cell
  h.end({clientX:350,clientY:10});
  assert.equal(h.moves.length,0,'Scrolling through a header must not create an outside-target drop');
  assert.equal(h.pending,0);h.close();
+});
+
+
+test('the dedicated handle moves with a mouse or pen and does not trigger a native card drag',()=>{
+ for(const pointerType of ['mouse','pen']){
+  const h=harness(),event=h.event({pointerType});
+  h.render().getHandleProps('task-1').onPointerDown(event);
+  assert(event.prevented&&event.stopped);
+  assert.equal(h.handle.dataset.taskDragPressed,'true');
+  h.move({pointerType,clientX:350,clientY:160});h.flush();
+  assert(h.ghost);assert.equal(h.destination.dataset.taskDragOver,'true');
+  h.end({pointerType,clientX:350,clientY:160});
+  assert.deepEqual(h.moves,[['task-1','2026-11-11','luxe']]);
+  assert.equal(h.ghost,undefined);h.expireClicks();h.close();
+ }
 });

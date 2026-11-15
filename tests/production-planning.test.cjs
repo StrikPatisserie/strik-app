@@ -189,3 +189,19 @@ test('operational recipe search matches independent word parts, accents, article
  for(const query of ['cara pec','PECAN strik','345','vanille cre','decore bak'])assert(m.matchesProductionSearch(query,values));
  assert(!m.matchesProductionSearch('pecan aardbei',values));assert(m.matchesProductionSearch('',values));
 });
+
+
+test('preparation moves atomically with internal dependencies and preserves every real task identity',()=>{
+ const task=(id,extra={})=>({id,itemId:id,batchId:id,date:'2026-11-17',departmentId:'dessert',quantity:2,status:'planned',operation:'Maken',source:'manual',note:'',...extra});
+ const tasks=[task('first'),task('second',{requires:['first']}),task('root',{date:'2026-11-20',requires:['second']})];
+ const before=JSON.stringify(tasks);
+ const moved=m.moveTasks(tasks,['first','second'],'2026-11-19','bak');
+ assert.deepEqual(JSON.parse(JSON.stringify(moved)),[{...tasks[0],date:'2026-11-19',departmentId:'bak'},{...tasks[1],date:'2026-11-19',departmentId:'bak'},tasks[2]]);
+ assert.equal(JSON.stringify(tasks),before);
+ assert.throws(()=>m.moveTasks(tasks,['first','second'],'2026-11-21','bak'),/volgende stap/);
+ assert.throws(()=>m.moveTasks(tasks,['second'],'2026-11-16','bak'),/benodigde halffabricaten/);
+ assert.throws(()=>m.moveTasks([{...tasks[0],status:'done'},...tasks.slice(1)],['first','second'],'2026-11-19','bak'),/Heropen/);
+ assert.throws(()=>m.moveTasks(tasks,['missing'],'2026-11-19','bak'),/niet gevonden/);
+ assert.throws(()=>m.moveTasks(tasks,[],'2026-11-19','bak'),/Kies een taak/);
+ assert.equal(JSON.stringify(tasks),before);
+});

@@ -1693,11 +1693,36 @@ test('preparation is bundled on the actual work day and the final card keeps its
  const dayCell = find(tree, node => node.props?.onDrop && node.props['aria-label'] === 'Desserttaart & fruit · wo 28 okt');
  const bundle = find(dayCell, node => node.props?.['data-preparation-ids'] === 'prep-before');
  assert(!nodes(tree).some(node => node.props?.['data-task-id'] === 'prep-before'));
- bundle.props.onClick(); tree = h.render(h.Component, props);
+ find(bundle, node => node.type === "button" && !!node.props.onClick).props.onClick(); tree = h.render(h.Component, props);
  const focused = find(tree, node => typeof node.type === 'function' && node.type.name === 'PlanningInspector');
  assert.equal(focused.props.task.id, 'prep-root');
  assert.equal(focused.props.preparationDate, '2026-10-28');
  reminder.props.onClick(); tree = h.render(h.Component, props);
  assert.equal(find(tree, node => typeof node.type === 'function' && node.type.name === 'PlanningInspector').props.task.id, 'prep-root');
  assert.equal(JSON.stringify(state), before);
+});
+
+
+test('dragging a preparation bundle moves its open tasks together through the existing save and leaves completed work dated',async()=>{
+ const state=sample.initialPreviewState(),base=state.tasks.find(task=>task.departmentId==='dessert'&&!task.generatedFor&&!task.dependsOn);
+ state.tasks=[
+  {...base,id:'root',batchId:'root',itemId:'fruit',date:'2026-10-30',status:'planned',requires:['part-2','part-done']},
+  {...base,id:'part-1',batchId:'part-1',itemId:'creme',date:'2026-10-28',status:'planned',generatedFor:'root',requires:[]},
+  {...base,id:'part-2',batchId:'part-2',itemId:'creme',date:'2026-10-28',status:'planned',generatedFor:'root',requires:['part-1']},
+  {...base,id:'part-done',batchId:'part-done',itemId:'creme',date:'2026-10-28',status:'done',generatedFor:'root',requires:[]},
+ ];
+ const m=movingTaskHarness(state);m.props.initialLayout='new';let tree=m.render();
+ const bundle=find(tree,node=>node.type==='article'&&node.props['data-preparation-ids']);
+ assert.equal(bundle.props.draggable,true);
+ const handle=find(bundle,node=>node.props?.['data-task-drag-handle']);assert(handle.props['aria-label'].startsWith('Versleep voorbereiding'));
+ bundle.props.onDragStart({dataTransfer:{setData(){}}});tree=m.render();
+ m.cell(tree,'Luxe gebak · do 29 okt').props.onDrop({preventDefault(){}});
+ assert.equal(m.requests.length,1);
+ const request=m.requests[0],body=JSON.parse(request.init.body);
+ for(const id of ['part-1','part-2'])assert.deepEqual(body.state.tasks.find(task=>task.id===id),{...state.tasks.find(task=>task.id===id),date:'2026-10-29',departmentId:'luxe'});
+ for(const id of ['root','part-done'])assert.deepEqual(body.state.tasks.find(task=>task.id===id),state.tasks.find(task=>task.id===id));
+ request.resolve({ok:true,json:async()=>({state:body.state,revision:8})});await m.flush();
+ tree=m.render();assert(nodes(m.cell(tree,'Luxe gebak · do 29 okt')).some(node=>node.props?.['data-preparation-ids']==='part-1 part-2'));
+ const completed=find(tree,node=>node.props?.['data-preparation-ids']==='part-done');assert.equal(completed.props.draggable,false);
+ assert(!nodes(completed).some(node=>node.props?.['data-task-drag-handle']));
 });

@@ -45,7 +45,7 @@ function fixture(selected = 'compote') {
   { ...recipe('cream', 'Vanillecrème', 'kg', 1), ingredients: [{ name: 'Melk', quantity: 700, unit: 'gram' }] },
  ];
  const calls = [];
- return { state, recipes, calls, props: { state, recipes, task: state.tasks.find(row => row.id === selected), canManage: true, busy: false, revision: 1, live: false, onClose: () => calls.push(['close']), onComplete: id => calls.push(['complete', id]), onCorrect: id => calls.push(['correct', id]), onAdvanced: id => calls.push(['advanced', id]), onRecipe() {}, onWork() {}, onCombine() {} } };
+ return { state, recipes, calls, props: { state, recipes, task: state.tasks.find(row => row.id === selected), canManage: true, busy: false, revision: 1, live: false, onClose: () => calls.push(['close']), onComplete: id => calls.push(['complete', id]), onCorrect: id => calls.push(['correct', id]), onAdvanced: id => calls.push(['advanced', id]), onRecipe() {}, onWork() {}, onCombine() {}, onMove: async (...args) => { calls.push(["move", ...args]); }, onReturn: async id => { calls.push(["return", id]); } } };
 }
 test('shared batch shows all consumers and exact allocations while secondary data starts collapsed', () => {
  const render = harness(), f = fixture(), before = JSON.stringify(f.state);
@@ -192,4 +192,44 @@ test('a shared batch only flags additional weekly demand outside its existing co
  assert(text(notice).includes('za 21 nov'));
  assert(text(notice).includes('2 kg'));
  assert(text(notice.props.children[0]).includes('1 andere productie'));
+});
+
+
+test('a task can change its date and department directly in the inspector after drilling into preparation',async()=>{
+ const render=harness(),f=fixture('framboyant');let view=render(f.props);
+ find(detail(view,'Onderdelen'),node=>node.type==='button'&&text(node).includes('Frambozen Compote')).props.onClick();
+ view=render(f.props);
+ find(view,node=>node.type==='button'&&text(node)==='Verplaatsen').props.onClick();view=render(f.props);
+ const form=find(view,node=>node.type==='form');
+ find(form,node=>node.type==='input').props.onChange({target:{value:'2026-11-16'}});
+ find(form,node=>node.type==='select').props.onChange({target:{value:'bak'}});
+ view=render(f.props);await find(view,node=>node.type==='form').props.onSubmit({preventDefault(){}});
+ assert.deepEqual(f.calls,[['move','compote','2026-11-16','bak']]);
+ assert(!nodes(render(f.props)).some(node=>node.type==='form'));
+});
+
+test('returning a root production requires confirmation and preserves visible errors',async()=>{
+ const render=harness(),f=fixture('framboyant');let view=render(f.props);
+ find(view,node=>node.type==='button'&&text(node)==='Terug naar verzoeken').props.onClick();view=render(f.props);
+ assert.equal(f.calls.length,0);assert(text(view).includes('Framboyant terugzetten naar productieverzoeken?'));
+ find(view,node=>node.type==='button'&&text(node)==='Annuleren').props.onClick();
+ assert.equal(f.calls.length,0);
+ view=render(f.props);find(view,node=>node.type==='button'&&text(node)==='Terug naar verzoeken').props.onClick();
+ view=render({...f.props,onReturn:async()=> 'Deze productie is al gestart.'});
+ await find(view,node=>node.type==='button'&&text(node)==='Terugzetten').props.onClick();
+ view=render(f.props);assert(text(find(view,node=>node.props?.role==='alert')).includes('al gestart'));
+ await find(view,node=>node.type==='button'&&text(node)==='Terugzetten').props.onClick();
+ assert.deepEqual(f.calls,[['return','framboyant']]);
+});
+
+test('read-only, completed and unplanned recipe views do not expose planning mutations',()=>{
+ const f=fixture('framboyant');
+ for(const props of [{...f.props,canManage:false},{...f.props,task:{...f.props.task,status:'done'}},{...f.props,preparationDate:'2026-11-17'}]){
+  const view=harness()(props);
+  assert(!nodes(view).some(node=>node.type==='button'&&['Verplaatsen','Terug naar verzoeken'].includes(text(node))));
+ }
+ const generated=harness()(fixture().props);
+ assert(!nodes(generated).some(node=>node.type==='button'&&text(node)==='Terug naar verzoeken'));
+ const busy=harness()({...f.props,busy:true});
+ for(const node of nodes(busy).filter(node=>node.type==='button'&&['Verplaatsen','Terug naar verzoeken'].includes(text(node))))assert(node.props.disabled);
 });
