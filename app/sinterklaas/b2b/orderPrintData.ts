@@ -1,5 +1,5 @@
 import { BUSINESS_PICKUP_LOCATIONS } from "../../lib/businessPickupLocations";
-import { b2bLetterHasLogo, b2bLetterLineLabel } from "../b2bLetterLines";
+import { b2bLetterInPackage, b2bLetterHasLogo, b2bLetterLineLabel } from "../b2bLetterLines";
 import type { B2BLetterLine, SinterklaasB2BOrder } from "../types";
 import { letterGroupMatchesOrder, parseLetterGroup } from "./groupedLetterOrders";
 import type { OrderPrintData, OrderPrintLine } from "./orderPrint";
@@ -76,7 +76,7 @@ export function buildB2BOrderPrintData(order: SinterklaasB2BOrder, parsed: Parse
       } });
     }
   } else {
-    for (const original of order.letterLines) {
+    for (const original of order.letterLines.filter(line => !b2bLetterInPackage(line))) {
       const letter = { ...original, withLogo: b2bLetterHasLogo(order, original) };
       entries.push({ letter, row: {
         quantity: letter.quantity,
@@ -89,6 +89,8 @@ export function buildB2BOrderPrintData(order: SinterklaasB2BOrder, parsed: Parse
   const hasStructuredRows = entries.length > 0;
   if (!hasStructuredRows && order.orderText.trim()) entries.push({ row: { description: order.orderText } });
   const notes: string[] = [];
+  const packageLetters = order.letterLines.filter(b2bLetterInPackage);
+  if (packageLetters.length) notes.push(`Inbegrepen in de pakketten: ${packageLetters.map(b2bLetterLineLabel).join("; ")}. Geen extra bestelartikelen.`);
   for (const raw of (hasStructuredRows ? parsed.otherText : "").split(/\r?\n/)) {
     const text = raw.trim();
     if (!text || /^(?:PRODUCTEN EN PRIJS|OVERIGE ORDERAFSPRAKEN)$/.test(text)) continue;

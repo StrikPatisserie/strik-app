@@ -16,6 +16,7 @@ export type Product = {
   allergens: Allergen[];
   tiers: PriceTier[];
   retailPriceIncl?: number;
+  manualPriceOnly?: boolean;
   fixedSurchargeIncl?: number;
   personalizationText?: string;
   logoAvailable?: boolean;
@@ -273,6 +274,15 @@ export const products: Product[] = [
 ];
 // Extra products for entering custom B2B packages, alongside the folder range.
 export const b2bExtraProducts: Product[] = [
+  {
+    id: "sint-pakket-op-maat",
+    name: "Sint pakket op maat",
+    description: "Zelf samengesteld pakket met een afgesproken pakketprijs. Leg inhoud, verpakking en eventuele uitzonderingen vast bij de bestelling.",
+    image: "", shelfLifeInfo: [], allergens: [], accent: "#d79a6d",
+    logoAvailable: false, manualPriceOnly: true,
+    options: ["Standaardpakket", "Aangepast pakket"],
+    tiers: [],
+  },
   {
     id: "sint-pepernotencake",
     name: "Sint Pepernoten Cake",

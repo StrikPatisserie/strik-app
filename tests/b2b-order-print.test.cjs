@@ -191,3 +191,18 @@ test('decoration prints against its own letter row without borrowing another lin
  drawnText=[];await prints.createOrderPrint(data,{format:'a4',copies:1,products:true});
  assert(drawnText.some(row=>/BLAUWE BALLETJES/i.test(row.text)));
 });
+
+test('custom package labels count the gifts once and retain included letter production details', () => {
+  const packageLetters = [{ ...letters[0], id: 'package:small-s', letter: 'S', chocolate: 'melk', size: 'klein', quantity: 21, exceptions: [], withLogo: false }];
+  const data = printOrder({ letterLines: packageLetters }, {
+    productLines: [
+      {productId: 'sint-pakket-op-maat', quantity: 21, description: 'Sint pakket op maat · Standaardpakket'},
+      {productId: 'sint-pakket-op-maat', quantity: 1, description: 'Sint pakket op maat · Aangepast pakket'},
+    ],
+    otherText: '1 apart pakket: lactose-allergie, inhoud nog afstemmen; niet standaard produceren.',
+  });
+  assert.equal(data.lines.length, 2);
+  assert.equal(data.lines.reduce((sum, line) => sum + line.quantity, 0), 22);
+  assert(data.notes.some(note => /Inbegrepen in de pakketten: 21× S/.test(note)));
+  assert(data.notes.some(note => /lactose-allergie.*niet standaard produceren/.test(note)));
+});

@@ -629,3 +629,58 @@ test('custom Sint package components are selectable with the folder tier and fix
   const packaging = sint.b2bExtraProducts.find(product => product.id === 'sint-verpakking');
   for (const quantity of [1, 37, 201]) assert.equal(sint.productUnitPrice(packaging, sint.tierFor(packaging, quantity), true), 1);
 });
+
+test('custom Sint packages retain their agreed price and included production letters after save and reopen', async () => {
+  const ui = entry();
+  ui.field('Bedrijfsnaam / klantnaam *', 'Pakketvoorbeeld');
+  ui.field('Vaste leverdatum', '2026-11-26');
+  ui.field('Fase', 'akkoord');
+  ui.button('Verder naar producten →');
+  for (const [variant, quantity] of [['Standaardpakket', 21], ['Aangepast pakket', 1]]) {
+    ui.field('Product', 'sint-pakket-op-maat');
+    ui.field('Variant', variant); ui.field('Aantal producten', String(quantity));
+    ui.button('+ Product toevoegen');
+    assert.match(label(ui.render()), /Vul een geldige prijs in/);
+    ui.field('Afgesproken pakketprijs excl. btw', '29.15');
+    ui.button('+ Product toevoegen');
+  }
+  ui.field('Product', 'letters');
+  ui.check('Letters inbegrepen in pakketprijs', true);
+  ui.field('Letter', 'S'); ui.field('Chocolade', 'melk'); ui.field('Soort', 'spuit');
+  ui.field('Formaat', 'klein'); ui.field('Aantal letters', '21'); ui.button('+ Letter toevoegen');
+  assert.equal(nodes(ui.render(), n => n.props?.['data-order-item'] === 'letter').length, 0);
+  assert.match(label(ui.render()), /22 artikelen/);
+  ui.button('Bestelling controleren →'); await ui.submit();
+  assert.equal(ui.calls.length, 1);
+  const saved = ui.calls[0];
+  assert.equal(saved.status, 'akkoord'); assert.equal(saved.department, 'beide');
+  assert.equal(saved.totalExVat.replace(/\s/g, ''), '€641,30');
+  assert.match(saved.orderText, /21 × Sint pakket op maat · Standaardpakket/);
+  assert.match(saved.orderText, /1 × Sint pakket op maat · Aangepast pakket/);
+  assert.doesNotMatch(saved.orderText, /Chocolade spuitletters/);
+  assert.equal(saved.letterLines.length, 1); assert.match(saved.letterLines[0].id, /^package:/);
+  assert.equal(combinations.b2bProductionLetters({ ...saved, id: 'pakket' }).lines[0].quantity, 21);
+  const reopened = entry('sint', { ...saved, id: 'pakket' });
+  assert.equal(reopened.parse(saved.orderText).productLines.length, 2);
+  reopened.button('Verder naar producten →'); reopened.button('Bestelling controleren →'); await reopened.submit();
+  assert.equal(reopened.calls[0].orderText, saved.orderText);
+  assert.equal(reopened.calls[0].totalExVat, saved.totalExVat);
+  assert.equal(reopened.calls[0].letterLines[0].quantity, 21);
+  // A genuinely loose letter remains separately priced, even in the same order.
+  const mixed = entry('sint', { ...saved, id: 'mixed' }); mixed.button('Verder naar producten →');
+  mixed.field('Product', 'letters'); mixed.check('Letters inbegrepen in pakketprijs', false);
+  mixed.field('Letter', 'S'); mixed.field('Chocolade', 'melk'); mixed.field('Soort', 'spuit');
+  mixed.field('Formaat', 'klein'); mixed.field('Aantal letters', '2'); mixed.button('+ Letter toevoegen');
+  mixed.button('Bestelling controleren →'); await mixed.submit();
+  assert.equal(mixed.calls[0].totalExVat.replace(/\s/g, ''), '€657,72');
+  assert.equal(mixed.calls[0].letterLines.length, 2);
+  assert.match(mixed.calls[0].orderText, /2 × Chocolade spuitletters/);
+  // Removing the package must not turn the remaining included letters into a sale.
+  const removed = entry('sint', { ...saved, id: 'removed' }); removed.button('Verder naar producten →');
+  removed.button('×'); removed.button('×');
+  removed.button('Bestelling controleren →'); await removed.submit();
+  assert.equal(removed.calls.length, 0); assert.match(label(removed.render()), /Er staan nog letters in een pakket/);
+  assert.equal(nodes(removed.render(), n => n.props?.['data-order-item'] === 'package-letter').length, 2, 'included letters remain available for repair in both form views');
+  removed.button('Pakketletterregel 1 verwijderen');
+  assert.equal(nodes(removed.render(), n => n.props?.['data-order-item'] === 'package-letter').length, 0);
+});

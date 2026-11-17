@@ -1,5 +1,12 @@
 import type { B2BLetterException, B2BLetterLine, SinterklaasB2BOrder } from "./types";
 
+// Included letters retain their existing production records without becoming
+// separately priced sales. The ID survives the WordPress order contract.
+export const B2B_PACKAGE_LETTER_PREFIX = "package:";
+export function b2bLetterInPackage(line: Pick<B2BLetterLine, "id">) {
+  return line.id.startsWith(B2B_PACKAGE_LETTER_PREFIX);
+}
+
 export const B2B_SPUIT_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 export const B2B_VORM_LETTERS = ["S", "Q"];
 export const B2B_LETTER_EXCEPTIONS: { id: B2BLetterException; label: string }[] = [
