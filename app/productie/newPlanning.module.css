@@ -338,3 +338,5 @@
 .preparationDrag:active { cursor:grabbing; }
 .preparationBundle[data-task-dragging], .card[data-task-dragging] { opacity:.35;outline:1px dashed #1b3342; }
 .drag { cursor:grab;touch-action:none; }
+
+.bakeryOperation { font-size: 11px; font-weight: 700; white-space: nowrap; }

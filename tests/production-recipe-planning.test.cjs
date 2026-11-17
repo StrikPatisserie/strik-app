@@ -453,3 +453,24 @@ test('shared legacy preparation without a saved allocation requires review rathe
  const review=rules.recipePlanChanges(state,f.recipes,state.tasks.find(t=>t.id==='order-2'));
  assert(review.changed);assert.match(review.errors.join(' '),/verdeling/i);
 });
+
+
+test('baking off repeats separately while stock output and preparation needs stay with production',()=>{
+ const {state,recipes,command}=fixture();
+ command.task.departmentId='bak';command.task.operation='Produceren';command.amount=1500;
+ const produced=rules.buildRecipePlan(state,recipes,command);
+ const bake={task:{...command.task,id:'daily-bake',batchId:'daily-bake-batch',operation:'Afbakken',recordsOutput:true},amount:250,amountMode:'quantity',dates:Array.from({length:6},(_,i)=>planning.addDays(command.task.date,i))};
+ const next=rules.buildRecipePlan(produced,recipes,bake);
+ const baked=next.tasks.filter(t=>t.id.startsWith('daily-bake'));
+ assert.equal(baked.length,6);assert(baked.every(t=>t.operation==='Afbakken'&&t.quantity===250&&!t.recordsOutput&&!t.requires?.length));
+ assert(baked.every(t=>Object.keys(t.materialNeeds).length===0));assert.equal(new Set(baked.map(t=>t.batchId)).size,6);
+ const done=next.tasks.map(t=>({...t,status:'done'}));assert.equal(planning.completedOutput(next.items,done).get('recipe:pie'),1500,'Baking off must not add another 1500 to stock');
+ const materials=load('app/productie/materialPlanning.ts',{'./planning':planning});
+ assert([...materials.materialUsesByRecipe(next,recipes).values()].flat().every(use=>!use.task.id.startsWith('daily-bake')));
+ assert(workspace.validWorkspace(next,recipes));assert.equal(state.tasks.length,0);
+});
+
+test('baking off cannot create a second set of recipe preparations',()=>{
+ const {state,recipes,command}=fixture();command.task.departmentId='brood';command.task.operation='Afbakken';
+ assert.throws(()=>rules.buildRecipePlan(state,recipes,command),/Plan de halffabricaten bij Produceren/);assert.equal(state.tasks.length,0);
+});

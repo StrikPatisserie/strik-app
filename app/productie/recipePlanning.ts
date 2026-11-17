@@ -1,5 +1,5 @@
 import { combineNewPreparations, recipeMaterialNeeds } from "./materialPlanning";
-import { convertRecipeQuantity, addDays, addTask, dateLabel, mondayOf, defaultComponentDepartment, DEPARTMENTS, requiredTaskIds, type DemoRecipe, type DepartmentId, type PreviewState, type Task, type PreparationChoice } from "./planning";
+import { isBakeOffTask, convertRecipeQuantity, addDays, addTask, dateLabel, mondayOf, defaultComponentDepartment, DEPARTMENTS, requiredTaskIds, type DemoRecipe, type DepartmentId, type PreviewState, type Task, type PreparationChoice } from "./planning";
 
 export type { PreparationChoice } from "./planning";
 export type PlanCommand = {
@@ -61,6 +61,7 @@ export function preparationProposal(state:PreviewState,recipes:DemoRecipe[],comm
     if(!(result.quantity>0) || result.quantity>1000000)throw Error("De berekende hoeveelheid is te groot of ongeldig.");
     if(root?.yield && root.yield>0)result.recipeCount=result.quantity/root.yield;
     if(!command.preparation)return result;
+    if(isBakeOffTask(command.task))throw Error("Plan de halffabricaten bij Produceren, niet bij Afbakken.");
     if(!root || !(root.yield>0))throw Error("Halffabricaten meeplannen vereist een recept met een bekende basisopbrengst.");
     if(root.unit!==rootItem.unit)throw Error("Controleer de eenheid van het gekoppelde recept.");
     if(root.reviewRequired || rootItem.productionBlocked)throw Error("Het bronrecept bevat ontbrekende verwijzingen. Controleer dit eerst.");
@@ -156,7 +157,7 @@ export function buildRecipePlan(state:PreviewState,recipes:DemoRecipe[],command:
   // Do not spread untrusted dependency metadata from the browser into a task.
   const draft=command.task;
   const root:Task={id:draft.id,itemId:draft.itemId,departmentId:draft.departmentId,date:draft.date,quantity:proposal.quantity,operation:draft.operation,status:draft.status,
-    note:draft.note,source:draft.source,batchId:draft.batchId,recordsOutput:draft.recordsOutput,
+    note:draft.note,source:draft.source,batchId:draft.batchId,recordsOutput:!isBakeOffTask(draft) && draft.recordsOutput,
     ...(draft.minutes!==undefined?{minutes:draft.minutes}:{}),...(draft.dueDate?{dueDate:draft.dueDate}:{}),...(draft.dependsOn?{dependsOn:draft.dependsOn}:{}),
     ...(included.length?{requires:included.filter(r=>directIds.has(r.recipeId)).map(r=>taskIds.get(r.recipeId)!)}:{}),
     recipePlan:{amount:command.amount,amountMode:command.amountMode,...(command.preparation?{preparation:{daysBefore:command.preparation.daysBefore,...(command.preparation.combine!==undefined?{combine:command.preparation.combine}:{}),choices:Object.fromEntries(proposal.rows.filter(r=>command.preparation!.choices[r.recipeId]).map(r=>{const c=command.preparation!.choices[r.recipeId];return [r.recipeId,{...(c.include!==undefined?{include:c.include}:{}),...(c.date?{date:c.date}:{}),...(c.daysBefore!==undefined?{daysBefore:c.daysBefore}:{}),...(c.departmentId?{departmentId:c.departmentId}:{}),...(c.operation!==undefined?{operation:c.operation}:{}),...(c.minutes!==undefined?{minutes:c.minutes}:{})}];}))}}:{})}};

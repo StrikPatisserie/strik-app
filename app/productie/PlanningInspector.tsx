@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Icon from "./ProductionIcon";
 import TaskWorkPanel, { WorkClock } from "./TaskWorkPanel";
-import { convertRecipeQuantity, dateLabel, DEPARTMENTS, mondayOf, requiredTaskIds, STATUS_LABELS, taskIssues, type DemoRecipe, type DepartmentId, type PreviewState, type Task } from "./planning";
+import { isBakeOffTask, convertRecipeQuantity, dateLabel, DEPARTMENTS, mondayOf, requiredTaskIds, STATUS_LABELS, taskIssues, type DemoRecipe, type DepartmentId, type PreviewState, type Task } from "./planning";
 import { earlierPreparations, materialBatchGroups, materialConsumers, materialUsesByRecipe } from "./materialPlanning";
 import { recipeLinks } from "./recipeGroups";
 import { taskWorkSummary } from "./workSummary";
@@ -66,7 +66,7 @@ export default function PlanningInspector({ state, recipes, task, preparationDat
   const shortage = currentTask?.status === "done" && produced + 1e-6 < reserved && !currentTask.stockFulfillmentId;
   const requiredIds = currentTask ? requiredTaskIds(currentTask) : [];
   const relatedRecipeIds = new Set(related.map(row => state.items.find(item => item.id === row.itemId)?.recipeId));
-  const recipeParts = recipe?.semiFinishedItems?.filter(part => !relatedRecipeIds.has(part.recipeId)) || [];
+  const recipeParts = currentTask && isBakeOffTask(currentTask) ? [] : recipe?.semiFinishedItems?.filter(part => !relatedRecipeIds.has(part.recipeId)) || [];
   const otherRequired = requiredIds.filter(id => !related.some(row => row.id === id) && !recipe?.semiFinishedItems?.some(part => state.items.find(item => item.id === state.tasks.find(task => task.id === id)?.itemId)?.recipeId === part.recipeId));
   const focusDate = !selected ? preparationDate : undefined;
   const visibleRelated = focusDate ? related.filter(row => row.date === focusDate) : related;
@@ -128,6 +128,7 @@ export default function PlanningInspector({ state, recipes, task, preparationDat
       {path.length > 0 && <button type="button" className={s.back} aria-label="Terug naar vorig product" disabled={busy} onClick={() => { setPath(path.slice(0, -1)); setCombine(false); setPlanningAction(null); setError(""); }}><Icon name="back" size={16}/>Terug</button>}
       <button type="button" className={s.close} aria-label="Productiedetails sluiten" disabled={busy} onClick={onClose}><Icon name="close" size={20}/></button>
       <h2 ref={heading} tabIndex={-1}>{title}</h2>
+      {currentTask && (currentTask.departmentId==="bak" || currentTask.departmentId==="brood") && /^(Produceren|Afbakken)$/.test(currentTask.operation) && <strong>{currentTask.operation}</strong>}
       {currentTask && <small>{focusDate ? `Voorbereiden ${dateLabel(focusDate, true)} · voor ${dateLabel(currentTask.date, true)}` : dateLabel(currentTask.date, true)} · {DEPARTMENTS.find(row => row.id === currentTask.departmentId)?.short}</small>}
       <div className={s.facts}><strong>{number(amount)} {unit}</strong>{currentTask ? <span className={s[currentTask.status]}>{STATUS_LABELS[currentTask.status]}</span> : <span>Recept · geen gekoppelde taak</span>}</div>
       {currentTask && <div className={s.time}>{currentTask.minutes !== undefined && <span><Icon name="clock" size={14}/>{number(currentTask.minutes)} min gepland</span>}<WorkClock state={state} taskId={currentTask.id}/>{completed && <span><Icon name="users" size={14}/>{completed.crewSize ?? "—"} · {completed.minutes === undefined ? "tijd onbekend" : `${number(completed.minutes)} min`}</span>}</div>}

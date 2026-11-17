@@ -1457,3 +1457,14 @@
 .planDays label:focus-within { outline: 2px solid #1b3342; outline-offset: 2px; }
 .planRepeatNotice { display: flex; align-items: flex-start; gap: 6px; color: #814620; background: #fff4e6; border-radius: 6px; padding: 8px 10px; font-size: 12px; margin: 0 0 12px; }
 .planRepeatNotice svg { flex: 0 0 auto; margin-top: 1px; }
+
+/* One compact choice for bakery production versus daily baking off. */
+.planOperation { border: 0; padding: 0; margin: 0 0 12px; }
+.planOperation legend { font-size: 12px; font-weight: 700; margin-bottom: 6px; color: #4c644c; }
+.planOperation > div { display: inline-flex; gap: 4px; padding: 3px; border: 1px solid #c6d2c1; border-radius: 8px; }
+.planOperation button { border: 0; border-radius: 5px; min-height: 40px; padding: 7px 15px; background: white; color: #1b3342; font: inherit; cursor: pointer; }
+.planOperation button[aria-pressed=true] { background: #1b3342; color: white; }
+.planOperation > small { display: block; margin-top: 5px; color: #4c644c; }
+.repeatReview h3 { margin: 0 0 12px; }
+.repeatReview p { margin: 0 0 12px; }
+.bakeryOperation { font-size: 11px; font-weight: 700; color: inherit; }

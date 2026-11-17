@@ -177,7 +177,7 @@ test('a day-cell plus uses its date and department without asking for either aga
  assert.equal(view.props.subtitle,'Luxe gebak · '+planning.dateLabel('2026-10-29',true));
  assert(!nodes(view).some(node=>node.type==='label'&&text(node)==='Productiedatum'));
  assert(!nodes(view).some(node=>node.type==='label'&&text(node)==='Afdeling'));
- assert(!nodes(view).some(node=>node.props?.className==='planDays'));
+ assert.equal(inputByLabel(view,'do 29').props.checked,true);
  const quantity=find(view,node=>node.type==='input'&&node.props.type==='number');
  quantity.props.onChange({target:{value:'7'}});
  view=render();
@@ -366,6 +366,7 @@ test('day context and the draft survive opening the existing recipe editor',asyn
  picker.props.onChange('fruit');view=render();
  find(view,n=>n.type==='select'&&n.props.value==='batches').props.onChange({target:{value:'quantity'}});view=render();
  inputByLabel(view,'Aantal (').props.onChange({target:{value:'100'}});
+ find(view,n=>n.type==='textarea'&&n.props.name==='note').props.onChange({target:{value:'Bewaren'}});
  find(view,n=>n.type==='input'&&n.props.name==='minutes').props.onChange({target:{value:'45'}});view=render();
  button(view,'Recept aanpassen').props.onClick();tree=h.render(h.Component,{live});
  assert(find(tree,n=>n.type===form.type&&!!n.props.onPlan),'Draft stays mounted behind recipe editor');
@@ -1518,7 +1519,7 @@ test('new planning offers one add button per day and category while task cells s
  assert.equal(cleaning.props.categoryActionsOnly,true);
 });
 
-test('day plus fixes its day while category plus can repeat on several selected weekdays',async()=>{
+test('day and category plus offer weekdays and require review before repeated production',async()=>{
  for(const fromDay of [true,false]){
   const h=harness(),pageProps={initialLayout:'new'};let tree=h.render(h.Component,pageProps);
   button(tree,fromDay?'Productie toevoegen · do 29 okt':'Productie toevoegen · Luxe gebak').props.onClick();tree=h.render(h.Component,pageProps);
@@ -1526,21 +1527,55 @@ test('day plus fixes its day while category plus can repeat on several selected 
   let view=render();assert.equal(view.props.subtitle,fromDay?'do 29 okt':'Luxe gebak');
   find(view,n=>n.type===h.pickerWidget).props.onChange('creme');view=render();
   assert(!nodes(view).some(n=>n.type==='label'&&text(n)==='Productiedatum'));
-  if(!fromDay){
-   assert(!nodes(view).some(n=>n.type==='label'&&text(n)==='Afdeling'));
-   for(const value of ['vr 30','ma 26']){inputByLabel(view,value).props.onChange();view=render();}
-   assert(text(view).includes('je plant dit recept 3 keer in'));
-   assert.equal(button(view,'3 dagen inplannen').props.disabled,false);
-  }
+  assert.equal(inputByLabel(view,fromDay?'do 29':'wo 28').props.checked,true);
+  if(!fromDay)assert(!nodes(view).some(n=>n.type==='label'&&text(n)==='Afdeling'));
+  for(const value of ['vr 30','ma 26']){inputByLabel(view,value).props.onChange();view=render();}
+  assert(text(view).includes('je plant dit recept 3 keer in'));
+  assert.equal(button(view,'3 dagen inplannen').props.disabled,false);
   await find(view,n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}});
-  assert.equal(commands[0].task.date,fromDay?'2026-10-29':'2026-10-26');assert.equal(commands[0].task.departmentId,fromDay?'dessert':'luxe');
-  if(fromDay)assert.equal(commands[0].dates,undefined);
-  else{
-   assert.deepEqual(Array.from(commands[0].dates),['2026-10-26',sample.DEMO_TODAY,'2026-10-30']);
-   const result=recipePlanning.buildRecipePlan(form.props.state,sample.demoRecipes,commands[0]);
-   const added=result.tasks.filter(t=>!form.props.state.tasks.some(old=>old.id===t.id));assert.equal(added.length,3);assert.equal(new Set(added.map(t=>t.batchId)).size,3);
-  }
+  assert.equal(commands.length,0,'Nothing is saved before the repeat confirmation');view=render();
+  assert.equal(view.props.title,'Meerdere dagen inplannen?');assert(text(view).includes('per dag'));
+  await find(view,n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}});
+  assert.equal(commands[0].task.date,'2026-10-26');assert.equal(commands[0].task.departmentId,fromDay?'dessert':'luxe');
+  assert.deepEqual(Array.from(commands[0].dates),['2026-10-26',fromDay?'2026-10-29':sample.DEMO_TODAY,'2026-10-30']);
+  const result=recipePlanning.buildRecipePlan(form.props.state,sample.demoRecipes,commands[0]);
+  const added=result.tasks.filter(t=>!form.props.state.tasks.some(old=>old.id===t.id));assert.equal(added.length,3);assert.equal(new Set(added.map(t=>t.batchId)).size,3);
  }
+});
+
+test('repeat review can go back without losing recipe, quantities, notes or weekdays',async()=>{
+ const h=harness();let tree=xl(h);button(tree,'Inplannen').props.onClick();tree=h.render(h.Component);
+ const form=find(tree,n=>typeof n.type==='function'&&!!n.props.onPlan),commands=[],props={...form.props,onPlan:async c=>{commands.push(c);}},render=()=>h.render(form.type,props,tree.props.value);
+ let view=render();find(view,n=>n.type===h.pickerWidget).props.onChange('creme');view=render();
+ find(view,n=>n.type==='select'&&n.props.value==='batches').props.onChange({target:{value:'quantity'}});view=render();
+ inputByLabel(view,'Aantal (kg)').props.onChange({target:{value:'12'}});find(view,n=>n.type==='textarea'&&n.props.name==='note').props.onChange({target:{value:'Elke dag vers'}});
+ inputByLabel(view,'do 29').props.onChange();view=render();
+ await find(view,n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}});view=render();
+ button(view,'Terug').props.onClick();view=render();
+ assert.equal(inputByLabel(view,'Aantal per dag (kg)').props.value,'12');assert.equal(find(view,n=>n.type==='textarea').props.value,'Elke dag vers');assert.equal(inputByLabel(view,'do 29').props.checked,true);
+ inputByLabel(view,'Aantal per dag (kg)').props.onChange({target:{value:'15'}});view=render();
+ await find(view,n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}});view=render();
+ await find(view,n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}});
+ assert.equal(commands.length,1);assert.equal(commands[0].amount,15);assert.equal(commands[0].task.note,'Elke dag vers');
+});
+
+test('bakery can produce a large batch and separately bake off a daily amount without preparing ingredients again',async()=>{
+ const h=harness();let tree=xl(h);button(tree,'Inplannen').props.onClick();tree=h.render(h.Component);
+ const form=find(tree,n=>typeof n.type==='function'&&!!n.props.onPlan),commands=[],props={...form.props,onPlan:async c=>{commands.push(c);}},render=()=>h.render(form.type,props,tree.props.value);
+ let view=render();find(view,n=>n.type===h.pickerWidget).props.onChange('fruit');view=render();
+ find(find(view,n=>n.type==='label'&&text(n).startsWith('Afdeling')),n=>n.type==='select').props.onChange({target:{value:'bak'}});view=render();
+ assert.equal(button(view,'Produceren').props['aria-pressed'],true);
+ find(find(view,n=>n.type==='label'&&text(n).startsWith('Invoer')),n=>n.type==='select').props.onChange({target:{value:'quantity'}});view=render();
+ inputByLabel(view,'Aantal (stuks)').props.onChange({target:{value:'1500'}});view=render();
+ await find(view,n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}});
+ assert.equal(commands[0].task.operation,'Produceren');assert.equal(commands[0].task.recordsOutput,true);assert.equal(commands[0].amount,1500);assert(commands[0].preparation);
+ button(view,'Afbakken').props.onClick();view=render();assert.equal(button(view,'Afbakken').props['aria-pressed'],true);
+ assert(!text(view).includes('Halffabricaten apart meenemen'));
+ inputByLabel(view,'Aantal (stuks)').props.onChange({target:{value:'250'}});inputByLabel(view,'do 29').props.onChange();view=render();
+ await find(view,n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}});view=render();assert.equal(commands.length,1);
+ assert(text(view).includes('250 stuks per dag'));assert(text(view).includes('afbakken'));
+ await find(view,n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}});
+ assert.equal(commands[1].task.operation,'Afbakken');assert.equal(commands[1].task.recordsOutput,false);assert.equal(commands[1].amount,250);assert.equal(commands[1].preparation,undefined);assert.equal(commands[1].dates.length,2);
 });
 
 test('category weekday choices follow the visible week and cannot submit with no day selected',async()=>{

@@ -1,9 +1,10 @@
-import { convertRecipeQuantity, mondayOf, requiredTaskIds, type DemoRecipe, type PreviewState, type Task } from "./planning";
+import { isBakeOffTask, convertRecipeQuantity, mondayOf, requiredTaskIds, type DemoRecipe, type PreviewState, type Task } from "./planning";
 
 const round = (value: number) => Math.round(value * 1e9) / 1e9;
 
 /** Reservations belong to the consuming task. A shared batch records output once. */
 export function recipeMaterialNeeds(state: PreviewState, recipes: DemoRecipe[], task: Task): Record<string, number> {
+  if (isBakeOffTask(task)) return {};
   const item = state.items.find(item => item.id === task.itemId);
   const recipe = state.productionWork?.overrides?.[task.id]
     || recipes.find(recipe => recipe.id === item?.recipeId);
@@ -61,6 +62,7 @@ export function materialUsesByRecipe(state: PreviewState, recipes: DemoRecipe[])
       || batch.find(row => row.requires?.length)
       || batch.find(row => !row.dependsOn)
       || batch[0];
+    if (isBakeOffTask(task)) continue;
     const item = items.get(task.itemId);
     const recipe = state.productionWork?.overrides?.[task.id] || recipeMap.get(item?.recipeId || "");
     if (!item) continue;

@@ -354,6 +354,10 @@ export function linkRecipe(state: PreviewState, itemId: string, recipeId: string
   if (item.kind === "activity" || item.unit !== recipe.unit) throw Error("De eenheid van het recept past niet bij dit onderdeel.");
   return { ...state, items: state.items.map(i => i.id === itemId ? { ...i, recipeId } : i) };
 }
+/** Baking off is a later operation on existing production, not new recipe output. */
+export function isBakeOffTask(task: Pick<Task, "departmentId" | "operation">): boolean {
+  return (task.departmentId === "bak" || task.departmentId === "brood") && task.operation.trim().toLocaleLowerCase("nl-NL") === "afbakken";
+}
 export function completedOutput(items: Item[], tasks: Task[]): Map<string, number> {
   const result = new Map<string, number>(), batches = new Set<string>();
   for (const task of tasks) {
