@@ -266,7 +266,7 @@ function ProductionRound({ batch, complete, keepOpen, actions, children }: Reado
   return <section ref={sectionRef} className={styles.round} data-complete={complete}>
     <div className={styles.roundHead}>
       <div className={styles.roundDate}>
-        <p className={styles.roundLabel}>{batch.supplementName || "Centrale productieronde"}</p>
+        <p className={styles.roundLabel}>{batch.supplementId ? "Extra productiedag" : "Hoofdproductiedag"}</p>
         <h2><button ref={toggleRef} type="button" className={styles.roundToggle} aria-expanded={visible} aria-controls={contentId} onClick={() => setExpanded(value => !value)}>
           {formatCompactProductionDate(batch.startDate)}
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d={visible ? "m5 12 5-5 5 5" : "m5 8 5 5 5-5"}/></svg>
