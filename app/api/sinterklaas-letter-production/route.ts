@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { hasCronAuthorization } from "@/app/lib/auth/cron";
 import { canAccessSinterklaasPath } from "@/app/lib/auth/access";
@@ -5,15 +6,16 @@ import { getCurrentProfile } from "@/app/lib/auth/session";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 import { loadProductionWordPressOrders } from "@/app/sinterklaas/sinterklaasServerApi";
 import { loadCentralProduction } from "@/app/sinterklaas/letters/productie/productionData.server";
-import { combineProductionOrders, hydrateProductionRecipients, productionChanges, productionDeadlinePassed, productionPlanVersion, reviseProductionRows, setProductionQuantity } from "@/app/sinterklaas/letters/productie/productionChecklist";
+import { combineProductionOrders, hydrateProductionRecipients, productionDeadlinePassed, productionPlanVersion, reviseProductionRows, setProductionQuantity } from "@/app/sinterklaas/letters/productie/productionChecklist";
+import { createProductionSupplement, productionChecklistView, reviseProductionAllocations, type ProductionSupplement } from "@/app/sinterklaas/letters/productie/productionSupplements";
 import type { ProductionSeedRow } from "@/app/sinterklaas/letters/productie/productionSources";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-type SavedChecklist = { batch_id: string; rows: ProductionSeedRow[]; revision: number; plan_revision: number; locked_at: string | null; updated_at: string };
-const columns = "batch_id,rows,revision,plan_revision,locked_at,updated_at";
+type SavedChecklist = { batch_id: string; rows: ProductionSeedRow[]; supplements?: ProductionSupplement[]; revision: number; plan_revision: number; locked_at: string | null; updated_at: string };
+const columns = "batch_id,rows,supplements,revision,plan_revision,locked_at,updated_at";
 const jsonError = (message: string, status = 400) => Response.json({ message }, { status });
 
 async function loadCurrent(season: string) {
@@ -50,7 +52,7 @@ async function readLists(season: string, actorId: string | null) {
     }
     if (!list) return { ...batch, checklist: undefined };
     const rows = list.locked_at ? hydrateProductionRecipients(list.rows, batch.rows) : reviseProductionRows(list.rows, batch.rows);
-    return { ...batch, rows, checklist: { revision: list.revision, planRevision: list.plan_revision, planVersion: productionPlanVersion(batch.rows), lockedAt: list.locked_at, updatedAt: list.updated_at, changes: list.locked_at ? productionChanges(rows, batch.rows) : [] } };
+    return { ...batch, rows, checklist: productionChecklistView({ ...list, rows }, batch.rows) };
   }));
   return { ...current, batches: views };
 }
@@ -78,7 +80,7 @@ export async function POST(request: Request) {
   try { data = await request.json(); } catch { return jsonError("Ongeldig verzoek."); }
   if (!data || typeof data !== "object") return jsonError("Ongeldig verzoek.");
   const { batchId, revision, action, key, quantity } = data;
-  if (typeof batchId !== "string" || !/^[0-9a-f-]{36}$/i.test(batchId) || (!Number.isSafeInteger(revision) || Number(revision) < 0) || !["quantity", "revise"].includes(String(action))) return jsonError("Ongeldige productielijst.");
+  if (typeof batchId !== "string" || !/^[0-9a-f-]{36}$/i.test(batchId) || (!Number.isSafeInteger(revision) || Number(revision) < 0) || !["quantity", "revise", "supplement"].includes(String(action))) return jsonError("Ongeldige productielijst.");
   try {
     const db = createAdminClient() as unknown as SupabaseClient;
     const batchResult = await db.from("letter_production_batches").select("status,order_deadline_at,season").eq("id", batchId).maybeSingle();
@@ -89,31 +91,47 @@ export async function POST(request: Request) {
     const list = stored.data as SavedChecklist | null;
     if ((list?.revision || 0) !== revision) return jsonError("De lijst is intussen gewijzigd. De nieuwste versie wordt geladen. Controleer je wijziging opnieuw.", 409);
     let currentRows: ProductionSeedRow[] | undefined;
-    if (!list?.locked_at || action === "revise") {
+    if (!list?.locked_at || action !== "quantity") {
       const current = await loadCurrent(String(batchResult.data.season));
       const batch = current.batches.find(item => item.id === batchId);
       if (!batch) return jsonError("Productieronde niet gevonden.", 404);
       currentRows = batch.rows;
     }
     let rows = list?.locked_at ? list.rows : reviseProductionRows(list?.rows || [], currentRows!);
+    let supplements = list?.supplements || [];
     if (action === "quantity") {
       if (typeof key !== "string" || typeof quantity !== "number") return jsonError("Controleer het geproduceerde aantal.");
-      rows = setProductionQuantity(rows, key, quantity);
+      if (data.supplementId !== undefined) {
+        if (typeof data.supplementId !== "string" || !supplements.some(item => item.id === data.supplementId)) return jsonError("Aanvullende productielijst niet gevonden.", 404);
+        supplements = supplements.map(item => item.id === data.supplementId ? { ...item, rows: setProductionQuantity(item.rows, key, quantity) } : item);
+      } else rows = setProductionQuantity(rows, key, quantity);
     } else {
       if (!list?.locked_at) return jsonError("Een open productielijst wordt automatisch bijgewerkt.", 409);
       if (data.planVersion !== productionPlanVersion(currentRows!)) return jsonError("De bestellingen zijn opnieuw gewijzigd. Bekijk eerst de nieuwste verschillen.", 409);
-      rows = reviseProductionRows(list.rows, currentRows!);
+      if (action === "supplement") {
+        if (typeof data.date !== "string" || !Array.isArray(data.customerIds) || !data.customerIds.every(id => typeof id === "string")) return jsonError("Kies klanten en een productiedatum.");
+        if (data.date.slice(0, 4) !== String(batchResult.data.season)) return jsonError("Kies een datum binnen dit seizoen.");
+        const supplement = createProductionSupplement(rows, supplements, currentRows!, data.customerIds, {
+          id: randomUUID(), date: data.date, createdAt: new Date().toISOString(),
+          createdBy: profile?.id || null, createdByName: profile?.full_name || "",
+        });
+        supplements = [...supplements, supplement];
+      } else {
+        const revised = reviseProductionAllocations(rows, supplements, currentRows!);
+        rows = revised.rows;
+        supplements = revised.supplements;
+      }
     }
     const now = new Date().toISOString();
     const lockedAt = list?.locked_at || (productionDeadlinePassed({status: batchResult.data.status, deadlineAt: batchResult.data.order_deadline_at}) ? now : null);
-    const values = { rows, revision: (list?.revision || 0) + 1, plan_revision: (list?.plan_revision || 1) + (action === "revise" ? 1 : 0), locked_at: lockedAt, updated_at: now, updated_by: profile?.id };
+    const values = { rows, supplements, revision: (list?.revision || 0) + 1, plan_revision: (list?.plan_revision || 1) + (action === "revise" ? 1 : 0), locked_at: lockedAt, updated_at: now, updated_by: profile?.id };
     const updated = list
       ? await db.from("letter_production_checklists").update(values).eq("batch_id", batchId).eq("revision", list.revision).select(columns).maybeSingle()
       : await db.from("letter_production_checklists").insert({ batch_id: batchId, ...values }).select(columns).maybeSingle();
     if (updated.error?.code === "23505") return jsonError("Iemand anders heeft de lijst gewijzigd. Controleer de nieuwste versie en probeer opnieuw.", 409);
     if (updated.error) return jsonError("Opslaan is mislukt. De wijziging is niet bevestigd.", 503);
     if (!updated.data) return jsonError("Iemand anders heeft de lijst gewijzigd. Controleer de nieuwste versie en probeer opnieuw.", 409);
-    return Response.json({ list: updated.data });
+    return Response.json({ list: updated.data, ...(currentRows ? { checklist: productionChecklistView(updated.data as SavedChecklist, currentRows) } : {}) });
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : "Productie opslaan is mislukt.");
   }

@@ -1,3 +1,4 @@
+import type { ProductionCustomerChange, ProductionSupplement } from "./productionSupplements";
 import { b2bLetterHasLogo, b2bLetterDecoration } from "../../b2bLetterLines";
 import { b2bProductionLetters } from "../../b2bCombinationLetters";
 import { b2bProductionPlan, eligibleB2BLetterOrder, type B2BProductionAssignment, type B2BProductionPlan } from "./b2bProductionPlanning";
@@ -122,7 +123,7 @@ export function combineProductionOrders(batches: ProductionBatchSeed[], legacyOr
 }
 
 export type ProductionChange = { key: string; label: string; before: number; after: number; detail: string };
-export type ProductionChecklist = { revision: number; planRevision: number; planVersion: string; lockedAt: string | null; updatedAt: string; changes: ProductionChange[] };
+export type ProductionChecklist = { revision: number; planRevision: number; planVersion: string; lockedAt: string | null; updatedAt: string; changes: ProductionChange[]; orderChanges?: ProductionCustomerChange[]; supplements?: ProductionSupplement[] };
 
 export function productionPlanVersion(rows: ProductionSeedRow[]) {
   return JSON.stringify(rows.filter(row => row.orders + row.stock > 0).map(row => [row.key, row.label, row.orders, row.stock, ...(["winkel", "online", "b2b", "onbekend"] as const).map(source => row.orderSources?.[source] || 0), productionRecipientVersion(row)]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))));

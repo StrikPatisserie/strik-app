@@ -11,6 +11,7 @@ function load(file, stubs={}) {
  return compiled.exports;
 }
 const helper=load('app/sinterklaas/letters/productie/productionChecklist.ts');
+const supplements=load('app/sinterklaas/letters/productie/productionSupplements.ts');
 const presentation=load('app/sinterklaas/letters/productie/productionPresentation.ts');
 const row=(more={})=>({key:'s|melk|groot|spuit',label:'S · melk · groot · spuit',orders:20,stock:8,produced:0,orderSources:{online:10,winkel:4,b2b:6},...more});
 const id='d8c0af2e-a725-4ef0-a435-6b5f2838784a';
@@ -200,9 +201,10 @@ function endpointFixture({allowed=true,locked=true,existing=true,wpFailure=false
   '@/app/sinterklaas/sinterklaasServerApi':{loadProductionWordPressOrders:async()=>{if(wpFailure)throw Error('Source unavailable');return wordpress}},
   '@/app/sinterklaas/letters/productie/productionData.server':{loadCentralProduction:async()=>({batches:[current],centralUnplannedCount:0})},
   '@/app/sinterklaas/letters/productie/productionChecklist':helper,
+  '@/app/sinterklaas/letters/productie/productionSupplements':supplements,
  });
  const request=body=>new Request('https://app.strik-patisserie.nl/api/sinterklaas-letter-production',{method:'POST',headers:{'content-type':'application/json',origin:'https://app.strik-patisserie.nl'},body:JSON.stringify(body)});
- return {api,writes,request,get saved(){return saved},setCurrent(value){current=value},setWordPressOrders(value){wordpress=value}};
+ return {api,writes,request,get saved(){return saved},setSaved(value){saved=value},setCurrent(value){current=value},setWordPressOrders(value){wordpress=value}};
 }
 test('unauthorized or shop-only accounts cannot read or mark the global production list',async()=>{
  const f=endpointFixture({allowed:false});assert.equal((await f.api.GET(new Request('https://app.strik-patisserie.nl/api/sinterklaas-letter-production'))).status,403);
@@ -403,4 +405,98 @@ test('decoration creates separate production variants and frozen revisions retai
  assert(blue);assert.equal(blue.orders,3);assert(presentation.productionVariant(blue.label).extras.includes('decoratie: Blauwe balletjes'));
  const revised=helper.reviseProductionRows(rows.map(row=>({...row,produced:row.key===blue.key?3:0})),rows.filter(row=>row.key!==blue.key));
  assert.equal(revised.find(row=>row.key===blue.key).produced,3);
+});
+
+const recipient=(id,quantity,more={})=>({id,source:'b2b',customerName:id,quantity,date:'2099-12-03',...more});
+const customerRow=(people,more={})=>row({orders:people.reduce((sum,p)=>sum+p.quantity,0),stock:0,orderSources:{b2b:people.reduce((sum,p)=>sum+p.quantity,0)},recipients:people,...more});
+const extraDetails=(more={})=>({id:'extra-1',date:'2099-11-20',createdAt:'2099-11-17T08:00:00Z',createdBy:null,createdByName:'Test',...more});
+
+test('additional lists consume only selected customer increases and retain the printed original',()=>{
+ const original=[customerRow([recipient('A',10)],{produced:10})];
+ const current=[customerRow([recipient('A',12),recipient('B',7)])];
+ const savedOriginal=JSON.stringify(original);
+ const extra=supplements.createProductionSupplement(original,[],current,['b2b:A'],extraDetails());
+ assert.equal(extra.rows[0].orders,2);assert.equal(extra.rows[0].produced,0);
+ assert.equal(extra.rows[0].recipients[0].id,'A');
+ assert.equal(JSON.stringify(original),savedOriginal);
+ const changes=supplements.productionCustomerChanges(supplements.combinedProductionRows(original,[extra]),current);
+ assert.deepEqual(plain(changes.map(item=>[item.id,item.extra])),[['b2b:B',7]]);
+ assert.throws(()=>supplements.createProductionSupplement(original,[extra],current,['b2b:A'],extraDetails()),/Kies klanten/);
+ const second=supplements.createProductionSupplement(original,[extra],current,['b2b:B'],extraDetails({id:'extra-2',date:'2099-11-21'}));
+ assert.equal(second.name,'Aanvulling 2');
+ const combined=supplements.combinedProductionRows(original,[extra,second]);
+ assert.equal(combined[0].orders,19);assert.equal(combined[0].produced,10);
+ assert.equal(helper.productionChanges(combined,supplements.combinedProductionRows(current)).length,0);
+});
+
+test('reviewed cancellation keeps actual production and exposes surplus in its own additional run',()=>{
+ const original=[customerRow([recipient('A',10)],{produced:10})];
+ const extra={...extraDetails(),name:'Aanvulling 1',planRevision:1,rows:[customerRow([recipient('B',7)],{produced:7})]};
+ const revised=supplements.reviseProductionAllocations(original,[extra],[customerRow([recipient('A',10),recipient('B',3)])]);
+ assert.equal(revised.rows[0].orders,10);assert.equal(revised.rows[0].produced,10);
+ assert.equal(revised.supplements[0].rows[0].orders,3);assert.equal(revised.supplements[0].rows[0].produced,7);
+ assert.equal(helper.productionSurplus(revised.supplements[0].rows),4);
+ assert.equal(helper.productionChanges(supplements.combinedProductionRows(revised.rows,revised.supplements),[customerRow([recipient('A',10),recipient('B',3)])]).length,0);
+ const cancelled=supplements.reviseProductionAllocations(revised.rows,revised.supplements,[customerRow([recipient('A',10)])]);
+ assert.equal(cancelled.supplements[0].rows[0].orders,0);assert.equal(cancelled.supplements[0].rows[0].produced,7);
+});
+
+test('date and customer validation reject stale choices, past dates and production after delivery',()=>{
+ const current=[customerRow([recipient('A',3,{date:'2099-11-22'})])];
+ const create=(ids,details)=>supplements.createProductionSupplement([],[],current,ids,extraDetails(details));
+ assert.throws(()=>create(['b2b:missing'],{}),/Kies klanten/);
+ assert.throws(()=>create(['b2b:A','b2b:A'],{}),/Kies klanten/);
+ assert.throws(()=>create(['b2b:A'],{date:'2099-11-16'}),/geldige productiedag/);
+ assert.throws(()=>create(['b2b:A'],{date:'2099-11-23'}),/uiterlijk op de leverdatum/);
+ assert.throws(()=>create(['b2b:A'],{date:'2099-02-31'}),/geldige productiedag/);
+});
+
+test('missing historical customer allocations cannot be guessed for supplemental planning',()=>{
+ const changes=supplements.productionCustomerChanges([row({orders:20,stock:0})],[customerRow([recipient('A',25)])]);
+ assert.equal(changes.length,0);
+});
+
+test('combined recipient quantities support original customer readiness independently of later extras',()=>{
+ const readiness=load('app/sinterklaas/letters/productie/productionReadiness.ts');
+ const original=[customerRow([recipient('A',10)],{produced:10})];
+ const extra={...extraDetails(),name:'Aanvulling 1',planRevision:1,rows:[customerRow([recipient('B',5)])]};
+ const current=[customerRow([recipient('A',10),recipient('B',5)])];
+ let ready=readiness.readyProductionRecipients([{id,rows:current}],[{batch_id:id,rows:original,locked_at:'now',supplements:[extra]}]);
+ assert.equal(ready.has('A'),true);assert.equal(ready.has('B'),false);
+ extra.rows[0].produced=5;
+ ready=readiness.readyProductionRecipients([{id,rows:current}],[{batch_id:id,rows:original,locked_at:'now',supplements:[extra]}]);
+ assert.equal(ready.has('B'),true);
+});
+
+test('supplement API uses a revision guard and cannot schedule the same increment twice',async()=>{
+ const f=endpointFixture();
+ const original=[customerRow([recipient('A',10)],{produced:10})];
+ f.setSaved({...f.saved,rows:original});
+ // Current recipient data is supplied through the existing B2B source adapter.
+ const order=b2bLetterOrder({id:'new',customerName:'New',deliveryDate:'2026-11-06',letterLines:[{letter:'S',chocolate:'melk',size:'groot',style:'spuit',quantity:5,exceptions:[],withLogo:false}]});
+ f.setCurrent(batch({rows:original,status:'IN_PRODUCTION'}));
+ f.setWordPressOrders({letters:[],b2b:[order]});
+ const view=(await (await f.api.GET(new Request('https://app.strik-patisserie.nl/api/sinterklaas-letter-production?season=2026'))).json()).batches[0];
+ const payload={batchId:id,revision:1,action:'supplement',planVersion:view.checklist.planVersion,date:'2026-11-20',customerIds:['b2b:b2b:new']};
+ // The delivery is already past. Server validation must reject before writing.
+ const rejected=await f.api.POST(f.request(payload));assert.equal(rejected.status,400);assert.equal(f.writes.length,0);
+ order.deliveryDate='2026-12-03';
+ f.setWordPressOrders({letters:[],b2b:[order]});
+ const fresh=(await (await f.api.GET(new Request('https://app.strik-patisserie.nl/api/sinterklaas-letter-production?season=2026'))).json()).batches[0];
+ payload.planVersion=fresh.checklist.planVersion;
+ payload.date=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Amsterdam'}).format(new Date());
+ // Keep the date valid as time moves on, without writing real production data.
+ order.deliveryDate='2099-12-03';
+ f.setWordPressOrders({letters:[],b2b:[order]});
+ const latest=(await (await f.api.GET(new Request('https://app.strik-patisserie.nl/api/sinterklaas-letter-production?season=2026'))).json()).batches[0];
+ payload.planVersion=latest.checklist.planVersion;
+ const response=await f.api.POST(f.request(payload));assert.equal(response.status,200,await response.clone().text());
+ assert.equal(f.saved.supplements.length,1);assert.equal(f.saved.rows[0].produced,10);
+ assert.equal(f.saved.supplements[0].rows[0].orders,5);assert.equal(f.saved.plan_revision,1);
+ assert.equal((await f.api.POST(f.request(payload))).status,409);
+ const quantity=await f.api.POST(f.request({batchId:id,revision:2,action:'quantity',supplementId:f.saved.supplements[0].id,key:row().key,quantity:3}));
+ assert.equal(quantity.status,200);assert.equal(f.saved.supplements[0].rows[0].produced,3);assert.equal(f.saved.rows[0].produced,10);
+ const updatedView=(await (await f.api.GET(new Request('https://app.strik-patisserie.nl/api/sinterklaas-letter-production?season=2026'))).json()).batches[0];
+ const duplicate=await f.api.POST(f.request({...payload,revision:3,planVersion:updatedView.checklist.planVersion}));
+ assert.equal(duplicate.status,400);assert.equal(f.saved.supplements.length,1);
 });

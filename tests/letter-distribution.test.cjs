@@ -10,7 +10,10 @@ function load(file,stubs={},globals={}){
  vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText,{exports,require(name){
   if(name in stubs)return stubs[name];
   if(name.endsWith('.module.css'))return{default:new Proxy({},{get:(_,key)=>key})};
-  if(name.startsWith('.'))return load(path.resolve(path.dirname(file),name+'.ts'),stubs);
+  if(name.startsWith('.')){
+   const resolved=path.resolve(path.dirname(file),name);
+   return load(fs.existsSync(resolved+'.ts')?resolved+'.ts':resolved+'.tsx',stubs);
+  }
   return require(name);
  },Response,Request,URL,Buffer,process,...globals});
  return exports;

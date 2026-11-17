@@ -38,7 +38,7 @@ export function ProductionPrintSheet({ batch }: Readonly<{ batch: ProductionBatc
       <div className={styles.titleRow}>
         <div>
           <p className={styles.brand}>Strik Patisserie / Bakkerij</p>
-          <h2>Productielijst chocoladeletters</h2>
+          <h2>{batch.supplementName ? `${batch.supplementName} · chocoladeletters` : "Productielijst chocoladeletters"}</h2>
           <p className={styles.date}>{date}</p>
         </div>
         <span className={styles.version} data-provisional={!batch.checklist?.lockedAt}>{batch.checklist?.lockedAt ? <>Vastgezet<strong>Versie {batch.checklist.planRevision}</strong></> : <>Voorlopig<strong>Nog wijzigbaar</strong></>}</span>

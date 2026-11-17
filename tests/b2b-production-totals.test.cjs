@@ -151,7 +151,7 @@ test('production button permission is resolved on the server for both seasons', 
   for (const file of ['app/sinterklaas/b2b/page.tsx', 'app/kerst/b2b/page.tsx']) for (const role of ['manager', 'logistiek', 'winkel']) {
     const dummy = () => null, current = { id: 'u', active: true, role, permissions: {} };
     const page = loader({ '../../lib/auth/session': { getCurrentProfile: async () => current }, '../../lib/auth/access': access, './SinterklaasB2BClient': { default: dummy }, '../../sinterklaas/b2b/SinterklaasB2BClient': { default: dummy } })(file);
-    const tree = await page.default(); assert.equal(tree.props.children.props.canViewProduction, role !== 'winkel');
+    const tree = await page.default({}); assert.equal(tree.props.children.props.canViewProduction, role !== 'winkel');
   }
 });
 test('the existing B2B button opens current totals and the existing production checkbox immediately removes an order without changing its other fields', async () => {

@@ -6,6 +6,7 @@ import styles from "./ProductionPlanning.module.css";
 import ProductionPrintPreviewDialog from "./ProductionPrintPreview";
 import ProductionDistributionPrint from "./ProductionDistributionPrint";
 import B2BProductionPlanning from "./B2BProductionPlanner";
+import ProductionChangesDialog from "./ProductionChangesDialog";
 import ProductionRecipientsDialog from "./ProductionRecipientsDialog";
 import type { B2BProductionPlan } from "./b2bProductionPlanning";
 import { compareProductionRows, productionRoundIsComplete, productionRowIsComplete, productionSections, productionValueLabel, productionVariant } from "./productionPresentation";
@@ -43,6 +44,11 @@ type StartDistributionResult = {
 
 export type ProductionBatchSeed = {
   id: string;
+  parentBatchId?: string;
+  supplementId?: string;
+  supplementName?: string;
+  createdAt?: string;
+  createdByName?: string;
   startDate: string;
   date: string;
   pickupFrom?: string;
@@ -260,7 +266,7 @@ function ProductionRound({ batch, complete, keepOpen, actions, children }: Reado
   return <section ref={sectionRef} className={styles.round} data-complete={complete}>
     <div className={styles.roundHead}>
       <div className={styles.roundDate}>
-        <p className={styles.roundLabel}>Centrale productieronde</p>
+        <p className={styles.roundLabel}>{batch.supplementName || "Centrale productieronde"}</p>
         <h2><button ref={toggleRef} type="button" className={styles.roundToggle} aria-expanded={visible} aria-controls={contentId} onClick={() => setExpanded(value => !value)}>
           {formatCompactProductionDate(batch.startDate)}
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d={visible ? "m5 12 5-5 5 5" : "m5 8 5 5 5-5"}/></svg>
@@ -1547,11 +1553,18 @@ export default function ProductionPlanningClient({
       });
     });
 
-    const batchViews = (liveBatches || batches).map(batch => ({
+    const mainViews = (liveBatches || batches).map(batch => ({
       ...batch,
       storeOrders: demoMode ? storeOrdersByBatch[batch.id] || batch.storeOrders || [] : batch.storeOrders,
       rows: [...(rowsByDate.get(batch.date)?.values() || [])].map(row => ({...row, produced: producedRowsByBatch[batch.id]?.find(update => update.key === row.key)?.produced ?? row.produced})).sort(compareProductionRows),
     }));
+    const batchViews = mainViews.flatMap(batch => [batch, ...(batch.checklist?.supplements || []).map(supplement => ({
+      ...batch, id: supplement.id, parentBatchId: batch.id, supplementId: supplement.id,
+      supplementName: supplement.name, startDate: supplement.date, date: supplement.date,
+      createdAt: supplement.createdAt, createdByName: supplement.createdByName,
+      storeOrders: [], rows: [...supplement.rows].sort(compareProductionRows),
+      checklist: { ...batch.checklist!, changes: [], orderChanges: [], supplements: [], planRevision: supplement.planRevision },
+    }))]);
     const grandRows = aggregateProductionRows(batchViews.flatMap((batch) => batch.rows));
 
     return {
@@ -1602,7 +1615,7 @@ export default function ProductionPlanningClient({
     }));
   }
 
-  async function saveProduction(batch: ProductionBatchSeed, action: "quantity" | "revise", row?: WorkingRow, quantity?: number) {
+  async function saveProduction(batch: ProductionBatchSeed, action: "quantity" | "revise" | "supplement", row?: WorkingRow, quantity?: number, extra?: { date: string; customerIds: string[] }) {
     if (savingProduction) return false;
     setProductionNoticeBatch(batch.id);
     if (demoMode) {
@@ -1614,15 +1627,15 @@ export default function ProductionPlanningClient({
     setProductionNotice("");
     productionMutationVersion.current += 1;
     try {
-      const response = await fetch("/api/sinterklaas-letter-production", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({batchId: batch.id, revision: batch.checklist?.revision || 0, planVersion: batch.checklist?.planVersion, action, key: row?.key, quantity})});
+      const response = await fetch("/api/sinterklaas-letter-production", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({batchId: batch.parentBatchId || batch.id, supplementId: batch.supplementId, ...extra, revision: batch.checklist?.revision || 0, planVersion: batch.checklist?.planVersion, action, key: row?.key, quantity})});
       const result = await response.json();
       if (!response.ok) {
         if (response.status === 409) { setRefreshVersion(current => current + 1); setQuantityDialog(null); setReviseBatch(null); }
         throw new Error(result.message || "Productie opslaan is mislukt.");
       }
       const list = result.list;
-      setLiveBatches(current => current?.map(item => item.id === batch.id ? {...item, rows: list.rows, checklist: {revision: list.revision, planRevision: list.plan_revision, lockedAt: list.locked_at, planVersion: item.checklist?.lockedAt && action !== "revise" ? item.checklist.planVersion : productionPlanVersion(list.rows), updatedAt: list.updated_at, changes: action === "revise" || !item.checklist?.lockedAt ? [] : item.checklist.changes}} : item) || null);
-      setProductionNotice(action === "revise" ? "Nieuwe versie opgeslagen. Print de bijgewerkte productielijst voor de bakkers." : "Productievoortgang opgeslagen.");
+      setLiveBatches(current => current?.map(item => item.id === (batch.parentBatchId || batch.id) ? {...item, rows: list.rows, checklist: result.checklist || {revision: list.revision, planRevision: list.plan_revision, lockedAt: list.locked_at, planVersion: item.checklist?.lockedAt ? item.checklist.planVersion : productionPlanVersion(list.rows), updatedAt: list.updated_at, supplements: list.supplements || [], changes: item.checklist?.changes || [], orderChanges: item.checklist?.orderChanges || []}} : item) || null);
+      setProductionNotice(action === "supplement" ? "Aanvullende productielijst opgeslagen. Je kunt deze apart printen en afvinken." : action === "revise" ? "Nieuwe versie opgeslagen. Print de bijgewerkte productielijst voor de bakkers." : "Productievoortgang opgeslagen.");
       return true;
     } catch (error) {
       setProductionNotice(error instanceof Error ? error.message : "Opslaan is mislukt.");
@@ -1689,7 +1702,7 @@ export default function ProductionPlanningClient({
         )}
       </section>
 
-      {!demoMode && liveBatches && !warning && <B2BProductionPlanning plans={b2bPlans} batches={overview.batches} season={season} onSaved={()=>setRefreshVersion(value=>value+1)}/>}
+      {!demoMode && liveBatches && !warning && <B2BProductionPlanning plans={b2bPlans} batches={overview.batches.filter(batch => !batch.supplementId)} season={season} onSaved={()=>setRefreshVersion(value=>value+1)}/>}
 
       {(liveUnplannedCount > 0 || overview.unplanned.length > 0) && <section className={styles.attention}>
         <h2>Nog niet aan een productiedag gekoppeld</h2>
@@ -1707,9 +1720,9 @@ export default function ProductionPlanningClient({
           return <ProductionRound key={batch.id} batch={batch} complete={complete} keepOpen={quantityDialog?.batch.id === batch.id || reviseBatch?.id === batch.id || sourceDialogBatch === batch.id} actions={<>
                 {demoMode && <button type="button" onClick={() => setPrintOptionsBatch(batch)} className={styles.button}>Printlijsten</button>}
                 {!demoMode && <button type="button" disabled={loading || Boolean(warning) || !liveBatches} onClick={() => setPrintOptionsBatch(batch)} className={styles.button}>Printlijsten</button>}
-                <button type="button" onClick={() => { setStoreOrderInitialShop(DISTRIBUTION_SHOPS[0]); setStoreOrderBatch(batch); }} className={styles.button}>
+                {!batch.supplementId && <button type="button" onClick={() => { setStoreOrderInitialShop(DISTRIBUTION_SHOPS[0]); setStoreOrderBatch(batch); }} className={styles.button}>
                   {storeOrdersLocked ? "Bekijk winkelvoorraad" : storeStockTotal > 0 ? "Winkelvoorraad wijzigen" : "+ Winkelvoorraad per winkel"}
-                </button>
+                </button>}
               </>}>
             <div className={styles.roundSummary}>
               <span>Totaal <b>{planned}</b></span>
@@ -1719,7 +1732,7 @@ export default function ProductionPlanningClient({
               <p className={styles.tableLegend}>Besteld = klantbestellingen · Winkel = vrije winkelvoorraad</p>
             </div>
             <div className={styles.checklistNote}>
-              {batch.checklist?.lockedAt ? <>Vastgezet op {formatDeadline(batch.checklist.lockedAt)} · versie {batch.checklist.planRevision}. Tik op het aantal om gemaakte aantallen te registreren.</> : <>Bestellen tot {formatDeadline(batch.deadlineAt)}. Gemaakte aantallen kun je nu al registreren.</>}
+              {batch.supplementId ? <>Aangemaakt {batch.createdAt ? formatDeadline(batch.createdAt) : ""}{batch.createdByName ? ` door ${batch.createdByName}` : ""} · versie {batch.checklist?.planRevision}</> : batch.checklist?.lockedAt ? <>Vastgezet op {formatDeadline(batch.checklist.lockedAt)} · versie {batch.checklist.planRevision}. Tik op het aantal om gemaakte aantallen te registreren.</> : <>Bestellen tot {formatDeadline(batch.deadlineAt)}. Gemaakte aantallen kun je nu al registreren.</>}
             </div>
             {productionNotice && productionNoticeBatch === batch.id && <p role="status" className={styles.checklistNote}>{productionNotice}</p>}
             {!!batch.checklist?.changes.length && <div className={styles.changeNotice} role="status"><strong>Bestellingen gewijzigd na vastzetten</strong><p>{batch.checklist.changes.length} gewijzigde letterregel(s). De productielijst blijft staan totdat je deze wijzigingen controleert.</p><button type="button" className={styles.button} disabled={savingProduction || Boolean(warning)} onClick={() => {setProductionNotice(""); setReviseBatch(batch);}}>Wijzigingen bekijken</button></div>}
@@ -1727,7 +1740,7 @@ export default function ProductionPlanningClient({
               onSourceDialogChange={open => setSourceDialogBatch(open ? batch.id : "")}
               onToggleComplete={demoMode ? row => toggleProductionRow(batch, row) : !loading && !warning ? row => { void saveProduction(batch, "quantity", row, productionRowIsComplete(row) ? 0 : row.orders + row.stock); } : undefined}
               onEditQuantity={(demoMode || !loading && !warning) ? row => {setProductionNotice(""); setQuantityDialog({batch, row}); setQuantityDraft(String(row.produced));} : undefined} />
-            <div className={styles.storeFooter}>
+            {!batch.supplementId && <div className={styles.storeFooter}>
               <div className={styles.stockHeading}>
                 <span>Winkelbestellingen · voorraad per vestiging</span>
                 <strong>{storeOrdersLocked ? "Vergrendeld" : `Wijzigbaar tot ${formatDeadline(batch.deadlineAt)}`}</strong>
@@ -1741,7 +1754,7 @@ export default function ProductionPlanningClient({
                   </button>;
                 })}
               </div>
-            </div>
+            </div>}
           </ProductionRound>;
         })}
       </div>
@@ -1784,13 +1797,10 @@ export default function ProductionPlanningClient({
         {productionNotice && <p role="alert">{productionNotice}</p>}
         <div className={styles.progressActions}><button type="button" className={styles.button} disabled={savingProduction} onClick={() => setQuantityDialog(null)}>Annuleren</button><button type="submit" className={styles.primary} disabled={savingProduction}>{savingProduction ? "Opslaan…" : "Aantal opslaan"}</button></div>
       </form></div>}
-      {reviseBatch && <div className={`${styles.progressOverlay} ${styles.dialog}`} role="dialog" aria-modal="true" aria-labelledby="revise-title"><section className={styles.progressDialog}>
-        <h2 id="revise-title">Gewijzigde bestellingen controleren</h2><p>De bestaande vinkjes en gemaakte aantallen blijven bewaard. Bij een verhoging blijft het extra aantal openstaan.</p>
-        <ul className={styles.changeList}>{reviseBatch.checklist?.changes.map(change => <li key={change.key}><strong>{change.label}</strong><span>{change.before} → {change.after} stuks · {change.detail}</span></li>)}</ul>
-        <p>Na overnemen krijgt de lijst een nieuw versienummer. Vervang ook de papieren lijst in de bakkerij.</p>
-        {productionNotice && <p role="alert">{productionNotice}</p>}
-        <div className={styles.progressActions}><button type="button" className={styles.button} disabled={savingProduction} onClick={() => setReviseBatch(null)}>Sluiten</button><button type="button" className={styles.primary} disabled={savingProduction} onClick={async () => {if (await saveProduction(reviseBatch, "revise")) setReviseBatch(null);}}>{savingProduction ? "Opslaan…" : "Bijgewerkte lijst overnemen"}</button></div>
-      </section></div>}
+      {reviseBatch && <ProductionChangesDialog batch={reviseBatch} saving={savingProduction} notice={productionNotice}
+        onClose={() => setReviseBatch(null)}
+        onRevise={async () => { if (await saveProduction(reviseBatch, "revise")) setReviseBatch(null); }}
+        onSchedule={async (date, customerIds) => { if (await saveProduction(reviseBatch, "supplement", undefined, undefined, { date, customerIds })) setReviseBatch(null); }} />}
       {startDistributionOpen && (
         <StartDistributionDialog
           season={season}

@@ -1878,10 +1878,10 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
   </article>;
 }
 
-export default function SinterklaasB2BClient({ season = "sint", canViewProduction = false }: Readonly<{ season?: BusinessSeason; canViewProduction?: boolean }>) {
+export default function SinterklaasB2BClient({ season = "sint", canViewProduction = false, initialSearch = "" }: Readonly<{ season?: BusinessSeason; canViewProduction?: boolean; initialSearch?: string }>) {
   const excelInput=useRef<HTMLInputElement>(null);
   const [year, setYear] = useState(() => currentYear());
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
   const [statusFilter, setStatusFilter] = useState("");
   const [orders, setOrders] = useState<SinterklaasB2BOrder[]>([]);
   const [loading, setLoading] = useState(true);
