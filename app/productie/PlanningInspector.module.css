@@ -44,3 +44,5 @@
 .returnConfirm { margin-top:9px;font-size:12px; }
 .returnConfirm p { margin:0 0 7px; }
 .returnConfirm button+button { margin-left:6px;background:#fff; }
+
+.party{padding:12px 0;border-top:1px solid #d7e0d2}.party p{font-size:12px;color:#53694f;margin:6px 0}.party button{display:block;margin-top:8px;padding:8px 10px;border:1px solid #bdcdb4;border-radius:7px;background:#edf2e8;color:#294329;text-align:left;cursor:pointer}.party button:disabled{opacity:.5;cursor:default}

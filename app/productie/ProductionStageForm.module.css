@@ -1,0 +1,156 @@
+.dialog {
+  width: min(540px,calc(100vw - 24px));
+  max-height: calc(100dvh - 32px);
+  padding: 0;
+  border: 1px solid #c3d3bc;
+  border-radius: 14px;
+  background: #fff;
+  color: #1c3444;
+  box-shadow:0 14px 55px #142e3b35;
+}
+
+.dialog::backdrop {
+  background:#17344466;
+}
+
+.dialog form {
+  display: flex;
+  flex-direction: column;
+  max-height:calc(100dvh - 34px);
+}
+
+.dialog header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 20px 22px 14px;
+  border-bottom:1px solid #dce4d7;
+}
+
+.dialog h2 {
+  font-size: 22px;
+  margin:0;
+}
+
+.dialog header p {
+  margin: 5px 0 0;
+  color:#53694f;
+}
+
+.dialog button {
+  border: 1px solid #bacab1;
+  border-radius: 7px;
+  padding: 9px 13px;
+  color: inherit;
+  background: #fff;
+  cursor: pointer;
+  font:inherit;
+}
+
+.dialog header button {
+  padding: 6px;
+  display:flex;
+}
+
+.body {
+  overflow-y: auto;
+  padding:18px 22px;
+}
+
+.date {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-weight:600;
+}
+
+.dialog input {
+  border: 1px solid #b5c7ad;
+  border-radius: 6px;
+  padding: 9px;
+  color: inherit;
+  font: inherit;
+  min-width:0;
+}
+
+.date input {
+  max-width:190px;
+}
+
+.parties {
+  margin-top: 16px;
+  border-top:1px solid #dce4d7;
+}
+
+.party {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom:1px solid #dce4d7;
+}
+
+.party strong {
+  font-size:14px;
+}
+
+.party small {
+  display: block;
+  margin-top: 4px;
+  color:#53694f;
+}
+
+.party input {
+  width:100px;
+}
+
+.total {
+  font-weight: 700;
+  background: #edf3e9;
+  padding: 10px;
+  border-radius: 6px;
+  margin-bottom:0;
+}
+
+.dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 22px;
+  border-top:1px solid #dce4d7;
+}
+
+.dialog .primary {
+  background: #1c3444;
+  color: white;
+  border-color:#1c3444;
+}
+
+.dialog button:disabled {
+  opacity: .5;
+  cursor:default;
+}
+
+.error {
+  color: #a22e29;
+  font-size:14px;
+}
+
+@media(max-width:480px) {
+  .party {
+    align-items:flex-start;
+  }
+  .party input {
+    width:80px;
+  }
+  .body {
+    padding:14px;
+  }
+  .dialog header,.dialog footer {
+    padding:14px;
+  }
+}
+
+.party input { border:1px solid #b5c7ad; border-radius:6px; padding:9px; color:#1c3444; font:inherit; min-width:0; }

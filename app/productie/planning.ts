@@ -24,6 +24,7 @@ export type Item = {
   note: string; stock: number; minimumStock?: number;
   stockKnown?: boolean; departmentUnconfirmed?: boolean;
   productionBlocked?: boolean;
+  productionSteps?: string[];
 };
 export type Task = {
   id: string; itemId: string; departmentId: DepartmentId; date: string;
@@ -35,8 +36,9 @@ export type Task = {
   recipePlan?: RecipePlanSettings;
   weddingCode?: string; weddingDeliveryDate?: string; completedQuantity?:number;
   stockFulfillmentId?:string;
+  productionStage?: { stepId: string; steps?: string[]; sources: { taskId: string; quantity: number }[] };
 };
-export type PreparationChoice = { include?: boolean; date?: string; daysBefore?: number; departmentId?: DepartmentId; operation?: string; minutes?: number | null };
+export type PreparationChoice = { include?: boolean; date?: string; daysBefore?: number; departmentId?: DepartmentId; operation?: string; minutes?: number | null; sourceTaskId?: string };
 export type RecipePlanSettings = {
   amount: number; amountMode: "quantity" | "batches";
   preparation?: { daysBefore: number; choices: Record<string, PreparationChoice>; combine?: boolean };
@@ -46,6 +48,7 @@ export type DemoRecipe = {
   ingredients: { name: string; quantity: number; unit: string }[];
   steps: string[]; allergens: string[];
   reviewRequired?: boolean;
+  productionSteps?: string[];
   type?: "finalProduct" | "semiFinished";
   semiFinishedItems?: { recipeId: string; quantity: number; unit: string }[];
 };
@@ -225,7 +228,7 @@ export function taskIssues(task: Task, tasks: Task[], items: Item[] = []): strin
     else if (prior.date>task.date) issues.push(`${name} staat later ingepland (${dateLabel(prior.date)}).`);
     else if (prior.status!=="done") issues.push(`Wacht op ${name} (${dateLabel(prior.date)}).`);
     else if (task.materialNeeds?.[id] !== undefined || prior.completedQuantity !== undefined) {
-      const consumers=tasks.filter(consumer=>consumer.requires?.includes(id));
+      const consumers=tasks.filter(consumer=>!consumer.stockFulfillmentId && consumer.requires?.includes(id));
       const reserved=Math.max(consumers.reduce((total,consumer)=>total+(consumer.materialNeeds?.[id]||0),0),consumers.some(consumer=>consumer.materialNeeds?.[id]===undefined)?prior.quantity:0);
       if((prior.completedQuantity??prior.quantity)+1e-6<reserved)issues.push(`${name}: minder beschikbaar dan de ${reserved.toLocaleString("nl-NL")} ${items.find(item=>item.id===prior.itemId)?.unit||""} die aan producties is gekoppeld.`);
     }
@@ -375,7 +378,7 @@ export function validRecipePlan(value:RecipePlanSettings):boolean {
   const prep=value.preparation;if(!prep)return true;
   if(prep.combine!==undefined && typeof prep.combine!=="boolean")return false;
   if(!Number.isInteger(prep.daysBefore) || prep.daysBefore<0 || prep.daysBefore>30 || !prep.choices || typeof prep.choices!=="object" || Array.isArray(prep.choices) || Object.keys(prep.choices).length>250)return false;
-  return Object.values(prep.choices).every(c=>{if(!c || typeof c!=="object" || (c.include!==undefined && typeof c.include!=="boolean") || (c.daysBefore!==undefined && (!Number.isInteger(c.daysBefore) || c.daysBefore<0 || c.daysBefore>30)) || (c.departmentId!==undefined && !DEPARTMENTS.some(d=>d.id===c.departmentId)) || (c.operation!==undefined && (typeof c.operation!=="string" || !c.operation.trim() || c.operation.length>100)) || (c.minutes!==undefined && c.minutes!==null && (!Number.isFinite(c.minutes) || c.minutes<0 || c.minutes>1440)))return false;try{if(c.date)addDays(c.date,0);return true;}catch{return false;}});
+  return Object.values(prep.choices).every(c=>{if(!c || typeof c!=="object" || (c.include!==undefined && typeof c.include!=="boolean") || (c.daysBefore!==undefined && (!Number.isInteger(c.daysBefore) || c.daysBefore<0 || c.daysBefore>30)) || (c.departmentId!==undefined && !DEPARTMENTS.some(d=>d.id===c.departmentId)) || (c.operation!==undefined && (typeof c.operation!=="string" || !c.operation.trim() || c.operation.length>100)) || (c.minutes!==undefined && c.minutes!==null && (!Number.isFinite(c.minutes) || c.minutes<0 || c.minutes>1440)) || (c.sourceTaskId!==undefined && (typeof c.sourceTaskId!=="string" || !c.sourceTaskId || c.sourceTaskId.length>200)))return false;try{if(c.date)addDays(c.date,0);return true;}catch{return false;}});
 }
 
 export function matchesProductionSearch(query:string,values:(string|undefined)[]):boolean {
@@ -406,4 +409,169 @@ export function validProductionRequests(value:unknown):value is ProductionReques
   } catch {
     return false;
   }
+}
+
+
+/** These defaults can be changed in the recipe. Existing task snapshots keep
+ * their sequence when a recipe is edited. */
+export const PRODUCTION_STEP_OPTIONS = [
+  "Deeg zetten", "Beslag maken", "Produceren", "Interieur maken",
+  "Interieur vullen", "Storten", "Spuiten", "Bakken", "Afbakken",
+  "Lossen", "Plakken", "Doorhalen", "Afwerken", "Product maken & afbakken",
+] as const;
+export function validProductionSteps(value: unknown): value is string[] {
+  return Array.isArray(value) && value.length > 0 && value.length <= PRODUCTION_STEP_OPTIONS.length
+    && new Set(value).size === value.length
+    && value.every(step => typeof step === "string" && (PRODUCTION_STEP_OPTIONS as readonly string[]).includes(step));
+}
+export const PRODUCTION_ROUTES = [
+  { recipeId: "recipe-new-1782226444084", steps: ["Produceren", "Afbakken"], stockStep: 0 },
+  { recipeId: "recipe-new-1783506022927", steps: ["Interieur maken", "Storten", "Plakken", "Afwerken"], stockStep: 3 },
+  { recipeId: "recipe-new-1782249922037", steps: ["Spuiten", "Doorhalen"], stockStep: 1, unitLabel: "doosjes", packSize: 10 },
+  { recipeId: "recipe-new-1783603930205", steps: ["Interieur vullen", "Storten", "Lossen"], stockStep: 1 },
+  { recipeId: "hf030", steps: ["Beslag maken"], stockStep: 0 },
+] as const;
+type RouteItem = { recipeId?: string; name?: string; productionSteps?: string[] };
+export type ProductionRoute = { steps: readonly string[]; stockStep: number; unitLabel?: string; packSize?: number };
+export function defaultProductionSteps(item: RouteItem): string[] | undefined {
+  const route = PRODUCTION_ROUTES.find(route => route.recipeId === item.recipeId);
+  if (route) return [...route.steps];
+  const name = (item.name || "").trim().toLocaleLowerCase("nl-NL");
+  if (/^(?:gevuld(?:e)? speculaas|speculaas(?:brok|plak|jes|koek|pop|staaf| amandel bites))/.test(name)) {
+    return ["Deeg zetten", "Product maken & afbakken"];
+  }
+  if (name === "speculaasdeeg") return ["Deeg zetten"];
+}
+export function productionRoute(item: RouteItem | undefined, task?: Task): ProductionRoute | undefined {
+  if (!item) return;
+  const legacy = PRODUCTION_ROUTES.find(route => route.recipeId === item.recipeId);
+  const metadata = legacy && "packSize" in legacy ? { packSize: legacy.packSize, unitLabel: legacy.unitLabel } : {};
+  if (task?.productionStage?.steps) {
+    const steps = task.productionStage.steps;
+    return validProductionSteps(steps) ? { steps, stockStep: steps.length - 1, ...metadata } : undefined;
+  }
+  // Earlier saved parties used their original stock point.
+  if (task?.productionStage && legacy) return legacy;
+  const steps = item.productionSteps || defaultProductionSteps(item);
+  if (steps && validProductionSteps(steps)) return { steps, stockStep: steps.length - 1, ...metadata };
+}
+export function productionUnit(item: Pick<Item, "recipeId" | "unit"> | undefined): string {
+  return productionRoute(item)?.unitLabel || item?.unit || "";
+}
+export function productionStepIndex(item: Item | undefined, task: Task): number {
+  return productionRoute(item, task)?.steps.indexOf(task.productionStage?.stepId || task.operation) ?? -1;
+}
+export function reservedMaterial(state: PreviewState, taskId: string, exceptId?: string): number {
+  return state.tasks.filter(task => task.id !== exceptId && !task.stockFulfillmentId)
+    .reduce((total, task) => total + (task.materialNeeds?.[taskId] || 0), 0);
+}
+export function remainingParty(state: PreviewState, task: Task): number {
+  return Math.max(0, (task.completedQuantity ?? task.quantity) - reservedMaterial(state, task.id));
+}
+export function stageParties(state: PreviewState, item: Item, route: ProductionRoute, index: number, date: string): Task[] {
+  return state.tasks.filter(task => task.itemId === item.id && !!task.productionStage && !task.stockFulfillmentId && task.date <= date
+    && productionStepIndex(item, task) === index - 1
+    && JSON.stringify(productionRoute(item, task)?.steps) === JSON.stringify(route.steps)
+    && productionRoute(item, task)?.stockStep === route.stockStep
+    && remainingParty(state, task) > 0);
+}
+/** Physical intermediate stock and pending reservations are kept separate.
+ * A planned party is selectable for later work, but is never counted as made. */
+export function productionStageStock(state: PreviewState, item: Item, stepId: string, today: string, route?: ProductionRoute) {
+  let onHand = 0, reserved = 0;
+  for (const source of state.tasks) {
+    if (source.itemId !== item.id || !source.productionStage || source.status !== "done" || source.stockFulfillmentId || source.operation !== stepId) continue;
+    if (route && (JSON.stringify(productionRoute(item, source)?.steps) !== JSON.stringify(route.steps)
+      || productionRoute(item, source)?.stockStep !== route.stockStep)) continue;
+    const completion = state.productionWork?.completions?.[source.id];
+    const madeOn = completion?.productionDate || (completion?.at
+      ? new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Amsterdam", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(completion.at))
+      : source.date);
+    if (madeOn > today) continue;
+    let used = 0, pending = 0;
+    for (const consumer of state.tasks) {
+      if (consumer.itemId !== item.id || consumer.stockFulfillmentId || !consumer.productionStage) continue;
+      const allocated = consumer.materialNeeds?.[source.id] || 0;
+      if (consumer.status === "done") used += allocated;
+      else pending += allocated;
+    }
+    const remaining = Math.max(0, (source.completedQuantity ?? source.quantity) - used);
+    onHand += remaining;
+    reserved += Math.min(remaining, pending);
+  }
+  return { onHand, reserved, available: Math.max(0, onHand - reserved) };
+}
+export function assertMaterialCapacity(state: PreviewState, ids: string[]) {
+  for (const id of new Set(ids)) {
+    const source = state.tasks.find(task => task.id === id);
+    if (!source || reservedMaterial(state, id) > (source.completedQuantity ?? source.quantity) + 1e-6) {
+      throw Error("Van deze partij is al meer ingepland. Ververs de planning en kies de resterende hoeveelheid.");
+    }
+  }
+}
+/** Structural validation also applies to ordinary planner saves and work commands. */
+export function validProductionStages(state: PreviewState): boolean {
+  for (const task of state.tasks) {
+    if (task.productionStage === undefined) continue;
+    const stage = task.productionStage;
+    const item = state.items.find(row => row.id === task.itemId);
+    const route = productionRoute(item, task);
+    if (!stage || !route || !Array.isArray(stage.sources) || stage.sources.length > 100) return false;
+    if (stage.steps !== undefined && !validProductionSteps(stage.steps)) return false;
+    const index = route.steps.indexOf(stage.stepId);
+    if (index < 0 || task.operation !== stage.stepId || task.recordsOutput !== (index === route.stockStep)) return false;
+    if (index === 0) {
+      if (stage.sources.length || task.dependsOn) return false;
+      continue;
+    }
+    const seen = new Set<string>();
+    let allocated = 0;
+    for (const link of stage.sources) {
+      const source = state.tasks.find(row => row.id === link.taskId);
+      if (!source || !source.productionStage || seen.has(link.taskId) || source.itemId !== task.itemId || source.date > task.date || source.stockFulfillmentId
+        || !Number.isFinite(link.quantity) || link.quantity <= 0 || link.quantity > 1000000
+        || productionStepIndex(item, source) !== index - 1
+        || JSON.stringify(productionRoute(item, source)?.steps) !== JSON.stringify(route.steps)
+        || productionRoute(item, source)?.stockStep !== route.stockStep
+        || !task.requires?.includes(link.taskId) || task.materialNeeds?.[link.taskId] !== link.quantity) return false;
+      seen.add(link.taskId);
+      allocated += link.quantity;
+    }
+    if (!stage.sources.length || Math.abs(allocated - task.quantity) > 1e-6 || task.dependsOn
+      || task.requires?.length !== seen.size || Object.keys(task.materialNeeds || {}).length !== seen.size) return false;
+    if (task.status === "done" && (task.completedQuantity ?? task.quantity) > allocated + 1e-6) return false;
+  }
+  return true;
+}
+export function buildProductionStage(state: PreviewState, draft: Task): PreviewState {
+  const item = state.items.find(row => row.id === draft.itemId);
+  const stage = draft.productionStage;
+  if (!stage || !Array.isArray(stage.sources) || !stage.sources.length) throw Error("Kies de eerder gemaakte partij voor deze vervolgstap.");
+  const source = state.tasks.find(task => task.id === stage.sources[0].taskId);
+  const route = productionRoute(item, source);
+  const index = route?.steps.indexOf(stage.stepId) ?? -1;
+  if (!route || index <= 0) throw Error("Kies een geldige vervolgstap.");
+  const task: Task = {
+    id: draft.id, itemId: draft.itemId, departmentId: draft.departmentId, date: draft.date,
+    quantity: draft.quantity, note: draft.note, source: draft.source,
+    ...(draft.minutes !== undefined ? { minutes: draft.minutes } : {}),
+    ...(draft.dueDate ? { dueDate: draft.dueDate } : {}),
+    productionStage: {
+      stepId: stage.stepId,
+      ...(source?.productionStage?.steps ? { steps: [...route.steps] } : {}),
+      sources: stage.sources.map(row => ({ taskId: row.taskId, quantity: row.quantity })),
+    },
+    status: "planned", batchId: `stage:${draft.id}`, recordsOutput: index === route.stockStep,
+    operation: stage.stepId, requires: stage.sources.map(source => source.taskId),
+    materialNeeds: Object.fromEntries(stage.sources.map(source => [source.taskId, source.quantity])),
+  };
+  const existing = state.tasks.find(row => row.id === task.id);
+  if (existing) {
+    if (JSON.stringify(existing) === JSON.stringify(task)) return state;
+    throw Error("Deze opdracht bestaat al. Ververs de planning.");
+  }
+  const next = addTask(state, task);
+  if (!validProductionStages(next)) throw Error("Controleer de stap, datum en hoeveelheden van de gekozen partijen.");
+  assertMaterialCapacity(next, stage.sources.map(source => source.taskId));
+  return next;
 }

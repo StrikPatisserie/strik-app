@@ -1,5 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import RecipeLabelPanel from "./RecipeLabelPanel";
+import ProductionStepsField from "../../productie/ProductionStepsField";
+import { defaultProductionSteps } from "../../productie/planning";
 import styles from "./RecipeScreens.module.css";
 import type {
   Ingredient,
@@ -2275,6 +2277,7 @@ export default function RecipeDetail({
 
               {activeEditSection === "stappen" && (
               <div className="grid gap-4 xl:grid-cols-2">
+                <div className="xl:col-span-2"><ProductionStepsField value={draft.productionSteps} onChange={productionSteps => updateDraft({ productionSteps })}/></div>
                 <ArrayEditor
                   title="Productiestappen"
                   values={draft.preparationSteps}
@@ -2873,6 +2876,7 @@ type RecipeDraft = {
   ingredients: RecipeIngredientDraft[];
   semiFinishedItems: SemiFinishedDraft[];
   packagingItems: RecipePackagingDraft[];
+  productionSteps: string[];
   preparationSteps: string[];
   workInstructions: string[];
   finishingSteps: string[];
@@ -3042,6 +3046,7 @@ function createRecipeDraft(recipe: Recipe): RecipeDraft {
       costContribution: item.costContribution,
       nameSnapshot: item.nameSnapshot || "",
     })),
+    productionSteps: recipe.productionSteps || defaultProductionSteps({ recipeId: recipe.id, name: recipe.name }) || ["Produceren"],
     preparationSteps,
     workInstructions: recipe.workInstructions?.length
       ? recipe.workInstructions
@@ -3195,6 +3200,7 @@ function buildRecipeFromDraft(
     ingredients: recipeIngredients,
     semiFinishedItems,
     packagingItems: isSemiFinished ? [] : packagingItems,
+    productionSteps: [...draft.productionSteps],
     workInstructions: cleanList(draft.workInstructions),
     preparationSteps: cleanRecipeSteps(draft.preparationSteps),
     finishingSteps: isSemiFinished ? [] : cleanList(draft.finishingSteps),

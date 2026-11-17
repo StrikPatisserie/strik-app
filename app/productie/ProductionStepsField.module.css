@@ -1,0 +1,11 @@
+.field { border:1px solid #c3d3bc; border-radius:10px; padding:12px; color:#1c3444; min-width:0; }
+.field legend { padding:0 5px; font-weight:700; }
+.options { display:flex; flex-wrap:wrap; gap:8px 16px; }
+.options label { display:flex; flex-direction:row; align-items:center; gap:6px; font-size:14px; }
+.options input { width:18px; height:18px; accent-color:#496d43; }
+.sequence { list-style:none; padding:8px 0 0; margin:10px 0 0; border-top:1px solid #dce4d7; }
+.sequence li { display:flex; justify-content:space-between; align-items:center; gap:8px; margin:4px 0; font-size:14px; }
+.sequence small { color:#496d43; margin-left:10px; font-weight:600; }
+.actions { display:flex; gap:4px; }
+.actions button { border:1px solid #c3d3bc; background:#fff; color:#1c3444; border-radius:5px; min-width:30px; min-height:30px; padding:3px; cursor:pointer; }
+.actions button:disabled { opacity:.35; cursor:default; }

@@ -159,6 +159,7 @@ export type Recipe = {
   ingredients: RecipeIngredient[];
   semiFinishedItems: SemiFinishedUsage[];
   packagingItems?: RecipePackagingLine[];
+  productionSteps?: string[];
   workInstructions?: string[];
   preparationSteps: string[];
   finishingSteps?: string[];

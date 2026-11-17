@@ -1,4 +1,5 @@
 "use client";
+import {productionUnit} from "./planning";
 import {useEffect,useState} from 'react';
 import {convertRecipeQuantity,type DemoRecipe,type Item,type PreviewState,type Task} from './planning';
 import {elapsedMilliseconds,learnedWorkEstimate,productionDay,timerLabel,workView,type WorkCommand} from './productionWork';
@@ -6,7 +7,7 @@ import Icon from './ProductionIcon';
 import CompletedQuantityForm from './CompletedQuantityForm';
 import s from './work.module.css';
 const number=(value:number)=>value.toLocaleString('nl-NL',{maximumFractionDigits:1});
-const stockNumber=(value:number)=>value.toLocaleString('nl-NL',{maximumFractionDigits:6});
+const stockNumber=(value:number)=>value.toLocaleString('nl-NL',{maximumFractionDigits:2});
 export function WorkClock({state,taskId}:{state:PreviewState;taskId:string}){
  const [now,setNow]=useState(()=>Date.now()),timer=state.productionWork?.timers?.[taskId];
  useEffect(()=>{if(!timer?.runningSince)return;const interval=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(interval);},[timer?.runningSince]);
@@ -55,9 +56,9 @@ export default function TaskWorkPanel({state,task,item,recipes,busy,onCommand}:{
  const crewField=<label className={s.crew}>Medewerkers<input type="number" min="1" max="20" step="1" required disabled={busy} value={crew} onChange={event=>setCrew(event.target.value)}/></label>;
  return <section className={s.panel} aria-label="Productietijd">
   {task.status!=='done'&&!checking&&estimate&&<p className={s.estimate}>Richttijd: ca. <strong>{number(estimate.minutes)} min met {crewSize} {crewSize===1?'persoon':'personen'}</strong> · {number(estimate.laborMinutes)} arbeidsmin · {estimate.measurements} {estimate.measurements===1?'meting':'metingen'}</p>}
-  {task.status!=='done'&&!checking&&!estimate&&plannedMinutes!==undefined&&<p className={`${s.estimate} ${s.plannedEstimate}`}>Geschatte tijd <strong>{number(plannedMinutes)} min</strong><small>{task.operation} · voor {stockNumber(task.quantity)} {item.unit}</small></p>}
+  {task.status!=='done'&&!checking&&!estimate&&plannedMinutes!==undefined&&<p className={`${s.estimate} ${s.plannedEstimate}`}>Geschatte tijd <strong>{number(plannedMinutes)} min</strong><small>{task.operation} · voor {stockNumber(task.quantity)} {productionUnit(item)}</small></p>}
   {task.status==='done'?<div className={s.done}>
-   <Icon name="check"/>Klaar{stock?<span> · uit voorraad · {stockNumber(stock.quantity)} {stock.unit} · {stock.who}<small>{stockNumber(stock.countedQuantity)} geteld − {stockNumber(stock.quantity)} gebruikt = {stockNumber(stock.remainingQuantity)} over</small></span>:<span> · {stockNumber(task.completedQuantity??completion?.quantity??task.quantity)} {item.unit}{completion&&<>{completion.unmeasured ? " · naam en tijd onbekend" : <> · {number(completion.minutes!)} min{completion.crewSize!==undefined&&<> × {completion.crewSize} pers. = {number(completion.laborMinutes!)} arbeidsmin</>} · {completion.who}</>}</>}</span>}
+   <Icon name="check"/>Klaar{stock?<span> · uit voorraad · {stockNumber(stock.quantity)} {stock.unit} · {stock.who}<small>{stockNumber(stock.countedQuantity)} geteld − {stockNumber(stock.quantity)} gebruikt = {stockNumber(stock.remainingQuantity)} over</small></span>:<span> · {stockNumber(task.completedQuantity??completion?.quantity??task.quantity)} {productionUnit(item)}{completion&&<>{completion.unmeasured ? " · naam en tijd onbekend" : <> · {number(completion.minutes!)} min{completion.crewSize!==undefined&&<> × {completion.crewSize} pers. = {number(completion.laborMinutes!)} arbeidsmin</>} · {completion.who}</>}</>}</span>}
    {!stock&&<><button disabled={busy} onClick={()=>setCorrectingQuantity(true)}>Aantal / datum corrigeren</button><button disabled={busy} onClick={()=>void act({kind:'reopen',taskId:task.id})}>Heropen</button></>}
    {correctingQuantity&&!stock&&<CompletedQuantityForm key={task.id} task={task} item={item} recipe={recipe} completedDate={completion?.productionDate ?? (completion ? productionDay(completion.at) : task.date)} busy={busy} onCommand={onCommand} onClose={()=>setCorrectingQuantity(false)}/>}
   </div>:countingStock?<form className={s.confirm} onSubmit={async event=>{
@@ -65,8 +66,8 @@ export default function TaskWorkPanel({state,task,item,recipes,busy,onCommand}:{
    if(stockConfirmed&&!await act({kind:'stock',taskId:task.id,who,countedQuantity:countedStock,confirmed:true}))setCountingStock(false);
   }}>
    <strong>Uit voorraad gebruiken</strong>
-   <div className={s.numbers}><label>Totaal geteld vóór gebruik ({item.unit})<input required disabled={busy} inputMode="decimal" value={stockCount} onChange={event=>setStockCount(event.target.value)}/></label><label>Jouw naam<input required disabled={busy} minLength={2} maxLength={80} value={who} onChange={event=>setWho(event.target.value)}/></label></div>
-   <p className={s.stockBalance}>{validStock?<>{stockNumber(countedStock)} geteld − <strong>{stockNumber(task.quantity)} {item.unit} nodig</strong> = {stockNumber(stockRemaining)} over</>:<>Voor deze taak is <strong>{stockNumber(task.quantity)} {item.unit}</strong> nodig.</>}</p>
+   <div className={s.numbers}><label>Totaal geteld vóór gebruik ({productionUnit(item)})<input required disabled={busy} inputMode="decimal" value={stockCount} onChange={event=>setStockCount(event.target.value)}/></label><label>Jouw naam<input required disabled={busy} minLength={2} maxLength={80} value={who} onChange={event=>setWho(event.target.value)}/></label></div>
+   <p className={s.stockBalance}>{validStock?<>{stockNumber(countedStock)} geteld − <strong>{stockNumber(task.quantity)} {productionUnit(item)} nodig</strong> = {stockNumber(stockRemaining)} over</>:<>Voor deze taak is <strong>{stockNumber(task.quantity)} {productionUnit(item)}</strong> nodig.</>}</p>
    <label className={s.stockCheck}><input type="checkbox" required disabled={busy} checked={stockConfirmed} onChange={event=>setStockConfirmed(event.target.checked)}/>Ik heb de totaalvoorraad geteld en neem de benodigde hoeveelheid eruit.</label>
    <div className={s.buttons}><button type="button" disabled={busy} onClick={()=>setCountingStock(false)}>Terug</button><button className={s.primary} disabled={busy||!validStock||who.trim().length<2||!stockConfirmed} type="submit">Gebruik & klaar</button></div>
   </form>:checking?<form className={`${s.confirm} ${s.completionForm}`} aria-label="Productie afronden" onSubmit={async event=>{
@@ -78,15 +79,15 @@ export default function TaskWorkPanel({state,task,item,recipes,busy,onCommand}:{
    {!timer&&estimate&&<p className={s.estimate}>Advies ± {number(estimate.minutes)} min · {crewSize} {crewSize===1?'persoon':'personen'} · {estimate.measurements} eerdere {estimate.measurements===1?'productie':'producties'}</p>}
    <div className={s.numbers}>
     <label>Werktijd (minuten)<input required disabled={busy} inputMode="decimal" value={minutes} onChange={event=>setMinutes(event.target.value)}/></label>
-    <label>Gemaakt ({item.unit})<input required disabled={busy} inputMode="decimal" value={quantity} onChange={event=>setQuantity(event.target.value)}/></label>
+    <label>Gemaakt ({productionUnit(item)})<input required disabled={busy} inputMode="decimal" value={quantity} onChange={event=>setQuantity(event.target.value)}/></label>
    </div>
    {baseQuantity!==undefined&&<div className={s.batchButtons}>
-    {[baseQuantity,baseQuantity*2].map((batchQuantity,index)=><button key={index} type="button" disabled={busy} onClick={()=>setQuantity(String(batchQuantity))}>{index+1}× basisrecept · {number(batchQuantity)} {item.unit}</button>)}
+    {[baseQuantity,baseQuantity*2].map((batchQuantity,index)=><button key={index} type="button" disabled={busy} onClick={()=>setQuantity(String(batchQuantity))}>{index+1}× basisrecept · {number(batchQuantity)} {productionUnit(item)}</button>)}
    </div>}
    <label>Gemaakt op<input type="date" required max={today} disabled={busy} value={productionDate} onChange={event=>setProductionDate(event.target.value)}/></label>
    <div className={s.people}><label>Jouw naam<input required disabled={busy} minLength={2} maxLength={80} value={who} onChange={event=>setWho(event.target.value)}/></label>{crewField}</div>
    {validCrew&&Number.isFinite(confirmedLabor)&&confirmedLabor>0&&<p className={s.labor}>{number(Number(minutes.replace(',','.')))} min × {crewSize} {crewSize===1?'persoon':'personen'} = <strong>{number(confirmedLabor)} arbeidsminuten</strong></p>}
-   <small>Gepland: {number(task.quantity)} {item.unit}{timer&&<> · gemeten <WorkClock state={state} taskId={task.id}/></>}</small>
+   <small>Gepland: {number(task.quantity)} {productionUnit(item)}{timer&&<> · gemeten <WorkClock state={state} taskId={task.id}/></>}</small>
    <div className={`${s.buttons} ${s.completionActions}`}><button className={s.adjust} type="button" disabled={busy} onClick={()=>setChecking(false)}>Nog aanpassen</button><button className={s.primary} disabled={busy||!validCompletion} type="submit"><Icon name="check" size={16}/>{busy?'Opslaan…':'Opslaan & klaar'}</button></div>
   </form>:timer?<div className={s.running}>
    <div><WorkClock state={state} taskId={task.id}/><small>{timer.who}{timer.crewSize!==undefined&&<> · {timer.crewSize} {timer.crewSize===1?'persoon':'personen'}</>}{!timer.runningSince?' · gepauzeerd':''}</small></div>

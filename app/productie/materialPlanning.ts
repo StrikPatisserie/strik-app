@@ -142,6 +142,7 @@ export function canCombineMaterial(state: PreviewState, task: Task) {
     && !!task.generatedFor
     && task.recordsOutput
     && !task.dependsOn
+    && !task.productionStage
     && !task.stockFulfillmentId
     && !state.productionWork?.timers?.[task.id]
     && !state.productionWork?.completions?.[task.id]
@@ -177,7 +178,7 @@ export function combineMaterialTasks(state: PreviewState, recipes: DemoRecipe[],
   const removed = new Set(chosen.slice(1).map(task => task.id));
   const consumers = state.tasks.filter(task => requiredTaskIds(task).some(id => ids.includes(id)));
   const needs = new Map(consumers.map(task => [task.id, task.materialNeeds || recipeMaterialNeeds(state, recipes, task)]));
-  if (consumers.some(task => task.status !== "planned"
+  if (consumers.some(task => !!task.productionStage || task.status !== "planned"
     || task.requires?.some(id => ids.includes(id) && !needs.get(task.id)?.[id]))) {
     throw Error("Controleer eerst de recepthoeveelheden en ongestarte vervolgstappen van deze batches.");
   }
@@ -213,6 +214,9 @@ export function combineMaterialTasks(state: PreviewState, recipes: DemoRecipe[],
       ...task,
       ...(task.requires ? { requires: [...new Set(task.requires.map(replace))] } : {}),
       ...(materialNeeds ? { materialNeeds } : {}),
+      ...(task.recipePlan?.preparation ? {recipePlan:{...task.recipePlan,preparation:{...task.recipePlan.preparation,
+        choices:Object.fromEntries(Object.entries(task.recipePlan.preparation.choices).map(([id,choice])=>[id,
+          choice.sourceTaskId ? {...choice,sourceTaskId:replace(choice.sourceTaskId)} : choice]))}}} : {}),
     };
   });
   return { ...state, tasks };

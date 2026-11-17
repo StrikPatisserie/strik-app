@@ -1,4 +1,4 @@
-import type {DemoRecipe,DepartmentId,PreviewState} from './planning';
+import { validProductionStages, type DemoRecipe, type DepartmentId, type PreviewState } from './planning';
 import {correctCompletedQuantity,confirmTaskCompletion,fulfillTaskFromStock,pauseWorkTimer,reopenTimedTask,setPreparation,startWorkTimer,storeWork,workView,type WorkCommand} from './productionWork';
 
 /** Only called with server time/identity. Browser snapshots never own work logs. */
@@ -43,6 +43,7 @@ export function applyWorkCommand(state:PreviewState,recipes:DemoRecipe[],command
  if(task&&view.completions?.[task.id]?.id===id)view.completions[task.id].actorId=actorId;
  if(task&&view.stockFulfillments?.[task.id]?.id===id)view.stockFulfillments[task.id]={...view.stockFulfillments[task.id],actorId};
  const next=storeWork(view,state.productionWork);
+ if(!validProductionStages(next))throw Error("Deze vervolgstap gebruikt meer dan de gekoppelde partij. Pas eerst de partijverdeling aan.");
  return {...next,productionWork:{...next.productionWork!,receipts:[...(state.productionWork?.receipts||[]).slice(-199),{id,actorId,at}]}};
 }
 
@@ -50,6 +51,7 @@ export function assertWorkUnchanged(current:PreviewState,next:PreviewState){
  if(JSON.stringify(current.productionWork)!==JSON.stringify(next.productionWork))throw Error('Productietijden en recepthistorie worden apart opgeslagen. Ververs de planning.');
  if(current.tasks.some(task=>task.stockFulfillmentId&&!next.tasks.some(row=>row.id===task.id)))throw Error('Een uit voorraad afgehandelde taak blijft in de registratie bewaard.');
  for(const task of next.tasks){const before=current.tasks.find(t=>t.id===task.id) || current.removedTasks?.find(row=>row.task.id===task.id)?.task;
+  if(JSON.stringify(task.productionStage)!==JSON.stringify(before?.productionStage))throw Error("Wijzig de partijverdeling via de productieplanning.");
   if(JSON.stringify(task.materialNeeds)!==JSON.stringify(before?.materialNeeds))throw Error('Bundel of herbereken de materiaalbehoefte via de receptplanning.');
   if(task.completedQuantity!==before?.completedQuantity)throw Error('Bevestig de gemaakte hoeveelheid via de productiecontrole.');
   if(task.stockFulfillmentId!==before?.stockFulfillmentId)throw Error('Registreer voorraadgebruik via de voorraadcontrole.');

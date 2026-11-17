@@ -7,7 +7,7 @@ import { ProductionStoreError, readDocument, saveRecipePlanDocument } from "@/ap
 import { recipeViews, syncRecipeCatalog, validWorkspace } from "@/app/productie/workspaceData";
 import { buildRecipePlan, refreshRecipePlan } from "@/app/productie/recipePlanning";
 import type { RecepturenData } from "@/app/bakkerij/recepturen/recepturenApi";
-import type { PreviewState } from "@/app/productie/planning";
+import { assertMaterialCapacity, type PreviewState } from "@/app/productie/planning";
 import { combineMaterialTasks } from "@/app/productie/materialPlanning";
 export const dynamic="force-dynamic";
 const headers={"Cache-Control":"private, no-store"};
@@ -42,6 +42,9 @@ export async function POST(request:Request) {
       const base = syncRecipeCatalog(basePlanner, recipes.data, views);
       let next=incoming.action === "combine" ? combineMaterialTasks(base,views,incoming.taskIds) : incoming.replaceTaskId?refreshRecipePlan(base,views,incoming.replaceTaskId,incoming.command):buildRecipePlan(base,views,incoming.command);
       next = mergeConcurrentChanges(base, next, current);
+      const sourceIds = [...(incoming.command?.stage?.sources || []).map((source:{taskId:string})=>source.taskId),
+        ...Object.values(incoming.command?.preparation?.choices || {}).flatMap(choice=> (choice as {sourceTaskId?:string})?.sourceTaskId ? [(choice as {sourceTaskId:string}).sourceTaskId] : [])];
+      assertMaterialCapacity(next, sourceIds);
       try{mergeWorkspaceForEmployee(current,next,productionDepartments(profile));}catch(error){throw new ProductionStoreError((error as Error).message,403);}
       if(incoming.replaceTaskId)next={...next,removedTasks:[...(current.removedTasks || []),...current.tasks.filter(t=>!next.tasks.some(n=>n.id===t.id)).map(task=>({task,removedAt:new Date().toISOString(),removedBy:profile.id}))]};
       if(!validWorkspace(next,views))throw new ProductionStoreError("Het voorstel bevat een ongeldige hoeveelheid, koppeling of planning.",400);

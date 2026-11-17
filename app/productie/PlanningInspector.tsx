@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Icon from "./ProductionIcon";
 import TaskWorkPanel, { WorkClock } from "./TaskWorkPanel";
-import { isBakeOffTask, convertRecipeQuantity, dateLabel, DEPARTMENTS, mondayOf, requiredTaskIds, STATUS_LABELS, taskIssues, type DemoRecipe, type DepartmentId, type PreviewState, type Task } from "./planning";
+import { productionRoute, productionStepIndex, productionUnit, remainingParty, isBakeOffTask, convertRecipeQuantity, dateLabel, DEPARTMENTS, mondayOf, requiredTaskIds, STATUS_LABELS, taskIssues, type DemoRecipe, type DepartmentId, type PreviewState, type Task } from "./planning";
 import { earlierPreparations, materialBatchGroups, materialConsumers, materialUsesByRecipe } from "./materialPlanning";
 import { recipeLinks } from "./recipeGroups";
 import { taskWorkSummary } from "./workSummary";
@@ -12,10 +12,11 @@ const number = (value: number) => value.toLocaleString("nl-NL", { maximumFractio
 type Selection = { taskId?: string; recipeId?: string; amount: number };
 type Stock = { itemId: string; balance: number; known: boolean; count?: { date: string; quantity: number } | null };
 const isImportNote = (line: string) => /^(Receptregels zijn overgenomen uit Halffabricaten Recepturen Strik|Werkwijze en kritieke temperaturen kunnen later per halffabricaat worden aangevuld)/i.test(line.trim());
-export default function PlanningInspector({ state, recipes, task, preparationDate, canManage, busy, revision, live, onClose, onWork, onComplete, onCorrect, onAdvanced, onRecipe, onCombine, onMove, onReturn }: {
+export default function PlanningInspector({ state, recipes, task, preparationDate, canManage, busy, revision, live, onClose, onWork, onComplete, onCorrect, onAdvanced, onRecipe, onCombine, onMove, onReturn, onNext }: {
   state: PreviewState; recipes: DemoRecipe[]; task: Task; preparationDate?: string; canManage: boolean; busy: boolean; revision: number; live: boolean;
   onClose: () => void; onWork: (command: WorkCommand) => Promise<string | undefined>; onComplete: (id: string) => void;
   onCorrect: (id: string) => void;
+  onNext: (id: string) => void;
   onMove: (id: string, date: string, departmentId: DepartmentId) => Promise<string | undefined>;
   onReturn: (id: string) => Promise<string | undefined>;
   onAdvanced: (id: string) => void; onRecipe: (itemId: string, taskId?: string) => void; onCombine: (ids: string[]) => Promise<string | undefined>;
@@ -51,6 +52,10 @@ export default function PlanningInspector({ state, recipes, task, preparationDat
   let recipeAmount: number | undefined;
   try { if (recipe) recipeAmount = convertRecipeQuantity(amount, unit, recipe.unit); }
   catch { /* Incompatible units remain explicit instead of inventing quantities. */ }
+  const route = currentTask?.productionStage ? productionRoute(item, currentTask) : undefined;
+  const stepIndex = currentTask ? productionStepIndex(item,currentTask) : -1;
+  const nextStep = route && stepIndex>=0 ? route.steps[stepIndex+1] : undefined;
+  const displayUnit = currentTask ? productionUnit(item) : unit;
   const title = item?.name || recipe?.name || "Onderdeel niet gevonden";
   const stock = stocks.find(row => row.itemId === item?.id);
   const consumers = currentTask ? materialConsumers(state, recipes, currentTask.id) : [];
@@ -130,7 +135,7 @@ export default function PlanningInspector({ state, recipes, task, preparationDat
       <h2 ref={heading} tabIndex={-1}>{title}</h2>
       {currentTask && (currentTask.departmentId==="bak" || currentTask.departmentId==="brood") && /^(Produceren|Afbakken)$/.test(currentTask.operation) && <strong>{currentTask.operation}</strong>}
       {currentTask && <small>{focusDate ? `Voorbereiden ${dateLabel(focusDate, true)} · voor ${dateLabel(currentTask.date, true)}` : dateLabel(currentTask.date, true)} · {DEPARTMENTS.find(row => row.id === currentTask.departmentId)?.short}</small>}
-      <div className={s.facts}><strong>{number(amount)} {unit}</strong>{currentTask ? <span className={s[currentTask.status]}>{STATUS_LABELS[currentTask.status]}</span> : <span>Recept · geen gekoppelde taak</span>}</div>
+      <div className={s.facts}><strong>{number(amount)} {displayUnit}</strong>{currentTask ? <span className={s[currentTask.status]}>{STATUS_LABELS[currentTask.status]}</span> : <span>Recept · geen gekoppelde taak</span>}</div>
       {currentTask && <div className={s.time}>{currentTask.minutes !== undefined && <span><Icon name="clock" size={14}/>{number(currentTask.minutes)} min gepland</span>}<WorkClock state={state} taskId={currentTask.id}/>{completed && <span><Icon name="users" size={14}/>{completed.crewSize ?? "—"} · {completed.minutes === undefined ? "tijd onbekend" : `${number(completed.minutes)} min`}</span>}</div>}
       {!focusDate && preparationDates.length > 0 && <p className={s.preparationNotice}><Icon name="warning" size={15}/><span>Voorbereiden {preparationDates.map(date => dateLabel(date, true)).join(" · ")}</span></p>}
     </header>
@@ -152,12 +157,12 @@ export default function PlanningInspector({ state, recipes, task, preparationDat
           const parent = state.tasks.find(row => row.id === link.rootId)!;
           const portions = consumers.filter(row => row.task.batchId === parent.batchId);
           const known = portions.length > 0 && portions.every(row => row.quantity !== null);
-          return <button type="button" className={s.linkRow} key={link.rootId} onClick={() => openTask(parent)}><span className={s.recipeDot} style={{ background: ["#50708f", "#81609b", "#b75676", "#987020", "#b55764", "#657b4f"][link.tone] }}/><span><strong>{link.name}</strong><small>{dateLabel(parent.date, true)}</small></span>{known && <b>{number(portions.reduce((sum, row) => sum + (row.quantity || 0), 0))} {unit}</b>}<Icon name="chevron" size={14}/></button>;
+          return <button type="button" className={s.linkRow} key={link.rootId} onClick={() => openTask(parent)}><span className={s.recipeDot} style={{ background: ["#50708f", "#81609b", "#b75676", "#987020", "#b55764", "#657b4f"][link.tone] }}/><span><strong>{link.name}</strong><small>{dateLabel(parent.date, true)}</small></span>{known && <b>{number(portions.reduce((sum, row) => sum + (row.quantity || 0), 0))} {displayUnit}</b>}<Icon name="chevron" size={14}/></button>;
         })}
       </section>}
       {currentTask && item?.kind === "component" && materialNotice(item.recipeId, currentTask.date, currentTask)}
       {!!issues.length && currentTask?.status !== "done" && <details className={s.warnings}><summary><Icon name="warning" size={15}/>{issues.length} aandachtspunt{issues.length > 1 ? "en" : ""}</summary><ul>{issues.map(issue => <li key={issue}>{issue}</li>)}</ul></details>}
-      {shortage && <p className={s.warnings}>{number(reserved)} {unit} nodig · {number(produced)} {unit} gemaakt</p>}
+      {shortage && <p className={s.warnings}>{number(reserved)} {displayUnit} nodig · {number(produced)} {displayUnit} gemaakt</p>}
       {partCount > 0 && <details open={!parents.length || preparation.length > 0}><summary>{focusDate ? "Voorbereiden" : "Onderdelen"} <small>{partCount}</small>{!focusDate && preparation.length > 0 && <span className={s.preparationCount}><Icon name="warning" size={12}/>{preparation.length} eerder</span>}</summary>
         {visibleRelated.map(taskRow)}
           {visibleRecipeParts.length > 0 && recipeAmount === undefined && <p className={s.warnings}>Controleer de eenheid van de taak en het recept.</p>}
@@ -176,18 +181,19 @@ export default function PlanningInspector({ state, recipes, task, preparationDat
       {focusDate && <button type="button" className={s.action} onClick={() => openTask(task)}><Icon name="book" size={14}/>Hele recept</button>}
       {steps.length > 1 && !focusDate && <details><summary>Stappen <small>{steps.length}</small></summary>{steps.map(row => <button type="button" className={s.step} key={row.id} onClick={() => openTask(row)}><span className={`${s.dot} ${s[row.status]}`}>{row.status === "done" ? <Icon name="check" size={13}/> : row.status === "active" ? <Icon name="play" size={11}/> : null}</span><span><strong>{row.operation}</strong><small>{dateLabel(row.date, true)} · {STATUS_LABELS[row.status]}</small></span></button>)}</details>}
       <details><summary>Recept</summary>
-        {recipe ? <><small>Basis {number(recipe.yield)} {recipe.unit}{recipe.yield > 0 ? ` · × ${recipeAmount === undefined ? "?" : number(recipeAmount / recipe.yield)}` : " · opbrengst controleren"}</small><div className={s.ingredients}>{recipe.ingredients.map((line, index) => <div key={index}><span>{line.name}</span><b>{recipe.yield > 0 && recipeAmount !== undefined ? number(line.quantity * recipeAmount / recipe.yield) : "Basis " + number(line.quantity)} {line.unit}</b></div>)}</div>{instructions.length > 0 && <ol className={s.instructions}>{instructions.map((step, index) => <li key={index}>{step}</li>)}</ol>}<p className={s.muted}>Allergenen · {recipe.allergens.join(", ") || "Nog controleren"}</p></> : <p>Recept nog koppelen of aanvullen.</p>}
+        {recipe ? <><small>Basis {number(recipe.yield)} {productionUnit({recipeId:recipe.id,unit:recipe.unit})}{recipe.yield > 0 ? ` · × ${recipeAmount === undefined ? "?" : number(recipeAmount / recipe.yield)}` : " · opbrengst controleren"}</small><div className={s.ingredients}>{recipe.ingredients.map((line, index) => <div key={index}><span>{line.name}</span><b>{recipe.yield > 0 && recipeAmount !== undefined ? number(line.quantity * recipeAmount / recipe.yield) : "Basis " + number(line.quantity)} {line.unit}</b></div>)}</div>{instructions.length > 0 && <ol className={s.instructions}>{instructions.map((step, index) => <li key={index}>{step}</li>)}</ol>}<p className={s.muted}>Allergenen · {recipe.allergens.join(", ") || "Nog controleren"}</p></> : <p>Recept nog koppelen of aanvullen.</p>}
         {canManage && item && <button type="button" className={s.action} disabled={busy} onClick={() => onRecipe(item.id, currentTask?.id)}><Icon name="edit" size={14}/>{recipe ? "Recept aanpassen" : "Recept toevoegen"}</button>}
       </details>
       {(currentTask || item?.note) && <details><summary>Meer</summary>
-        {consumers.length > 0 && currentTask && <div className={s.amounts}><span>Nodig<strong>{consumers.some(row => row.quantity === null) ? "Deels onbekend" : `${number(reserved)} ${unit}`}</strong></span><span>{currentTask.stockFulfillmentId ? "Uit voorraad" : "Gemaakt"}<strong>{number(currentTask.stockFulfillmentId ? currentTask.quantity : produced)} {unit}</strong></span></div>}
-        {(stockError || stock?.known || stock?.count) && <p className={s.stock}>{stockError ? "Voorraad tijdelijk niet beschikbaar" : stock?.known ? `Voorraadprognose ${number(stock.balance)} ${unit}` : `Geteld ${number(stock!.count!.quantity)} ${unit} · ${dateLabel(stock!.count!.date, true)}`}</p>}
+        {consumers.length > 0 && currentTask && <div className={s.amounts}><span>Nodig<strong>{consumers.some(row => row.quantity === null) ? "Deels onbekend" : `${number(reserved)} ${displayUnit}`}</strong></span><span>{currentTask.stockFulfillmentId ? "Uit voorraad" : "Gemaakt"}<strong>{number(currentTask.stockFulfillmentId ? currentTask.quantity : produced)} {displayUnit}</strong></span></div>}
+        {(stockError || stock?.known || stock?.count) && <p className={s.stock}>{stockError ? "Voorraad tijdelijk niet beschikbaar" : stock?.known ? `Voorraadprognose ${number(stock.balance)} ${displayUnit}` : `Geteld ${number(stock!.count!.quantity)} ${displayUnit} · ${dateLabel(stock!.count!.date, true)}`}</p>}
         {[currentTask?.note, item?.note].filter((note): note is string => !!note && !isImportNote(note)).map((note, index) => <p className={s.note} key={index}>{note}</p>)}
         {canManage && group && currentTask && <div className={s.combine}>
-          {!combine ? <button type="button" disabled={busy} onClick={() => setCombine(true)}><Icon name="link" size={14}/>{group.length} batches bundelen</button> : <><p>{number(group.reduce((sum, row) => sum + row.quantity, 0))} {unit} op {dateLabel(currentTask.date, true)}.</p><button type="button" disabled={busy} onClick={async () => { const result = await onCombine(group.map(row => row.id)); setError(result || ""); if (!result) onClose(); }}>Bevestig gezamenlijke batch</button><button type="button" disabled={busy} onClick={() => setCombine(false)}>Annuleren</button></>}
+          {!combine ? <button type="button" disabled={busy} onClick={() => setCombine(true)}><Icon name="link" size={14}/>{group.length} batches bundelen</button> : <><p>{number(group.reduce((sum, row) => sum + row.quantity, 0))} {displayUnit} op {dateLabel(currentTask.date, true)}.</p><button type="button" disabled={busy} onClick={async () => { const result = await onCombine(group.map(row => row.id)); setError(result || ""); if (!result) onClose(); }}>Bevestig gezamenlijke batch</button><button type="button" disabled={busy} onClick={() => setCombine(false)}>Annuleren</button></>}
         </div>}
         {currentTask && item && canManage && <TaskWorkPanel key={currentTask.id} state={state} task={currentTask} item={item} recipes={recipes} busy={busy} onCommand={onWork}/>}
       </details>}
+      {currentTask && route && <section className={s.party}><strong>{currentTask.operation}</strong><p>{route.steps.join(" → ")}</p>{currentTask.productionStage?.sources.map(link=>{const source=state.tasks.find(row=>row.id===link.taskId);return <button type="button" key={link.taskId} onClick={()=>setPath([...path,{taskId:link.taskId,amount:link.quantity}])}>{source?.operation} · {source?dateLabel(source.date,true):""} · {number(link.quantity)} {displayUnit}</button>;})}{nextStep && <button type="button" disabled={!canManage || busy || remainingParty(state,currentTask)<=0 || !!currentTask.stockFulfillmentId} onClick={()=>onNext(currentTask.id)}>{nextStep} inplannen · {number(remainingParty(state,currentTask))} {displayUnit} vrij</button>}</section>}
       {error && <p role="alert" className={s.warnings}>{error}</p>}
     </div>
     {currentTask && canManage && !focusDate && <footer className={s.footer}><button type="button" disabled={busy || !!currentTask.stockFulfillmentId} onClick={() => currentTask.status === "done" ? onCorrect(currentTask.id) : onComplete(currentTask.id)}><Icon name={currentTask.status === "done" ? "edit" : "check"} size={16}/>{currentTask.status === "done" ? "Aantal corrigeren" : "Afronden"}</button><button type="button" className={s.secondary} disabled={busy} onClick={() => onAdvanced(currentTask.id)}><Icon name="settings" size={16}/>Aanpassen</button></footer>}

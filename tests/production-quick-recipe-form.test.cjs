@@ -18,7 +18,8 @@ function load(file, imports, globals = {}) {
   return exports;
 }
 
-const workRecipe = load('app/productie/workRecipe.ts', {});
+const planning = load('app/productie/planning.ts', {});
+const workRecipe = load('app/productie/workRecipe.ts', {'./planning': planning});
 const item = { id: 'manual-cake', name: 'Nieuwe taart', kind: 'product', departmentId: 'luxe', unit: 'stuks', stock: 0, note: '' };
 const ingredients = [
   { id: 'flour-a', name: 'Bloem', supplier: 'Molen Noord', unit: 'gram' },
@@ -71,7 +72,8 @@ function harness(overrides = {}) {
   };
   const choice = function SearchableChoice() {};
   const component = load('app/productie/QuickRecipeForm.tsx', {
-    react, 'react/jsx-runtime': jsx, './workRecipe': workRecipe,
+    react, 'react/jsx-runtime': jsx, './workRecipe': workRecipe, './planning': planning,
+    './ProductionStepsField': { __esModule: true, default: function ProductionStepsField() {} },
     './SearchableChoice': { __esModule: true, default: choice },
     './requests.module.css': { __esModule: true, default: new Proxy({}, { get: (_, key) => key }) },
   }, {

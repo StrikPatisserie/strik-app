@@ -1,4 +1,4 @@
-import {addDays,mondayOf,weekNumber,type Item,type PreviewState} from "./planning";
+import {addDays,mondayOf,weekNumber,productionUnit,type Item,type PreviewState} from "./planning";
 import type {LogisticsBatch} from "../bakkerij/logistiek/logisticsTypes";
 export type DispatchDay={date:string;importedAt:string;lines:{article:string;description:string;quantity:number}[];unknownLines:number};
 export type InventoryCount={id:string;itemId:string;unit:string;date:string;quantity:number;who:string;actorId:string;at:string;stockUse?:{taskId:string;countedQuantity:number;quantity:number}};
@@ -67,6 +67,24 @@ function productionRows(planner:PreviewState,item:Item){
   return{date,quantity:task.completedQuantity??task.quantity,at:at&&date===amsterdamDate(at)?at:undefined};
  });
 }
+/** Completing a consuming batch uses its explicit material reservation once.
+ * Same-product follow-up steps transfer a party without creating another stock use. */
+function materialConsumptionRows(planner:PreviewState,item:Item){
+ const tasks=new Map(planner.tasks.map(task=>[task.id,task]));
+ const uses=new Map<string,{date:string;quantity:number;at?:string}>();
+ for(const consumer of planner.tasks){
+  if(consumer.status!=="done" || consumer.stockFulfillmentId || consumer.itemId===item.id)continue;
+  for(const [sourceId,quantity] of Object.entries(consumer.materialNeeds||{})){
+   const source=tasks.get(sourceId);
+   if(!source || source.itemId!==item.id || !source.recordsOutput || source.stockFulfillmentId)continue;
+   const completion=planner.productionWork?.completions?.[consumer.id],at=completion?.at;
+   const date=completion?.productionDate ?? (at?amsterdamDate(at):consumer.date);
+   const key=`${consumer.batchId}:${sourceId}`,previous=uses.get(key);
+   if(!previous || quantity>previous.quantity)uses.set(key,{date,quantity,at:at&&date===amsterdamDate(at)?at:undefined});
+  }
+ }
+ return [...uses.values()];
+}
 function amsterdamDate(at:string){return new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Amsterdam",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(at));}
 /** A stock use stores its physical count and resulting balance in the same
  * audited planner transaction as the completed task. No second write is needed. */
@@ -87,14 +105,15 @@ export function inventoryOverview(planner:PreviewState,state:InventoryState,days
   // An ordinary count describes the end of its selected day, even if entered
   // later. A physical stock-use checkpoint describes its exact time that day.
   const count=counts.filter(row=>row.itemId===item.id&&row.unit===item.unit&&row.date<=asOf).reverse().sort((a,b)=>b.date.localeCompare(a.date)||Number(!!a.stockUse)-Number(!!b.stockUse)||b.at.localeCompare(a.at)||(checkpointOrder.get(b.id)??-1)-(checkpointOrder.get(a.id)??-1)).at(0);
-  const link=state.links.find(row=>row.itemId===item.id&&row.unit===item.unit),production=productionRows(planner,item);
-  const through=count&&count.date>closedThrough?count.date:closedThrough;
+  const link=state.links.find(row=>row.itemId===item.id&&row.unit===item.unit),production=productionRows(planner,item),consumption=materialConsumptionRows(planner,item);
+  const through=[closedThrough,count?.date||"",...production.map(row=>row.date),...consumption.map(row=>row.date)].filter(date=>date<=asOf).sort().at(-1)||closedThrough;
   const latest=production.filter(row=>row.date<=asOf).sort((a,b)=>b.date.localeCompare(a.date)).at(0);
   const made=round(production.filter(row=>count&&row.date<=through&&(count.stockUse&&row.at?row.at>count.at:row.date>count.date)).reduce((total,row)=>total+row.quantity,0));
   const issued=count&&link?.article?round(days.filter(day=>day.date>count.date&&day.date<=through).reduce((total,day)=>total+(day.lines.find(line=>line.article===link.article)?.quantity||0)*link.factor,0)):null;
   const missing:string[]=[];
   if(count)for(let date=addDays(count.date,1);date<=through;date=addDays(date,1)){if(!coverage.has(date))missing.push(date);}
-  const balance=count?round(count.quantity+made-(issued||0)):null;
+  const used=round(consumption.filter(row=>count&&row.date<=through&&(count.stockUse&&row.at?row.at>count.at:row.date>count.date)).reduce((total,row)=>total+row.quantity,0));
+  const balance=count?round(count.quantity+made-(issued||0)-used):null;
   // Day totals cannot split dispatches before/after an intraday physical count.
   // Keep that snapshot visible; a later end-of-day count restores a forecast.
   const checkpoint=!!count?.stockUse;
@@ -104,7 +123,7 @@ export function inventoryOverview(planner:PreviewState,state:InventoryState,days
   const rate=observed.length===28&&recentQuantity>0?recentQuantity/28:null;
   const runOut=known&&balance!==null&&rate?addDays(through,Math.min(3650,Math.max(0,Math.floor(balance/rate)))):null;
   const productionDate=runOut&&link?addDays(runOut,-link.leadDays):null;
-  return{itemId:item.id,name:item.name,unit:item.unit,kind:item.kind,departmentId:item.departmentId,through,count:count||null,latest:latest||null,made,issued,balance,known,checkpoint,missingDays:missing.length,link:link||null,productionWeek:productionDate?{date:productionDate,monday:mondayOf(productionDate),week:weekNumber(productionDate)}:null};
+  return{itemId:item.id,name:item.name,unit:item.unit,displayUnit:productionUnit(item),kind:item.kind,departmentId:item.departmentId,through,count:count||null,latest:latest||null,made,issued,used,balance,known,checkpoint,missingDays:missing.length,link:link||null,productionWeek:productionDate?{date:productionDate,monday:mondayOf(productionDate),week:weekNumber(productionDate)}:null};
  });
  const articles=new Map<string,string>();for(const day of days)for(const line of day.lines)articles.set(line.article,line.description);
  return{asOf,rows,articles:[...articles].map(([article,description])=>({article,description})),sourceFrom:days[0]?.date||null,sourceUntil:days.filter(day=>day.date<=asOf).at(-1)?.date||null,forecastDays:observed.length,unknownLines:observed.reduce((n,day)=>n+day.unknownLines,0)};

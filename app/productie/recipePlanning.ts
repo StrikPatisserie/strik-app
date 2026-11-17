@@ -1,9 +1,10 @@
 import { combineNewPreparations, recipeMaterialNeeds } from "./materialPlanning";
-import { isBakeOffTask, convertRecipeQuantity, addDays, addTask, dateLabel, mondayOf, defaultComponentDepartment, DEPARTMENTS, requiredTaskIds, type DemoRecipe, type DepartmentId, type PreviewState, type Task, type PreparationChoice } from "./planning";
+import { productionRoute, buildProductionStage, validProductionStages, remainingParty, assertMaterialCapacity, isBakeOffTask, convertRecipeQuantity, addDays, addTask, dateLabel, mondayOf, defaultComponentDepartment, DEPARTMENTS, requiredTaskIds, type DemoRecipe, type DepartmentId, type PreviewState, type Task, type PreparationChoice } from "./planning";
 
 export type { PreparationChoice } from "./planning";
 export type PlanCommand = {
   task: Omit<Task,"quantity"|"requires"|"generatedFor">;
+  stage?: { stepId: string; sources: { taskId: string; quantity: number }[] };
   amount: number; amountMode: "quantity" | "batches";
   /** Repeat a new recipe production on selected days of the same week. */
   dates?: string[];
@@ -12,6 +13,7 @@ export type PlanCommand = {
 export type PreparationRow = {
   recipeId: string; itemId: string; name: string; quantity: number; unit: string;
   recipeCount: number; date: string; latestDate: string; departmentId: DepartmentId; departmentUnconfirmed: boolean;
+  sourceTaskId?: string;
   included: boolean; requires: string[]; operation: string; minutes?: number;
 };
 export type PreparationProposal = { quantity: number; recipeCount?: number; rows: PreparationRow[]; errors: string[] };
@@ -70,6 +72,7 @@ export function preparationProposal(state:PreviewState,recipes:DemoRecipe[],comm
     if(command.preparation.combine!==undefined && typeof command.preparation.combine!=="boolean")throw Error("Ongeldige batchkeuze.");
     if(!Number.isInteger(daysBefore) || daysBefore<0 || daysBefore>30 || !choices || typeof choices!=="object" || Array.isArray(choices))throw Error("Kies nul tot dertig dagen voorbereiding.");
     const nodes=new Map<string,PreparationRow>();let visits=0;
+    const availableState={...state,tasks:state.tasks.filter(task=>task.id!==command.task.id && task.generatedFor!==command.task.id)};
     function expand(recipe:DemoRecipe,amount:number,date:string,path:string[],consumer?:PreparationRow) {
       if(++visits>2500 || path.length>20 || nodes.size>250)throw Error("De receptketen is te groot of te diep om automatisch te plannen.");
       for(const line of recipe.semiFinishedItems || []) {
@@ -95,12 +98,17 @@ export function preparationProposal(state:PreviewState,recipes:DemoRecipe[],comm
         if(!DEPARTMENTS.some(d=>d.id===departmentId))throw Error("Kies een geldige afdeling voor ieder halffabricaat.");
         let row=nodes.get(child.id);
         if(!row) {row={recipeId:child.id,itemId:item.id,name:child.name,quantity:0,unit:item.unit,recipeCount:0,date:plannedDate,latestDate:date,departmentId,departmentUnconfirmed:!!item.departmentUnconfirmed&&!choice.departmentId&&!componentDepartment,included,requires:[],operation:choice.operation?.trim() || "Bereiden",...(typeof choice.minutes==="number"?{minutes:choice.minutes}:{})};nodes.set(child.id,row);}
+        if (choice.sourceTaskId !== undefined) {
+          const source = state.tasks.find(task => task.id === choice.sourceTaskId);
+          if (!included || !source || source.itemId !== item.id || !source.recordsOutput || source.stockFulfillmentId || source.date > plannedDate) throw Error(`Kies een passende eerdere partij voor ${child.name}.`);
+          row.sourceTaskId = source.id;
+        }
         row.quantity+=needed;row.recipeCount=child.yield>0?row.quantity/child.yield:0;
         if(plannedDate<row.date)row.date=plannedDate;
         if(date<row.latestDate)row.latestDate=date;
         if(included) {
           if(consumer && !consumer.requires.includes(child.id))consumer.requires.push(child.id);
-          expand(child,needed,plannedDate,[...path,child.id],row);
+          if (!row.sourceTaskId) expand(child,needed,plannedDate,[...path,child.id],row);
         }
       }
     }
@@ -110,6 +118,7 @@ export function preparationProposal(state:PreviewState,recipes:DemoRecipe[],comm
     // Keep the complete proposal editable when a date is too late. Saving still
     // rejects every error, including the earliest use of shared preparations.
     for(const row of result.rows) {
+      if(row.sourceTaskId && row.quantity > remainingParty(availableState,state.tasks.find(task=>task.id===row.sourceTaskId)!) + 1e-6) result.errors.push(`${row.name}: deze partij is al aan andere producties toegewezen.`);
       if(row.included && row.date>row.latestDate)result.errors.push(`${row.name} moet op of vóór de gebruiksdatum ${dateLabel(row.latestDate,true)} worden ingepland. Pas de datum bij dit halffabricaat aan.`);
     }
   } catch(error) { result.errors.push(error instanceof Error?error.message:"Het voorstel kon niet worden berekend."); }
@@ -117,33 +126,47 @@ export function preparationProposal(state:PreviewState,recipes:DemoRecipe[],comm
 }
 
 export function buildRecipePlan(state:PreviewState,recipes:DemoRecipe[],command:PlanCommand):PreviewState {
+  return buildPlan(state,recipes,command);
+}
+function buildPlan(state:PreviewState,recipes:DemoRecipe[],command:PlanCommand,original?:Task):PreviewState {
   if(command.dates!==undefined) {
     if(!Array.isArray(command.dates) || !command.dates.length || command.dates.length>7)throw Error("Kies één of meer dagen in deze week.");
     const dates=[...new Set(command.dates)].sort();
     if(dates.length!==command.dates.length || dates.some(date=>typeof date!=="string" || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0,10)!==date || mondayOf(date)!==mondayOf(command.task.date)) || !dates.includes(command.task.date))throw Error("Kies verschillende dagen binnen dezelfde week.");
-    if(dates.length>1 && command.task.dependsOn)throw Error("Plan een vervolgstap op één dag.");
+    if(dates.length>1 && (command.task.dependsOn || command.stage?.sources.length))throw Error("Plan een vervolgstap op één dag.");
     const single:PlanCommand={...command,dates:undefined};
     // Build every day first, then save the complete result in one existing API call.
     // Separate batch IDs keep repeated productions and their output independent.
     return dates.reduce((next,date,index)=>{
       const offset=Math.round((Date.parse(date)-Date.parse(single.task.date))/86400000);
-      return buildRecipePlan(next,recipes,{
+      return buildPlan(next,recipes,{
         ...single,
         task:{...single.task,date,id:index===0?single.task.id:`${single.task.id}:day:${date}`,batchId:index===0?single.task.batchId:`${single.task.batchId}:day:${date}`,...(single.task.dueDate?{dueDate:addDays(single.task.dueDate,offset)}:{})},
         ...(single.preparation?{preparation:{...single.preparation,choices:Object.fromEntries(Object.entries(single.preparation.choices).map(([id,choice])=>[id,{...choice,...(choice.date?{date:addDays(choice.date,offset)}:{})}]))}}:{}),
-      });
+      },original);
     },state);
   }
   const proposal=preparationProposal(state,recipes,command);
   if(proposal.errors.length)throw Error(proposal.errors[0]);
   const rootItem=state.items.find(i=>i.id===command.task.itemId)!;
   const recipe=recipes.find(r=>r.id===rootItem.recipeId);
+  const priorStage = command.stage?.sources?.[0]?.taskId;
+  const route = original && !original.productionStage ? undefined : productionRoute(rootItem, priorStage ? state.tasks.find(task => task.id === priorStage) : original);
+  if (command.stage) {
+    if (!route || !(route.steps as readonly string[]).includes(command.stage.stepId)) throw Error("Kies een geldige productiestap.");
+    if (command.stage.stepId !== route.steps[0]) {
+      if (command.preparation || command.task.dependsOn) throw Error("Koppel de voorgaande partijen bij deze vervolgstap.");
+      return buildProductionStage(state, { ...command.task, quantity: proposal.quantity, productionStage: command.stage });
+    }
+    if (!Array.isArray(command.stage.sources) || command.stage.sources.length || command.task.dependsOn) throw Error("Een nieuwe partij heeft geen voorgaande partijen.");
+  }
   const included=proposal.rows.filter(r=>r.included);
-  const taskIds=new Map(included.map((row,index)=>[row.recipeId,`${command.task.id}:prep:${index}`]));
+  const taskIds=new Map(included.map((row,index)=>[row.recipeId,row.sourceTaskId || `${command.task.id}:prep:${index}`]));
   let next=state;
   const added=new Set<string>();
   function addPreparation(row:PreparationRow) {
     if(added.has(row.recipeId))return;
+    if(row.sourceTaskId){added.add(row.recipeId);return;}
     for(const id of row.requires) {const dependency=included.find(r=>r.recipeId===id);if(dependency)addPreparation(dependency);}
     const task:Task={id:taskIds.get(row.recipeId)!,itemId:row.itemId,departmentId:row.departmentId,date:row.date,quantity:row.quantity,
       operation:row.operation,...(row.minutes!==undefined?{minutes:row.minutes}:{}),status:"planned",note:`Meegepland voor ${rootItem.name} · ${proposal.quantity.toLocaleString("nl-NL",{maximumFractionDigits:1})} ${rootItem.unit} op ${command.task.date}.`,
@@ -160,10 +183,17 @@ export function buildRecipePlan(state:PreviewState,recipes:DemoRecipe[],command:
     note:draft.note,source:draft.source,batchId:draft.batchId,recordsOutput:!isBakeOffTask(draft) && draft.recordsOutput,
     ...(draft.minutes!==undefined?{minutes:draft.minutes}:{}),...(draft.dueDate?{dueDate:draft.dueDate}:{}),...(draft.dependsOn?{dependsOn:draft.dependsOn}:{}),
     ...(included.length?{requires:included.filter(r=>directIds.has(r.recipeId)).map(r=>taskIds.get(r.recipeId)!)}:{}),
-    recipePlan:{amount:command.amount,amountMode:command.amountMode,...(command.preparation?{preparation:{daysBefore:command.preparation.daysBefore,...(command.preparation.combine!==undefined?{combine:command.preparation.combine}:{}),choices:Object.fromEntries(proposal.rows.filter(r=>command.preparation!.choices[r.recipeId]).map(r=>{const c=command.preparation!.choices[r.recipeId];return [r.recipeId,{...(c.include!==undefined?{include:c.include}:{}),...(c.date?{date:c.date}:{}),...(c.daysBefore!==undefined?{daysBefore:c.daysBefore}:{}),...(c.departmentId?{departmentId:c.departmentId}:{}),...(c.operation!==undefined?{operation:c.operation}:{}),...(c.minutes!==undefined?{minutes:c.minutes}:{})}];}))}}:{})}};
+    recipePlan:{amount:command.amount,amountMode:command.amountMode,...(command.preparation?{preparation:{daysBefore:command.preparation.daysBefore,...(command.preparation.combine!==undefined?{combine:command.preparation.combine}:{}),choices:Object.fromEntries(proposal.rows.filter(r=>command.preparation!.choices[r.recipeId]).map(r=>{const c=command.preparation!.choices[r.recipeId];return [r.recipeId,{...(c.include!==undefined?{include:c.include}:{}),...(c.date?{date:c.date}:{}),...(c.daysBefore!==undefined?{daysBefore:c.daysBefore}:{}),...(c.departmentId?{departmentId:c.departmentId}:{}),...(c.operation!==undefined?{operation:c.operation}:{}),...(c.minutes!==undefined?{minutes:c.minutes}:{}),...(c.sourceTaskId?{sourceTaskId:c.sourceTaskId}:{})}];}))}}:{})}};
+  if (route) {
+    root.productionStage = { stepId: route.steps[0], ...(original?.productionStage && !original.productionStage.steps ? {} : { steps: [...route.steps] }), sources: [] };
+    root.operation = route.steps[0];
+    root.recordsOutput = route.stockStep === 0;
+  }
   root.materialNeeds=recipeMaterialNeeds(next,recipes,root);
   next=addTask(next,root);
-  return command.preparation?.combine ? combineNewPreparations(next,recipes,new Set([...taskIds.values()])) : next;
+  if(!validProductionStages(next))throw Error("Controleer de productiestappen.");
+  assertMaterialCapacity(next,included.flatMap(row=>row.sourceTaskId?[row.sourceTaskId]:[]));
+  return command.preparation?.combine ? combineNewPreparations(next,recipes,new Set(included.filter(row=>!row.sourceTaskId).map(row=>taskIds.get(row.recipeId)!))) : next;
 }
 
 /** Reconstruct older plans too. Existing dates/departments take precedence over
@@ -177,7 +207,7 @@ export function currentPlanCommand(state:PreviewState,task:Task):PlanCommand {
     const recipeId=state.items.find(i=>i.id===child.itemId)?.recipeId;
     if(recipeId)choices[recipeId]={...choices[recipeId],include:true,date:child.date,departmentId:child.departmentId,operation:child.operation,minutes:child.minutes??null};
   }
-  return {task:{...task},amount:saved?.amount || task.quantity,amountMode:saved?.amountMode || "quantity",...(preparation?{preparation:{daysBefore:preparation.daysBefore,...(preparation.combine!==undefined?{combine:preparation.combine}:{}),choices}}:{})};
+  return {task:{...task},...(task.productionStage?{stage:task.productionStage}:{}),amount:saved?.amount || task.quantity,amountMode:saved?.amountMode || "quantity",...(preparation?{preparation:{daysBefore:preparation.daysBefore,...(preparation.combine!==undefined?{combine:preparation.combine}:{}),choices}}:{})};
 }
 export type PlanChange={name:string;unit:string;before?:number;after?:number;detail?:string};
 /** Compare a recipe with its reserved share of a batch, never the batch total.
@@ -243,6 +273,7 @@ export function recipePlanChanges(state:PreviewState,recipes:DemoRecipe[],task:T
 }
 export function recipePlanUpdateBlock(state:PreviewState,task:Task):string|undefined {
   const group=state.tasks.filter(t=>t.id===task.id || t.generatedFor===task.id),ids=new Set(group.map(t=>t.id));
+  if(task.productionStage?.sources.length)return "Een vervolgstap gebruikt gereserveerde partijen. Plan een nieuwe vervolgstap met de gewenste hoeveelheid.";
   if(task.generatedFor || task.dependsOn)return "Werk de eerste productiestap bij; deze taak hoort bij een andere productiestap.";
   if(group.some(t=>t.status!=="planned"))return "Deze productie of een halffabricaat is al gestart, afgerond of geblokkeerd. De bestaande registratie blijft behouden; beoordeel de wijziging handmatig.";
   if(state.tasks.some(t=>!ids.has(t.id) && requiredTaskIds(t).some(id=>id!==task.id && ids.has(id))))return "Een halffabricaat wordt ook door een andere productie gebruikt. Controleer die koppeling eerst.";
@@ -254,21 +285,24 @@ export function refreshRecipePlan(state:PreviewState,recipes:DemoRecipe[],id:str
   if(command.task.id!==id || command.task.itemId!==root.itemId || command.task.batchId!==root.batchId || command.task.recordsOutput!==root.recordsOutput || command.task.status!=="planned" || command.task.dependsOn)throw Error("De oorspronkelijke productietaak en batch moeten behouden blijven.");
   const children=state.tasks.filter(t=>t.generatedFor===id),ids=new Set([id,...children.map(t=>t.id)]);
   // Build independently so old preparation IDs cannot collide with new ones.
-  const proposal=buildRecipePlan({...state,tasks:[]},recipes,command);
+  const retained=state.tasks.filter(task=>!ids.has(task.id));
+  const proposal=buildPlan({...state,tasks:retained},recipes,command,root);
+  const retainedIds=new Set(retained.map(task=>task.id));
+  const proposedTasks=proposal.tasks.filter(task=>!retainedIds.has(task.id));
   const used=new Set([...state.tasks.map(t=>t.id),...(state.removedTasks || []).map(r=>r.task.id)]),mapped=new Map<string,string>([[id,id]]);
-  for(const task of proposal.tasks.filter(t=>t.id!==id)) {
+  for(const task of proposedTasks.filter(t=>t.id!==id)) {
     const old=children.find(t=>t.itemId===task.itemId);
     let nextId=old?.id || `${id}:prep:update`;let n=0;
     while(!old && used.has(nextId))nextId=`${id}:prep:update:${++n}`;
     used.add(nextId);mapped.set(task.id,nextId);
   }
-  const rebuilt=proposal.tasks.map(task=>{
+  const rebuilt=proposedTasks.map(task=>{
     const old=children.find(t=>t.itemId===task.itemId),nextId=mapped.get(task.id)!;
     const childRecipeId = state.items.find(item => item.id === task.itemId)?.recipeId;
     const choice = childRecipeId ? command.preparation?.choices[childRecipeId] : undefined;
     return {...task,...(old?{operation:choice?.operation!==undefined?task.operation:old.operation,note:old.note.startsWith("Meegepland voor ")?task.note:old.note,minutes:choice?.minutes!==undefined?task.minutes:old.minutes,batchId:old.batchId}:{}),id:nextId,
-      ...(task.materialNeeds?{materialNeeds:Object.fromEntries(Object.entries(task.materialNeeds).map(([key,value])=>[mapped.get(key)!,value]))}:{}),
-      ...(task.generatedFor?{generatedFor:id}:{}),...(task.requires?{requires:task.requires.map(required=>mapped.get(required)!)}:{}),
+      ...(task.materialNeeds?{materialNeeds:Object.fromEntries(Object.entries(task.materialNeeds).map(([key,value])=>[mapped.get(key) || key,value]))}:{}),
+      ...(task.generatedFor?{generatedFor:id}:{}),...(task.requires?{requires:task.requires.map(required=>mapped.get(required) || required)}:{}),
       ...(!old && task.id!==id?{batchId:`batch:${nextId}`}:{})};
   });
   return {...state,tasks:[...state.tasks.filter(t=>!ids.has(t.id)),...rebuilt]};

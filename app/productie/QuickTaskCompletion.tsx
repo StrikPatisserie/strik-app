@@ -1,4 +1,5 @@
 "use client";
+import {productionUnit} from "./planning";
 
 import { useState } from "react";
 import { convertRecipeQuantity, type DemoRecipe, type Item, type PreviewState, type Task } from "./planning";
@@ -54,15 +55,15 @@ export default function QuickTaskCompletion({ state, task, item, recipes, busy, 
     if (result) setError(result);
     else onClose();
   }}>
-    <p className={styles.quickQuantity}>Gepland · {task.quantity.toLocaleString("nl-NL")} {item.unit}</p>
+    <p className={styles.quickQuantity}>Gepland · {task.quantity.toLocaleString("nl-NL")} {productionUnit(item)}</p>
     <label className={styles.quickUnknown}><input type="checkbox" checked={unmeasured} disabled={busy || readOnly} onChange={event => { setUnmeasured(event.target.checked); setError(""); }}/><span>Snel afvinken zonder naam en tijd</span></label>
     <div className={styles.numbers}>
       {!unmeasured && <label>Naam<input autoFocus required minLength={2} maxLength={80} value={who} disabled={busy} onChange={event => setWho(event.target.value)} /></label>}
-      <label>Werkelijk gemaakt ({item.unit})<input required inputMode="decimal" value={quantity} disabled={busy} onChange={event => setQuantity(event.target.value)} /></label>
+      <label>Werkelijk gemaakt ({productionUnit(item)})<input required inputMode="decimal" value={quantity} disabled={busy} onChange={event => setQuantity(event.target.value)} /></label>
     </div>
     {baseQuantity !== undefined && <div className={styles.batchButtons}>
       {[baseQuantity, baseQuantity * 2].map((batchQuantity, index) => <button key={index} type="button" disabled={busy || readOnly} onClick={() => setQuantity(String(batchQuantity))}>
-        {index + 1}× basisrecept · {batchQuantity.toLocaleString("nl-NL", { maximumFractionDigits: 2 })} {item.unit}
+        {index + 1}× basisrecept · {batchQuantity.toLocaleString("nl-NL", { maximumFractionDigits: 2 })} {productionUnit(item)}
       </button>)}
     </div>}
     <label>Gemaakt op<input type="date" required max={today} value={productionDate} disabled={busy} onChange={event => setProductionDate(event.target.value)} /></label>

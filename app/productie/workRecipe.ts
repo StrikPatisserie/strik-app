@@ -1,6 +1,6 @@
 import type { RecepturenData } from "../bakkerij/recepturen/recepturenApi";
 import type { RecipeUnit } from "../bakkerij/recepturen/types";
-import type { PreviewState } from "./planning";
+import { validProductionSteps, type PreviewState } from "./planning";
 
 export type WorkRecipeLine = { ingredientId: string; quantity: number; unit: string };
 export type WorkRecipeComponent = { kind: "ingredient" | "semiFinished"; linkedId: string; quantity: number; unit: string };
@@ -15,6 +15,7 @@ export function workRecipeComponentError(line: WorkRecipeComponent, availableIds
 export type WorkRecipeInput = {
   itemId: string; recipeId: string; yield: number; instructions: string;
   workInstructions: string; finishingInstructions: string;
+  productionSteps?: string[];
   ingredients: WorkRecipeLine[];
   semiFinishedItems: { recipeId: string; quantity: number; unit: string }[];
 };
@@ -44,6 +45,7 @@ export function editableWorkRecipe(state: PreviewState, data: RecepturenData, it
   const { recipe, yieldQuantity } = workRecipeSource(state, data, itemId);
   return {
     itemId, recipeId: recipe.id, yield: yieldQuantity,
+    ...(recipe.productionSteps ? { productionSteps: recipe.productionSteps } : {}),
     instructions: (recipe.preparationSteps || []).join("\n"),
     workInstructions: (recipe.workInstructions || []).join("\n"),
     finishingInstructions: (recipe.finishingSteps || []).join("\n"),
@@ -57,6 +59,7 @@ export function updateWorkRecipe(state: PreviewState, data: RecepturenData, inpu
   if (current.id !== input.recipeId) throw Error("De receptkoppeling is gewijzigd. Ververs eerst de planning.");
   if (!["stuks", "gram", "kg", "ml", "liter"].includes(item.unit)) throw Error("Controleer de eenheid eerst in receptenbeheer.");
   if (!Number.isFinite(input.yield) || input.yield <= 0 || input.yield > 1000000) throw Error("Vul een geldige basisopbrengst in.");
+  if (input.productionSteps !== undefined && !validProductionSteps(input.productionSteps)) throw Error("Kies minimaal één geldige productiestap.");
   const texts = [input.instructions, input.workInstructions, input.finishingInstructions];
   if (texts.some(text => typeof text !== "string" || text.length > 10000) || !texts.some(text => text.trim())) throw Error("Vul de werkwijze in.");
   if (!Array.isArray(input.ingredients) || !Array.isArray(input.semiFinishedItems) || !input.ingredients.length && !input.semiFinishedItems.length || input.ingredients.length + input.semiFinishedItems.length > 100) throw Error("Voeg één tot honderd grondstoffen of halffabricaten toe.");
@@ -87,7 +90,7 @@ export function updateWorkRecipe(state: PreviewState, data: RecepturenData, inpu
   // Only operational fields change. Prices, specifications, photos, logs and
   // other management data are retained from the canonical server document.
   const allergens = [...new Set([...(current.allergens || []), ...ingredients.flatMap(line => data.ingredients.find(row => row.id === line.ingredientId)?.allergens || []), ...semiFinishedItems.flatMap(line => data.recipes.find(row => row.id === line.semiFinishedRecipeId)?.allergens || [])])];
-  const recipe = { ...current, standardBatchQuantity: input.yield, standardBatchUnit: (item.unit === "stuks" ? "stuk" : item.unit) as RecipeUnit, batchSize: `${input.yield} ${item.unit}`, ingredients, semiFinishedItems, allergens,
+  const recipe = { ...current, ...(input.productionSteps ? { productionSteps: [...input.productionSteps] } : {}), standardBatchQuantity: input.yield, standardBatchUnit: (item.unit === "stuks" ? "stuk" : item.unit) as RecipeUnit, batchSize: `${input.yield} ${item.unit}`, ingredients, semiFinishedItems, allergens,
     preparationSteps: steps(input.instructions), workInstructions: steps(input.workInstructions), finishingSteps: steps(input.finishingInstructions),
     status: "draft" as const, lastUpdated: now.slice(0, 10) };
   const planner = item.productionBlocked || item.recipeId !== current.id ? { ...state, items: state.items.map(row => row.id === item.id ? { ...row, recipeId: current.id, productionBlocked: false } : row) } : state;

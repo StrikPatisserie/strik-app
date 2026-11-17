@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import type { Item } from "./planning";
+import { defaultProductionSteps, type Item } from "./planning";
+import ProductionStepsField from "./ProductionStepsField";
 import type { IngredientView } from "./workspaceData";
 import { WORK_RECIPE_UNITS, workRecipeComponentError, type WorkRecipeComponent, type WorkRecipeInput } from "./workRecipe";
 import SearchableChoice from "./SearchableChoice";
@@ -37,6 +38,8 @@ export default function QuickRecipeForm({ item, ingredients, getRevision, recipe
   const [showValidation, setShowValidation] = useState(false);
   const [scope, setScope] = useState<"once" | "permanent">(taskId && editing ? "once" : "permanent");
   const [loaded, setLoaded] = useState<LoadedRecipe | null>(null);
+  const [defaultSteps] = useState(() => item.productionSteps || defaultProductionSteps(item) || ["Produceren"]);
+  const [productionSteps, setProductionSteps] = useState(defaultSteps);
 
   useEffect(() => {
     if (!item.recipeId) return;
@@ -54,6 +57,7 @@ export default function QuickRecipeForm({ item, ingredients, getRevision, recipe
         nextRow.current = components.length;
         setRows(components);
         setLoaded(data);
+        setProductionSteps(data.draft.productionSteps || defaultSteps);
         if (data.requiresPermanent) setScope("permanent");
       } catch (e) {
         if (!cancelled) setError((e as Error).message);
@@ -61,7 +65,7 @@ export default function QuickRecipeForm({ item, ingredients, getRevision, recipe
     }
     void load();
     return () => { cancelled = true; };
-  }, [item.id, item.recipeId, taskId]);
+  }, [item.id, item.recipeId, taskId, defaultSteps]);
 
   const semiFinished = loaded?.semiFinished || [];
   const ingredientChoices = useMemo(() => ingredients.map(ingredient => ({
@@ -106,6 +110,7 @@ export default function QuickRecipeForm({ item, ingredients, getRevision, recipe
     try {
       const command = {
         itemId: item.id,
+        ...(scope === "permanent" ? { productionSteps } : {}),
         yield: Number(form.get("yield")),
         instructions: String(form.get("instructions")),
         ingredients: rows.filter(row => row.kind === "ingredient").map(row => ({ ingredientId: row.linkedId, quantity: Number(row.quantity), unit: row.unit })),
@@ -149,6 +154,7 @@ export default function QuickRecipeForm({ item, ingredients, getRevision, recipe
         <option value="permanent">Vast recept aanpassen</option>
       </select>
     </label>}
+    {scope === "permanent" && <ProductionStepsField value={productionSteps} onChange={setProductionSteps} disabled={busy}/>}
     <label>Basisopbrengst ({item.unit})<input name="yield" type="number" min="0.000001" max="1000000" step="any" required disabled={busy} defaultValue={draft?.yield} /></label>
     {rows.map((row, index) => {
       const choices = row.kind === "ingredient" ? ingredients : semiFinished;

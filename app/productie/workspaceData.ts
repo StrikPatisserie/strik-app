@@ -1,5 +1,5 @@
 import type { RecepturenData } from "../bakkerij/recepturen/recepturenApi";
-import { type DepartmentId, type DemoRecipe, type ItemUnit, type PreviewState, type Task, validProductionRequests, DEPARTMENTS, addDays, requiredTaskIds, validRecipePlan, validStaffingSettings, validCleaningDays, defaultComponentDepartment } from "./planning";
+import { type DepartmentId, type DemoRecipe, type ItemUnit, type PreviewState, type Task, validProductionRequests, DEPARTMENTS, addDays, requiredTaskIds, validRecipePlan, validStaffingSettings, validCleaningDays, defaultComponentDepartment, validProductionStages, validProductionSteps } from "./planning";
 
 export type IngredientView = { id: string; name: string; supplier: string; unit: string; linked: boolean; specification: string; allergens: string };
 export type LiveWorkspace = {
@@ -27,6 +27,7 @@ export function recipeViews(data: RecepturenData): DemoRecipe[] {
       ...(recipe.ingredients || []).map(line => ({ name: data.ingredients.find(i => i.id === line.ingredientId)?.name || "Grondstofverwijzing controleren", quantity: line.quantity, unit: line.unit })),
       ...(recipe.semiFinishedItems || []).map(line => ({ name: data.recipes.find(r => r.id === line.semiFinishedRecipeId)?.name || "Halffabricaatverwijzing controleren", quantity: line.quantity, unit: line.unit })),
     ],
+    ...(recipe.productionSteps ? { productionSteps: recipe.productionSteps } : {}),
     steps: [...(recipe.workInstructions || []), ...(recipe.preparationSteps || []), ...(recipe.finishingSteps || [])],
     allergens: recipe.allergens || [],
     semiFinishedItems: (recipe.semiFinishedItems || []).map(line=>({recipeId:line.semiFinishedRecipeId,quantity:line.quantity,unit:line.unit})),
@@ -51,6 +52,7 @@ export function seedWorkspace(data: RecepturenData, views = recipeViews(data)): 
       kind: recipe.type === "semiFinished" ? "component" : "product", unit: itemUnit(recipe.standardBatchUnit),
       departmentId, departmentUnconfirmed: !knownGroup && !componentDepartment,
       stock: 0, stockKnown: false, note: recipe.internalNotes || recipe.notes || "", articleNumber: recipe.strikArticleNumber,
+      ...(recipe.productionSteps ? { productionSteps: recipe.productionSteps } : {}),
       productionBlocked: !!views.find(r=>r.id===recipe.id)?.reviewRequired,
     });
     for (const request of recipe.productionRequests || []) {
@@ -81,7 +83,7 @@ export function syncRecipeCatalog(state: PreviewState, data: RecepturenData, rec
     const recipe = recipes.find(r=>r.id===item.recipeId);
     if (!recipe || recipe.unit!==item.unit) return {...item,recipeId:undefined,note:`${item.note}\nReceptkoppeling opnieuw controleren: bronrecept of eenheid gewijzigd.`};
     const componentDepartment = item.departmentUnconfirmed && recipe.type === "semiFinished" ? defaultComponentDepartment(recipe.name) : undefined;
-    return {...item,name:recipe.name,kind:recipe.type==="semiFinished"?"component" as const:"product" as const,...(componentDepartment?{departmentId:componentDepartment,departmentUnconfirmed:false}:{}),productionBlocked:!!recipe.reviewRequired};
+    return {...item,productionSteps:recipe.productionSteps,name:recipe.name,kind:recipe.type==="semiFinished"?"component" as const:"product" as const,...(componentDepartment?{departmentId:componentDepartment,departmentUnconfirmed:false}:{}),productionBlocked:!!recipe.reviewRequired};
   });
   return {...state,items:[...items,...source.items.filter(i=>!known.has(i.id)&&(!i.recipeId||!linkedRecipes.has(i.recipeId)))]};
 }
@@ -98,6 +100,7 @@ export function validWorkspace(value: unknown, recipes: DemoRecipe[]): value is 
   try {
     for (const i of state.items) {
       if (!i || typeof i.id !== "string" || !i.id || ids.has(i.id) || typeof i.name !== "string" || !i.name.trim() || i.name.length > 500 || !["product","component","activity"].includes(i.kind) || !DEPARTMENTS.some(d => d.id === i.departmentId) || !["stuks","gram","kg","ml","liter","platen","taak"].includes(i.unit) || !Number.isFinite(i.stock) || i.stock < 0 || typeof i.note !== "string") return false;
+      if (i.productionSteps !== undefined && !validProductionSteps(i.productionSteps)) return false;
       if (i.recipeId && (!recipes.some(r => r.id === i.recipeId && r.unit === i.unit) || i.kind === "activity")) return false;
       ids.add(i.id);
     }
@@ -153,6 +156,6 @@ export function validWorkspace(value: unknown, recipes: DemoRecipe[]): value is 
       visiting.delete(id);visited.add(id);return true;
     }
     for(const id of tasks.keys()) if(!visit(id))return false;
-    return true;
+    return validProductionStages(state);
   } catch { return false; }
 }

@@ -7,7 +7,7 @@ const rights=load('app/productie/access.ts',{'../lib/auth/access':access,'./plan
 const workspace=load('app/productie/workspaceData.ts',{'./planning':planning});
 const recipePlanning=load('app/productie/recipePlanning.ts',{'./planning':planning,'./materialPlanning':load('app/productie/materialPlanning.ts',{'./planning':planning})});
 const productionWork=load('app/productie/productionWork.ts',{'./planning':planning,'./recipePlanning':recipePlanning});
-const work=load('app/productie/workRecipe.ts'),quick=load('app/productie/quickRecipe.ts');
+const work=load('app/productie/workRecipe.ts',{'./planning':planning}),quick=load('app/productie/quickRecipe.ts',{'./planning':planning});
 const baker={id:'baker',active:true,role:'bakkerij',permissions:{'bakkerij.patisserie':true}};
 const editor={...baker,permissions:{...baker.permissions,'productie.manage':true}};
 const recipe=(more={})=>({id:'r',name:'Recept',type:'finalProduct',standardBatchQuantity:10,standardBatchUnit:'stuk',ingredients:[{ingredientId:'flour',quantity:100,unit:'gram',costContribution:45}],semiFinishedItems:[],preparationSteps:['Mengen'],workInstructions:['Klaarzetten'],finishingSteps:['Afwerken'],allergens:['ei'],costPrice:77,salesPrice:99,photoPreviewDataUrl:'private-photo',productionLog:[{id:'log'}],...more});
@@ -142,4 +142,15 @@ test('one-off recipe API stores a task snapshot and named audit, leaving source 
  const saved=writes[0][2];assert.equal(saved.productionWork.overrides['production-1'].ingredients[0].quantity,250);assert.equal(e.data.recipes[0].ingredients[0].quantity,100);assert.equal(saved.tasks[0].quantity,10);assert.equal(saved.productionWork.history[0].actorId,editor.id);assert.equal(saved.productionWork.history[0].who,'Bakker B');assert.equal(saved.productionWork.history[0].before.ingredients[0].quantity,100);assert.equal(saved.productionWork.recipeDrafts['production-1'].ingredients[0].ingredientId,'flour');
  Object.assign(e.state,saved);assert.equal((await route.POST(request({}))).status,400);assert.equal(writes.length,1);
  assert.equal((await route.POST(request({who:''}))).status,400);assert.equal((await route.POST(request({taskId:'missing'}))).status,400);assert.equal(writes.length,1);
+});
+
+
+test('recipe stage choices persist through the shared recipe editor with valid ordered options',()=>{
+ const {data,state}=fixture(),input=work.editableWorkRecipe(state,data,'recipe:r');
+ input.productionSteps=['Deeg zetten','Product maken & afbakken'];
+ const saved=work.updateWorkRecipe(state,data,input,'2026-11-17T12:00:00Z').recipes;
+ assert.equal(saved.recipes[0].productionSteps.join('|'),'Deeg zetten|Product maken & afbakken');
+ const synced=workspace.syncRecipeCatalog(state,saved);
+ assert.equal(synced.items.find(i=>i.recipeId==='r').productionSteps.join('|'),'Deeg zetten|Product maken & afbakken');
+ for(const productionSteps of [[],['Produceren','Produceren'],['Onbekend']])assert.throws(()=>work.updateWorkRecipe(state,data,{...input,productionSteps},'now'),/productiestap/);
 });
