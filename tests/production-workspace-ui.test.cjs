@@ -19,11 +19,11 @@ function harness({fetchImpl,timerApi={}}={}) {
  const slot=initial=>{const i=index++;if(!(i in current))current[i]=typeof initial==='function'?initial():initial;return i;};
  const react={Fragment:jsx.Fragment,createContext:value=>({Provider:'workspace-provider',defaultValue:value}),useContext:c=>context || c.defaultValue,useEffect:()=>{},useMemo:fn=>fn(),useRef:value=>current[slot(()=>({current:value}))],useState:initial=>{const i=slot(initial),store=current;return[store[i],next=>{store[i]=typeof next==='function'?next(store[i]):next;}];}};
  const quickCompletion=load('app/productie/QuickTaskCompletion.tsx',{'./ProductionIcon':{__esModule:true,default:()=>null},'react':react,'react/jsx-runtime':jsx,'./productionWork':productionWork,'./planning':planning,'./work.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})}});
- const quantityCorrection=load('app/productie/CompletedQuantityForm.tsx',{'./planning':planning,'react':react,'react/jsx-runtime':jsx,'./work.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})}});
+ const quantityCorrection=load('app/productie/CompletedQuantityForm.tsx',{'./productionWork':productionWork,'./planning':planning,'react':react,'react/jsx-runtime':jsx,'./work.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})}});
  const navigation={__esModule:true,default:function Navigation(){},ProductionMobileNavigation:function MobileNavigation(){}};
  const offerWidget={__esModule:true,default:function ProductionWeekOffer(){}};
  const pickerWidget={__esModule:true,default:function ProductionItemPicker(){}};
- const component=load('app/preview/productie/ProductionPreview.tsx',{'react':react,'react/jsx-runtime':jsx,'next/link':'a','../../productie/ProductionIcon':{__esModule:true,default:()=>null},'../../productie/ProductionNavigation':navigation,'../../productie/navigation':load('app/productie/navigation.ts',{'./planning':planning}),'../../productie/dayRhythm':load('app/productie/dayRhythm.ts',{'./planning':planning}),'next/dynamic':()=>()=>null,'../../productie/WeddingWeekLane':{__esModule:true,default:()=>null},'../../productie/useProductionUpdates':{__esModule:true,default:()=>false},'../../productie/usePhysicalKeyboard':{__esModule:true,default:()=>({physicalKeyboard:false,setPhysicalKeyboard(){},storageError:false})},'../../productie/useTaskDrag':{__esModule:true,default:()=>({getHandleProps:()=>({onClick(){}}),cancelDrag(){}})},'../../productie/productionUpdates':{},'../../productie/useScreenLayout':{__esModule:true,default:(...args)=>{screenLayouts.push(args);return{frameRef:{current:null},workspaceRef:{current:null}};}},'../../productie/QuickTaskCompletion':quickCompletion,'../../productie/CompletedQuantityForm':quantityCorrection,'../../productie/TaskWorkPanel':{__esModule:true,default:function TaskWorkPanel(){},WorkClock:function WorkClock(){},PreparationControl:function PreparationControl(){},RecipeWorkHistory:function RecipeWorkHistory(){}},'../../productie/workCommands':workCommands,'../../productie/workSummary':workSummary,'../../productie/QuickRecipeForm':{__esModule:true,default:()=>null},'../../productie/ProductionRequests':{__esModule:true,default:()=>null},'../../productie/OperationalDialog':{__esModule:true,default:()=>null},'../../productie/ProductionWeekOffer':offerWidget,'../../productie/ProductionItemPicker':pickerWidget,'../../productie/SearchableChoice':{__esModule:true,default:function SearchableChoice(){}},'../../productie/recipeGroups':recipeGrouping,'../../productie/taskOperations':taskOperations,'../../productie/CleaningWeekLane':{__esModule:true,default:()=>null},'../../productie/weddingPlanning':weddingPlanning,'../../productie/planning':planning,'./sampleData':sample,'./production.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})},'../../productie/workspaceData':{},'../../productie/PlanningInspector':{__esModule:true,default:function PlanningInspector(){}},'../../productie/materialPlanning':load('app/productie/materialPlanning.ts',{'./planning':planning}),'../../productie/newPlanning.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})},'../../productie/recipePlanning':recipePlanning,'../../productie/requestPlanning':load('app/productie/requestPlanning.ts',{'./planning':planning,'./recipePlanning':recipePlanning,'./materialPlanning':load('app/productie/materialPlanning.ts',{'./planning':planning}),'./taskOperations':taskOperations})},{fetch:fetchImpl||(()=>assert.fail('Unexpected live request in the UI harness')),...timerApi});
+ const component=load('app/preview/productie/ProductionPreview.tsx',{'react':react,'react/jsx-runtime':jsx,'next/link':'a','../../productie/ProductionIcon':{__esModule:true,default:()=>null},'../../productie/ProductionNavigation':navigation,'../../productie/navigation':load('app/productie/navigation.ts',{'./planning':planning}),'../../productie/dayRhythm':load('app/productie/dayRhythm.ts',{'./planning':planning}),'next/dynamic':()=>()=>null,'../../productie/WeddingWeekLane':{__esModule:true,default:()=>null},'../../productie/useProductionUpdates':{__esModule:true,default:()=>false},'../../productie/usePhysicalKeyboard':{__esModule:true,default:()=>({physicalKeyboard:false,setPhysicalKeyboard(){},storageError:false})},'../../productie/useTaskDrag':{__esModule:true,default:()=>({getHandleProps:()=>({onClick(){}}),cancelDrag(){}})},'../../productie/productionUpdates':{},'../../productie/useScreenLayout':{__esModule:true,default:(...args)=>{screenLayouts.push(args);return{frameRef:{current:null},workspaceRef:{current:null}};}},'../../productie/QuickTaskCompletion':quickCompletion,'../../productie/CompletedQuantityForm':quantityCorrection,'../../productie/TaskWorkPanel':{__esModule:true,default:function TaskWorkPanel(){},WorkClock:function WorkClock(){},PreparationControl:function PreparationControl(){},RecipeWorkHistory:function RecipeWorkHistory(){}},'../../productie/workCommands':workCommands,'../../productie/workSummary':workSummary,'../../productie/productionWork':productionWork,'../../productie/QuickRecipeForm':{__esModule:true,default:()=>null},'../../productie/ProductionRequests':{__esModule:true,default:()=>null},'../../productie/OperationalDialog':{__esModule:true,default:()=>null},'../../productie/ProductionWeekOffer':offerWidget,'../../productie/ProductionItemPicker':pickerWidget,'../../productie/SearchableChoice':{__esModule:true,default:function SearchableChoice(){}},'../../productie/recipeGroups':recipeGrouping,'../../productie/taskOperations':taskOperations,'../../productie/CleaningWeekLane':{__esModule:true,default:()=>null},'../../productie/weddingPlanning':weddingPlanning,'../../productie/planning':planning,'./sampleData':sample,'./production.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})},'../../productie/workspaceData':{},'../../productie/PlanningInspector':{__esModule:true,default:function PlanningInspector(){}},'../../productie/materialPlanning':load('app/productie/materialPlanning.ts',{'./planning':planning}),'../../productie/newPlanning.module.css':{__esModule:true,default:new Proxy({},{get:(_,key)=>key})},'../../productie/recipePlanning':recipePlanning,'../../productie/requestPlanning':load('app/productie/requestPlanning.ts',{'./planning':planning,'./recipePlanning':recipePlanning,'./materialPlanning':load('app/productie/materialPlanning.ts',{'./planning':planning}),'./taskOperations':taskOperations})},{fetch:fetchImpl||(()=>assert.fail('Unexpected live request in the UI harness')),...timerApi});
  const render=(fn,props={},value)=>{if(!records.has(fn))records.set(fn,[]);current=records.get(fn);index=0;context=value;return fn(props);};
  return{render,Component:component.default,navigation,screenLayouts,offerWidget:offerWidget.default,pickerWidget:pickerWidget.default};
 }
@@ -1012,7 +1012,7 @@ test('the completion square opens the fast name, output, time and crew form and 
  assert(!nodes(tree).some(node=>typeof node.type==='function'&&node.props.onMove));
  const quick=find(tree,node=>typeof node.type==='function'&&node.type.name==='QuickTaskCompletion');
  let form=h.render(quick.type,quick.props);
- assert.equal(nodes(form).filter(node=>node.type==='input').length,5);
+ assert.equal(nodes(form).filter(node=>node.type==='input').length,6);
  assert.equal(nodes(form).filter(node=>node.type==='details').length,0);
  inputByLabel(form,'Naam').props.onChange({target:{value:'Bakker test'}});
  inputByLabel(form,'Tijd (minuten)').props.onChange({target:{value:'12,5'}});
@@ -1085,7 +1085,7 @@ test('a completed card opens a named quantity correction and keeps completion st
  tree=h.render(h.Component,props);
  const correction=find(tree,node=>typeof node.type==='function'&&node.type.name==='CompletedQuantityForm');
  let form=h.render(correction.type,correction.props);
- assert.equal(nodes(form).filter(node=>node.type==='input').length,2);
+ assert.equal(nodes(form).filter(node=>node.type==='input').length,3);
  assert.equal(button(form,'Bewaar correctie').props.disabled,true);
  const inputs=nodes(form).filter(node=>node.type==='input');
  inputs[0].props.onChange({target:{value:'17,5'}});
@@ -1149,7 +1149,7 @@ test('next production prefills learned time in the quick check and adapts to qua
   const commands = [], before = JSON.stringify(state);
   const quickProps = { ...quick.props, onCommand: async command => { commands.push(command); } };
   let form = h.render(quick.type, quickProps);
-  assert.equal(nodes(form).filter(node => node.type === 'input').length, 5);
+  assert.equal(nodes(form).filter(node => node.type === 'input').length, 6);
   assert.equal(inputByLabel(form,'Tijd (minuten)').props.value, '80');
   assert(text(form).includes('1 eerdere productie'));
   assert.equal(commands.length, 0);
@@ -1206,7 +1206,7 @@ test('recipe groups open the original recipe and keep quick completion and task 
  const cluster = find(tree, node => node.type === 'section' && node.props['aria-label'] === 'Fruitdesserttaart');
  for (const task of family.filter(row => !row.generatedFor)) {
   const card = find(tree, node => node.type === 'article' && node.props['data-task-id'] === task.id);
-  assert(nodes(card).some(node => node.type === 'button' && /^(Afronden|Aantal corrigeren):/.test(node.props['aria-label'])));
+  assert(nodes(card).some(node => node.type === 'button' && /^(Afronden|Productie corrigeren):/.test(node.props['aria-label'])));
   assert(!nodes(card).some(node => node.props?.className === 'recipeLinks'));
  }
  const bundledIds = nodes(tree).filter(node => node.props?.['data-preparation-ids']).flatMap(node => node.props['data-preparation-ids'].split(' '));
@@ -1235,7 +1235,7 @@ test('a shared batch stays in one group and opens its own inspector with every c
  const props = { initialLayout: 'new', live: { state, today: sample.DEMO_TODAY, recipes: sample.demoRecipes, ingredients: [], canManage: true, departments: planning.DEPARTMENTS.map(row => row.id), revision: 1 } };
  let tree = h.render(h.Component, props);
  assert.equal(nodes(tree).filter(node => node.props?.['data-preparation-ids'] === 'shared-edge').length, 1);
- assert(!nodes(tree).some(node => node.type === 'article' && node.props['data-task-id'] === 'shared-edge'));
+ assert.equal(nodes(tree).filter(node => node.type === 'article' && node.props['data-task-id'] === 'shared-edge').length, 1, 'The combined batch has one independently completable card');
  const shared = button(tree, 'Voorbereiden gedeeld voor Citroen-meringuetaart, Fruitdesserttaart · ma 26 okt');
  assert(text(shared).includes('2 recepten'));
  shared.props.onClick();
@@ -1479,7 +1479,7 @@ test('a completed recipe can explicitly correct one piece to one base recipe wit
  const live = {state, today:sample.DEMO_TODAY, recipes:[recipe], ingredients:[], canManage:true, departments:['dessert'], revision:1};
  const props = {live, initialLayout:'new'};
  let tree = h.render(h.Component, props);
- button(tree, 'Aantal corrigeren: Fruitdesserttaart').props.onClick();tree = h.render(h.Component, props);
+ button(tree, 'Productie corrigeren: Fruitdesserttaart').props.onClick();tree = h.render(h.Component, props);
  const correction = find(tree, node => typeof node.type === 'function' && node.type.name === 'CompletedQuantityForm');
  const commands = [], correctionProps = {...correction.props, onCommand:async command => {commands.push(command);}};
  const render = () => h.render(correction.type, correctionProps);
@@ -1604,7 +1604,7 @@ test('quick completion accepts 600 made against 300 planned in both layouts and 
   const commands = [];let saved,closes=0;
   const quickProps = {...quick.props,onClose:()=>closes++,onCommand:async command=>{
    commands.push(command);
-   saved=workCommands.applyWorkCommand(state,sample.demoRecipes,command,planning.DEPARTMENTS.map(row=>row.id),'baker-test','made-600','2026-10-28T08:00:00Z');
+   saved=workCommands.applyWorkCommand(state,sample.demoRecipes,command,planning.DEPARTMENTS.map(row=>row.id),'baker-test','made-600','2026-11-17T08:00:00Z');
   }};
   const render = () => h.render(quick.type, quickProps);
   let form = render();
@@ -1654,16 +1654,16 @@ test('quick and retrospective completion can select two base recipes using the a
   inputByLabel(form,'Tijd (minuten)').props.onChange({target:{value:'30'}});
   form=h.render(quick.type,quickProps);await form.props.onSubmit({preventDefault(){}});
   assert.equal(commands[0].quantity,actual);
-  const completed=workCommands.applyWorkCommand(state,[recipe],commands[0],planning.DEPARTMENTS.map(row=>row.id),'baker','double-batch','2026-10-28T08:00:00Z');
+  const completed=workCommands.applyWorkCommand(state,[recipe],commands[0],planning.DEPARTMENTS.map(row=>row.id),'baker','double-batch','2026-11-17T08:00:00Z');
   const done=completed.tasks.find(row=>row.id===task.id);
   const doneProps={...props,live:{...props.live,state:completed}};
   const correctionHarness=harness();tree=correctionHarness.render(correctionHarness.Component,doneProps);
   const doneCard=find(tree,node=>node.type==='article'&&node.props['data-task-id']===task.id);
-  button(doneCard,`Aantal corrigeren: ${item.name}`).props.onClick();tree=correctionHarness.render(correctionHarness.Component,doneProps);
+  button(doneCard,`Productie corrigeren: ${item.name}`).props.onClick();tree=correctionHarness.render(correctionHarness.Component,doneProps);
   const correction=find(tree,node=>typeof node.type==='function'&&node.type.name==='CompletedQuantityForm');
   let corrected;
   const correctionProps={...correction.props,onCommand:async command=>{
-   corrected=workCommands.applyWorkCommand(completed,[recipe],command,planning.DEPARTMENTS.map(row=>row.id),'manager','change-batch','2026-10-29T08:00:00Z');
+   corrected=workCommands.applyWorkCommand(completed,[recipe],command,planning.DEPARTMENTS.map(row=>row.id),'manager','change-batch','2026-11-17T09:00:00Z');
   }};
   const render=()=>correctionHarness.render(correction.type,correctionProps);
   form=render();assert(button(form,doubleLabel));
@@ -1706,13 +1706,13 @@ test('quick completion explicitly records unknown work without invented names, c
   assert.equal(closes,1);assert.equal(commands.length,1);
   assert.equal(commands[0].unmeasured,true);assert.equal(commands[0].quantity,600);
   for(const key of ['who','minutes','crewSize'])assert.equal(commands[0][key],undefined);
-  const saved=workCommands.applyWorkCommand(state,sample.demoRecipes,commands[0],planning.DEPARTMENTS.map(row=>row.id),'account-baker','unknown-work','2026-10-28T08:00:00Z');
+  const saved=workCommands.applyWorkCommand(state,sample.demoRecipes,commands[0],planning.DEPARTMENTS.map(row=>row.id),'account-baker','unknown-work','2026-11-17T08:00:00Z');
   assert.equal(saved.tasks.find(row=>row.id===task.id).completedQuantity,600);
   assert.equal(saved.productionWork.work.length,0);
  }
 });
 
-test('preparation is bundled on the actual work day and the final card keeps its earlier-date reminder', () => {
+test('preparation is bundled on the actual work day and the final card keeps its earlier-date reminder', async () => {
  const h = harness(), state = sample.initialPreviewState();
  const base = state.tasks.find(task => task.departmentId === 'dessert' && !task.generatedFor && !task.dependsOn);
  state.tasks = [
@@ -1727,7 +1727,13 @@ test('preparation is bundled on the actual work day and the final card keeps its
  assert(text(reminder).includes('Voorbereiden wo 28 okt'));
  const dayCell = find(tree, node => node.props?.onDrop && node.props['aria-label'] === 'Desserttaart & fruit · wo 28 okt');
  const bundle = find(dayCell, node => node.props?.['data-preparation-ids'] === 'prep-before');
- assert(!nodes(tree).some(node => node.props?.['data-task-id'] === 'prep-before'));
+ assert(nodes(dayCell).some(node => node.props?.['data-task-id'] === 'prep-before'), 'The actual component remains visible and independently completable in its recipe group');
+ const componentCard = find(dayCell, node => node.type === 'article' && node.props['data-task-id'] === 'prep-before');
+ const componentName = state.items.find(item => item.id === 'creme').name;
+ assert(text(componentCard).includes(componentName));
+ await button(componentCard, `Afronden: ${componentName}`).props.onClick();
+ tree = h.render(h.Component, props);
+ assert.equal(find(tree, node => typeof node.type === 'function' && node.type.name === 'QuickTaskCompletion').props.task.id, 'prep-before');
  find(bundle, node => node.type === "button" && !!node.props.onClick).props.onClick(); tree = h.render(h.Component, props);
  const focused = find(tree, node => typeof node.type === 'function' && node.type.name === 'PlanningInspector');
  assert.equal(focused.props.task.id, 'prep-root');

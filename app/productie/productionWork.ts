@@ -1,10 +1,10 @@
-import { addDays, addItem, transitionTask, type DemoRecipe, type DepartmentId, type ItemUnit, type PreviewState, type Task } from "./planning";
+import { addDays, addItem, moveTask, transitionTask, type DemoRecipe, type DepartmentId, type ItemUnit, type PreviewState, type Task } from "./planning";
 import { buildRecipePlan, type PlanCommand } from "./recipePlanning";
 
 export type Change = { id:string; itemId:string; taskId?:string; who:string; at:string; actorId?:string; kind:"recipe"|"time"|"preparation"|"stock"|"output";quantityBefore?:number;quantityAfter?:number; scope:"once"|"permanent"; summary:string; before?:DemoRecipe; after?:DemoRecipe };
 export type WorkTime = { id:string; taskId:string; itemId:string; operation:string; quantity:number; minutes:number; who:string; at:string; actorId?:string; timerId?:string; measuredMs?:number; plannedQuantity?:number;crewSize?:number;laborMinutes?:number;recipeKey?:string;estimateEligible?:boolean };
 export type WorkTimer = {id:string;who:string;startedAt:string;runningSince?:string;elapsedMs:number;actorId?:string;crewSize?:number;recipeKey?:string;operation?:string};
-export type Completion = {id:string;who?:string;at:string;minutes?:number;unmeasured?:true;quantity:number;plannedQuantity:number;measuredMs?:number;timerId?:string;actorId?:string;crewSize?:number;laborMinutes?:number;measuredCrewSize?:number};
+export type Completion = {id:string;who?:string;at:string;productionDate?:string;minutes?:number;unmeasured?:true;quantity:number;plannedQuantity:number;measuredMs?:number;timerId?:string;actorId?:string;crewSize?:number;laborMinutes?:number;measuredCrewSize?:number};
 export type StockFulfillment = { id:string; taskId:string; itemId:string; unit:ItemUnit; countedQuantity:number; quantity:number; remainingQuantity:number; who:string; at:string; actorId?:string };
 export type ScreenState = { version:1; planner:PreviewState; recipes:DemoRecipe[]; overrides:Record<string,DemoRecipe>; preparation:Record<string,number>; history:Change[]; work:WorkTime[];timers?:Record<string,WorkTimer>;completions?:Record<string,Completion>;stockFulfillments?:Record<string,StockFulfillment> };
 function validCrew(value:number|undefined){if(value!==undefined&&(!Number.isInteger(value)||value<1||value>20))throw Error("Kies 1 tot 20 medewerkers.");return value;}
@@ -28,7 +28,27 @@ export function pauseWorkTimer(state:ScreenState,taskId:string,at:string):Screen
   const paused:WorkTimer={...timer,elapsedMs:elapsedMilliseconds(timer,now)};delete paused.runningSince;
   return {...state,timers:{...state.timers,[taskId]:paused}};
 }
-export type TaskCompletionInput = { taskId: string; quantity: number; timerId?: string } & (
+export function productionDay(at: string): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Amsterdam", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(at));
+}
+
+function checkedProductionDate(date: string, at: string): string {
+  if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(`${date}T12:00:00Z`))
+    || new Date(`${date}T12:00:00Z`).toISOString().slice(0, 10) !== date) throw Error("Kies een geldige maakdatum.");
+  if (date > productionDay(at)) throw Error("De maakdatum kan niet in de toekomst liggen.");
+  return date;
+}
+
+/** A completed task may change date through an audited correction. Its dependency
+ * dates remain subject to the same rules as a normal planning move. */
+function tasksOnProductionDate(tasks: Task[], task: Task, date: string): Task[] {
+  if (date === task.date) return tasks;
+  const movable = tasks.map(row => row.id === task.id ? { ...row, status: "planned" as const } : row);
+  return moveTask(movable, task.id, date, task.departmentId)
+    .map(row => row.id === task.id ? { ...row, status: task.status } : row);
+}
+
+export type TaskCompletionInput = { taskId: string; quantity: number; timerId?: string; productionDate?: string } & (
   { unmeasured: true; who?: never; minutes?: never; crewSize?: never }
   | { unmeasured?: false; who: string; minutes: number; crewSize?: number }
 );
@@ -43,11 +63,13 @@ export function confirmTaskCompletion(state: ScreenState, input: TaskCompletionI
     throw Error("Deze productie is al afgerond.");
   }
   if (!Number.isFinite(input.quantity) || input.quantity <= 0 || input.quantity > 1000000) throw Error("Controleer de gemaakte hoeveelheid.");
+  const productionDate = input.productionDate === undefined ? undefined : checkedProductionDate(input.productionDate, at);
+  const datedTasks = productionDate ? tasksOnProductionDate(state.planner.tasks, task, productionDate) : state.planner.tasks;
   const timer = state.timers?.[task.id];
   if (timer?.runningSince) throw Error("Stop de timer eerst en controleer de gemeten tijd.");
   if (timer?.id !== input.timerId) throw Error("De timer is intussen gewijzigd. Open de controle opnieuw.");
   const unit = state.planner.items.find(item => item.id === task.itemId)!.unit;
-  let completion: Completion = { id, at, quantity: input.quantity, plannedQuantity: task.quantity, ...(timer ? { timerId: timer.id } : {}) };
+  let completion: Completion = { id, at, ...(productionDate ? { productionDate } : {}), quantity: input.quantity, plannedQuantity: task.quantity, ...(timer ? { timerId: timer.id } : {}) };
   let work = state.work;
   let who = "Maker onbekend";
   let summary = `Snel afgerond · ${input.quantity.toLocaleString("nl-NL")} ${unit} gemaakt · naam en tijd onbekend.`;
@@ -67,13 +89,14 @@ export function confirmTaskCompletion(state: ScreenState, input: TaskCompletionI
     work = [...work, log];
     summary = `Afgerond: ${input.minutes.toLocaleString("nl-NL")} min${crewSize ? ` × ${crewSize} medewerkers = ${laborMinutes!.toLocaleString("nl-NL")} arbeidsmin` : ""} · ${input.quantity.toLocaleString("nl-NL")} ${unit} gemaakt (gepland ${task.quantity.toLocaleString("nl-NL")}).`;
   }
-  const tasks = transitionTask(state.planner.tasks, task.id, "done", state.planner.items)
+  if (productionDate) summary += ` Gemaakt op ${productionDate.split("-").reverse().join("-")}.`;
+  const tasks = transitionTask(datedTasks, task.id, "done", state.planner.items)
     .map(task => task.id === input.taskId ? { ...task, completedQuantity: input.quantity } : task);
   return { ...state, planner: { ...state.planner, tasks }, completions: { ...state.completions, [task.id]: completion }, work,
     history: [...state.history, { id, itemId: task.itemId, taskId: task.id, who, at, kind: "time", scope: "once", summary }] };
 }
 export function correctCompletedQuantity(state: ScreenState, input: {
-  taskId: string; who: string; quantity: number; expectedQuantity: number;
+  taskId: string; who: string; quantity: number; expectedQuantity: number; productionDate?: string; expectedProductionDate?: string;
 }, id: string, at: string): ScreenState {
   const who = actor(input.who);
   timestamp(at);
@@ -87,18 +110,25 @@ export function correctCompletedQuantity(state: ScreenState, input: {
   if (input.expectedQuantity !== previousQuantity) {
     throw Error("Het gemaakte aantal is intussen gewijzigd. Open de correctie opnieuw.");
   }
-  if (input.quantity === previousQuantity) throw Error("Vul het gewijzigde aantal in.");
+  const productionDate = input.productionDate === undefined ? undefined : checkedProductionDate(input.productionDate, at);
   const completion = state.completions?.[task.id];
+  const previousDate = completion?.productionDate ?? (completion ? productionDay(completion.at) : task.date);
+  if (input.expectedProductionDate !== undefined && input.expectedProductionDate !== previousDate) throw Error("De maakdatum is intussen gewijzigd. Open de correctie opnieuw.");
+  if (input.quantity === previousQuantity && (!productionDate || productionDate === previousDate && productionDate === task.date)) throw Error("Wijzig het aantal of de maakdatum.");
+  const datedTasks = productionDate ? tasksOnProductionDate(state.planner.tasks, task, productionDate) : state.planner.tasks;
+  const correctedCompletion: Completion = { ...(completion ?? { id, at, unmeasured: true, plannedQuantity: task.quantity }), quantity: input.quantity,
+    ...(productionDate ? { productionDate } : {}) };
   const unit = state.planner.items.find(row => row.id === task.itemId)!.unit;
   return {
     ...state,
-    planner: { ...state.planner, tasks: state.planner.tasks.map(row => row.id === task.id
+    planner: { ...state.planner, tasks: datedTasks.map(row => row.id === task.id
       ? { ...row, completedQuantity: input.quantity } : row) },
-    completions: completion ? { ...state.completions, [task.id]: { ...completion, quantity: input.quantity } } : state.completions,
+    completions: completion || productionDate ? { ...state.completions, [task.id]: correctedCompletion } : state.completions,
     history: [...state.history, {
       id, itemId: task.itemId, taskId: task.id, who, at, kind: "output", scope: "once",
       quantityBefore: previousQuantity, quantityAfter: input.quantity,
-      summary: `Gemaakt: ${previousQuantity.toLocaleString("nl-NL")} → ${input.quantity.toLocaleString("nl-NL")} ${unit}.`,
+      summary: [input.quantity !== previousQuantity ? `Gemaakt: ${previousQuantity.toLocaleString("nl-NL")} → ${input.quantity.toLocaleString("nl-NL")} ${unit}.` : "",
+        productionDate && (productionDate !== previousDate || productionDate !== task.date) ? `Maakdatum: ${previousDate} → ${productionDate}.` : ""].filter(Boolean).join(" "),
     }],
   };
 }
@@ -206,7 +236,7 @@ export type WorkCommand =
  | {kind:"start";taskId:string;who:string;crewSize?:number}
  | {kind:"pause";taskId:string}
  | ({kind:"complete"} & TaskCompletionInput)
- | {kind:"correct-output";taskId:string;who:string;quantity:number;expectedQuantity:number}
+ | {kind:"correct-output";taskId:string;who:string;quantity:number;expectedQuantity:number;productionDate?:string;expectedProductionDate?:string}
  | {kind:"reopen";taskId:string}
  | {kind:"stock";taskId:string;who:string;countedQuantity:number;confirmed:true}
  | {kind:"preparation";recipeId:string;days:number;who:string};

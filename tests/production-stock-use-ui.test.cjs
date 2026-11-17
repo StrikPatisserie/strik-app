@@ -62,7 +62,7 @@ function harness(result, learnedEstimate = null) {
     'react/jsx-runtime': jsx,
     './planning': load('app/productie/planning.ts', {}),
     './CompletedQuantityForm': { __esModule: true, default: function CompletedQuantityForm() {} },
-    './productionWork': { learnedWorkEstimate: () => learnedEstimate, workView: state => state, elapsedMilliseconds: timer => timer.elapsedMs },
+    './productionWork': { productionDay: at => at.slice(0, 10), learnedWorkEstimate: () => learnedEstimate, workView: state => state, elapsedMilliseconds: timer => timer.elapsedMs },
     './ProductionIcon': { __esModule: true, default: () => null },
     './work.module.css': { __esModule: true, default: new Proxy({}, { get: (_, key) => key }) },
   }).default;
@@ -128,7 +128,7 @@ test('a completed production exposes an amount correction without reopening its 
   const h = harness();
   const done = { ...h.task, status: 'done', completedQuantity: 1.2 };
   let tree = h.render({ task: done });
-  button(tree, 'Aantal corrigeren').props.onClick();
+  button(tree, 'Aantal / datum corrigeren').props.onClick();
   tree = h.render();
   const form = find(tree, node => typeof node.type === 'function' && node.type.name === 'CompletedQuantityForm');
   assert.equal(form.props.task.completedQuantity, 1.2);
@@ -245,7 +245,7 @@ test('the timer completion offers double base yield and passes the same recipe i
  tree=h.render();await find(tree,node=>node.type==='form').props.onSubmit({preventDefault(){}});
  assert.equal(h.commands[0].quantity,9.6);
  tree=h.render({task:{...h.task,status:'done',completedQuantity:9.6}});
- button(tree,'Aantal corrigeren').props.onClick();tree=h.render();
+ button(tree,'Aantal / datum corrigeren').props.onClick();tree=h.render();
  const correction=find(tree,node=>typeof node.type==='function'&&node.type.name==='CompletedQuantityForm');
  assert.equal(correction.props.recipe,recipe);
 });

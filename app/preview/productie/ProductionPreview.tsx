@@ -13,7 +13,7 @@ import QuickTaskCompletion from "../../productie/QuickTaskCompletion";
 import CompletedQuantityForm from "../../productie/CompletedQuantityForm";
 import TaskWorkPanel,{WorkClock,PreparationControl,RecipeWorkHistory} from "../../productie/TaskWorkPanel";
 import {applyWorkCommand} from "../../productie/workCommands";
-import type {WorkCommand} from "../../productie/productionWork";
+import {productionDay,type WorkCommand} from "../../productie/productionWork";
 import {departmentDayWork,taskWorkSummary} from "../../productie/workSummary";
 import WeddingWeekLane from "../../productie/WeddingWeekLane";
 import QuickRecipeForm from "../../productie/QuickRecipeForm";
@@ -479,7 +479,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
           type="button"
           disabled={completionDisabled}
           className={n.check}
-          aria-label={`${task.status === "done" ? "Aantal corrigeren" : "Afronden"}: ${item.name}`}
+          aria-label={`${task.status === "done" ? "Productie corrigeren" : "Afronden"}: ${item.name}`}
           aria-pressed={task.status === "done"}
           onClick={() => task.status === "done" ? setModal({ type: "correct-output", id: task.id }) : changeStatus(task.id, "done")}
         >
@@ -543,8 +543,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
       const selected = modal?.type === "detail" && (all.some(task => task.id === modal.id) || modal.preparationDate === all[0]?.date && cluster.links.some(link => link.rootId === modal.id));
       const doneParts = cluster.preparations.filter(task => task.status === "done").length;
       const activeParts = cluster.preparations.some(task => task.status === "active");
-      const hasIssues = cluster.preparations.some(task => task.status !== "done" && taskIssues(task, state.tasks, state.items).length);
-      const preparationName = shared ? cluster.preparations.map(task => state.items.find(item => item.id === task.itemId)?.name || task.operation).join(" · ") : cluster.name;
+      const preparationName = shared ? `Gedeeld · ${cluster.links.length} recepten` : cluster.name;
       const rootDates = [...new Set(cluster.links.map(link => state.tasks.find(task => task.id === link.rootId)?.date).filter((date): date is string => !!date))].sort();
       const date = cluster.preparations[0]?.date;
       const movableParts = cluster.preparations.filter(task => task.status !== "done");
@@ -556,7 +555,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
           </button>
           {cluster.tasks.map(task => newTaskCard(task, cluster))}
         </>}
-        {cluster.preparations.length > 0 && <article className={`${n.preparationBundle} ${doneParts === cluster.preparations.length ? n.done : activeParts ? n.active : ""}`}
+        {cluster.preparations.length > 0 && <><article className={`${n.preparationBundle} ${doneParts === cluster.preparations.length ? n.done : activeParts ? n.active : ""}`}
           data-task-id={dragId} data-task-department={cluster.preparations[0].departmentId} data-task-drag-kind="production"
           data-preparation-ids={cluster.preparations.map(task => task.id).join(" ")} data-preparation-date={date}
           draggable={canManage && !saving && movableParts.length > 0}
@@ -565,12 +564,12 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
             aria-label={`Voorbereiden ${shared ? `gedeeld voor ${cluster.links.map(link => link.name).join(", ")}` : cluster.name} · ${dateLabel(date!, true)}`}
             onClick={() => setModal({type:"detail",id:shared ? cluster.preparations[0].id : cluster.links[0].rootId,...(!shared ? {preparationDate:date} : {})})}>
             <Icon name={doneParts === cluster.preparations.length ? "check" : activeParts ? "play" : "warning"} size={13}/>
-            <span>{cluster.tasks.length === 0 && <strong>{preparationName}</strong>}<small>{doneParts === cluster.preparations.length ? "Voorbereiding afgerond" : "Voorbereiden"} · {doneParts}/{cluster.preparations.length}{shared ? ` · ${cluster.links.length} recepten` : rootDates.length && rootDates[0] !== date ? ` · voor ${dateLabel(rootDates[0])}` : ""}</small></span>
-            <Icon name={hasIssues ? "warning" : "chevron"} size={13}/>
+            <span><strong>{preparationName}</strong><small>{doneParts}/{cluster.preparations.length} klaar{!shared && rootDates.length && rootDates[0] !== date ? ` · voor ${dateLabel(rootDates[0])}` : ""}</small></span>
+            <Icon name="chevron" size={13}/>
           </button>
           {canManage && movableParts.length > 0 && <button type="button" className={n.preparationDrag} data-task-drag-handle draggable={false}
             aria-label={`Versleep voorbereiding ${preparationName}`} title="Versleep de openstaande voorbereiding" disabled={saving} {...touchDrag.getHandleProps(dragId)}><Icon name="move" size={14}/></button>}
-        </article>}
+        </article>{cluster.preparations.map(task => newTaskCard(task))}</>}
       </section>;
     });
   }
@@ -741,7 +740,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
     {modal?.type==="offer-manage" && canManageData && <ModalFrame wide title="Weekaanbieding beheren" onClose={()=>{setModal(null);void onRefresh?.();}}><div className={`${s.dialogBody} ${s.resourceSurface}`}><OfferManager embedded hideTopNav initialTab="beheer" lockedTab="beheer" initialBeheerView="voorpagina" initialOfferWeek={modal.week}/></div><footer className={s.dialogFooter}><button className={s.primaryButton} onClick={()=>{setModal(null);void onRefresh?.();}}>Terug naar het bord</button></footer></ModalFrame>}
     {modal?.type === "task" && <TaskForm week={week} showSunday={weekend} combineDefault={newLayout} onRecipe={itemId=>{setQuickRecipeTask(undefined);setQuickRecipeItem(itemId);}} onNewItem={()=>setModal({type:"item",returnTo:{date:modal.date,departmentId:modal.departmentId,fromCell:modal.fromCell}})} state={state} initial={modal} today={today} onClose={() => setModal(null)} onPlan={command=>plan(command,modal.refreshId)} />}
     {modal?.type === "item" && <ItemForm state={state} onClose={() => setModal(null)} onSave={async next => { const error=await persist(next,"Onderdeel toegevoegd. Je kunt het direct inplannen."); if (!error) setModal(modal.returnTo?{type:"task",...modal.returnTo,itemId:next.items.at(-1)?.id}:null); return error; }} />}
-    {correctionTask && correctionItem && <ModalFrame title={correctionItem.name} subtitle="Gemaakt aantal corrigeren" onClose={()=>{if(!saving)setModal(null);}}><CompletedQuantityForm readOnly={live?.readOnlyPreview} key={correctionTask.id} task={correctionTask} item={correctionItem} recipe={state.productionWork?.overrides?.[correctionTask.id] || recipeList.find(recipe=>recipe.id===correctionItem.recipeId)} busy={saving} onCommand={work} onClose={()=>setModal(null)}/></ModalFrame>}
+    {correctionTask && correctionItem && <ModalFrame title={correctionItem.name} subtitle="Productie corrigeren" onClose={()=>{if(!saving)setModal(null);}}><CompletedQuantityForm readOnly={live?.readOnlyPreview} key={correctionTask.id} task={correctionTask} item={correctionItem} completedDate={state.productionWork?.completions?.[correctionTask.id]?.productionDate ?? (state.productionWork?.completions?.[correctionTask.id] ? productionDay(state.productionWork.completions[correctionTask.id].at) : correctionTask.date)} recipe={state.productionWork?.overrides?.[correctionTask.id] || recipeList.find(recipe=>recipe.id===correctionItem.recipeId)} busy={saving} onCommand={work} onClose={()=>setModal(null)}/></ModalFrame>}
     {completionTask && completionItem && <ModalFrame title={completionItem.name} subtitle="Snel afronden" onClose={()=>{if(!saving)setModal(null);}}><QuickTaskCompletion readOnly={live?.readOnlyPreview} key={completionTask.id} state={state} task={completionTask} item={completionItem} recipes={recipeList} busy={saving} onCommand={work} onClose={()=>setModal(null)}/></ModalFrame>}
     {selectedTask && selectedTaskItem && (!newLayout || modal?.type==="detail"&&modal.advanced) && <TaskDetail onItem={()=>setModal({type:"item-detail",id:selectedTaskItem.id})} onRecipe={()=>{setModal(null);setQuickRecipeTask(selectedTask.id);setQuickRecipeItem(selectedTaskItem.id);}} onWork={work} key={selectedTask.id} task={selectedTask} item={selectedTaskItem} state={state} onClose={() => setModal(null)} onStatus={status => changeStatus(selectedTask.id, status)} onMove={move} onReturn={()=>returnToRequests(selectedTask.id)} onRemove={whole=>remove(selectedTask.id,whole)} onRefreshPlan={()=>setModal({type:"task",refreshId:selectedTask.id,itemId:selectedTask.itemId,date:selectedTask.date,departmentId:selectedTask.departmentId})} onOpenTask={id=>setModal({type:"detail",id})} onNext={() => setModal({ type: "task", date: selectedTask.date, departmentId: selectedTask.departmentId, itemId: selectedTask.itemId, priorId: selectedTask.id })} />}
     {selectedItem && <ItemDetail onRecipe={()=>{setModal(null);setQuickRecipeTask(undefined);setQuickRecipeItem(selectedItem.id);}} key={`${selectedItem.id}:${selectedItem.recipeId || "loose"}`} item={selectedItem} state={state} onClose={()=>setModal(null)} onPlan={()=>setModal({type:"task",itemId:selectedItem.id,departmentId:selectedItem.departmentId,date:day})} onLink={recipeId=>connectRecipe(selectedItem.id,recipeId)} onUpdate={changes=>updateItem(selectedItem.id,changes)}/>}

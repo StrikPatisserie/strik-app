@@ -263,3 +263,70 @@ test('unmeasured completion saves and reads back through the work API with repla
  const denied=endpoint();denied.store.planner.data.tasks[0].departmentId='ijs';
  assert.notEqual((await denied.route.POST(post(command,'complete-denied-api'))).status,200);assert.equal(denied.writes.length,0);
 });
+
+
+test('backdated completion records output and labor on its actual day while retaining the registration audit', () => {
+ const state=fixture();state.tasks[0].date='2026-11-16';
+ const enteredAt='2026-11-17T08:00:00Z';
+ const saved=apply(state,{kind:'complete',taskId:'task',who:'Marit',minutes:60,crewSize:2,quantity:480,productionDate:'2026-11-13'},'backdated-complete',enteredAt);
+ const completion=saved.productionWork.completions.task;
+ assert.equal(saved.tasks[0].date,'2026-11-13');assert.equal(saved.tasks[0].status,'done');
+ assert.equal(completion.productionDate,'2026-11-13');assert.equal(completion.at,enteredAt);assert.equal(completion.actorId,baker.id);
+ assert.equal(completion.quantity,480);assert.equal(completion.laborMinutes,120);
+ assert.match(saved.productionWork.history.at(-1).summary,/13-11-2026/);
+ const inventory=load('app/productie/inventory.ts',{'./planning':planning}),stock=inventory.emptyInventory();
+ stock.counts=[{id:'count',itemId:'cake',unit:'stuks',date:'2026-11-14',quantity:100,who:'Bakker',actorId:'baker',at:'2026-11-14T18:00:00Z'}];
+ let row=inventory.inventoryOverview(saved,stock,[],'2026-11-17').rows[0];
+ assert.equal(row.latest.date,'2026-11-13');assert.equal(row.latest.quantity,480);assert.equal(row.made,0);assert.equal(row.balance,100,'The later stock count already contains the backdated production');
+ stock.counts[0].date='2026-11-12';stock.counts[0].at='2026-11-12T18:00:00Z';
+ row=inventory.inventoryOverview(saved,stock,[],'2026-11-17').rows[0];
+ assert.equal(row.made,480);assert.equal(row.balance,580);
+ assert(workspace.validWorkspace(saved,[]));
+ assert.equal(apply(saved,{kind:'complete',taskId:'task',unmeasured:true,quantity:480,productionDate:'2026-11-13'},'backdated-complete',enteredAt).productionWork.work.length,1);
+});
+
+test('a date-only correction preserves the original quantity, maker and measurement and moves daily totals', () => {
+ const state=fixture();state.tasks[0].date='2026-11-16';
+ const completed=apply(state,{kind:'complete',taskId:'task',who:'Marit',minutes:30,crewSize:2,quantity:480},'made-monday','2026-11-16T10:00:00Z');
+ const before=JSON.stringify(completed),original=completed.productionWork.completions.task;
+ const corrected=apply(completed,{kind:'correct-output',taskId:'task',who:'Feline',quantity:480,expectedQuantity:480,productionDate:'2026-11-13'},'fix-make-date','2026-11-17T08:00:00Z');
+ assert.equal(JSON.stringify(completed),before);assert.equal(corrected.tasks[0].date,'2026-11-13');
+ assert.equal(corrected.productionWork.completions.task.id,original.id);assert.equal(corrected.productionWork.completions.task.who,'Marit');assert.equal(corrected.productionWork.completions.task.at,original.at);
+ assert.equal(corrected.productionWork.completions.task.productionDate,'2026-11-13');assert.equal(corrected.productionWork.completions.task.laborMinutes,60);
+ assert.deepEqual(corrected.productionWork.work,completed.productionWork.work);
+ const summary=load('app/productie/workSummary.ts',{'./productionWork':work}).departmentDayWork(corrected,[]);
+ assert.equal(summary.get('dessert:2026-11-13').doneLaborMinutes,60);assert.equal(summary.has('dessert:2026-11-16'),false);
+ const audit=corrected.productionWork.history.at(-1);assert.equal(audit.who,'Feline');assert.equal(audit.actorId,baker.id);assert.match(audit.summary,/Maakdatum: 2026-11-16 → 2026-11-13/);
+ assert(workspace.validWorkspace(corrected,[]));
+});
+
+test('competing date corrections reject a stale date even when the completed quantity is unchanged', () => {
+ const state=fixture();state.tasks[0].date='2026-11-16';
+ const completed=apply(state,{kind:'complete',taskId:'task',who:'Marit',minutes:30,crewSize:1,quantity:480},'complete-before-date-race','2026-11-16T10:00:00Z');
+ const command={kind:'correct-output',taskId:'task',who:'Feline',quantity:480,expectedQuantity:480,productionDate:'2026-11-13',expectedProductionDate:'2026-11-16'};
+ const corrected=apply(completed,command,'date-race-first','2026-11-17T08:00:00Z');
+ assert.throws(()=>apply(corrected,{...command,productionDate:'2026-11-12'},'date-race-stale','2026-11-17T08:01:00Z'),/maakdatum is intussen gewijzigd/);
+ assert.equal(corrected.tasks[0].date,'2026-11-13');
+ assert.equal(apply(corrected,command,'date-race-first','2026-11-17T08:02:00Z'),corrected,'Retrying the confirmed correction keeps the saved result');
+});
+
+test('make dates reject impossible dates, future dates and violations of earlier preparation dependencies', () => {
+ for(const productionDate of ['2026-11-18','2026-02-30','2026-13-01','tomorrow','2026-1-1']){
+  const state=fixture();state.tasks[0].date='2026-11-16';
+  assert.throws(()=>apply(state,{kind:'complete',taskId:'task',unmeasured:true,quantity:480,productionDate},'invalid-make-date','2026-11-17T08:00:00Z'),/maakdatum/);
+ }
+ const state=fixture();state.tasks[0].date='2026-11-16';state.tasks[0].requires=['prep'];
+ state.items.push({...state.items[0],id:'component',kind:'component'});
+ state.tasks.push({...state.tasks[0],id:'prep',itemId:'component',date:'2026-11-14',batchId:'prep',status:'done',requires:[]});
+ assert.throws(()=>apply(state,{kind:'complete',taskId:'task',unmeasured:true,quantity:480,productionDate:'2026-11-13'},'before-prep','2026-11-17T08:00:00Z'),/halffabricaten/);
+ assert.equal(work.productionDay('2026-11-16T23:30:00Z'),'2026-11-17');
+});
+
+test('the existing work API saves a backdated completion once with its authenticated audit', async () => {
+ const e=endpoint();e.store.planner.data.tasks[0].date='2026-11-16';
+ const command={kind:'complete',taskId:'task',quantity:480,unmeasured:true,productionDate:'2026-11-13'};
+ const response=await e.route.POST(post(command,'api-backdated-complete'));
+ assert.equal(response.status,200);assert.equal(e.writes.length,1);
+ const saved=e.store.planner.data;assert.equal(saved.tasks[0].date,'2026-11-13');assert.equal(saved.productionWork.completions.task.productionDate,'2026-11-13');assert.equal(saved.productionWork.completions.task.actorId,baker.id);
+ assert.equal((await e.route.POST(post(command,'api-backdated-complete'))).status,200);assert.equal(e.writes.length,1);
+});

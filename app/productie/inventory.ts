@@ -60,8 +60,11 @@ function productionRows(planner:PreviewState,item:Item){
  const seen=new Set<string>();return planner.tasks.filter(task=>{
   if(task.itemId!==item.id||!task.recordsOutput||task.status!=="done"||task.stockFulfillmentId||seen.has(task.batchId))return false;seen.add(task.batchId);return true;
  }).map(task=>{
-  const at=planner.productionWork?.completions?.[task.id]?.at;
-  return{date:at?amsterdamDate(at):task.date,quantity:task.completedQuantity??task.quantity,at};
+  const completion=planner.productionWork?.completions?.[task.id], at=completion?.at;
+  const date=completion?.productionDate ?? (at?amsterdamDate(at):task.date);
+  // A backdated entry has no known time within that day. A physical count on
+  // that day already covers its production, regardless of when it was entered.
+  return{date,quantity:task.completedQuantity??task.quantity,at:at&&date===amsterdamDate(at)?at:undefined};
  });
 }
 function amsterdamDate(at:string){return new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Amsterdam",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(at));}
