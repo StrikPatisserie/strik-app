@@ -48,6 +48,7 @@ import {
   productChoiceWithLetter,
   defaultProductChoice,
   folderProducts,
+  b2bExtraProducts,
   productChoiceCandidates,
   productChoiceLabel,
   productLogoPrice,
@@ -136,7 +137,7 @@ type B2BFormState = {
 };
 
 const CHRISTMAS_CATALOG: Product[] = christmasProducts.map(product => ({ ...product, id: `kerst-${product.id}`, description: product.detail, image: product.image || "", options: [product.detail], shelfLifeInfo: [], allergens: [], tiers: BUSINESS_FOLDER_PRICE_TIERS, accent: "green" }));
-const PRODUCT_CATALOG = [products[0], products[1], ...folderProducts, ...CHRISTMAS_CATALOG];
+const PRODUCT_CATALOG = [products[0], products[1], ...folderProducts, ...b2bExtraProducts, ...CHRISTMAS_CATALOG];
 const MANUAL_PRODUCT_CATALOG = PRODUCT_CATALOG.filter(
   (product) => product.id !== "chocoladeletter" && product.id !== "chocolade-vormletter"
 );

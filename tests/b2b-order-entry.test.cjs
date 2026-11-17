@@ -586,3 +586,46 @@ test('decoration stays on its letter line through entry, editing, review and reo
  reopened.button('Verder naar producten →');reopened.button('Bestelling controleren →');await reopened.submit();
  assert.equal(reopened.calls[0].letterLines[0].decoration,'Blauwe balletjes, geen rood');
 });
+
+
+test('custom Sint package components are selectable with the folder tier and fixed packaging, and survive reopening', async () => {
+  const ui = entry();
+  ui.field('Bedrijfsnaam / klantnaam *', 'Pakketbedrijf');
+  ui.field('Vaste leverdatum', '2026-12-02');
+  ui.field('Fase', 'offerte');
+  ui.button('Verder naar producten →');
+  const catalogOptions = nodes(ui.render(), node => node.type === 'option').map(node => node.props.value);
+  assert(catalogOptions.includes('sint-pepernotencake'));
+  assert(catalogOptions.includes('sint-verpakking'));
+  for (const [id, choice] of [
+    ['sint-pepernotencake', null],
+    ['speculaasplak-gedicht', 'Zonder amandel'],
+    ['staaf', 'Gevulde amandelstaaf'],
+    ['sint-verpakking', null],
+  ]) {
+    ui.field('Product', id);
+    if (choice) ui.field('Variant', choice);
+    ui.field('Aantal producten', '37');
+    ui.button('+ Product toevoegen');
+  }
+  ui.button('Bestelling controleren →');
+  await ui.submit();
+  assert.equal(ui.calls.length, 1);
+  const saved = ui.calls[0];
+  assert.equal(saved.status, 'offerte');
+  assert.equal(saved.totalExVat, '€ 775,89');
+  assert.match(saved.orderText, /37 × Sint Pepernoten Cake · €\s*8,72 p\.s\. ex btw/);
+  assert.match(saved.orderText, /37 × Sint-tasje of diamantzak · €\s*0,92 p\.s\. ex btw/);
+  const reopened = entry('sint', { ...saved, id: 'package-order' });
+  const lines = reopened.parse(saved.orderText).productLines;
+  assert.deepEqual(Array.from(lines, line => line.productId), ['sint-pepernotencake', 'speculaasplak-gedicht', 'staaf', 'sint-verpakking']);
+  assert.deepEqual(Array.from(lines, line => line.quantity), [37, 37, 37, 37]);
+  assert.deepEqual(Array.from(lines, line => line.unitPriceEx), ['8.72', '4.36', '6.97', '0.92']);
+  reopened.button('Verder naar producten →');
+  reopened.button('Bestelling controleren →');
+  await reopened.submit();
+  assert.equal(reopened.calls[0].orderText, saved.orderText);
+  assert.equal(reopened.calls[0].totalExVat, saved.totalExVat);
+  const packaging = sint.b2bExtraProducts.find(product => product.id === 'sint-verpakking');
+  for (const quantity of [1, 37, 201]) assert.equal(sint.productUnitPrice(packaging, sint.tierFor(packaging, quantity), true), 1);
+});

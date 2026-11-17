@@ -271,6 +271,34 @@ export const products: Product[] = [
     tiers: chocolateLetterTiers,
   },
 ];
+// Extra products for entering custom B2B packages, alongside the folder range.
+export const b2bExtraProducts: Product[] = [
+  {
+    id: "sint-pepernotencake",
+    name: "Sint Pepernoten Cake",
+    description: "Sint Pepernoten Cake uit de webshop.",
+    image: "",
+    shelfLifeInfo: [],
+    allergens: [],
+    accent: "#8f563d",
+    logoAvailable: false,
+    retailPriceIncl: 9.95,
+    tiers: BUSINESS_FOLDER_PRICE_TIERS,
+  },
+  {
+    id: "sint-verpakking",
+    name: "Sint-tasje of diamantzak",
+    description: "Cadeauverpakking per pakket.",
+    image: "",
+    shelfLifeInfo: [],
+    allergens: [],
+    accent: "#d62d1d",
+    logoAvailable: false,
+    retailPriceIncl: 1,
+    tiers: [{ min: 1, label: "Vaste prijs", discountPercent: 0 }],
+  },
+];
+
 export const chocolateLetterProduct = products[0];
 export const shapeLetterProduct = products[1];
 const folderProductOrder = [
