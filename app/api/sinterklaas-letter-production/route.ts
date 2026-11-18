@@ -20,17 +20,18 @@ const jsonError = (message: string, status = 400) => Response.json({ message }, 
 
 async function loadCurrent(season: string) {
   const [central, wordpress] = await Promise.all([loadCentralProduction(season), loadProductionWordPressOrders(season)]);
-  return { ...combineProductionOrders(central.batches, wordpress.letters, wordpress.b2b, central.assignments || []), centralUnplannedCount: central.centralUnplannedCount };
+  const ids = central.batches.map(batch => batch.id);
+  const result = ids.length ? await (createAdminClient() as unknown as SupabaseClient).from("letter_production_checklists").select(columns).in("batch_id", ids) : { data: [], error: null };
+  if (result.error) throw new Error("De productievoortgang kon niet worden geladen.");
+  const storedLists = result.data as SavedChecklist[];
+  return { ...combineProductionOrders(central.batches, wordpress.letters, wordpress.b2b, central.assignments || [], storedLists), storedLists, centralUnplannedCount: central.centralUnplannedCount };
 }
 
 async function readLists(season: string, actorId: string | null) {
-  const current = await loadCurrent(season);
+  const { storedLists, ...current } = await loadCurrent(season);
   const db = createAdminClient() as unknown as SupabaseClient;
-  const ids = current.batches.map(batch => batch.id);
-  if (!ids.length) return current;
-  const result = await db.from("letter_production_checklists").select(columns).in("batch_id", ids);
-  if (result.error) throw new Error("De productievoortgang kon niet worden geladen. Probeer opnieuw.");
-  const saved = new Map((result.data as SavedChecklist[]).map(list => [list.batch_id, list]));
+  if (!current.batches.length) return current;
+  const saved = new Map(storedLists.map(list => [list.batch_id, list]));
   const views = await Promise.all(current.batches.map(async batch => {
     let list = saved.get(batch.id);
     // A provisional list stores actual production while demand remains live.

@@ -11,10 +11,11 @@ import { b2bProductionLetters } from "../../b2bCombinationLetters";
 export async function loadReadyProductionRecipients(season:string) {
   if(!/^20\d{2}$/.test(season))return new Set<string>();
   const [central,wordpress]=await Promise.all([loadCentralProduction(season,true),loadProductionWordPressOrders(season)]);
-  const {batches}=combineProductionOrders(central.batches,wordpress.letters,wordpress.b2b,central.assignments);
-  if(!batches.length)return new Set<string>();
-  const result=await (createAdminClient() as unknown as SupabaseClient).from("letter_production_checklists").select("batch_id,rows,supplements,locked_at").in("batch_id",batches.map(batch=>batch.id));
+  if(!central.batches.length)return new Set<string>();
+  const result=await (createAdminClient() as unknown as SupabaseClient).from("letter_production_checklists").select("batch_id,rows,supplements,locked_at").in("batch_id",central.batches.map(batch=>batch.id));
   if(result.error)throw Error("Productievoortgang kon niet worden gecontroleerd.");
+  const history = result.data as {batch_id:string;rows:ProductionSeedRow[];locked_at:string|null}[];
+  const {batches}=combineProductionOrders(central.batches,wordpress.letters,wordpress.b2b,central.assignments,history);
   const expected={...central.orderQuantities};
   for(const order of wordpress.b2b)expected[`b2b:${order.id}`]=b2bProductionLetters(order).requiredQuantity;
   return readyProductionRecipients(batches,result.data as {batch_id:string;rows:ProductionSeedRow[];locked_at:string|null}[],expected);

@@ -60,7 +60,28 @@ export function productionDeadlinePassed(batch: Pick<ProductionBatchSeed, "deadl
     || Boolean(batch.deadlineAt && now >= Date.parse(batch.deadlineAt));
 }
 
-export function combineProductionOrders(batches: ProductionBatchSeed[], legacyOrders: ChocolateLetterOrder[], b2bOrders: SinterklaasB2BOrder[], assignments: B2BProductionAssignment[] = []) {
+export type ProductionHistory = { batch_id: string; locked_at: string | null; rows: ProductionSeedRow[]; supplements?: ProductionSupplement[] };
+
+// Once printed/frozen, an inferred assignment must not move when another round
+// is added, closed, or fulfillment changes. Quantities still come from the order;
+// an explicit reassignment or cancellation still goes through normal review.
+function historicalProductionBatches(history: ProductionHistory[]) {
+  const bindings = new Map<string, string | null>();
+  for (const list of history) {
+    if (!list.locked_at) continue;
+    for (const row of [...list.rows, ...(list.supplements || []).flatMap(part => part.rows)]) {
+      for (const recipient of row.recipients || []) {
+        if (recipient.quantity <= 0) continue;
+        const previous = bindings.get(recipient.id);
+        bindings.set(recipient.id, previous === undefined || previous === list.batch_id ? list.batch_id : null);
+      }
+    }
+  }
+  return bindings;
+}
+
+export function combineProductionOrders(batches: ProductionBatchSeed[], legacyOrders: ChocolateLetterOrder[], b2bOrders: SinterklaasB2BOrder[], assignments: B2BProductionAssignment[] = [], history: ProductionHistory[] = []) {
+  const historical = historicalProductionBatches(history);
   const rowsByDate = new Map(batches.map(batch => [batch.date, new Map(batch.rows.map(row => [row.key, {...row, orderSources: {...row.orderSources}} as ProductionSeedRow]))]));
   const unplanned: string[] = [];
   const b2bPlanning: B2BProductionPlan[] = [];
@@ -75,7 +96,8 @@ export function combineProductionOrders(batches: ProductionBatchSeed[], legacyOr
   legacyOrders
     .filter((order) => order.status !== "geannuleerd")
     .forEach((order) => {
-      const date = findProductionDate(batches, order.pickupDate);
+      const previousBatch = historical.get(`wordpress:${order.id}`);
+      const date = batches.find(batch => batch.id === previousBatch)?.date || findProductionDate(batches, order.pickupDate);
       if (!date) {
         if (!order.productionDone && !order.pickedUp && order.status !== "opgehaald") {
           unplanned.push(`${order.code} · ${order.customerName}`);
@@ -91,7 +113,7 @@ export function combineProductionOrders(batches: ProductionBatchSeed[], legacyOr
   b2bOrders
     .filter((order) => order.status === "akkoord" && !order.cancelled)
     .forEach((order) => {
-      const plan = b2bProductionPlan(order, batches, assignments);
+      const plan = b2bProductionPlan(order, batches, assignments, historical.get(`b2b:${order.id}`) || undefined);
       if (plan.quantity <= 0) return;
       const needsPlanning = eligibleB2BLetterOrder(order);
       if (needsPlanning) b2bPlanning.push(plan);

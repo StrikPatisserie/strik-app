@@ -566,3 +566,38 @@ test('adding another customer on the same date reuses the extra list and retains
  const duplicate=await f.api.POST(f.request({...addition,revision:4,planVersion:view.checklist.planVersion}));
  assert.equal(duplicate.status,400);assert.equal(f.saved.supplements[0].rows[0].orders,12);
 });
+
+
+test('frozen customer assignments survive new rounds and fulfillment without hiding real edits', () => {
+ const old = batch({rows: []});
+ const order = b2bLetterOrder({deliveryDate: '2026-11-25'});
+ const before = helper.combineProductionOrders([old], [], [order]).batches[0].rows;
+ const history = [{batch_id: old.id, locked_at: '2026-11-01T20:00:00Z', rows: before}];
+ const newer = batch({id: 'new-round', date: '2026-11-24', startDate: '2026-11-23', rows: [], status: 'CLOSED', minimumLeadDays: 0});
+ for (const flags of [{}, {productionDone: true}, {packed: true}, {delivered: true}, {productionDone:true,packed:true,delivered:true}]) {
+  const result = helper.combineProductionOrders([old,newer], [], [{...order,...flags}], [], history);
+  assert.equal(helper.productionChanges(before,result.batches[0].rows).length,0);
+  assert.equal(result.batches[1].rows.length,0);
+ }
+ const edited = {...order,delivered:true,letterLines:[{...order.letterLines[0],quantity:25}]};
+ const changed = helper.combineProductionOrders([old,newer], [], [edited], [], history);
+ assert.deepEqual(plain(helper.productionChanges(before,changed.batches[0].rows)).map(c=>[c.before,c.after]),[[20,25]]);
+ const cancelled=helper.combineProductionOrders([old,newer],[],[{...order,cancelled:true}],[],history);
+ assert.equal(cancelled.batches[0].rows.length,0);
+ const reassigned=helper.combineProductionOrders([old,newer],[],[order],[{order_id:order.id,batch_id:newer.id,season:2026,revision:1}],history);
+ assert.equal(reassigned.batches[0].rows.length,0); assert.equal(reassigned.batches[1].rows[0].orders,20);
+ const explicit=helper.combineProductionOrders([old,newer],[],[{...order,productionDate:newer.startDate}],[],history);
+ assert.equal(explicit.batches[1].rows[0].orders,20);
+ const provisional=helper.combineProductionOrders([old,newer],[],[order],[],[{...history[0],locked_at:null}]);
+ assert.equal(provisional.batches[1].rows[0].orders,20);
+});
+
+test('shop and supplementary recipients keep their frozen production round', () => {
+ const old=batch({rows:[]});
+ const order={id:'shop-history',code:'CL26-test',customerName:'Test',status:'besteld',source:'online',pickupDate:'2026-11-25',lines:[{letter:'S',chocolate:'melk',size:'klein',style:'spuit',quantity:3,notes:'',specialRequests:[]}]};
+ const before=helper.combineProductionOrders([old],[order],[]).batches[0].rows;
+ const newer=batch({id:'new-round',date:'2026-11-24',startDate:'2026-11-23',minimumLeadDays:0,rows:[]});
+ const history=[{batch_id:old.id,locked_at:'2026-11-01',rows:[],supplements:[{rows:before}]}];
+ const result=helper.combineProductionOrders([old,newer],[{...order,status:'opgehaald',productionDone:true}],[],[],history);
+ assert.equal(result.batches[0].rows[0].orders,3); assert.equal(result.batches[1].rows.length,0);
+});

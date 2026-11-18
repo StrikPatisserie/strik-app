@@ -285,3 +285,25 @@ test('recipe refresh preserves legacy output and new clients cannot forge a shor
   assert.equal(task(next,'new').productionStage.steps.join('|'),'Produceren|Afbakken');
   assert.equal(planning.stageParties(next,next.items[0],planning.productionRoute(next.items[0]),1,'2026-11-17').some(t=>t.id==='old'),false);
 });
+
+
+test('petit gateau routes reserve parties between steps and count finished stock only once', () => {
+ for (const recipeId of ['gateau-mango','gateau-choco','gateau-framboos','gateau-yoghurt-framboos','gateau-lemon','gateau-hazelnoot']) {
+  const expected=['gateau-lemon','gateau-hazelnoot'].includes(recipeId)?['Opspuiten','Afwerken']:[recipeId==='gateau-yoghurt-framboos'?'Opspuiten & aanzetten':'Opspuiten','Doorhalen en afwerken','Afwerken'];
+  const catalog=[recipe(recipeId,1)]; let state=stateFor(catalog);
+  assert.deepEqual(JSON.parse(JSON.stringify(planning.productionRoute(state.items[0]).steps)),expected);
+  let previous;
+  expected.forEach((operation,index)=>{
+   const id='gateau:'+index;
+   state=recipes.buildRecipePlan(state,catalog,command(id,recipeId,300,operation,previous?[{taskId:previous,quantity:300}]:[]));
+   assert.equal(task(state,id).recordsOutput,index===expected.length-1);
+   if(previous)assert.throws(()=>finish(state,id),/Wacht op/);
+   // The preceding step is finished before starting the next production.
+   if(previous)state=finish(state,previous);
+   previous=id;
+  });
+  state=finish(state,previous);
+  assert.equal(state.tasks.filter(t=>t.recordsOutput&&t.status==='done').reduce((n,t)=>n+t.completedQuantity,0),300);
+  assert(planning.validProductionStages(state));
+ }
+});

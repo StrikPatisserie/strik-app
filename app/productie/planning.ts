@@ -416,7 +416,7 @@ export function validProductionRequests(value:unknown):value is ProductionReques
  * their sequence when a recipe is edited. */
 export const PRODUCTION_STEP_OPTIONS = [
   "Deeg zetten", "Beslag maken", "Produceren", "Interieur maken",
-  "Interieur vullen", "Storten", "Spuiten", "Bakken", "Afbakken",
+  "Interieur vullen", "Storten", "Spuiten", "Opspuiten", "Opspuiten & aanzetten", "Doorhalen en afwerken", "Bakken", "Afbakken",
   "Lossen", "Plakken", "Doorhalen", "Afwerken", "Product maken & afbakken",
 ] as const;
 export function validProductionSteps(value: unknown): value is string[] {
@@ -436,6 +436,11 @@ export type ProductionRoute = { steps: readonly string[]; stockStep: number; uni
 export function defaultProductionSteps(item: RouteItem): string[] | undefined {
   const route = PRODUCTION_ROUTES.find(route => route.recipeId === item.recipeId);
   if (route) return [...route.steps];
+  if (["gateau-mango", "gateau-choco", "gateau-framboos"].includes(item.recipeId || "")) {
+    return ["Opspuiten", "Doorhalen en afwerken", "Afwerken"];
+  }
+  if (item.recipeId === "gateau-yoghurt-framboos") return ["Opspuiten & aanzetten", "Doorhalen en afwerken", "Afwerken"];
+  if (["gateau-lemon", "gateau-hazelnoot"].includes(item.recipeId || "")) return ["Opspuiten", "Afwerken"];
   const name = (item.name || "").trim().toLocaleLowerCase("nl-NL");
   if (/^(?:gevuld(?:e)? speculaas|speculaas(?:brok|plak|jes|koek|pop|staaf| amandel bites))/.test(name)) {
     return ["Deeg zetten", "Product maken & afbakken"];
