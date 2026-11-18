@@ -4,10 +4,11 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const ts = require('typescript');
 const jsx = require('react/jsx-runtime');
+const { renderToStaticMarkup } = require('react-dom/server');
 
 function load(file, imports, globals = {}) {
   const exports = {};
-  const source = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+  const source = ts.transpileModule(fs.readFileSync(file, 'utf8') + (file.endsWith('HolidayProduction.tsx') ? '\nexport { HolidayProductionTotals };' : ''), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true },
   }).outputText;
   vm.runInNewContext(source, {
@@ -19,9 +20,23 @@ function load(file, imports, globals = {}) {
 }
 
 const planning = load('app/productie/planning.ts', {});
+const folder = load('app/lib/businessFolderOrderText.ts', {});
+const seasons = load('app/lib/businessSeasons.ts', {});
+const deliveries = load('app/lib/businessOrderDeliveries.ts', { './businessSeasons': seasons });
+const lines = load('app/sinterklaas/b2bLetterLines.ts', {});
+const combinations = load('app/sinterklaas/b2bCombinationLetters.ts', { '../lib/businessFolderOrderText': folder, './b2bLetterLines': lines });
+const productionTotals = load('app/sinterklaas/b2b/productionTotals.ts', {
+  '../../lib/businessFolderOrderText': folder, '../../lib/businessOrderDeliveries': deliveries,
+  '../../lib/businessSeasons': seasons, '../b2bCombinationLetters': combinations,
+});
+const totalFixture = { products: [{ key: 'brok', product: 'Speculaasbrok zonder amandel', quantity: 32, unit: 'stuks', allocations: [
+  { orderId: 'single', customer: 'Klant A', quantity: 20, date: '2026-11-23', end: '2026-11-23' },
+  { orderId: 'mixed', customer: 'Klant B', quantity: 12, date: '2026-11-23', end: '2026-11-25' },
+] }], orderCount: 2, skippedLetters: 10, issues: [] };
+
 const baseOrder = {
   id: 'single', name: 'Klant A', season: 'sint', date: '2026-11-23', dateEnd: '2026-11-23',
-  productionDate: '2026-11-20', department: 'bakkerij', products: '20× Speculaasbrok zonder amandel',
+  productionDate: '2026-11-20', department: 'bakkerij', products: '20× Speculaasbrok zonder amandel\n5× Kruidcake',
   letters: [], packaging: 'Per stuk in een doosje', instructions: 'Rood lint en apart klaarzetten', logo: '',
   productionDone: false, letterProductionDone: false, hasLetters: false, delivered: false, version: 'version-single',
 };
@@ -60,7 +75,7 @@ function checkboxes(tree) {
 function harness() {
   const slots = [], effects = [], calls = [], posts = [], timers = new Set();
   let cursor = 0, pending = [], sequence = 0;
-  let source = { orders: structuredClone(orders), batches: [], updatedAt: '2026-11-05T08:00:00Z', unplannedCount: 0 };
+  let source = { orders: structuredClone(orders), productionTotals: structuredClone(totalFixture), batches: [], updatedAt: '2026-11-05T08:00:00Z', unplannedCount: 0 };
   const sameDeps = (first, second) => first?.length === second?.length && first.every((value, index) => Object.is(value, second[index]));
   const react = {
     useState(initial) {
@@ -90,6 +105,7 @@ function harness() {
   const component = load('app/productie/HolidayProduction.tsx', {
     react, 'react/jsx-runtime': jsx, 'next/link': 'a', './planning': planning,
     './ProductionIcon': { __esModule: true, default: () => null },
+    '../sinterklaas/b2b/productionTotals': productionTotals,
     '../sinterklaas/b2b/B2BProductText': { __esModule: true, default: productText },
     '../preview/productie/production.module.css': { __esModule: true, default: new Proxy({}, { get: (_, key) => key }) },
   }, {
@@ -121,21 +137,22 @@ function harness() {
   };
 }
 
-test('the compact holiday table keeps delivery, customer and products in four aligned columns with secondary information collapsed', async () => {
+test('the compact holiday table keeps delivery, customer and products in three aligned columns with secondary information collapsed', async () => {
   const h = harness(); h.render(); await h.flush();
   const tree = h.render();
   assert.equal(h.calls[0].url, '/api/productie/feestdagen?season=sint&year=2026');
   assert.equal(h.calls[0].options.cache, 'no-store');
   const table = find(tree, node => node.type === 'table' && node.props['aria-label'] === 'B2B-productie');
-  assert.deepEqual(nodes(table).filter(node => node.type === 'th' && node.props.scope === 'col').map(text), ['Leverdatum', 'Klant', 'Bestelling', 'Klaar']);
+  assert.deepEqual(nodes(table).filter(node => node.type === 'th' && node.props.scope === 'col').map(text), ['Levering / klant', 'Bestelling', 'Klaar']);
   const row = orderRow(table, 'single');
   assert.equal(row.props['aria-label'], 'Klant A');
   const cells = nodes(row).filter(node => node.type === 'td' || node.type === 'th');
-  assert.equal(cells.length, 4);
+  assert.equal(cells.length, 3);
   assert(text(cells[0]).includes(planning.dateLabel(baseOrder.date, true)));
-  assert(text(cells[1]).includes('Klant A'));
-  assert.equal(find(cells[2], node => node.type === h.productText).props.text, baseOrder.products);
-  const details = find(cells[2], node => node.type === 'details' && text(find(node, child => child.type === 'summary')) === 'Details');
+  assert(text(cells[0]).includes('Klant A'));
+  assert.deepEqual(nodes(cells[1]).filter(node => node.type === h.productText).map(node => node.props.text), baseOrder.products.split('\n'));
+  assert.equal(nodes(cells[1]).filter(node => node.type === 'li').length, 2);
+  const details = find(cells[1], node => node.type === 'details' && text(find(node, child => child.type === 'summary')) === 'Details');
   assert(!details.props.open);
   assert(text(details).includes(baseOrder.packaging));
   assert(text(details).includes(baseOrder.instructions));
@@ -147,9 +164,9 @@ test('the compact holiday table keeps delivery, customer and products in four al
     if (Array.isArray(node)) return node.map(visibleText).join('');
     return node?.props ? visibleText(node.props.children) : '';
   };
-  assert(!visibleText(cells[2]).includes(baseOrder.packaging));
-  assert(!visibleText(cells[2]).includes(baseOrder.instructions));
-  assert(visibleText(cells[2]).includes(baseOrder.products));
+  assert(!visibleText(cells[1]).includes(baseOrder.packaging));
+  assert(!visibleText(cells[1]).includes(baseOrder.instructions));
+  for (const line of baseOrder.products.split('\n')) assert(visibleText(cells[1]).includes(line));
   h.unmount();
 });
 
@@ -200,4 +217,42 @@ test('single and mixed progress controls retain the narrow versioned write contr
   assert(checkboxes(orderRow(tree, 'mixed')).every(node => node.props.checked));
   assert(checkboxes(orderRow(tree, 'delivered')).every(node => node.props.disabled));
   h.unmount();
+});
+
+test('the opteller opens the canonical product totals independently of the list filters, and closes without saving', async () => {
+  const h = harness(); h.render(); await h.flush();
+  let tree = h.render();
+  const button = find(tree, node => node.type === 'button' && node.props['aria-label'] === 'Producten optellen');
+  assert.equal(button.props.disabled, false);
+  find(tree, node => node.type === 'input' && node.props.type === 'search').props.onChange({ target: { value: 'geleverd' } });
+  tree = h.render();
+  assert.equal(nodes(tree).filter(node => node.type === 'tr' && node.props['aria-label']).length, 1);
+  button.props.onClick(); tree = h.render();
+  const modal = find(tree, node => typeof node.type === 'function' && node.type.name === 'HolidayProductionTotals');
+  assert.deepEqual(JSON.parse(JSON.stringify(modal.props.totals)), totalFixture);
+  assert.equal(modal.props.year, '2026');
+  modal.props.onClose(); tree = h.render();
+  assert(!nodes(tree).some(node => typeof node.type === 'function' && node.type.name === 'HolidayProductionTotals'));
+  assert.equal(h.posts.length, 0);
+  h.unmount();
+});
+
+test('the opteller shows expandable quantities with customer and date and provides a copy action', () => {
+  const module = load('app/productie/HolidayProduction.tsx', {
+    react: require('react'), 'react/jsx-runtime': jsx, 'next/link': 'a', './planning': planning,
+    './ProductionIcon': { __esModule: true, default: () => null },
+    '../sinterklaas/b2b/productionTotals': productionTotals,
+    '../sinterklaas/b2b/B2BProductText': { __esModule: true, default: () => null },
+    '../preview/productie/production.module.css': { __esModule: true, default: new Proxy({}, { get: (_, key) => key }) },
+  });
+  const markup = renderToStaticMarkup(require('react').createElement(module.HolidayProductionTotals, { totals: totalFixture, season: 'sint', year: '2026', onClose() {} }));
+  assert.match(markup, /aria-label="Productie opteller"/);
+  assert.match(markup, /<details/);
+  assert.match(markup, /32 <small>stuks/);
+  assert.match(markup, /20×/);
+  assert.match(markup, /Klant A/);
+  assert.match(markup, /23 nov t\/m 25 nov/);
+  assert.match(markup, /Klant B/);
+  assert.match(markup, /Kopieer lijst/);
+  assert.match(markup, /Losse chocoladeletters staan in de letterplanning/);
 });

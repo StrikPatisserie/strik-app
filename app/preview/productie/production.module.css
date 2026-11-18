@@ -403,9 +403,8 @@
 .holidayTools { display:flex; align-items:center; gap:6px; margin-left:auto; }
 .holidayOrders { border:1px solid #c5d1bf; border-radius:6px; overflow:hidden; background:#fff; }
 .holidayOrderTable { width:100%; border-collapse:collapse; table-layout:fixed; text-align:left; }
-.holidayDateColumn { width:125px; }
-.holidayCustomerColumn { width:19%; }
-.holidayProgressColumn { width:90px; }
+.holidayDeliveryColumn { width:18%; }
+.holidayProgressColumn { width:76px; }
 .holidayOrderTable thead { background:#e5eddf; color:#4b6250; }
 .holidayOrderTable thead th { padding:7px 10px; font-size:10px; font-weight:600; border-bottom:1px solid #bdcbb7; }
 .holidayOrderTable tbody td,.holidayOrderTable tbody th { padding:8px 10px; vertical-align:top; border-bottom:1px solid #d6dfd0; }
@@ -413,8 +412,13 @@
 .holidayOrderTable tbody th { font-weight:700; }
 .holidayOrderTable tbody tr:nth-child(even) { background:#fafbf8; }
 .holidayOrderTable tbody tr.holidayDone { background:#edf3e8; color:#687563; }
-.holidayDate { font-size:11px; color:#5d715e; line-height:1.4; }
-.holidayCustomer { font-size:12px; line-height:1.4; overflow-wrap:break-word; }
+.holidayDelivery { border-right:1px solid #e2e8de; }
+.holidayDate { display:block; font-size:15px; color:#1b3344; font-weight:700; line-height:1.3; }
+.holidayCustomer { display:block; margin-top:4px; color:#5d715e; font-size:12px; font-weight:500; line-height:1.35; overflow-wrap:break-word; }
+.holidayOrderLines { list-style:none; margin:0; padding:0; }
+.holidayOrderLines > li { padding:3px 0; }
+.holidayOrderLines > li + li { border-top:1px solid #e9ede6; }
+.holidayOrderLines > li:first-child { padding-top:0; }
 .holidayProducts { font-size:12px; line-height:1.45; white-space:pre-wrap; overflow-wrap:break-word; }
 .holidayProducts button { min-height:24px; padding:3px; }
 .holidayOrderExtras { display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 14px; margin-top:3px; white-space:normal; }
@@ -440,11 +444,12 @@
  .holidayOrderTable,.holidayOrderTable tbody { display:block; }
  .holidayOrderTable colgroup { display:none; }
  .holidayOrderTable thead { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; }
- .holidayOrderTable tbody tr { display:grid; grid-template-columns:100px minmax(0,1fr) 75px; grid-template-areas:"date customer progress" "products products products"; gap:5px 10px; padding:9px 10px; border-bottom:1px solid #d6dfd0; }
+ .holidayOrderTable tbody tr { display:grid; grid-template-columns:minmax(0,1fr) 75px; grid-template-areas:"delivery progress" "products products"; gap:5px 10px; padding:9px 10px; border-bottom:1px solid #d6dfd0; }
  .holidayOrderTable tbody tr:last-child { border-bottom:0; }
  .holidayOrderTable tbody td,.holidayOrderTable tbody th { padding:0; border:0; }
- .holidayDate { grid-area:date; font-size:10px; }
- .holidayCustomer { grid-area:customer; font-size:12px; }
+ .holidayDelivery { grid-area:delivery; }
+ .holidayDate { font-size:14px; }
+ .holidayCustomer { margin-top:2px; font-size:11px; }
  .holidayProducts { grid-area:products; }
  .holidayStatus { grid-area:progress; }
  .holidayProgress label { min-height:28px; }
@@ -456,7 +461,7 @@
  .holidayToolbar .secondaryButton { font-size:10px !important; padding:6px 8px; }
  .holidayBatch > summary { font-size:11px; }
 }
-@media(max-width:450px) { .holidayOrderTable tbody tr { grid-template-columns:85px minmax(0,1fr) 65px; gap:5px 8px; }.holidayTools { margin-left:0; }.holidayTabs { flex:1; } }
+@media(max-width:450px) { .holidayOrderTable tbody tr { grid-template-columns:minmax(0,1fr) 65px; gap:5px 8px; }.holidayTools { margin-left:0; }.holidayTabs { flex:1; } }
 
 
 .staffing { min-width:0; margin-bottom:12px; }.staffPeek { display:flex; align-items:center; flex-wrap:wrap; gap:10px; font-size:11px; margin-bottom:9px; }.staffPeek > span { color:#9c6533; font-size:10px; }.staffPeek .secondaryButton { min-height:32px; padding:6px 10px; font-size:11px !important; }
@@ -1468,3 +1473,26 @@
 .repeatReview h3 { margin: 0 0 12px; }
 .repeatReview p { margin: 0 0 12px; }
 .bakeryOperation { font-size: 11px; font-weight: 700; color: inherit; }
+
+.holidayOptellerHeader { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; padding-bottom:14px; border-bottom:1px solid #c5d1bf; }
+.holidayOptellerHeader h2 { margin:0; }
+.holidayOptellerHeader p { margin:5px 0 0; color:#5d715e; font-size:12px; }
+.holidayOptellerHeader button { flex-shrink:0; min-width:36px; }
+.holidayOptellerBody { max-height:65dvh; overflow-y:auto; overscroll-behavior:contain; padding:2px 0; }
+.holidayProductTotal { border-bottom:1px solid #d6dfd0; }
+.holidayProductTotal > summary { display:flex; align-items:center; gap:10px; padding:14px 2px; cursor:pointer; list-style:none; font-size:14px; }
+.holidayProductTotal > summary::-webkit-details-marker { display:none; }
+.holidayProductTotal > summary > span { flex:1; min-width:0; }
+.holidayProductTotal > summary > strong { white-space:nowrap; font-size:20px; }
+.holidayProductTotal > summary small { font-size:11px; font-weight:500; color:#5d715e; }
+.holidayProductTotal > summary svg { flex-shrink:0; transition:transform .15s; }
+.holidayProductTotal[open] > summary svg { transform:rotate(90deg); }
+.holidayProductTotal ul { list-style:none; margin:0 0 12px; padding:0; border-left:3px solid #c3d3bc; }
+.holidayProductTotal li { display:grid; grid-template-columns:65px minmax(105px,.8fr) minmax(0,1.2fr); align-items:baseline; gap:6px 12px; padding:7px 12px; font-size:12px; }
+.holidayProductTotal li + li { border-top:1px solid #edf0e9; }
+.holidayProductTotal li > :nth-child(2) { color:#5d715e; }
+.holidayTotalIssues { margin:14px 0; font-size:12px; }
+.holidayTotalIssues summary { display:flex; align-items:center; gap:6px; cursor:pointer; color:#985423; }
+.holidayOptellerFooter { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; padding-top:12px; color:#5d715e; font-size:12px; }
+@media(max-width:450px) { .holidayProductTotal li { grid-template-columns:48px minmax(0,1fr); gap:3px 8px; }.holidayProductTotal li > :last-child { grid-column:2; }.holidayProductTotal > summary { font-size:13px; } }
+@media(prefers-reduced-motion:reduce) { .holidayProductTotal > summary svg { transition:none; } }

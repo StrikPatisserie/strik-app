@@ -3,6 +3,8 @@ import { editableFolderOrderText } from "../lib/businessFolderOrderText";
 import { businessDeliveryWindow } from "../lib/businessOrderDeliveries";
 import { b2bLetterHasLogo } from "../sinterklaas/b2bLetterLines";
 import type { SinterklaasB2BOrder } from "../sinterklaas/types";
+import { buildProductionTotals } from "../sinterklaas/b2b/productionTotals";
+import type { BusinessSeason } from "../lib/businessSeasons";
 export const PRODUCTION_HOLIDAYS=[{id:"sint",name:"Sinterklaas"},{id:"kerst",name:"Kerst"}] as const;
 export type HolidayOrder={id:string;name:string;season:string;date:string;dateEnd:string;productionDate:string;letterProductionDate?:string;letterProductionEnd?:string;department:string;products:string;letters:string[];packaging:string;instructions:string;logo:string;productionDone:boolean;letterProductionDone:boolean;hasLetters:boolean;delivered:boolean;version:string};
 export function productionOrderText(value:string){
@@ -45,3 +47,9 @@ export function holidayOrder(order:SinterklaasB2BOrder):HolidayOrder{
  return {...projection,version:createHash("sha256").update(JSON.stringify([order.updatedAt,projection])).digest("hex")};
 }
 export function productionHolidayOrders(orders:SinterklaasB2BOrder[],season:string){return orders.filter(o=>o.status==="akkoord"&&!o.cancelled && (o.season===season || o.season==="sint-kerst")).map(holidayOrder).sort((a,b)=>(a.productionDate || a.date || "9999").localeCompare(b.productionDate || b.date || "9999") || a.name.localeCompare(b.name,"nl-NL"));}
+
+/** Reuse the B2B opteller, exposing only operational quantities and recipients. */
+export function productionHolidayTotals(orders:SinterklaasB2BOrder[],season:BusinessSeason,year:string){
+ const totals=buildProductionTotals(orders,season,year);
+ return {...totals,products:totals.products.map(group=>({...group,key:createHash("sha256").update(group.key).digest("hex"),product:productionOrderText(group.product)}))};
+}

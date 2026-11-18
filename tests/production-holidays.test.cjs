@@ -4,7 +4,9 @@ function load(file,imports={},globals={}){const exports={};vm.runInNewContext(ts
 const access=load('app/lib/auth/access.ts'),planning=load('app/productie/planning.ts'),rights=load('app/productie/access.ts',{'../lib/auth/access':access,'./planning':planning});
 const seasons=load('app/lib/businessSeasons.ts'),deliveries=load('app/lib/businessOrderDeliveries.ts',{'./businessSeasons':seasons}),folder=load('app/lib/businessFolderOrderText.ts'),lines=load('app/sinterklaas/b2bLetterLines.ts');
 const normalizers=load('app/sinterklaas/sinterklaasApi.ts',{'./b2bLetterLines':lines});
-const projection=load('app/productie/holidayPlanning.ts',{'node:crypto':crypto,'../lib/businessFolderOrderText':folder,'../lib/businessOrderDeliveries':deliveries,'../sinterklaas/b2bLetterLines':lines});
+const combinations=load('app/sinterklaas/b2bCombinationLetters.ts',{'../lib/businessFolderOrderText':folder,'./b2bLetterLines':lines});
+const productionTotals=load('app/sinterklaas/b2b/productionTotals.ts',{'../../lib/businessFolderOrderText':folder,'../../lib/businessOrderDeliveries':deliveries,'../../lib/businessSeasons':seasons,'../b2bCombinationLetters':combinations});
+const projection=load('app/productie/holidayPlanning.ts',{'node:crypto':crypto,'../lib/businessFolderOrderText':folder,'../lib/businessOrderDeliveries':deliveries,'../sinterklaas/b2bLetterLines':lines,'../sinterklaas/b2b/productionTotals':productionTotals});
 const manager={id:'m',active:true,role:'manager',permissions:{}},baker={id:'b',active:true,role:'bakkerij',permissions:{'bakkerij.patisserie':true}};
 function order(input={}){return normalizers.normalizeB2BOrder({id:'order-1',year:'2026',season:'sint',customerName:'Fictief bedrijf',status:'akkoord',department:'beide',deliveryWindowType:'range',deliveryDate:'2026-11-23',deliveryDateEnd:'2026-11-27',productionDate:'2026-11-20',orderText:'PRODUCTEN EN PRIJS\n25 × Spuitletter · € 12,20 p.s. ex btw\nFactuur: secret-invoice\nTotaal € 305',letterLines:[{id:'letter-1',letter:'A',quantity:25,chocolate:'puur',style:'spuit',size:'groot',withLogo:true,exceptions:['vegan']}],customerEmail:'private@invalid.example',contactName:'private-person',phone:'private-phone',invoiceInfo:'private-invoice',priceAgreement:'private-price',logo:'https://images.invalid/logo.png',updatedAt:'2026-10-28T09:00:00Z',...input});}
 function batch(){return{id:'round-1',date:'2026-11-20',startDate:'2026-11-19',status:'closed',rows:[{key:'A',label:'A puur groot',orders:25,stock:5,produced:10,recipients:[{customerName:'Fictief bedrijf',quantity:25,notes:'private-recipient-note',code:'private-code'}]}],checklist:{revision:2,planVersion:'private-raw-plan-version',changes:[{key:'A',label:'A puur groot',before:20,after:25,detail:'private-detail'}]}};}
@@ -129,4 +131,20 @@ test('the original B2B overview refreshes shared progress and discards in-flight
  let complete;delayed=new Promise(resolve=>{complete=resolve;});[...timers][0]();await flush();nodes(tree).find(n=>n.type==='button' && text(n)==='+ Nieuwe bestelling').props.onClick();tree=render();assert.equal(timers.size,0);
  complete([order({productionDone:false})]);await flush();tree=render();const editor=nodes(tree).find(n=>n.props?.onSaved && n.props?.onClose);assert(editor);editor.props.onClose();tree=render();assert.equal(row().props.order.productionDone,true);assert.equal(timers.size,1);
  assert.equal(listeners.has('focus'),true);
+});
+
+test('the holiday opteller reuses canonical B2B totals, excludes completed orders and exposes no commercial data',async()=>{
+ const text='PRODUCTEN EN PRIJS\n30 × Speculaasbrok met letter · Speculaasbrok zonder amandel · kleine spuitletter · letter S · € 10,00 p.s. ex btw · € 300,00';
+ const values=[order({id:'later',customerName:'Klant B',deliveryWindowType:'date',deliveryDate:'2026-12-02',letterLines:[],orderText:text.replace('30 ×','70 ×')}),order({id:'first',customerName:'Klant A',deliveryWindowType:'date',deliveryDate:'2026-12-01',letterLines:[],orderText:text}),order({id:'made',productionDone:true,orderText:text}),order({id:'delivered',delivered:true,orderText:text}),order({id:'packed',packed:true,orderText:text})];
+ const before=JSON.stringify(values),a=api(baker,{orders:values});
+ const response=await a.route.GET(new Request('https://test.invalid?season=sint&year=2026')),data=await response.json();
+ assert.equal(response.status,200);assert.equal(data.productionTotals.products.length,1);
+ const group=data.productionTotals.products[0];assert.equal(group.product,'Speculaasbrok · zonder amandel');assert.equal(group.quantity,100);
+ assert.deepEqual(group.allocations.map(item=>[item.quantity,item.customer,item.date]),[[30,'Klant A','2026-12-01'],[70,'Klant B','2026-12-02']]);
+ assert.match(group.key,/^[a-f0-9]{64}$/);assert.equal(data.productionTotals.orderCount,2);
+ for(const privateValue of ['€','10,00','300,00','private@','private-price','private-invoice'])assert(!JSON.stringify(data.productionTotals).includes(privateValue),privateValue);
+ assert.equal(JSON.stringify(values),before);assert.equal(a.writes.length+a.letterWrites.length,0);
+ const first=values.find(o=>o.id==='first');
+ const saved=await a.route.POST(req({id:first.id,field:'productionDone',done:true,version:projection.holidayOrder(first).version}));assert.equal(saved.status,200);
+ const refreshed=await(await a.route.GET(new Request('https://test.invalid?season=sint&year=2026'))).json();assert.equal(refreshed.productionTotals.products[0].quantity,70);
 });
