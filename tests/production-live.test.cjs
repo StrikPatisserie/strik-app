@@ -137,11 +137,20 @@ test('production resource routes enforce management and HACCP department access 
   const auth={'@/app/lib/auth/session':{requireCurrentProfile:async()=>who}};
   const data=load('app/bakkerij/productie/beheer/[section]/page.tsx',{
    ...common,...auth,'@/app/productie/navigation':nav,'@/app/bakkerij/recepturen/RecepturenApp':{default:'recipe-editor'},
+   '@/app/bakkerij/allergenen/AllergenenClient':{default:'customer-allergen-lists'},
   });
   const open=()=>data.default({params:Promise.resolve({section:'verpakkingen'})});
   if(who===manager)assert.equal((await open()).props.canManage,true);
   else await assert.rejects(open(),/not-found/);
-  for(const section of ['marge','factuurimport','import']){const openSection=()=>data.default({params:Promise.resolve({section})});if(who===manager)assert.equal((await openSection()).props.canManage,true);else await assert.rejects(openSection(),/not-found/);}
+  for(const section of ['marge','factuurimport','import','allergenen']){const openSection=()=>data.default({params:Promise.resolve({section})});if(who===manager)assert.equal((await openSection()).props.canManage,true);else await assert.rejects(openSection(),/not-found/);}
+  if(who===manager){
+   const page=await data.default({params:Promise.resolve({section:'allergenen'})});
+   const [tabs,content]=page.props.children;
+   assert.equal(content.type,'customer-allergen-lists');assert.equal(content.props.embedded,true);
+   assert(tabs.props.children.some(link=>link.props.href==='/bakkerij/productie/beheer/allergenen'&&link.props['aria-current']==='page'));
+   const recipes=await data.default({params:Promise.resolve({section:'recepten'})});
+   assert.equal(recipes.props.children[1].props.children.type,'recipe-editor');
+  }
   const haccp=load('app/bakkerij/productie/haccp/[department]/layout.tsx',{...common,...auth});
   const own=who===ice?'ijs':'bakkerij';
   const page=await haccp.default({params:Promise.resolve({department:own}),children:'registration'});
