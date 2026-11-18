@@ -157,10 +157,12 @@ export function reviseProductionAllocations(rows: ProductionSeedRow[], supplemen
       });
       if (remaining > 0) allocations[0].push({ ...recipient, quantity: remaining });
     }
-    let unknown = Math.max(0, (live?.orders || 0) - (live?.recipients || []).reduce((sum, item) => sum + item.quantity, 0));
+    // Store stock is separate demand, never an unattributed customer order.
+    const customerQuantity = (recipients: ProductionRecipient[]) => recipients.filter(item => item.source !== "voorraad").reduce((sum, item) => sum + item.quantity, 0);
+    let unknown = Math.max(0, (live?.orders || 0) - customerQuantity(live?.recipients || []));
     old.forEach((row, index) => {
-      const known = allocations[index].reduce((sum, item) => sum + item.quantity, 0);
-      const capacity = Math.max(0, (row?.orders || 0) - (row?.recipients || []).reduce((sum, item) => sum + item.quantity, 0));
+      const known = customerQuantity(allocations[index]);
+      const capacity = Math.max(0, (row?.orders || 0) - customerQuantity(row?.recipients || []));
       const unknownHere = index === 0 ? 0 : Math.min(unknown, capacity);
       unknown -= unknownHere;
       const orders = known + unknownHere;

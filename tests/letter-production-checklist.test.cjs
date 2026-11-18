@@ -601,3 +601,32 @@ test('shop and supplementary recipients keep their frozen production round', () 
  const result=helper.combineProductionOrders([old,newer],[{...order,status:'opgehaald',productionDone:true}],[],[],history);
  assert.equal(result.batches[0].rows[0].orders,3); assert.equal(result.batches[1].rows.length,0);
 });
+
+
+test('revising extra production counts shop stock once, alongside customer orders',()=>{
+ const stock=recipient('stock:ZIEK',4,{source:'voorraad',customerName:'Winkelvoorraad'});
+ const original=[customerRow([recipient('A',10),stock],{orders:10,stock:4,orderSources:{b2b:10},produced:9})];
+ const extra={...extraDetails(),name:'Aanvulling 1',planRevision:1,rows:[customerRow([recipient('B',3)],{produced:2})]};
+ const current=[customerRow([recipient('A',10),recipient('B',3),stock],{orders:13,stock:4,orderSources:{b2b:13}})];
+ const revised=supplements.reviseProductionAllocations(original,[extra],current);
+ assert.equal(revised.rows[0].orders,10);assert.equal(revised.rows[0].stock,4);assert.equal(revised.rows[0].produced,9);
+ assert.deepEqual(plain(revised.rows[0].orderSources),{b2b:10});
+ assert.equal(revised.supplements[0].rows[0].orders,3);assert.equal(revised.supplements[0].rows[0].produced,2);
+ const combined=supplements.combinedProductionRows(revised.rows,revised.supplements);
+ assert.equal(combined[0].orders+combined[0].stock,17);
+ assert.equal(helper.productionChanges(combined,current).length,0);
+ const twice=supplements.reviseProductionAllocations(revised.rows,revised.supplements,current);
+ assert.deepEqual(plain(twice.rows),plain(revised.rows),'repeated review never duplicates shop stock');
+});
+
+test('stock recipients do not hide genuinely unattributed customer quantities',()=>{
+ const stock=recipient('stock:LENT',5,{source:'voorraad',customerName:'Winkelvoorraad'});
+ const original=[customerRow([recipient('A',10),stock],{orders:13,stock:5,orderSources:{b2b:10,onbekend:3},produced:8})];
+ const extra={...extraDetails(),name:'Aanvulling 1',planRevision:1,rows:[customerRow([recipient('B',2)])]};
+ const current=[customerRow([recipient('A',10),recipient('B',2),stock],{orders:15,stock:5,orderSources:{b2b:12,onbekend:3}})];
+ const revised=supplements.reviseProductionAllocations(original,[extra],current);
+ const combined=supplements.combinedProductionRows(revised.rows,revised.supplements);
+ assert.equal(combined[0].orders,15);assert.equal(combined[0].stock,5);assert.equal(combined[0].produced,8);
+ assert.equal(combined[0].orderSources.onbekend,3);
+ assert.equal(helper.productionChanges(combined,current).length,0);
+});
