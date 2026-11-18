@@ -1,7 +1,7 @@
 import { productionChanges, productionPlanVersion, reviseProductionRows } from "./productionChecklist";
 import { aggregateProductionRows, productionRecipientVersion, type ProductionRecipient, type ProductionSeedRow } from "./productionSources";
 
-export type ProductionSupplement = {
+type ProductionSupplementRecord = {
   id: string;
   name: string;
   date: string;
@@ -10,6 +10,11 @@ export type ProductionSupplement = {
   createdBy: string | null;
   createdByName: string;
   planRevision: number;
+};
+
+export type ProductionSupplement = ProductionSupplementRecord & {
+  // Original lists remain traceable after merging. These snapshots never add to demand.
+  mergedLists?: ProductionSupplementRecord[];
 };
 
 export type ProductionCustomerChange = {
@@ -41,6 +46,26 @@ export function combinedProductionRows(rows: ProductionSeedRow[], supplements: P
   });
 }
 
+// One extra run per date within the original production round. Keep the first
+// identifier so its checklist/print links remain stable, and sum actual production.
+export function mergeProductionSupplementsByDate(supplements: ProductionSupplement[]) {
+  const byDate = new Map<string, ProductionSupplement>();
+  const originalLists = (item: ProductionSupplement): ProductionSupplementRecord[] => {
+    if (item.mergedLists) return item.mergedLists;
+    return [{ id: item.id, name: item.name, date: item.date, rows: item.rows, createdAt: item.createdAt, createdBy: item.createdBy, createdByName: item.createdByName, planRevision: item.planRevision }];
+  };
+  for (const item of supplements) {
+    const existing = byDate.get(item.date);
+    byDate.set(item.date, existing ? {
+      ...existing,
+      rows: combinedProductionRows([...existing.rows, ...item.rows]),
+      planRevision: Math.max(existing.planRevision, item.planRevision) + 1,
+      mergedLists: [...originalLists(existing), ...originalLists(item)],
+    } : item);
+  }
+  return [...byDate.values()];
+}
+
 export function productionCustomerChanges(saved: ProductionSeedRow[], current: ProductionSeedRow[]) {
   const groups = new Map<string, ProductionCustomerChange>();
   const oldRows = new Map(saved.map(row => [row.key, row]));
@@ -68,7 +93,7 @@ export function productionCustomerChanges(saved: ProductionSeedRow[], current: P
 }
 
 export function productionChecklistView(list: { rows: ProductionSeedRow[]; supplements?: ProductionSupplement[]; revision: number; plan_revision: number; locked_at: string | null; updated_at: string }, current: ProductionSeedRow[]) {
-  const supplements = list.supplements || [];
+  const supplements = mergeProductionSupplementsByDate(list.supplements || []);
   const combined = combinedProductionRows(list.rows, supplements);
   return {
     revision: list.revision, planRevision: list.plan_revision,

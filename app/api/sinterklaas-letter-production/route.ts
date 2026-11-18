@@ -7,7 +7,7 @@ import { createAdminClient } from "@/app/lib/supabase/admin";
 import { loadProductionWordPressOrders } from "@/app/sinterklaas/sinterklaasServerApi";
 import { loadCentralProduction } from "@/app/sinterklaas/letters/productie/productionData.server";
 import { combineProductionOrders, hydrateProductionRecipients, productionDeadlinePassed, productionPlanVersion, reviseProductionRows, setProductionQuantity } from "@/app/sinterklaas/letters/productie/productionChecklist";
-import { createProductionSupplement, productionChecklistView, reviseProductionAllocations, type ProductionSupplement } from "@/app/sinterklaas/letters/productie/productionSupplements";
+import { createProductionSupplement, mergeProductionSupplementsByDate, productionChecklistView, reviseProductionAllocations, type ProductionSupplement } from "@/app/sinterklaas/letters/productie/productionSupplements";
 import type { ProductionSeedRow } from "@/app/sinterklaas/letters/productie/productionSources";
 
 export const runtime = "nodejs";
@@ -98,7 +98,7 @@ export async function POST(request: Request) {
       currentRows = batch.rows;
     }
     let rows = list?.locked_at ? list.rows : reviseProductionRows(list?.rows || [], currentRows!);
-    let supplements = list?.supplements || [];
+    let supplements = mergeProductionSupplementsByDate(list?.supplements || []);
     if (action === "quantity") {
       if (typeof key !== "string" || typeof quantity !== "number") return jsonError("Controleer het geproduceerde aantal.");
       if (data.supplementId !== undefined) {
@@ -115,7 +115,7 @@ export async function POST(request: Request) {
           id: randomUUID(), date: data.date, createdAt: new Date().toISOString(),
           createdBy: profile?.id || null, createdByName: profile?.full_name || "",
         });
-        supplements = [...supplements, supplement];
+        supplements = mergeProductionSupplementsByDate([...supplements, supplement]);
       } else {
         const revised = reviseProductionAllocations(rows, supplements, currentRows!);
         rows = revised.rows;

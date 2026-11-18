@@ -1635,7 +1635,7 @@ export default function ProductionPlanningClient({
       }
       const list = result.list;
       setLiveBatches(current => current?.map(item => item.id === (batch.parentBatchId || batch.id) ? {...item, rows: list.rows, checklist: result.checklist || {revision: list.revision, planRevision: list.plan_revision, lockedAt: list.locked_at, planVersion: item.checklist?.lockedAt ? item.checklist.planVersion : productionPlanVersion(list.rows), updatedAt: list.updated_at, supplements: list.supplements || [], changes: item.checklist?.changes || [], orderChanges: item.checklist?.orderChanges || []}} : item) || null);
-      setProductionNotice(action === "supplement" ? "Aanvullende productielijst opgeslagen. Je kunt deze apart printen en afvinken." : action === "revise" ? "Nieuwe versie opgeslagen. Print de bijgewerkte productielijst voor de bakkers." : "Productievoortgang opgeslagen.");
+      setProductionNotice(action === "supplement" ? "Extra productiedag opgeslagen. Letters op dezelfde datum staan samen op één lijst. Print de bijgewerkte lijst opnieuw." : action === "revise" ? "Nieuwe versie opgeslagen. Print de bijgewerkte productielijst voor de bakkers." : "Productievoortgang opgeslagen.");
       return true;
     } catch (error) {
       setProductionNotice(error instanceof Error ? error.message : "Opslaan is mislukt.");

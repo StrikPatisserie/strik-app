@@ -22,6 +22,7 @@ export default function ProductionChangesDialog({ batch, saving, notice, onClose
   const dialog = useRef<HTMLDialogElement>(null);
   const groups = batch.checklist?.orderChanges || [];
   const extra = groups.filter(item => selected.includes(item.id)).reduce((sum, item) => sum + item.extra, 0);
+  const existingExtra = batch.checklist?.supplements?.some(item => item.date === date);
   const today = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Amsterdam" }).format(new Date());
   useEffect(() => {
     const element = dialog.current;
@@ -44,7 +45,7 @@ export default function ProductionChangesDialog({ batch, saving, notice, onClose
         </section>)}
         {!groups.length && <ul className={styles.changeList}>{batch.checklist?.changes.map(change => <li key={change.key}><strong>{change.label}</strong><span>{change.before} → {change.after} · {change.detail}</span></li>)}</ul>}
       </div>
-      {groups.some(group => group.extra > 0) && <section className={styles.scheduleSupplement}><h3>Aanvullende productie inplannen</h3><p>Kies klanten hierboven en een productiedag.</p><div><label>Productiedag<input type="date" required min={today} max={`${batch.startDate.slice(0, 4)}-12-31`} value={date} disabled={saving} onChange={event => setDate(event.target.value)} /></label><button type="submit" className={styles.primary} disabled={saving || !extra || !date}>{saving ? "Opslaan…" : `${extra} extra letters inplannen`}</button></div></section>}
+      {groups.some(group => group.extra > 0) && <section className={styles.scheduleSupplement}><h3>Aanvullende productie inplannen</h3><p>{existingExtra ? `Deze letters komen bij de extra productiedag van ${dateLabel(date)}.` : "Kies klanten hierboven en een productiedag."}</p><div><label>Productiedag<input type="date" required min={today} max={`${batch.startDate.slice(0, 4)}-12-31`} value={date} disabled={saving} onChange={event => setDate(event.target.value)} /></label><button type="submit" className={styles.primary} disabled={saving || !extra || !date}>{saving ? "Opslaan…" : existingExtra ? `${extra} letters toevoegen` : `${extra} extra letters inplannen`}</button></div></section>}
       {notice && <p role="alert" className={styles.error}>{notice}</p>}
     </form>
     <details className={styles.reviseOption}><summary>Oorspronkelijke lijsten bijwerken</summary><p>Dit verwerkt ook verlagingen en vervallen bestellingen. Gemaakte aantallen blijven bewaard. Print daarna de gewijzigde lijsten opnieuw.</p><label><input type="checkbox" checked={confirmRevise} disabled={saving} onChange={event => setConfirmRevise(event.target.checked)} />Ik wil de bestaande lijsten vervangen.</label><button type="button" className={styles.button} disabled={saving || !confirmRevise} onClick={() => void onRevise()}>Bijgewerkte lijsten overnemen</button></details>

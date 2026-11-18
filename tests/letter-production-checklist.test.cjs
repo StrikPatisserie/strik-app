@@ -500,3 +500,69 @@ test('supplement API uses a revision guard and cannot schedule the same incremen
  const duplicate=await f.api.POST(f.request({...payload,revision:3,planVersion:updatedView.checklist.planVersion}));
  assert.equal(duplicate.status,400);assert.equal(f.saved.supplements.length,1);
 });
+
+
+test('same-date extra lists combine demand and actual production without mixing variants or other dates',()=>{
+ const first={...extraDetails(),name:'Aanvulling 1',planRevision:2,rows:[customerRow([recipient('A',4)],{produced:3}),customerRow([recipient('A',2)],{key:row().key+'|logo',label:row().label+' · logo',produced:1})]};
+ const second={...extraDetails({id:'extra-2'}),name:'Aanvulling 2',planRevision:1,rows:[customerRow([recipient('A',2),recipient('B',6)],{produced:4}),customerRow([recipient('B',3)],{key:row().key+'|decoratie:blauw',label:row().label+' · decoratie: blauw',produced:2})]};
+ const other={...extraDetails({id:'extra-3',date:'2099-11-21'}),name:'Aanvulling 3',planRevision:1,rows:[customerRow([recipient('C',5)])]};
+ const before=JSON.stringify([first,second,other]);
+ const merged=supplements.mergeProductionSupplementsByDate([first,second,other]);
+ assert.equal(merged.length,2);assert.equal(merged[0].id,first.id);assert.equal(merged[0].createdAt,first.createdAt);assert.equal(merged[0].planRevision,3);
+ assert.equal(merged[0].rows.length,3);assert.equal(merged[0].rows.reduce((sum,r)=>sum+r.orders,0),17);
+ const common=merged[0].rows.find(r=>r.key===row().key);
+ assert.equal(common.orders,12);assert.equal(common.produced,7);assert.equal(common.orderSources.b2b,12);
+ assert.deepEqual(plain(common.recipients.map(r=>[r.id,r.quantity])),[['A',6],['B',6]]);
+ assert.equal(merged[0].rows.find(r=>r.key.endsWith('|logo')).produced,1);
+ assert.equal(merged[0].rows.find(r=>r.key.endsWith('|decoratie:blauw')).produced,2);
+ assert.equal(merged[1],other);assert.equal(JSON.stringify([first,second,other]),before);
+ assert.deepEqual(plain(merged[0].mergedLists),plain([first,second]));
+ assert.deepEqual(plain(supplements.mergeProductionSupplementsByDate(merged)),plain(merged),'normalizing twice never doubles the quantities or history');
+ const third={...extraDetails({id:'extra-4'}),name:'Aanvulling 4',planRevision:1,rows:[customerRow([recipient('D',2)])]};
+ const again=supplements.mergeProductionSupplementsByDate([...merged,third]);
+ assert.equal(again[0].rows.find(r=>r.key===row().key).orders,14);assert.equal(again[0].rows.find(r=>r.key===row().key).produced,7);
+ assert.deepEqual(plain(again[0].mergedLists.map(item=>item.id)),['extra-1','extra-2','extra-4']);
+});
+
+test('legacy same-date lists are read as one run and quantity changes preserve the printed main round',async()=>{
+ const f=endpointFixture();
+ const original=[customerRow([recipient('A',10)],{produced:10})];
+ const first={...extraDetails(),name:'Aanvulling 1',planRevision:1,rows:[customerRow([recipient('B',4)],{produced:2})]};
+ const second={...extraDetails({id:'extra-2'}),name:'Aanvulling 2',planRevision:1,rows:[customerRow([recipient('C',6)],{produced:3})]};
+ f.setSaved({...f.saved,rows:original,supplements:[first,second]});
+ f.setCurrent(batch({rows:[customerRow([recipient('A',10),recipient('B',4),recipient('C',6)])],status:'IN_PRODUCTION'}));
+ const get=()=>f.api.GET(new Request('https://app.strik-patisserie.nl/api/sinterklaas-letter-production?season=2026'));
+ const view=(await (await get()).json()).batches[0];
+ assert.equal(view.checklist.supplements.length,1);assert.equal(view.checklist.supplements[0].rows[0].orders,10);assert.equal(view.checklist.supplements[0].rows[0].produced,5);
+ assert.equal(view.checklist.changes.length,0);assert.equal(view.checklist.orderChanges.length,0);
+ assert.equal(f.writes.length,0,'reading legacy duplicates does not rewrite production');assert.equal(f.saved.supplements.length,2);
+ const response=await f.api.POST(f.request({batchId:id,revision:1,action:'quantity',supplementId:first.id,key:row().key,quantity:8}));
+ assert.equal(response.status,200);assert.equal(f.saved.supplements.length,1);assert.equal(f.saved.supplements[0].rows[0].produced,8);assert.equal(f.saved.supplements[0].rows[0].orders,10);
+ assert.deepEqual(plain(f.saved.rows),plain(original));assert.equal(f.saved.plan_revision,1);
+ assert.equal((await f.api.POST(f.request({batchId:id,revision:1,action:'quantity',supplementId:first.id,key:row().key,quantity:9}))).status,409);
+});
+
+test('adding another customer on the same date reuses the extra list and retains already-made quantities',async()=>{
+ const f=endpointFixture();
+ const original=[customerRow([recipient('A',10)],{produced:10})];
+ f.setSaved({...f.saved,rows:original});f.setCurrent(batch({rows:original,status:'IN_PRODUCTION'}));
+ const order=(id,quantity)=>b2bLetterOrder({id,customerName:id,deliveryDate:'2099-12-03',letterLines:[{letter:'S',chocolate:'melk',size:'groot',style:'spuit',quantity,exceptions:[],withLogo:false}]});
+ const b=order('B',5),c=order('C',7);
+ f.setWordPressOrders({letters:[],b2b:[b]});
+ const get=async()=> (await (await f.api.GET(new Request('https://app.strik-patisserie.nl/api/sinterklaas-letter-production?season=2026'))).json()).batches[0];
+ const date=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Amsterdam'}).format(new Date());
+ let view=await get();
+ const first=await f.api.POST(f.request({batchId:id,revision:1,action:'supplement',planVersion:view.checklist.planVersion,date,customerIds:['b2b:b2b:B']}));
+ assert.equal(first.status,200,await first.clone().text());
+ const extraId=f.saved.supplements[0].id;
+ assert.equal((await f.api.POST(f.request({batchId:id,revision:2,action:'quantity',supplementId:extraId,key:row().key,quantity:3}))).status,200);
+ f.setWordPressOrders({letters:[],b2b:[b,c]});view=await get();
+ const addition={batchId:id,revision:3,action:'supplement',planVersion:view.checklist.planVersion,date,customerIds:['b2b:b2b:C']};
+ const added=await f.api.POST(f.request(addition));assert.equal(added.status,200,await added.clone().text());
+ assert.equal(f.saved.supplements.length,1);assert.equal(f.saved.supplements[0].id,extraId);assert.equal(f.saved.supplements[0].rows[0].orders,12);assert.equal(f.saved.supplements[0].rows[0].produced,3);
+ assert.deepEqual(plain(f.saved.rows),plain(original));assert.equal(f.saved.supplements[0].mergedLists.length,2);assert.equal(f.saved.plan_revision,1);
+ assert.equal((await f.api.POST(f.request(addition))).status,409);
+ view=await get();assert.equal(view.checklist.orderChanges.length,0);
+ const duplicate=await f.api.POST(f.request({...addition,revision:4,planVersion:view.checklist.planVersion}));
+ assert.equal(duplicate.status,400);assert.equal(f.saved.supplements[0].rows[0].orders,12);
+});
