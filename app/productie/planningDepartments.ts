@@ -1,6 +1,6 @@
 /** Canonical groups, including read compatibility for previously saved plans. */
 export function canonicalDepartmentId<T extends string>(id: T): T {
-  return (id === "luxe" ? "dessert" : id === "slagroom" ? "kapsel" : id) as T;
+  return (id === "slagroom" ? "kapsel" : id) as T;
 }
 export function normalizePlanningDepartments<T>(value: T): T {
   if (Array.isArray(value)) {

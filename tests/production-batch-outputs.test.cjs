@@ -38,14 +38,15 @@ test('soezen output corrections preserve prior audit and reject concurrent stale
  assert.equal(changed.completions.a.batchOutputs.bosscheBollen,930);assert.equal(done.completions.a.batchOutputs.bosscheBollen,920);assert.deepEqual(normal(changed.history.slice(0,-1)),before);
  assert.throws(()=>work.correctCompletedQuantity(changed,input,'correction-2','2026-11-19T10:01:00Z'),/intussen gewijzigd/);
 });
-test('merged departments preserve task identity, quantities, completion data and historical snapshots',()=>{
+test('three departments preserve task identity, quantities, completion data and historical snapshots',()=>{
  const history=[{before:{departmentId:'luxe'},after:{departmentId:'slagroom'}}];
  const state={items:[{id:'i',departmentId:'luxe'}],tasks:[{id:'t',itemId:'i',departmentId:'slagroom',quantity:84,status:'done',completedQuantity:84}],recipe:{production:{departmentIds:['dessert','luxe','kapsel','slagroom']}},productionWork:{history,completions:{t:{quantity:84}}}};
  const merged=departments.normalizePlanningDepartments(state);
- assert.equal(merged.items[0].departmentId,'dessert');assert.equal(merged.tasks[0].departmentId,'kapsel');assert.deepEqual(normal(merged.recipe.production.departmentIds),['dessert','kapsel']);
+ assert.equal(merged.items[0].departmentId,'luxe');assert.equal(merged.tasks[0].departmentId,'kapsel');assert.deepEqual(normal(merged.recipe.production.departmentIds),['dessert','luxe','kapsel']);
  assert.deepEqual(normal(merged.tasks[0]),{...state.tasks[0],departmentId:'kapsel'});assert.equal(merged.productionWork,state.productionWork);assert.equal(merged.productionWork.history,history);
+ assert.deepEqual(Array.from(planning.DEPARTMENTS.filter(d=>['dessert','luxe','kapsel'].includes(d.id)).map(d=>d.name)),['Fruit','Gebak','Kapsel']);
  assert.equal(state.items[0].departmentId,'luxe');assert.equal(departments.normalizePlanningDepartments(merged),merged);
- assert.deepEqual(Array.from(planning.DEPARTMENTS.filter(d=>d.board==='patisserie').map(d=>d.id)),['dessert','kapsel','bruidstaarten']);
+ assert.deepEqual(Array.from(planning.DEPARTMENTS.filter(d=>d.board==='patisserie').map(d=>d.id)),['dessert','luxe','kapsel','bruidstaarten']);
 });
 test('workspace validation keeps old completions readable and rejects malformed persisted yield',()=>{
  const s=fixture(),base={...s.planner,productionWork:{overrides:{},preparation:{},history:[],work:[],completions:{a:{id:'old',quantity:90}},timers:{}}};

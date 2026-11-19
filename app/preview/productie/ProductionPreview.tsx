@@ -60,9 +60,9 @@ const ProductionInventory=dynamic(()=>import("../../productie/ProductionInventor
 const WorkspaceContext = createContext({ demo:true, recipes:demoRecipes, canManage:true, saving:false });
 
 const DEPARTMENT_BADGES: Record<DepartmentId | "cleaning", { label: string; icon: IconName }> = {
-  dessert: { label: "FR/GBK", icon: "fruit" },
+  dessert: { label: "FRUIT", icon: "fruit" },
   luxe: { label: "GBK", icon: "pastry" },
-  kapsel: { label: "SL/KPSL", icon: "cake" },
+  kapsel: { label: "KPSL", icon: "cake" },
   slagroom: { label: "SLGR", icon: "cream" },
   bruidstaarten: { label: "BRDS", icon: "wedding" },
   bak: { label: "BAK", icon: "oven" },

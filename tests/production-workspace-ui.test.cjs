@@ -62,10 +62,10 @@ function movingTaskHarness(state=sample.initialPreviewState()){
 
 test('a live task moves immediately while one save retains its identity and blocks a competing stale drop',async()=>{
  const m=movingTaskHarness(),before=JSON.stringify(m.state),original=m.state.tasks.find(task=>task.id==='f5');
- const dragged=m.drag(),destination=m.cell(dragged,'Slagroom & Kapsel · vr 30 okt'),competing=m.cell(dragged,'Fruit & Gebak · za 31 okt');
+ const dragged=m.drag(),destination=m.cell(dragged,'Kapsel · vr 30 okt'),competing=m.cell(dragged,'Fruit · za 31 okt');
  destination.props.onDrop({preventDefault(){}});
  assert.equal(m.requests.length,1);
- let tree=m.render();assert(m.located(tree,'Slagroom & Kapsel · vr 30 okt'),'The card reaches the destination before the server answers');assert(!m.located(tree,'Fruit & Gebak · do 29 okt'));
+ let tree=m.render();assert(m.located(tree,'Kapsel · vr 30 okt'),'The card reaches the destination before the server answers');assert(!m.located(tree,'Fruit · do 29 okt'));
  assert.equal(m.card(tree).props['data-task-saving'],true);assert.equal(m.card(tree).props.draggable,false);
  assert.equal(find(tree,node=>node.props?.['data-task-date']==='2026-10-30'&&node.props['aria-pressed']!==undefined).props['aria-pressed'],true);
  const request=m.requests[0],body=JSON.parse(request.init.body),moved=body.state.tasks.find(task=>task.id===original.id);
@@ -74,10 +74,10 @@ test('a live task moves immediately while one save retains its identity and bloc
  assert.deepEqual(moved,{...original,date:'2026-10-30',departmentId:'kapsel'});
  assert.equal(JSON.stringify(body.state.items),JSON.stringify(m.state.items));assert.equal(JSON.stringify(body.state.tasks.filter(task=>task.id!==original.id)),JSON.stringify(m.state.tasks.filter(task=>task.id!==original.id)));
  assert.equal(JSON.stringify(m.state),before,'The supplied workspace remains immutable');
- competing.props.onDrop({preventDefault(){}});tree=m.render();assert.equal(m.requests.length,1);assert(m.located(tree,'Slagroom & Kapsel · vr 30 okt'),'A stale second handler cannot roll back or replace the pending move');
+ competing.props.onDrop({preventDefault(){}});tree=m.render();assert.equal(m.requests.length,1);assert(m.located(tree,'Kapsel · vr 30 okt'),'A stale second handler cannot roll back or replace the pending move');
  request.resolve({ok:true,json:async()=>({state:body.state,revision:8,updatedAt:'2026-11-10T09:00:00.000Z'})});await m.flush();
- tree=m.render();assert(m.located(tree,'Slagroom & Kapsel · vr 30 okt'));assert.equal(m.card(tree).props.draggable,true);assert.equal(m.card(tree).props['data-task-saving'],undefined);assert.equal(m.refreshes,0);assert.equal(m.timers.size,0,'Successful saves clear their timeout');
- m.cell(m.drag(),'Fruit & Gebak · vr 30 okt').props.onDrop({preventDefault(){}});
+ tree=m.render();assert(m.located(tree,'Kapsel · vr 30 okt'));assert.equal(m.card(tree).props.draggable,true);assert.equal(m.card(tree).props['data-task-saving'],undefined);assert.equal(m.refreshes,0);assert.equal(m.timers.size,0,'Successful saves clear their timeout');
+ m.cell(m.drag(),'Fruit · vr 30 okt').props.onDrop({preventDefault(){}});
  assert.equal(m.requests.length,2);assert.equal(JSON.parse(m.requests[1].init.body).revision,8,'The next move uses the confirmed revision even while parent polling still has revision 7');
  m.requests[1].resolve({ok:true,json:async()=>({state:JSON.parse(m.requests[1].init.body).state,revision:9,updatedAt:'2026-11-10T09:01:00.000Z'})});await m.flush();
 });
@@ -85,13 +85,13 @@ test('a live task moves immediately while one save retains its identity and bloc
 test('a rejected or unconfirmed live move rolls back once, refreshes read-only and never resends the write',async()=>{
  for(const failure of ['conflict','forbidden','network']){
   const m=movingTaskHarness(),before=JSON.stringify(m.state),dragged=m.drag();
-  m.cell(dragged,'Slagroom & Kapsel · vr 30 okt').props.onDrop({preventDefault(){}});
-  assert(m.located(m.render(),'Slagroom & Kapsel · vr 30 okt'));
+  m.cell(dragged,'Kapsel · vr 30 okt').props.onDrop({preventDefault(){}});
+  assert(m.located(m.render(),'Kapsel · vr 30 okt'));
   const request=m.requests[0];
   if(failure==='network')request.reject(Error('Verbinding verbroken'));
   else request.resolve({ok:false,status:failure==='conflict'?409:403,json:async()=>({message:failure==='conflict'?'Intussen gewijzigd':'Geen rechten'})});
   await m.flush();const tree=m.render();
-  assert(m.located(tree,'Fruit & Gebak · do 29 okt'));assert(!m.located(tree,'Slagroom & Kapsel · vr 30 okt'));
+  assert(m.located(tree,'Fruit · do 29 okt'));assert(!m.located(tree,'Kapsel · vr 30 okt'));
   assert.equal(m.refreshes,1);assert.equal(m.requests.length,1);assert.equal(JSON.stringify(m.state),before);assert.equal(m.card(tree).props.draggable,true);assert.equal(m.card(tree).props['data-task-saving'],undefined);
   assert.equal(find(tree,node=>node.props?.['data-task-date']===sample.DEMO_TODAY&&node.props['aria-pressed']!==undefined).props['aria-pressed'],true,'A failed move restores the selected mobile day');
   assert(text(tree).includes(failure==='network'?'Verbinding verbroken':failure==='conflict'?'Intussen gewijzigd':'Geen rechten'));
@@ -100,12 +100,12 @@ test('a rejected or unconfirmed live move rolls back once, refreshes read-only a
 
 test('a stalled optimistic move aborts after fifteen seconds and restores an idle, refreshable board without retrying',async()=>{
  const m=movingTaskHarness(),before=JSON.stringify(m.state);
- m.cell(m.drag(),'Slagroom & Kapsel · vr 30 okt').props.onDrop({preventDefault(){}});
- assert(m.located(m.render(),'Slagroom & Kapsel · vr 30 okt'));assert.equal(m.requests.length,1);assert.equal(m.timers.size,1);
+ m.cell(m.drag(),'Kapsel · vr 30 okt').props.onDrop({preventDefault(){}});
+ assert(m.located(m.render(),'Kapsel · vr 30 okt'));assert.equal(m.requests.length,1);assert.equal(m.timers.size,1);
  const request=m.requests[0];assert.equal(request.init.signal.aborted,false);
  m.expireSaves();await m.flush();
  const tree=m.render();assert.equal(request.init.signal.aborted,true);assert.equal(m.timers.size,0);
- assert(m.located(tree,'Fruit & Gebak · do 29 okt'));assert(!m.located(tree,'Slagroom & Kapsel · vr 30 okt'));
+ assert(m.located(tree,'Fruit · do 29 okt'));assert(!m.located(tree,'Kapsel · vr 30 okt'));
  assert.equal(m.card(tree).props.draggable,true);assert.equal(m.card(tree).props['data-task-saving'],undefined);assert.equal(m.refreshes,1);assert.equal(m.requests.length,1);assert.equal(JSON.stringify(m.state),before);
  assert(text(tree).includes('Opslaan duurt te lang. De planning wordt opnieuw opgehaald.'));
  m.expireSaves();await m.flush();assert.equal(m.refreshes,1);assert.equal(m.requests.length,1,'Timeout recovery only refreshes and never resends the move');
@@ -150,11 +150,11 @@ test('wedding moves immediately through its dedicated endpoint and rejection res
 
 test('dropping in the original cell or after the required date never changes state or sends a write',async()=>{
  const same=movingTaskHarness(),before=JSON.stringify(same.state);
- same.cell(same.drag(),'Fruit & Gebak · do 29 okt').props.onDrop({preventDefault(){}});await same.flush();
- assert.equal(same.requests.length,0);assert.equal(same.refreshes,0);assert(same.located(same.render(),'Fruit & Gebak · do 29 okt'));assert.equal(JSON.stringify(same.state),before);
+ same.cell(same.drag(),'Fruit · do 29 okt').props.onDrop({preventDefault(){}});await same.flush();
+ assert.equal(same.requests.length,0);assert.equal(same.refreshes,0);assert(same.located(same.render(),'Fruit · do 29 okt'));assert.equal(JSON.stringify(same.state),before);
  const late=movingTaskHarness(),initial=late.render();
  find(initial,node=>node.type==='article'&&node.key==='f6').props.onDragStart({dataTransfer:{setData(){}}});
- late.cell(late.render(),'Fruit & Gebak · za 31 okt').props.onDrop({preventDefault(){}});await late.flush();
+ late.cell(late.render(),'Fruit · za 31 okt').props.onDrop({preventDefault(){}});await late.flush();
  assert.equal(late.requests.length,0);assert.equal(late.refreshes,0);assert.equal(JSON.stringify(late.state),before);assert(text(late.render()).includes('benodigde datum'));
 });
 
@@ -168,7 +168,7 @@ test('live synchronization respects the synchronous save lock and the newest con
 test('a day-cell plus uses its date and department without asking for either again',async()=>{
  const h=harness();
  let tree=xl(h);
- button(tree,'Taak toevoegen · Slagroom & Kapsel · do 29 okt').props.onClick();
+ button(tree,'Taak toevoegen · Kapsel · do 29 okt').props.onClick();
  tree=h.render(h.Component);
  const form=find(tree,node=>typeof node.type==='function'&&!!node.props.onPlan);
  const submitted=[];
@@ -177,7 +177,7 @@ test('a day-cell plus uses its date and department without asking for either aga
  let view=render();
  find(view,node=>node.type===h.pickerWidget).props.onChange('creme');
  view=render();
- assert.equal(view.props.subtitle,'Slagroom & Kapsel · '+planning.dateLabel('2026-10-29',true));
+ assert.equal(view.props.subtitle,'Kapsel · '+planning.dateLabel('2026-10-29',true));
  assert(!nodes(view).some(node=>node.type==='label'&&text(node)==='Productiedatum'));
  assert(!nodes(view).some(node=>node.type==='label'&&text(node)==='Afdeling'));
  assert.equal(inputByLabel(view,'do 29').props.checked,true);
@@ -288,10 +288,10 @@ test('XL keeps planning controls, drag/drop and task editing while hiding the na
  const taskId=card.key,open=nodes(card).find(n=>n.props?.className==='taskOpen');
  const dt={setData:(format,value)=>{assert.equal(format,'text/plain');assert.equal(value,taskId);}};
  card.props.onDragStart({dataTransfer:dt});tree=h.render(h.Component);
- const target=find(tree,n=>n.props?.onDrop && n.props['aria-label']==='Fruit & Gebak · za 31 okt');
+ const target=find(tree,n=>n.props?.onDrop && n.props['aria-label']==='Fruit · za 31 okt');
  let accepted=false;target.props.onDragOver({preventDefault:()=>{accepted=true;},dataTransfer:dt});assert(accepted);assert.equal(dt.dropEffect,'move');
  target.props.onDrop({preventDefault:()=>{}});tree=h.render(h.Component);
- const moved=find(tree,n=>n.props?.onDrop && n.props['aria-label']==='Fruit & Gebak · za 31 okt');assert(nodes(moved).some(n=>n.key===taskId));
+ const moved=find(tree,n=>n.props?.onDrop && n.props['aria-label']==='Fruit · za 31 okt');assert(nodes(moved).some(n=>n.key===taskId));
  open.props.onClick();tree=h.render(h.Component);
  const detail=find(tree,n=>typeof n.type==='function' && !!n.props.onMove),detailTree=h.render(detail.type,detail.props,tree.props.value);
  for(const label of ['Verplaatsen','Geplande taak verwijderen'])assert(button(detailTree,label));
@@ -361,7 +361,7 @@ test('a late preparation can be repaired or cancelled in XL and its input never 
 test('day context and the draft survive opening the existing recipe editor',async()=>{
  const h=harness(),live={state:sample.initialPreviewState(),today:sample.DEMO_TODAY,recipes:sample.demoRecipes,ingredients:[],canManage:true,departments:planning.DEPARTMENTS.map(d=>d.id),revision:1};
  let tree=xl(h,{live});
- button(tree,'Taak toevoegen · Slagroom & Kapsel · do 29 okt').props.onClick();tree=h.render(h.Component,{live});
+ button(tree,'Taak toevoegen · Kapsel · do 29 okt').props.onClick();tree=h.render(h.Component,{live});
  let form=find(tree,n=>typeof n.type==='function'&&!!n.props.onPlan),submitted=[];
  const props={...form.props,onPlan:async command=>{submitted.push(command);}},render=()=>h.render(form.type,props,tree.props.value);
  let view=render();const picker=find(view,n=>n.type===h.pickerWidget);
@@ -448,7 +448,7 @@ test('preparation days can be cleared and retyped without resetting the input or
 test('global planning uses the recipe department but a clicked row keeps its category and date',async()=>{
  const live={state:sample.initialPreviewState(),today:sample.DEMO_TODAY,recipes:sample.demoRecipes,ingredients:[],canManage:true,departments:planning.DEPARTMENTS.map(d=>d.id),revision:1};
  for(const clicked of [false,true]){
-  const h=harness();let tree=xl(h,{live});button(tree,clicked?'Taak toevoegen · Slagroom & Kapsel · do 29 okt':'Inplannen').props.onClick();tree=h.render(h.Component,{live});
+  const h=harness();let tree=xl(h,{live});button(tree,clicked?'Taak toevoegen · Kapsel · do 29 okt':'Inplannen').props.onClick();tree=h.render(h.Component,{live});
   const form=find(tree,n=>typeof n.type==='function'&&!!n.props.onPlan),commands=[],props={...form.props,onPlan:async c=>{commands.push(c);}},render=()=>h.render(form.type,props,tree.props.value);
   let view=render();find(view,n=>n.type===h.pickerWidget).props.onChange('creme');view=render();
   const department=nodes(view).find(n=>n.type==='label'&&text(n).startsWith('Afdeling'));assert.equal(!!department,!clicked);
@@ -691,7 +691,7 @@ function summaryWorkspace(tasks,completions={},timers={}){
  const live={state,today:sample.DEMO_TODAY,recipes:sample.demoRecipes,ingredients:[],canManage:true,departments:planning.DEPARTMENTS.map(department=>department.id),revision:1};
  return {state,live};
 }
-function dayWorkGroup(tree,department='Fruit & Gebak',date=sample.DEMO_TODAY){
+function dayWorkGroup(tree,department='Fruit',date=sample.DEMO_TODAY){
  return find(tree,node=>node.props?.role==='group'&&node.props['aria-label']===`Productieve uren · ${department} · ${planning.dateLabel(date,true)}`);
 }
 function dayWorkMetric(tree,label,department,date){return find(dayWorkGroup(tree,department,date),node=>node.type==='span'&&node.props['aria-label']?.startsWith(label));}
@@ -782,8 +782,8 @@ test('daily productive totals include hidden completed tasks, unfinished estimat
  tree=h.render(h.Component,{live});assert(!nodes(tree).some(node=>node.type==='article'&&node.key==='summary-done'));assertTotals();
  find(tree,node=>node.type==='select'&&text(node).includes('Nog te doen')).props.onChange({target:{value:'done'}});
  tree=h.render(h.Component,{live});assert(!nodes(tree).some(node=>node.type==='article'&&node.key==='summary-next'));assertTotals();
- assert.equal(text(dayWorkMetric(tree,'Nog gepland · ','Slagroom & Kapsel')),'2u');
- assert.equal(text(dayWorkMetric(tree,'Nog gepland · ','Fruit & Gebak',planning.addDays(sample.DEMO_TODAY,1))),'3u');
+ assert.equal(text(dayWorkMetric(tree,'Nog gepland · ','Kapsel')),'2u');
+ assert.equal(text(dayWorkMetric(tree,'Nog gepland · ','Fruit',planning.addDays(sample.DEMO_TODAY,1))),'3u');
 });
 
 test('an unestimated open task uses the existing confirmed recipe labor estimate without rewriting its plan',()=>{
@@ -827,7 +827,7 @@ test('day view switches locally and shows only the chosen day with every departm
  assert.deepEqual(dates,[sample.DEMO_TODAY]);
  assert(button(tree,'Open 36 stuks Fruitdesserttaart · Vullen & afwerken'));
  assert(!nodes(tree).some(node=>node.props?.['aria-label']==='Open 24 stuks Fruitdesserttaart · Vullen & afwerken'));
- assert(find(tree,node=>node.props?.['aria-label']==='Productieve uren · Fruit & Gebak · wo 28 okt'));
+ assert(find(tree,node=>node.props?.['aria-label']==='Productieve uren · Fruit · wo 28 okt'));
  assert(text(tree).includes('wo 28 okt'));assert(button(tree,'Vandaag'));
  button(tree,'Per week').props.onClick();tree=h.render(h.Component);
  assert(find(tree,node=>node.type==='section'&&node.props['aria-label']==='Weekbord'));
@@ -859,7 +859,7 @@ test('a day-cell plus and native drag keep the selected date and department in d
  const target=find(tree,node=>node.props?.onDrop&&node.props['data-task-department']==='kapsel');
  target.props.onDrop({preventDefault(){}});tree=h.render(h.Component);
  assert(nodes(find(tree,node=>node.props?.onDrop&&node.props['data-task-department']==='kapsel')).some(node=>node.props?.['data-task-id']==='f3'));
- button(tree,'Taak toevoegen · Slagroom & Kapsel · wo 28 okt').props.onClick();tree=h.render(h.Component);
+ button(tree,'Taak toevoegen · Kapsel · wo 28 okt').props.onClick();tree=h.render(h.Component);
  const form=find(tree,node=>typeof node.type==='function'&&node.type.name==='TaskForm');
  assert.equal(form.props.initial.date,sample.DEMO_TODAY);assert.equal(form.props.initial.departmentId,'kapsel');
  assert.equal(form.props.initial.fromCell,true);
@@ -1253,8 +1253,9 @@ test('new planning uses icon abbreviations for every department while keeping fu
  const h=harness(),props={initialLayout:'new'};
  let tree=h.render(h.Component,props);
  for (const [name,label,icon] of [
-  ['Fruit & Gebak','FR/GBK','fruit'],
-  ['Slagroom & Kapsel','SL/KPSL','cake'],
+  ['Fruit','FRUIT','fruit'],
+  ['Gebak','GBK','pastry'],
+  ['Kapsel','KPSL','cake'],
  ]) {
   const control=button(tree,name);
   assert.equal(text(control),label);
@@ -1262,13 +1263,13 @@ test('new planning uses icon abbreviations for every department while keeping fu
   assert(nodes(control).some(node=>node.props?.name===icon));
   assert.equal(control.props['aria-expanded'],true);
  }
- button(tree,'Fruit & Gebak').props.onClick();
+ button(tree,'Fruit').props.onClick();
  tree=h.render(h.Component,props);
- assert.equal(button(tree,'Fruit & Gebak').props['aria-expanded'],false);
+ assert.equal(button(tree,'Fruit').props['aria-expanded'],false);
  assert.equal(find(tree,node=>node.props?.['data-department']==='dessert').props['data-collapsed'],true);
- button(tree,'Fruit & Gebak').props.onClick();
+ button(tree,'Fruit').props.onClick();
  tree=h.render(h.Component,props);
- assert.equal(button(tree,'Fruit & Gebak').props['aria-expanded'],true);
+ assert.equal(button(tree,'Fruit').props['aria-expanded'],true);
  for (const [board,departments] of [
   ['bak',[['Bakafdeling','BAK','oven'],['Brood','BROOD','bread']]],
   ['chocolade',[['Chocolade','CHOCO','chocolate'],['IJs','IJS','icecream']]],
@@ -1285,7 +1286,7 @@ test('new planning uses icon abbreviations for every department while keeping fu
  for(const label of ['BRDS','SCHNMK'])assert(nodes(specialTree).some(node=>typeof node.type==='function'&&node.props.heading&&text(node.props.heading)===label));
  const original=harness(),current=original.render(original.Component,{initialLayout:'current'});
  assert(!nodes(current).some(node=>node.props?.className==='groupToggle'));
- assert(nodes(current).some(node=>node.type==='h2'&&text(node)==='Fruit & Gebak'));
+ assert(nodes(current).some(node=>node.type==='h2'&&text(node)==='Fruit'));
 });
 
 
@@ -1514,8 +1515,8 @@ test('new planning offers one add button per day and category while task cells s
    assert(!nodes(cell).some(node=>node.props?.className==='dayCellFooter'));
   }
  }
- button(tree,'Slagroom & Kapsel').props.onClick();tree=h.render(h.Component,props);
- assert(button(tree,'Productie toevoegen · Slagroom & Kapsel'));
+ button(tree,'Kapsel').props.onClick();tree=h.render(h.Component,props);
+ assert(button(tree,'Productie toevoegen · Kapsel'));
  const cleaning=find(tree,node=>typeof node.type==='function'&&'canCheck' in node.props&&'onCommand' in node.props);
  assert.equal(cleaning.props.categoryActionsOnly,true);
 });
@@ -1523,9 +1524,9 @@ test('new planning offers one add button per day and category while task cells s
 test('day and category plus offer weekdays and require review before repeated production',async()=>{
  for(const fromDay of [true,false]){
   const h=harness(),pageProps={initialLayout:'new'};let tree=h.render(h.Component,pageProps);
-  button(tree,fromDay?'Productie toevoegen · do 29 okt':'Productie toevoegen · Slagroom & Kapsel').props.onClick();tree=h.render(h.Component,pageProps);
+  button(tree,fromDay?'Productie toevoegen · do 29 okt':'Productie toevoegen · Kapsel').props.onClick();tree=h.render(h.Component,pageProps);
   const form=find(tree,n=>typeof n.type==='function'&&!!n.props.onPlan),commands=[],props={...form.props,onPlan:async c=>{commands.push(c);}},render=()=>h.render(form.type,props,tree.props.value);
-  let view=render();assert.equal(view.props.subtitle,fromDay?'do 29 okt':'Slagroom & Kapsel');
+  let view=render();assert.equal(view.props.subtitle,fromDay?'do 29 okt':'Kapsel');
   find(view,n=>n.type===h.pickerWidget).props.onChange('creme');view=render();
   assert(!nodes(view).some(n=>n.type==='label'&&text(n)==='Productiedatum'));
   assert.equal(inputByLabel(view,fromDay?'do 29':'wo 28').props.checked,true);
@@ -1582,7 +1583,7 @@ test('bakery can produce a large batch and separately bake off a daily amount wi
 test('category weekday choices follow the visible week and cannot submit with no day selected',async()=>{
  const h=harness(),pageProps={initialLayout:'new'};let tree=h.render(h.Component,pageProps);
  button(tree,'Volgende week').props.onClick();tree=h.render(h.Component,pageProps);
- button(tree,'Productie toevoegen · Slagroom & Kapsel').props.onClick();tree=h.render(h.Component,pageProps);
+ button(tree,'Productie toevoegen · Kapsel').props.onClick();tree=h.render(h.Component,pageProps);
  const form=find(tree,n=>typeof n.type==='function'&&!!n.props.onPlan),commands=[],props={...form.props,onPlan:async c=>{commands.push(c);}},render=()=>h.render(form.type,props,tree.props.value);
  let view=render();find(view,n=>n.type===h.pickerWidget).props.onChange('creme');view=render();
  assert.equal(inputByLabel(view,'ma 2').props.checked,true);
@@ -1726,7 +1727,7 @@ test('preparation is bundled on the actual work day and the final card keeps its
  const root = find(tree, node => node.type === 'article' && node.props['data-task-id'] === 'prep-root');
  const reminder = find(root, node => node.type === 'button' && node.props.className === 'preparation');
  assert(text(reminder).includes('Voorbereiden wo 28 okt'));
- const dayCell = find(tree, node => node.props?.onDrop && node.props['aria-label'] === 'Fruit & Gebak · wo 28 okt');
+ const dayCell = find(tree, node => node.props?.onDrop && node.props['aria-label'] === 'Fruit · wo 28 okt');
  const bundle = find(dayCell, node => node.props?.['data-preparation-ids'] === 'prep-before');
  assert(nodes(dayCell).some(node => node.props?.['data-task-id'] === 'prep-before'), 'The actual component remains visible and independently completable in its recipe group');
  const componentCard = find(dayCell, node => node.type === 'article' && node.props['data-task-id'] === 'prep-before');
@@ -1758,13 +1759,13 @@ test('dragging a preparation bundle moves its open tasks together through the ex
  assert.equal(bundle.props.draggable,true);
  const handle=find(bundle,node=>node.props?.['data-task-drag-handle']);assert(handle.props['aria-label'].startsWith('Versleep voorbereiding'));
  bundle.props.onDragStart({dataTransfer:{setData(){}}});tree=m.render();
- m.cell(tree,'Slagroom & Kapsel · do 29 okt').props.onDrop({preventDefault(){}});
+ m.cell(tree,'Kapsel · do 29 okt').props.onDrop({preventDefault(){}});
  assert.equal(m.requests.length,1);
  const request=m.requests[0],body=JSON.parse(request.init.body);
  for(const id of ['part-1','part-2'])assert.deepEqual(body.state.tasks.find(task=>task.id===id),{...state.tasks.find(task=>task.id===id),date:'2026-10-29',departmentId:'kapsel'});
  for(const id of ['root','part-done'])assert.deepEqual(body.state.tasks.find(task=>task.id===id),state.tasks.find(task=>task.id===id));
  request.resolve({ok:true,json:async()=>({state:body.state,revision:8})});await m.flush();
- tree=m.render();assert(nodes(m.cell(tree,'Slagroom & Kapsel · do 29 okt')).some(node=>node.props?.['data-preparation-ids']==='part-1 part-2'));
+ tree=m.render();assert(nodes(m.cell(tree,'Kapsel · do 29 okt')).some(node=>node.props?.['data-preparation-ids']==='part-1 part-2'));
  const completed=find(tree,node=>node.props?.['data-preparation-ids']==='part-done');assert.equal(completed.props.draggable,false);
  assert(!nodes(completed).some(node=>node.props?.['data-task-drag-handle']));
 });
