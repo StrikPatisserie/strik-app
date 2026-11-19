@@ -307,3 +307,23 @@ test('petit gateau routes reserve parties between steps and count finished stock
   assert(planning.validProductionStages(state));
  }
 });
+
+
+test('Steventje stages keep monthly sheets available for weekly filling and finishing', () => {
+  const id = 'recipe-new-1783508863145';
+  const steps = ['Storten', 'Vullen', 'Rollen & afmaken'];
+  const catalog = [{ ...recipe(id, 630), productionSteps: steps }];
+  let state = recipes.buildRecipePlan(stateFor(catalog), catalog, command('sheets', id, 630, 'Storten'));
+  assert(planning.validProductionSteps(steps));
+  assert.equal(task(state, 'sheets').recordsOutput, false);
+  state = finish(state, 'sheets');
+  state = recipes.buildRecipePlan(state, catalog, command('fill', id, 126, 'Vullen', [{ taskId: 'sheets', quantity: 126 }], '2026-11-18'));
+  assert.equal(task(state, 'fill').recordsOutput, false);
+  state = finish(state, 'fill');
+  state = recipes.buildRecipePlan(state, catalog, command('roll', id, 126, 'Rollen & afmaken', [{ taskId: 'fill', quantity: 126 }], '2026-11-19'));
+  assert.equal(task(state, 'roll').recordsOutput, true);
+  state = finish(state, 'roll');
+  assert.equal(planning.remainingParty(state, task(state, 'sheets')), 504);
+  assert.equal(state.tasks.filter(row => row.recordsOutput && row.status === 'done').reduce((sum, row) => sum + row.completedQuantity, 0), 126);
+  assert(planning.validProductionStages(state));
+});
