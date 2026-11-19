@@ -1,7 +1,10 @@
+const {productionConcurrencyImports}=require('./helpers/production-concurrency.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
 function load(file,imports={}){
+ imports={...productionConcurrencyImports(imports), './BatchOutputsFields':{__esModule:true,default:()=>null},...imports};
+
  const exports={};
  vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{
   compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022},

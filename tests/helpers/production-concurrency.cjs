@@ -9,10 +9,15 @@ function compile(file, imports) {
     return exports;
 }
 const changes = compile('app/productie/concurrentChanges.ts', {});
+const pure = {
+    './batchOutputs': compile('app/productie/batchOutputs.ts', {}),
+    './planningDepartments': compile('app/productie/planningDepartments.ts', {}),
+};
+pure['../../productie/planningDepartments'] = pure['./planningDepartments'];
 function productionConcurrencyImports(imports) {
     const docs = imports['@/app/productie/documents.server'] || imports['./documents.server'];
     if (!docs)
-        return {};
+        return pure;
     docs.readDocumentRevision ||= async () => null;
     docs.ProductionRevisionError ||= class extends docs.ProductionStoreError {
     };
@@ -20,6 +25,7 @@ function productionConcurrencyImports(imports) {
         'server-only': {}, './documents.server': docs, './concurrentChanges': changes
     });
     return {
+        ...pure,
         '@/app/productie/concurrentEditing.server': editing, './concurrentEditing.server': editing,
         '@/app/productie/concurrentChanges': changes, './concurrentChanges': changes,
     };

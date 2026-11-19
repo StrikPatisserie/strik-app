@@ -1,10 +1,11 @@
 import { addDays, addItem, moveTask, transitionTask, type DemoRecipe, type DepartmentId, type ItemUnit, type PreviewState, type Task } from "./planning";
 import { buildRecipePlan, type PlanCommand } from "./recipePlanning";
+import {needsSoezenOutputs, validBatchOutputs, sameBatchOutputs, batchOutputSummary, type SoezenBatchOutputs} from "./batchOutputs";
 
 export type Change = { id:string; itemId:string; taskId?:string; who:string; at:string; actorId?:string; kind:"recipe"|"time"|"preparation"|"stock"|"output";quantityBefore?:number;quantityAfter?:number; scope:"once"|"permanent"; summary:string; before?:DemoRecipe; after?:DemoRecipe };
 export type WorkTime = { id:string; taskId:string; itemId:string; operation:string; quantity:number; minutes:number; who:string; at:string; actorId?:string; timerId?:string; measuredMs?:number; plannedQuantity?:number;crewSize?:number;laborMinutes?:number;recipeKey?:string;estimateEligible?:boolean };
 export type WorkTimer = {id:string;who:string;startedAt:string;runningSince?:string;elapsedMs:number;actorId?:string;crewSize?:number;recipeKey?:string;operation?:string};
-export type Completion = {id:string;who?:string;at:string;productionDate?:string;minutes?:number;unmeasured?:true;quantity:number;plannedQuantity:number;measuredMs?:number;timerId?:string;actorId?:string;crewSize?:number;laborMinutes?:number;measuredCrewSize?:number};
+export type Completion = {batchOutputs?:SoezenBatchOutputs;id:string;who?:string;at:string;productionDate?:string;minutes?:number;unmeasured?:true;quantity:number;plannedQuantity:number;measuredMs?:number;timerId?:string;actorId?:string;crewSize?:number;laborMinutes?:number;measuredCrewSize?:number};
 export type StockFulfillment = { id:string; taskId:string; itemId:string; unit:ItemUnit; countedQuantity:number; quantity:number; remainingQuantity:number; who:string; at:string; actorId?:string };
 export type ScreenState = { version:1; planner:PreviewState; recipes:DemoRecipe[]; overrides:Record<string,DemoRecipe>; preparation:Record<string,number>; history:Change[]; work:WorkTime[];timers?:Record<string,WorkTimer>;completions?:Record<string,Completion>;stockFulfillments?:Record<string,StockFulfillment> };
 function validCrew(value:number|undefined){if(value!==undefined&&(!Number.isInteger(value)||value<1||value>20))throw Error("Kies 1 tot 20 medewerkers.");return value;}
@@ -48,7 +49,7 @@ function tasksOnProductionDate(tasks: Task[], task: Task, date: string): Task[] 
     .map(row => row.id === task.id ? { ...row, status: task.status } : row);
 }
 
-export type TaskCompletionInput = { taskId: string; quantity: number; timerId?: string; productionDate?: string } & (
+export type TaskCompletionInput = { taskId: string; quantity: number; timerId?: string; productionDate?: string; batchOutputs?: SoezenBatchOutputs } & (
   { unmeasured: true; who?: never; minutes?: never; crewSize?: never }
   | { unmeasured?: false; who: string; minutes: number; crewSize?: number }
 );
@@ -68,8 +69,12 @@ export function confirmTaskCompletion(state: ScreenState, input: TaskCompletionI
   const timer = state.timers?.[task.id];
   if (timer?.runningSince) throw Error("Stop de timer eerst en controleer de gemeten tijd.");
   if (timer?.id !== input.timerId) throw Error("De timer is intussen gewijzigd. Open de controle opnieuw.");
-  const unit = state.planner.items.find(item => item.id === task.itemId)!.unit;
-  let completion: Completion = { id, at, ...(productionDate ? { productionDate } : {}), quantity: input.quantity, plannedQuantity: task.quantity, ...(timer ? { timerId: timer.id } : {}) };
+  const item = state.planner.items.find(item => item.id === task.itemId)!;
+  const needsOutputs = needsSoezenOutputs(item, task);
+  if (needsOutputs && !validBatchOutputs(input.batchOutputs)) throw Error("Vul de drie opbrengsten van deze batch in, eventueel 0.");
+  if (!needsOutputs && input.batchOutputs !== undefined) throw Error("Deze opbrengsten horen alleen bij soezenbeslag.");
+  const unit = item.unit;
+  let completion: Completion = { id, at, ...(input.batchOutputs ? {batchOutputs: {...input.batchOutputs}} : {}), ...(productionDate ? { productionDate } : {}), quantity: input.quantity, plannedQuantity: task.quantity, ...(timer ? { timerId: timer.id } : {}) };
   let work = state.work;
   let who = "Maker onbekend";
   let summary = `Snel afgerond · ${input.quantity.toLocaleString("nl-NL")} ${unit} gemaakt · naam en tijd onbekend.`;
@@ -89,6 +94,7 @@ export function confirmTaskCompletion(state: ScreenState, input: TaskCompletionI
     work = [...work, log];
     summary = `Afgerond: ${input.minutes.toLocaleString("nl-NL")} min${crewSize ? ` × ${crewSize} medewerkers = ${laborMinutes!.toLocaleString("nl-NL")} arbeidsmin` : ""} · ${input.quantity.toLocaleString("nl-NL")} ${unit} gemaakt (gepland ${task.quantity.toLocaleString("nl-NL")}).`;
   }
+  if (input.batchOutputs) summary += ` Opbrengst: ${batchOutputSummary(input.batchOutputs)}.`;
   if (productionDate) summary += ` Gemaakt op ${productionDate.split("-").reverse().join("-")}.`;
   const tasks = transitionTask(datedTasks, task.id, "done", state.planner.items)
     .map(task => task.id === input.taskId ? { ...task, completedQuantity: input.quantity } : task);
@@ -96,7 +102,7 @@ export function confirmTaskCompletion(state: ScreenState, input: TaskCompletionI
     history: [...state.history, { id, itemId: task.itemId, taskId: task.id, who, at, kind: "time", scope: "once", summary }] };
 }
 export function correctCompletedQuantity(state: ScreenState, input: {
-  taskId: string; who: string; quantity: number; expectedQuantity: number; productionDate?: string; expectedProductionDate?: string;
+  taskId: string; who: string; quantity: number; expectedQuantity: number; productionDate?: string; expectedProductionDate?: string; batchOutputs?: SoezenBatchOutputs; expectedBatchOutputs?: SoezenBatchOutputs;
 }, id: string, at: string): ScreenState {
   const who = actor(input.who);
   timestamp(at);
@@ -112,22 +118,26 @@ export function correctCompletedQuantity(state: ScreenState, input: {
   }
   const productionDate = input.productionDate === undefined ? undefined : checkedProductionDate(input.productionDate, at);
   const completion = state.completions?.[task.id];
+  const item = state.planner.items.find(row => row.id === task.itemId)!;
+  if (input.batchOutputs !== undefined && (!needsSoezenOutputs(item, task) || !validBatchOutputs(input.batchOutputs))) throw Error("Controleer de drie batchopbrengsten.");
+  if (input.batchOutputs !== undefined && !sameBatchOutputs(completion?.batchOutputs, input.expectedBatchOutputs)) throw Error("De batchopbrengst is intussen gewijzigd. Open de correctie opnieuw.");
+  const outputsChanged = input.batchOutputs !== undefined && !sameBatchOutputs(completion?.batchOutputs, input.batchOutputs);
   const previousDate = completion?.productionDate ?? (completion ? productionDay(completion.at) : task.date);
   if (input.expectedProductionDate !== undefined && input.expectedProductionDate !== previousDate) throw Error("De maakdatum is intussen gewijzigd. Open de correctie opnieuw.");
-  if (input.quantity === previousQuantity && (!productionDate || productionDate === previousDate && productionDate === task.date)) throw Error("Wijzig het aantal of de maakdatum.");
+  if (!outputsChanged && input.quantity === previousQuantity && (!productionDate || productionDate === previousDate && productionDate === task.date)) throw Error("Wijzig het aantal of de maakdatum.");
   const datedTasks = productionDate ? tasksOnProductionDate(state.planner.tasks, task, productionDate) : state.planner.tasks;
   const correctedCompletion: Completion = { ...(completion ?? { id, at, unmeasured: true, plannedQuantity: task.quantity }), quantity: input.quantity,
-    ...(productionDate ? { productionDate } : {}) };
+    ...(productionDate ? { productionDate } : {}), ...(input.batchOutputs ? {batchOutputs: {...input.batchOutputs}} : {}) };
   const unit = state.planner.items.find(row => row.id === task.itemId)!.unit;
   return {
     ...state,
     planner: { ...state.planner, tasks: datedTasks.map(row => row.id === task.id
       ? { ...row, completedQuantity: input.quantity } : row) },
-    completions: completion || productionDate ? { ...state.completions, [task.id]: correctedCompletion } : state.completions,
+    completions: completion || productionDate || input.batchOutputs ? { ...state.completions, [task.id]: correctedCompletion } : state.completions,
     history: [...state.history, {
       id, itemId: task.itemId, taskId: task.id, who, at, kind: "output", scope: "once",
       quantityBefore: previousQuantity, quantityAfter: input.quantity,
-      summary: [input.quantity !== previousQuantity ? `Gemaakt: ${previousQuantity.toLocaleString("nl-NL")} → ${input.quantity.toLocaleString("nl-NL")} ${unit}.` : "",
+      summary: [outputsChanged ? `Batchopbrengst: ${completion?.batchOutputs ? batchOutputSummary(completion.batchOutputs) : "niet vastgelegd"} → ${batchOutputSummary(input.batchOutputs!)}.` : "", input.quantity !== previousQuantity ? `Gemaakt: ${previousQuantity.toLocaleString("nl-NL")} → ${input.quantity.toLocaleString("nl-NL")} ${unit}.` : "",
         productionDate && (productionDate !== previousDate || productionDate !== task.date) ? `Maakdatum: ${previousDate} → ${productionDate}.` : ""].filter(Boolean).join(" "),
     }],
   };
@@ -236,7 +246,7 @@ export type WorkCommand =
  | {kind:"start";taskId:string;who:string;crewSize?:number}
  | {kind:"pause";taskId:string}
  | ({kind:"complete"} & TaskCompletionInput)
- | {kind:"correct-output";taskId:string;who:string;quantity:number;expectedQuantity:number;productionDate?:string;expectedProductionDate?:string}
+ | {kind:"correct-output";taskId:string;who:string;quantity:number;expectedQuantity:number;productionDate?:string;expectedProductionDate?:string;batchOutputs?:SoezenBatchOutputs;expectedBatchOutputs?:SoezenBatchOutputs}
  | {kind:"reopen";taskId:string}
  | {kind:"stock";taskId:string;who:string;countedQuantity:number;confirmed:true}
  | {kind:"preparation";recipeId:string;days:number;who:string};

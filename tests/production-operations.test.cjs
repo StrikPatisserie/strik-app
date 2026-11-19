@@ -1,6 +1,9 @@
+const {productionConcurrencyImports}=require('./helpers/production-concurrency.cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
-function load(file,imports={}){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:name=>{if(!(name in imports))throw Error(`Unmocked ${name}`);return imports[name];},Request,Response,URL,Date,Intl,Buffer,structuredClone,crypto:require('node:crypto').webcrypto});return exports;}
+function load(file,imports={}){
+ imports={...productionConcurrencyImports(imports), './BatchOutputsFields':{__esModule:true,default:()=>null},...imports};
+const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:name=>{if(!(name in imports))throw Error(`Unmocked ${name}`);return imports[name];},Request,Response,URL,Date,Intl,Buffer,structuredClone,crypto:require('node:crypto').webcrypto});return exports;}
 const plain=value=>JSON.parse(JSON.stringify(value));
 const access=load('app/lib/auth/access.ts'),planning=load('app/productie/planning.ts');
 const rights=load('app/productie/access.ts',{'../lib/auth/access':access,'./planning':planning});

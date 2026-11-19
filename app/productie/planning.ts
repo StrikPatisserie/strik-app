@@ -2,10 +2,8 @@ import type {ProductionRequest} from "./requestPlanning";
 // Pure production rules, shared by the preview and the future server adapter.
 // Dates are local calendar dates. They are deliberately not elapsed 24h periods.
 export const DEPARTMENTS = [
-  { id: "dessert", name: "Desserttaart & fruit", short: "Dessert & fruit", tone: "sage", board: "patisserie" },
-  { id: "luxe", name: "Luxe gebak", short: "Luxe gebak", tone: "rose", board: "patisserie" },
-  { id: "kapsel", name: "Kapseltaarten", short: "Kapseltaarten", tone: "honey", board: "patisserie" },
-  { id: "slagroom", name: "Slagroomgebak", short: "Slagroomgebak", tone: "blue", board: "patisserie" },
+  { id: "dessert", name: "Fruit & Gebak", short: "Fruit & Gebak", tone: "sage", board: "patisserie" },
+  { id: "kapsel", name: "Slagroom & Kapsel", short: "Slagroom & Kapsel", tone: "honey", board: "patisserie" },
   { id: "bruidstaarten", name: "Bruidstaarten", short: "Bruidstaarten", tone: "rose", board: "patisserie" },
   { id: "bak", name: "Bakafdeling", short: "Bakafdeling", tone: "honey", board: "bak" },
   { id: "brood", name: "Brood", short: "Brood", tone: "sand", board: "bak" },
@@ -13,7 +11,7 @@ export const DEPARTMENTS = [
   { id: "chocolade", name: "Chocolade", short: "Chocolade", tone: "rose", board: "chocolade" },
 ] as const;
 
-export type DepartmentId = (typeof DEPARTMENTS)[number]["id"];
+export type DepartmentId = (typeof DEPARTMENTS)[number]["id"] | "luxe" | "slagroom";
 export type BoardId = (typeof DEPARTMENTS)[number]["board"];
 export type TaskStatus = "planned" | "active" | "done" | "blocked";
 export type ItemKind = "product" | "component" | "activity";

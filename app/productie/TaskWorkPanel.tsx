@@ -1,4 +1,6 @@
 "use client";
+import BatchOutputsFields from "./BatchOutputsFields";
+import {needsSoezenOutputs, batchOutputDraft, parseBatchOutputDraft, batchOutputSummary} from "./batchOutputs";
 import {productionUnit} from "./planning";
 import {useEffect,useState} from 'react';
 import {convertRecipeQuantity,type DemoRecipe,type Item,type PreviewState,type Task} from './planning';
@@ -24,6 +26,9 @@ export default function TaskWorkPanel({state,task,item,recipes,busy,onCommand}:{
  }
  const [who,setWho]=useState(timer?.who||''),[crew,setCrew]=useState(String(timer?.crewSize??1));
  const [checking,setChecking]=useState(false),[enteredMinutes,setMinutes]=useState<string|null>(null),[quantity,setQuantity]=useState(String(task.quantity)),[error,setError]=useState('');
+ const needsOutputs=needsSoezenOutputs(item,task);
+ const [outputs,setOutputs]=useState(()=>batchOutputDraft());
+ const parsedOutputs=parseBatchOutputDraft(outputs);
  const [correctingQuantity,setCorrectingQuantity]=useState(false);
  const [today]=useState(()=>productionDay(new Date().toISOString()));
  const [productionDate,setProductionDate]=useState(task.date<today?task.date:today);
@@ -38,7 +43,7 @@ export default function TaskWorkPanel({state,task,item,recipes,busy,onCommand}:{
  const plannedMinutes=Number.isFinite(task.minutes)&&task.minutes!>0?task.minutes:undefined;
  const minutes=enteredMinutes??String(estimate?.minutes??plannedMinutes??'');
  const workedMinutes=Number(minutes.replace(',','.')),madeQuantity=Number(quantity.replace(',','.'));
- const validCompletion=who.trim().length>=2&&who.trim().length<=80&&validCrew
+ const validCompletion=(!needsOutputs||!!parsedOutputs)&&who.trim().length>=2&&who.trim().length<=80&&validCrew
   &&Number.isFinite(workedMinutes)&&workedMinutes>0&&workedMinutes<=1440
   &&Number.isFinite(madeQuantity)&&madeQuantity>0&&madeQuantity<=1000000;
  const confirmedLabor=workedMinutes*crewSize;
@@ -59,8 +64,9 @@ export default function TaskWorkPanel({state,task,item,recipes,busy,onCommand}:{
   {task.status!=='done'&&!checking&&!estimate&&plannedMinutes!==undefined&&<p className={`${s.estimate} ${s.plannedEstimate}`}>Geschatte tijd <strong>{number(plannedMinutes)} min</strong><small>{task.operation} · voor {stockNumber(task.quantity)} {productionUnit(item)}</small></p>}
   {task.status==='done'?<div className={s.done}>
    <Icon name="check"/>Klaar{stock?<span> · uit voorraad · {stockNumber(stock.quantity)} {stock.unit} · {stock.who}<small>{stockNumber(stock.countedQuantity)} geteld − {stockNumber(stock.quantity)} gebruikt = {stockNumber(stock.remainingQuantity)} over</small></span>:<span> · {stockNumber(task.completedQuantity??completion?.quantity??task.quantity)} {productionUnit(item)}{completion&&<>{completion.unmeasured ? " · naam en tijd onbekend" : <> · {number(completion.minutes!)} min{completion.crewSize!==undefined&&<> × {completion.crewSize} pers. = {number(completion.laborMinutes!)} arbeidsmin</>} · {completion.who}</>}</>}</span>}
-   {!stock&&<><button disabled={busy} onClick={()=>setCorrectingQuantity(true)}>Aantal / datum corrigeren</button><button disabled={busy} onClick={()=>void act({kind:'reopen',taskId:task.id})}>Heropen</button></>}
-   {correctingQuantity&&!stock&&<CompletedQuantityForm key={task.id} task={task} item={item} recipe={recipe} completedDate={completion?.productionDate ?? (completion ? productionDay(completion.at) : task.date)} busy={busy} onCommand={onCommand} onClose={()=>setCorrectingQuantity(false)}/>}
+   {completion?.batchOutputs&&<small>{batchOutputSummary(completion.batchOutputs)}</small>}
+   {!stock&&<><button disabled={busy} onClick={()=>setCorrectingQuantity(true)}>{needsSoezenOutputs(item,task)?'Aantal / opbrengst corrigeren':'Aantal / datum corrigeren'}</button><button disabled={busy} onClick={()=>void act({kind:'reopen',taskId:task.id})}>Heropen</button></>}
+   {correctingQuantity&&!stock&&<CompletedQuantityForm key={task.id} task={task} item={item} recipe={recipe} batchOutputs={completion?.batchOutputs} completedDate={completion?.productionDate ?? (completion ? productionDay(completion.at) : task.date)} busy={busy} onCommand={onCommand} onClose={()=>setCorrectingQuantity(false)}/>}
   </div>:countingStock?<form className={s.confirm} onSubmit={async event=>{
    event.preventDefault();
    if(stockConfirmed&&!await act({kind:'stock',taskId:task.id,who,countedQuantity:countedStock,confirmed:true}))setCountingStock(false);
@@ -73,7 +79,7 @@ export default function TaskWorkPanel({state,task,item,recipes,busy,onCommand}:{
   </form>:checking?<form className={`${s.confirm} ${s.completionForm}`} aria-label="Productie afronden" onSubmit={async event=>{
    event.preventDefault();
    if(busy||!validCompletion)return;
-   if(!await act({kind:'complete',taskId:task.id,who,crewSize,minutes:workedMinutes,quantity:madeQuantity,timerId:timer?.id,productionDate}))setChecking(false);
+   if(!await act({kind:'complete',taskId:task.id,who,crewSize,minutes:workedMinutes,quantity:madeQuantity,timerId:timer?.id,productionDate,...(needsOutputs?{batchOutputs:parsedOutputs}:{})}))setChecking(false);
   }}>
    <strong>Klopt dit?</strong>
    {!timer&&estimate&&<p className={s.estimate}>Advies ± {number(estimate.minutes)} min · {crewSize} {crewSize===1?'persoon':'personen'} · {estimate.measurements} eerdere {estimate.measurements===1?'productie':'producties'}</p>}
@@ -84,7 +90,7 @@ export default function TaskWorkPanel({state,task,item,recipes,busy,onCommand}:{
    {baseQuantity!==undefined&&<div className={s.batchButtons}>
     {[baseQuantity,baseQuantity*2].map((batchQuantity,index)=><button key={index} type="button" disabled={busy} onClick={()=>setQuantity(String(batchQuantity))}>{index+1}× basisrecept · {number(batchQuantity)} {productionUnit(item)}</button>)}
    </div>}
-   <label>Gemaakt op<input type="date" required max={today} disabled={busy} value={productionDate} onChange={event=>setProductionDate(event.target.value)}/></label>
+   {needsOutputs&&<BatchOutputsFields value={outputs} onChange={setOutputs} disabled={busy}/>}<label>Gemaakt op<input type="date" required max={today} disabled={busy} value={productionDate} onChange={event=>setProductionDate(event.target.value)}/></label>
    <div className={s.people}><label>Jouw naam<input required disabled={busy} minLength={2} maxLength={80} value={who} onChange={event=>setWho(event.target.value)}/></label>{crewField}</div>
    {validCrew&&Number.isFinite(confirmedLabor)&&confirmedLabor>0&&<p className={s.labor}>{number(Number(minutes.replace(',','.')))} min × {crewSize} {crewSize===1?'persoon':'personen'} = <strong>{number(confirmedLabor)} arbeidsminuten</strong></p>}
    <small>Gepland: {number(task.quantity)} {productionUnit(item)}{timer&&<> · gemeten <WorkClock state={state} taskId={task.id}/></>}</small>

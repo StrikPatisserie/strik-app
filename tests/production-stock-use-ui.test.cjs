@@ -1,3 +1,4 @@
+const {productionConcurrencyImports}=require('./helpers/production-concurrency.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -6,6 +7,8 @@ const ts = require('typescript');
 const jsx = require('react/jsx-runtime');
 
 function load(file, imports) {
+ imports={...productionConcurrencyImports(imports), './BatchOutputsFields':{__esModule:true,default:()=>null},...imports};
+
   const exports = {};
   const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },

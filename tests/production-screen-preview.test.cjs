@@ -1,5 +1,8 @@
+const {productionConcurrencyImports}=require('./helpers/production-concurrency.cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
-function load(file,imports={}){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:name=>{assert(name in imports,`Missing ${name}`);return imports[name];},Date,Intl,Map,Set,Error,structuredClone});return exports;}
+function load(file,imports={}){
+ imports={...productionConcurrencyImports(imports), './BatchOutputsFields':{__esModule:true,default:()=>null},...imports};
+const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:name=>{assert(name in imports,`Missing ${name}`);return imports[name];},Date,Intl,Map,Set,Error,structuredClone});return exports;}
 const planning=load('app/productie/planning.ts'),recipes=load('app/productie/recipePlanning.ts',{'./planning':planning,'./materialPlanning':load('app/productie/materialPlanning.ts',{'./planning':planning})}),sample=load('app/preview/productie/sampleData.ts',{'../../productie/planning':planning});
 const work=load('app/productie/productionWork.ts',{'./planning':planning,'./recipePlanning':recipes});
 const model=load('app/preview/productie/scherm/model.ts',{'../../../productie/planning':planning,'../../../productie/productionWork':work,'../sampleData':sample});
@@ -23,7 +26,7 @@ test('permanent edits update the fixed recipe but do not move or reschedule exis
  assert.equal(next.history[0].after.semiFinishedItems.length,2);assert.equal(next.history[0].before.ingredients[0].quantity,12);
 });
 test('a new item without a recipe is schedulable and can receive a fixed recipe later',()=>{
- let state=model.planScreenTask(model.initialScreenState(),{name:'Nieuwe proefslof',departmentId:'luxe',quantity:24,date:'2026-11-06',id:'new',prepare:true});
+ let state=model.planScreenTask(model.initialScreenState(),{name:'Nieuwe proefslof',departmentId:'dessert',quantity:24,date:'2026-11-06',id:'new',prepare:true});
  const task=state.planner.tasks.find(t=>t.id==='new'),item=state.planner.items.find(i=>i.id===task.itemId);
  assert.equal(item.recipeId,undefined);assert.equal(task.quantity,24);assert.equal(model.taskRecipe(state,task),undefined);
  state=model.saveRecipeChange(state,{itemId:item.id,scope:'permanent',who:'Proefbakker',recipe:{id:'draft',name:'ignored',yield:24,unit:'stuks',ingredients:[{name:'Proefgrondstof',quantity:1000,unit:'gram'}],steps:['Voorbeeldwerkwijze.'],allergens:[]}},'recipe',now);

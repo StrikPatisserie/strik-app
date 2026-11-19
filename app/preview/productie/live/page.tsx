@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import ProductionPreview from "../ProductionPreview";
 import { recipeViews, syncRecipeCatalog, ingredientViews, todayAmsterdam } from "../../../productie/workspaceData";
 import type { RecepturenData } from "../../../bakkerij/recepturen/recepturenApi";
-import type { PreviewState } from "../../../productie/planning";
+import { DEPARTMENTS, type PreviewState } from "../../../productie/planning";
 
 export const dynamic = "force-dynamic";
 type SourceDocument = { key: string; data: unknown; revision: number; updated_at: string };
@@ -29,6 +29,6 @@ export default async function LivePlanningPreview() {
     today: todayAmsterdam(),
     canManage: false,
     readOnlyPreview: true,
-    departments: ["dessert", "luxe", "kapsel", "slagroom", "bruidstaarten", "bak", "brood", "ijs", "chocolade"],
+    departments: DEPARTMENTS.map((department) => department.id),
   }}/>;
 }

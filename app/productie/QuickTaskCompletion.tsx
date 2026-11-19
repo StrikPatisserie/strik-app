@@ -1,4 +1,6 @@
 "use client";
+import BatchOutputsFields from "./BatchOutputsFields";
+import {needsSoezenOutputs, batchOutputDraft, parseBatchOutputDraft} from "./batchOutputs";
 import {productionUnit} from "./planning";
 
 import { useState } from "react";
@@ -28,6 +30,9 @@ export default function QuickTaskCompletion({ state, task, item, recipes, busy, 
   const [productionDate, setProductionDate] = useState(task.date < today ? task.date : today);
   const [error, setError] = useState("");
   const [unmeasured, setUnmeasured] = useState(false);
+  const needsOutputs = needsSoezenOutputs(item, task);
+  const [outputs, setOutputs] = useState(() => batchOutputDraft());
+  const parsedOutputs = parseBatchOutputDraft(outputs);
   const madeQuantity = Number(quantity.replace(",", "."));
   const recipe = state.productionWork?.overrides?.[task.id] || recipes.find(recipe => recipe.id === item.recipeId);
   let baseQuantity: number | undefined;
@@ -41,7 +46,7 @@ export default function QuickTaskCompletion({ state, task, item, recipes, busy, 
   const minutes = enteredMinutes ?? (suggestedMinutes !== undefined && suggestedMinutes > 0 ? String(suggestedMinutes) : "");
   const amount = Number(minutes.replace(",", "."));
   const validQuantity = Number.isFinite(madeQuantity) && madeQuantity > 0 && madeQuantity <= 1000000;
-  const valid = validQuantity && !!productionDate && productionDate <= today && (unmeasured || who.trim().length >= 2 && who.trim().length <= 80
+  const valid = (!needsOutputs || !!parsedOutputs) && validQuantity && !!productionDate && productionDate <= today && (unmeasured || who.trim().length >= 2 && who.trim().length <= 80
     && Number.isFinite(amount) && amount > 0 && amount <= 1440
     && Number.isInteger(Number(crew)) && Number(crew) >= 1 && Number(crew) <= 20);
 
@@ -51,7 +56,7 @@ export default function QuickTaskCompletion({ state, task, item, recipes, busy, 
     const command: WorkCommand = unmeasured
       ? { kind: "complete", taskId: task.id, quantity: madeQuantity, timerId: timer?.id, unmeasured: true }
       : { kind: "complete", taskId: task.id, who, minutes: amount, crewSize: Number(crew), quantity: madeQuantity, timerId: timer?.id };
-    const result = await onCommand({ ...command, productionDate });
+    const result = await onCommand({ ...command, productionDate, ...(needsOutputs ? {batchOutputs: parsedOutputs} : {}) });
     if (result) setError(result);
     else onClose();
   }}>
@@ -66,6 +71,7 @@ export default function QuickTaskCompletion({ state, task, item, recipes, busy, 
         {index + 1}× basisrecept · {batchQuantity.toLocaleString("nl-NL", { maximumFractionDigits: 2 })} {productionUnit(item)}
       </button>)}
     </div>}
+    {needsOutputs && <BatchOutputsFields value={outputs} onChange={setOutputs} disabled={busy || readOnly}/>}
     <label>Gemaakt op<input type="date" required max={today} value={productionDate} disabled={busy} onChange={event => setProductionDate(event.target.value)} /></label>
     {!unmeasured && <div className={styles.numbers}>
       <label>Tijd (minuten)<input required inputMode="decimal" value={minutes} disabled={busy} onChange={event => setMinutes(event.target.value)} /></label>

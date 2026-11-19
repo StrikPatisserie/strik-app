@@ -1,5 +1,8 @@
+const {productionConcurrencyImports}=require('./helpers/production-concurrency.cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
-function load(file,imports={}){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:name=>{assert(name in imports,`Missing ${name}`);return imports[name];},Date,Intl,Map,Set,structuredClone});return exports;}
+function load(file,imports={}){
+ imports={...productionConcurrencyImports(imports), './BatchOutputsFields':{__esModule:true,default:()=>null},...imports};
+const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:name=>{assert(name in imports,`Missing ${name}`);return imports[name];},Date,Intl,Map,Set,structuredClone});return exports;}
 const planning=load('app/productie/planning.ts'),recipePlanning=load('app/productie/recipePlanning.ts',{'./planning':planning,'./materialPlanning':load('app/productie/materialPlanning.ts',{'./planning':planning})}),work=load('app/productie/productionWork.ts',{'./planning':planning,'./recipePlanning':recipePlanning});
 const fixture=()=>({version:1,planner:{version:1,items:[{id:'cake',name:'Taart',kind:'product',departmentId:'dessert',unit:'stuks',stock:0,note:'',recipeId:'recipe'}],tasks:[{id:'one',itemId:'cake',quantity:100,operation:'Vullen',date:'2026-11-06',departmentId:'dessert',status:'planned',source:'manual',note:'',batchId:'one',recordsOutput:true}]},recipes:[{id:'recipe',name:'Taart',unit:'stuks',yield:100,ingredients:[{name:'Bloem',quantity:1000,unit:'gram'}],steps:['Vullen'],allergens:[]}],overrides:{},preparation:{},history:[],work:[],timers:{},completions:{}});
 const at='2026-11-06T08:00:00Z';

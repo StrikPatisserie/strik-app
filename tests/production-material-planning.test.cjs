@@ -1,5 +1,8 @@
+const {productionConcurrencyImports}=require('./helpers/production-concurrency.cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
-function load(file,imports={}){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:key=>{if(!(key in imports))throw Error(`Unmocked ${key}`);return imports[key]},Date,Intl,Map,Set,Error,structuredClone});return exports;}
+function load(file,imports={}){
+ imports={...productionConcurrencyImports(imports), './BatchOutputsFields':{__esModule:true,default:()=>null},...imports};
+const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:key=>{if(!(key in imports))throw Error(`Unmocked ${key}`);return imports[key]},Date,Intl,Map,Set,Error,structuredClone});return exports;}
 const p=load('app/productie/planning.ts'),m=load('app/productie/materialPlanning.ts',{'./planning':p}),r=load('app/productie/recipePlanning.ts',{'./planning':p,'./materialPlanning':m}),w=load('app/productie/workspaceData.ts',{'./planning':p});
 function fixture(){
  const recipe=(id,yieldValue,parts=[],type='semiFinished')=>({id,name:id,yield:yieldValue,unit:type==='finalProduct'?'stuks':'kg',type,ingredients:[],steps:[],allergens:[],semiFinishedItems:parts});

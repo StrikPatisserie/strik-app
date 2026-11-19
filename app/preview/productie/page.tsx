@@ -4,6 +4,7 @@ import ProductionPreview from "./ProductionPreview";
 import ScreenPreview from "./scherm/ScreenPreview";
 import OperationalPreview from "./OperationalPreview";
 import ScreenMessagesPreview from "./ScreenMessagesPreview";
+import WelcomeMessagePreview from "./WelcomeMessagePreview";
 import ChristmasStockPreview from "./kerstvoorraad/ChristmasStockPreview";
 import { christmasForecastSource } from "./kerstvoorraad/source.server";
 import {productionBoard} from "../../productie/navigation";
@@ -20,6 +21,10 @@ export const metadata: Metadata = {
 export default async function ProductionPreviewPage({searchParams}:{searchParams:Promise<{scherm?:string;view?:string;board?:string}>}) {
   if (process.env.NODE_ENV !== "development") notFound();
   const params=await searchParams;
+  if(params.view==="welkom-wendy"){
+    // Read-only copy of the scheduled notice; this development view never changes it.
+    return <WelcomeMessagePreview message={{id:"welkom-terug-wendy-2026-11-20",version:1,title:"Welkom terug,\nWendy!",body:"Wat fijn dat je er weer bent.\nWe hebben je gemist!",startDate:"2026-11-20",endDate:"2026-11-20",startTime:"05:00",endTime:"10:00",variant:"welcome-baby",repeatAfterIdleMinutes:5}}/>;
+  }
   if(params.view==="feestdagen")return <ProductionResourceFrame title="Feestdagen" active="holidays" departments={DEPARTMENTS.map(department=>department.id)} canManage demo>
     <HolidayMenu forecastHref="/preview/productie?view=kerstvoorraad"/>
   </ProductionResourceFrame>;

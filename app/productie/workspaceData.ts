@@ -1,6 +1,9 @@
 import type { RecepturenData } from "../bakkerij/recepturen/recepturenApi";
 import { type DepartmentId, type DemoRecipe, type ItemUnit, type PreviewState, type Task, validProductionRequests, DEPARTMENTS, addDays, requiredTaskIds, validRecipePlan, validStaffingSettings, validCleaningDays, defaultComponentDepartment, validProductionStages, validProductionSteps } from "./planning";
 
+import {validBatchOutputs} from "./batchOutputs";
+import {normalizePlanningDepartments} from "./planningDepartments";
+
 export type IngredientView = { id: string; name: string; supplier: string; unit: string; linked: boolean; specification: string; allergens: string };
 export type LiveWorkspace = {
   appVersion?:string;
@@ -72,9 +75,11 @@ export function seedWorkspace(data: RecepturenData, views = recipeViews(data)): 
     state.items.push({ id, name: task.title, kind: "activity", departmentId: "dessert", unit: "taak", stock: 0, stockKnown: false, departmentUnconfirmed: true, note: task.note || "" });
     state.tasks.push({ id, itemId: id, departmentId: "dessert", date: task.date, quantity: 1, operation: "Uitvoeren", status: "planned", note: `${task.note || ""} · Overgenomen losse planning: ${task.quantity} ${task.unit}; afdeling controleren.`, source: "manual", batchId: `batch:${id}`, recordsOutput: false });
   }
-  return state;
+  return normalizePlanningDepartments(state);
 }
 export function syncRecipeCatalog(state: PreviewState, data: RecepturenData, recipes = recipeViews(data)): PreviewState {
+  state = normalizePlanningDepartments(state);
+  data = normalizePlanningDepartments(data);
   const source = seedWorkspace({...data,manualProductionPlanningItems:[],recipes:data.recipes.map(r=>({...r,productionRequests:[]}))},recipes);
   const known = new Set(state.items.map(i=>i.id));
   const linkedRecipes=new Set(state.items.map(i=>i.recipeId).filter(Boolean));
@@ -94,6 +99,9 @@ export function validWorkspace(value: unknown, recipes: DemoRecipe[]): value is 
   if(state.productionRequests!==undefined && !validProductionRequests(state.productionRequests))return false;
   if(state.staffing!==undefined && !validStaffingSettings(state.staffing))return false;
   if(state.cleaning!==undefined && !validCleaningDays(state.cleaning))return false;
+  const completions = state.productionWork?.completions;
+  if (completions !== undefined && (!completions || typeof completions !== "object" || Array.isArray(completions))) return false;
+  if (completions && Object.values(completions).some(c => c?.batchOutputs !== undefined && !validBatchOutputs(c.batchOutputs))) return false;
   const stockFulfillments=state.productionWork?.stockFulfillments;
   if(stockFulfillments!==undefined&&(!stockFulfillments||typeof stockFulfillments!=="object"||Array.isArray(stockFulfillments)))return false;
   const ids = new Set<string>(), tasks = new Map<string, Task>(), batches = new Set<string>();

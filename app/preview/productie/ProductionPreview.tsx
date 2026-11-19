@@ -1,5 +1,7 @@
 "use client";
 
+import {canonicalDepartmentId} from "../../productie/planningDepartments";
+
 /* eslint-disable @next/next/no-img-element -- private authenticated offer images retain their existing source URL. */
 
 import Link from "next/link";
@@ -58,9 +60,9 @@ const ProductionInventory=dynamic(()=>import("../../productie/ProductionInventor
 const WorkspaceContext = createContext({ demo:true, recipes:demoRecipes, canManage:true, saving:false });
 
 const DEPARTMENT_BADGES: Record<DepartmentId | "cleaning", { label: string; icon: IconName }> = {
-  dessert: { label: "FRUIT", icon: "fruit" },
+  dessert: { label: "FR/GBK", icon: "fruit" },
   luxe: { label: "GBK", icon: "pastry" },
-  kapsel: { label: "KPSL", icon: "cake" },
+  kapsel: { label: "SL/KPSL", icon: "cake" },
   slagroom: { label: "SLGR", icon: "cream" },
   bruidstaarten: { label: "BRDS", icon: "wedding" },
   bak: { label: "BAK", icon: "oven" },
@@ -134,7 +136,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
   const newLayout=layout==="new";
   const [collapsed,setCollapsed]=useState<string[]>([]);
   const [period,setPeriod]=useState<"week"|"day">("week");
-  const [department, setDepartment] = useState<DepartmentId | "all">(initialDepartment || "all");
+  const [department, setDepartment] = useState<DepartmentId | "all">(canonicalDepartmentId(initialDepartment || "all"));
   const [statusFilter, setStatusFilter] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
   const [query, setQuery] = useState("");
@@ -170,7 +172,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
       const saved=decodeReloadView(sessionStorage.getItem(RELOAD_VIEW_KEY),location.pathname+location.search,Date.now());
       sessionStorage.removeItem(RELOAD_VIEW_KEY);
       if(saved&&(!live||departmentsFor(saved.board).some(d=>live.departments.includes(d.id)))){
-        setPeriod(saved.period || "week");setWeek(saved.period==="day"?mondayOf(saved.day):saved.week);setDay(saved.day);setBoard(canonicalBoardId(saved.board));setDepartment(saved.department);setStatusFilter(saved.statusFilter);setWeekend(saved.weekend);
+        setPeriod(saved.period || "week");setWeek(saved.period==="day"?mondayOf(saved.day):saved.week);setDay(saved.day);setBoard(canonicalBoardId(saved.board));setDepartment(canonicalDepartmentId(saved.department));setStatusFilter(saved.statusFilter);setWeekend(saved.weekend);
       }
     }catch{/* No planner snapshot is ever restored from browser storage. */}
   // Restore view preferences once; subsequent data always comes from the API.

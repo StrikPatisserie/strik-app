@@ -1,9 +1,12 @@
+const {productionConcurrencyImports}=require('./helpers/production-concurrency.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const ts = require('typescript');
 function load(file, imports = {}, extra = '', environment = 'development') {
+ imports={...productionConcurrencyImports(imports), './BatchOutputsFields':{__esModule:true,default:()=>null},...imports};
+
   const exports = {};
   const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
   vm.runInNewContext(code + extra, { exports, require: name => imports[name] || {}, Date, Intl, structuredClone, process: { env: { NODE_ENV: environment } } });
@@ -29,7 +32,7 @@ test('calendar weeks survive Amsterdam clock changes and ISO year boundaries', (
   assert.throws(() => m.addDays('2026-02-30', 1), /datum/);
 });
 test('three planning boards retain department IDs and combine baking/bread and chocolate/ice', () => {
-  assert.deepEqual(Array.from(m.departmentsFor('patisserie'), d => d.id), ['dessert', 'luxe', 'kapsel', 'slagroom', 'bruidstaarten']);
+  assert.deepEqual(Array.from(m.departmentsFor('patisserie'), d => d.id), ['dessert', 'kapsel', 'bruidstaarten']);
   assert.deepEqual(Array.from(m.departmentsFor('bak'), d => d.id), ['bak', 'brood']);
   assert.equal(m.BOARDS.find(board => board.id === 'bak').name, 'Bak & brood');
   assert.equal(m.BOARDS.some(board => board.id === 'brood'), false);
