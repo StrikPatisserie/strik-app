@@ -57,17 +57,17 @@ test('Feline can schedule, change or turn off a notice, with CAS and origin chec
 });
 
 function uiHarness(options={}){
- const slots=[],timers=[],storage=new Map(),time=clock(options.now||'2026-11-06T12:00:00Z');let index=0,otherDialog=!!options.otherDialog;
+ const slots=[],timers=[],listeners=new Map(),storage=new Map(),time=clock(options.now||'2026-11-06T12:00:00Z');let index=0,otherDialog=!!options.otherDialog;
  const slot=init=>{const i=index++;if(!(i in slots))slots[i]=typeof init==='function'?init():init;return i;};
  const same=(a,b)=>a?.length===b?.length&&a.every((x,i)=>Object.is(x,b[i]));
  const react={useRef:value=>slots[slot(()=>({current:value}))],useState:init=>{const i=slot(init);return[slots[i],next=>{slots[i]=typeof next==='function'?next(slots[i]):next;}];},useEffect:(fn,deps)=>{const i=slot(()=>({deps:undefined}));if(!same(slots[i].deps,deps)){slots[i].deps=deps;fn();}}};
- const doc={hidden:false,querySelector:()=>otherDialog?{}:null,activeElement:{matches:()=>false},addEventListener:()=>{},removeEventListener:()=>{}};
+ const doc={hidden:false,querySelector:()=>otherDialog?{}:null,activeElement:{matches:()=>false},addEventListener:(event,fn)=>{listeners.set(event,[...(listeners.get(event)||[]),fn]);},removeEventListener:(event,fn)=>{listeners.set(event,(listeners.get(event)||[]).filter(item=>item!==fn));}};
  const component=load('app/productie/BakeryScreenMessages.tsx',{'react':react,'react/jsx-runtime':jsx,'./ProductionIcon':{__esModule:true,default:'icon'},'./ScreenMessageCard':{__esModule:true,default:'notice-card'},'./screenMessages':model,'./screenMessages.module.css':{__esModule:true,default:{}}},{Date:time.Date,document:doc,localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value)},setInterval:(fn,ms)=>{timers.push({fn,ms});return timers.length;},clearInterval:()=>{}}).default;
  let messages=[{...message}],request=async()=>({now:new time.Date().toISOString(),messages:plain(messages)});
  const render=(blocked=false)=>{index=0;return component({blocked,request});};
  const nodes=tree=>!tree||typeof tree!=='object'?[]:Array.isArray(tree)?tree.flatMap(nodes):[tree,...nodes(tree.props?.children)];
  const card=tree=>nodes(tree).find(n=>n.type==='notice-card');
- return{render,card,storage,flush:()=>new Promise(resolve=>setImmediate(resolve)),advance:ms=>{time.advance(ms);timers.filter(t=>t.ms===1000).forEach(t=>t.fn());},poll:()=>timers.filter(t=>t.ms===60000).forEach(t=>t.fn()),setMessages:value=>messages=value,setDialog:value=>otherDialog=value,nodes};
+ return{render,card,storage,flush:()=>new Promise(resolve=>setImmediate(resolve)),advance:ms=>{time.advance(ms);timers.filter(t=>t.ms===1000).forEach(t=>t.fn());},poll:()=>timers.filter(t=>t.ms===60000).forEach(t=>t.fn()),setMessages:value=>messages=value,setDialog:value=>otherDialog=value,activity:()=>{for(const fn of listeners.get('pointerdown')||[])fn();},nodes};
 }
 test('popup waits for editing to finish, can be dismissed and reread, and an edited version is shown again',async()=>{
  const h=uiHarness({otherDialog:true});h.render();await h.flush();h.render();assert.equal(h.card(h.render()),undefined);
@@ -81,4 +81,17 @@ test('an already open popup and its reopen button disappear at Amsterdam midnigh
 });
 test('multiple active messages can be read consecutively instead of losing access after dismissing them',async()=>{
  const h=uiHarness();h.setMessages([{...message},{...message,id:'second',title:'Tweede bericht'}]);h.render();await h.flush();h.render();let card=h.card(h.render());assert.equal(card.props.message.id,message.id);card.props.onClose();card=h.card(h.render());assert.equal(card.props.message.id,'second');card.props.onClose();assert.equal(h.card(h.render()),undefined);
+});
+
+const wendy={...message,id:'welkom-terug-wendy-2026-11-20',title:'Welkom terug, Wendy!',startDate:'2026-11-20',endDate:'2026-11-20',startTime:'05:00',endTime:'10:00',variant:'welcome-baby',repeatAfterIdleMinutes:5};
+test('Wendy notice uses Amsterdam 05:00 inclusive and 10:00 exclusive, with its presentation and repeat settings preserved',()=>{
+ for(const [now,count] of [['2026-11-20T03:59:59.999Z',0],['2026-11-20T04:00:00Z',1],['2026-11-20T08:59:59.999Z',1],['2026-11-20T09:00:00Z',0],['2026-11-21T04:00:00Z',0]])assert.equal(model.activeScreenMessages([wendy],now).length,count);
+ const row=model.activeScreenMessages([wendy],'2026-11-20T04:00:00Z')[0];assert.equal(row.variant,'welcome-baby');assert.equal(row.repeatAfterIdleMinutes,5);assert.equal(row.startTime,'05:00');assert.equal(row.endTime,'10:00');
+ for(const change of [{startTime:'24:00'},{endTime:'10:60'},{startTime:'10:00'},{repeatAfterIdleMinutes:0},{repeatAfterIdleMinutes:1.5},{variant:'other'}])assert.throws(()=>model.saveScreenMessage(model.initialScreenMessages(),{...wendy,...change},{id:'feline',name:'Feline'},'2026-11-19T11:00:00Z'));
+});
+test('dismissed welcome returns only after five quiet minutes, activity resets that interval and expiry works offline',async()=>{
+ const h=uiHarness({now:'2026-11-20T08:40:00Z'});h.setMessages([wendy]);h.render();await h.flush();h.render();assert(h.card(h.render()));h.card(h.render()).props.onClose();h.render();
+ h.advance(299000);assert.equal(h.card(h.render()),undefined);h.activity();h.advance(299000);assert.equal(h.card(h.render()),undefined);
+ h.setDialog(true);h.advance(1000);h.render();assert.equal(h.card(h.render()),undefined);h.setDialog(false);h.render();assert(h.card(h.render()));
+ h.advance(20*60000);assert.equal(h.render(),null);
 });

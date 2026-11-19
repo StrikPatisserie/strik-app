@@ -2,7 +2,7 @@
 import {useEffect,useRef,useState} from "react";
 import Icon from "./ProductionIcon";
 import ScreenMessageCard from "./ScreenMessageCard";
-import {SCREEN_SEEN_KEY,readScreenSeen,screenDate,screenMessageToken,type ScreenMessageView} from "./screenMessages";
+import {SCREEN_SEEN_KEY,readScreenSeen,isScreenMessageActive,screenMessageToken,type ScreenMessageView} from "./screenMessages";
 import s from "./screenMessages.module.css";
 export type ScreenMessageFeed={now:string;messages:ScreenMessageView[]};
 async function loadMessages():Promise<ScreenMessageFeed>{
@@ -12,9 +12,16 @@ async function loadMessages():Promise<ScreenMessageFeed>{
 export default function BakeryScreenMessages({blocked=false,request=loadMessages}:{blocked?:boolean;request?:()=>Promise<ScreenMessageFeed>}){
  const [feed,setFeed]=useState<ScreenMessageFeed>({now:"1970-01-01T00:00:00Z",messages:[]}),[clock,setClock]=useState(0),[seen,setSeen]=useState<string[]|null>(null),[opened,setOpened]=useState<string|null>(null);
  const [anchor,setAnchor]=useState({server:0,local:0}),serial=useRef(0);
- const currentDate=screenDate(anchor.server+clock-anchor.local);
- const active=feed.messages.filter(message=>message.startDate<=currentDate&&currentDate<=message.endDate);
+ const lastActivity=useRef(0);
+ const active=feed.messages.filter(message=>isScreenMessageActive(message,anchor.server+clock-anchor.local));
  const current=active.find(message=>screenMessageToken(message)===opened);
+ useEffect(()=>{
+  lastActivity.current=Date.now();
+  const activity=()=>{lastActivity.current=Date.now();};
+  const events=["pointermove","pointerdown","keydown","touchstart","wheel"];
+  events.forEach(event=>document.addEventListener(event,activity,{passive:true}));
+  return()=>events.forEach(event=>document.removeEventListener(event,activity));
+ },[]);
  useEffect(()=>{try{setSeen(readScreenSeen(localStorage.getItem(SCREEN_SEEN_KEY)));}catch{setSeen([]);}},[]);
  useEffect(()=>{
   let mounted=true;
@@ -28,9 +35,10 @@ export default function BakeryScreenMessages({blocked=false,request=loadMessages
  useEffect(()=>{
   if(blocked||document.hidden||seen===null||current)return;
   if(document.querySelector('dialog[open],[role="dialog"],[aria-busy="true"]')||document.activeElement?.matches('input,textarea,select,[contenteditable="true"]'))return;
-  const next=active.find(message=>!seen.includes(screenMessageToken(message)));if(next)setOpened(screenMessageToken(next));
+  const next=active.find(message=>!seen.includes(screenMessageToken(message))||(message.repeatAfterIdleMinutes&&clock-lastActivity.current>=message.repeatAfterIdleMinutes*60000));if(next)setOpened(screenMessageToken(next));
  },[active,blocked,current,seen,clock]);
  function dismiss(){
+  lastActivity.current=Date.now();
   if(opened){const next=[...(seen||[]).filter(value=>value!==opened),opened].slice(-100);setSeen(next);try{localStorage.setItem(SCREEN_SEEN_KEY,JSON.stringify(next));}catch{/* Acknowledged for this open screen when browser storage is disabled. */}}
   const next=active[active.findIndex(message=>screenMessageToken(message)===opened)+1];setOpened(next&&!blocked?screenMessageToken(next):null);
  }
