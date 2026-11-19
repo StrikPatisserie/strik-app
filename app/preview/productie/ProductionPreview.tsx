@@ -502,7 +502,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
         <span className={n.quantity} title={`${task.status === "done" ? "Gemaakt" : "Gepland"} · ${displayQuantity.toLocaleString("nl-NL", { maximumFractionDigits: 2 })} ${productionUnit(item)}`}>
           <span>{quantity(displayQuantity)}</span><small>{productionUnit(item)}</small>
         </span>
-        {((task.departmentId==="bak" || task.departmentId==="brood") && /^(Produceren|Afbakken)$/.test(task.operation) || task.productionStage) && <small className={n.bakeryOperation}>{task.operation}</small>}
+        {(task.productionStage || productionRoute(item, task)?.steps.includes(task.operation)) && <small className={n.bakeryOperation}>{task.operation}</small>}
       </div>
       <button type="button" className={n.openTask} aria-label={`Open ${item.name} · ${task.operation}`} onClick={() => setModal({ type: "detail", id: task.id })}>
         <strong data-fit-text>{cardTitle.split(/\s+/).map((word, i) => <Fragment key={i}>{i > 0 ? " " : null}<span data-fit-word>{word}</span></Fragment>)}</strong>
@@ -610,7 +610,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
           <strong data-fit-text>{displayName.split(/\s+/).map((word,i)=><Fragment key={i}>{i>0?" ":null}<span data-fit-word>{word}</span></Fragment>)}</strong>
         </button>
         <div className={s.taskMeta}>
-          {(task.departmentId==="bak" || task.departmentId==="brood") && /^(Produceren|Afbakken)$/.test(task.operation) && <small className={s.bakeryOperation}>{task.operation}</small>}
+          {(task.productionStage || productionRoute(item, task)?.steps.includes(task.operation)) && <small className={s.bakeryOperation}>{task.operation}</small>}
           {showStatus&&<button type="button" className={s.taskStep} aria-label={`Stap ${step} openen: ${item.name}`} onClick={()=>setModal({type:"detail",id:task.id})}>
             <small data-warning-only={warningOnly||undefined}>{task.stockFulfillmentId&&"Uit voorraad"}{task.status==="active"&&<><WorkClock state={state} taskId={task.id}/>{!state.productionWork?.timers?.[task.id]&&"Bezig"}</>}{task.status==="blocked"&&"Controleren"}{issues.length>0&&<span className={s.taskWarning} title={issues.join(" ")}><Icon name="warning" size={12}/></span>}</small>
           </button>}
