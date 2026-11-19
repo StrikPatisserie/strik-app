@@ -139,6 +139,10 @@ export function hasFullAccess(profile: UserProfile | null | undefined) {
   );
 }
 
+export function canViewHomeDayRevenue(profile: UserProfile | null | undefined) {
+  return hasFullAccess(profile) || Boolean(profile?.active && hasPermission(profile, "home.day_revenue"));
+}
+
 export function canAccessPersonalNotes(profile: UserProfile | null | undefined) {
   return hasFullAccess(profile) && profile?.personal_workspace===true;
 }

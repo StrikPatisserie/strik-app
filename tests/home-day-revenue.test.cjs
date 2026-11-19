@@ -36,7 +36,7 @@ function endpoint(profile,storage={status:'wordpress'}){let reads=0;const api=lo
  '@/app/management/revenueHistoryServer':{getRevenueComparisonHistory:async()=>[]},
  '@/app/management/revenueServer':{getStoredRevenueData:async()=>{reads++;return{storage,data:{dailyRecords:[record('Lent','2026-11-03',1234.56,{note:'private note',messageId:'private-message'})],cashRecords:['private cash'],records:['private weekly']}};}},'@/app/management/homeDayRevenue':model,
  });return{get:(request=new Request("https://app.strik-patisserie.nl/api/home-day-revenue"))=>api.GET(request),reads:()=>reads};}
-test('only active management accounts can retrieve revenue; other users never trigger a data read',async()=>{
+test('management can retrieve revenue; other users without the separate permission never trigger a data read',async()=>{
  for(const profile of [null,{active:false,role:'manager'},...['winkel','bakkerij','logistiek','medewerker'].map(role=>({active:true,role,permissions:{'management.view':true}}))]){
   const api=endpoint(profile),response=await api.get();assert.equal(response.status,403);assert.equal(api.reads(),0);assert.match(response.headers.get('cache-control'),/private, no-store/);
  }
@@ -137,4 +137,16 @@ test('subtle controls fetch the selected day and down arrow returns to live late
 });
 test('invalid date query is rejected before retrieving private revenue',async()=>{
  const api=endpoint({active:true,role:'manager'});const response=await api.get(new Request('https://app.strik-patisserie.nl/api/home-day-revenue?date=2026-02-31'));assert.equal(response.status,400);assert.equal(api.reads(),0);
+});
+
+test('delegated daily-revenue permission grants only the public summary, not management access',async()=>{
+  const profile={active:true,role:'winkel',permissions:{'stores.lent':true,'home.day_revenue':true}};
+  assert.equal(access.canViewHomeDayRevenue(profile),true);
+  assert.equal(access.hasFullAccess(profile),false);
+  assert.equal(access.canAccessPath(profile, "/management"),false);
+  const api=endpoint(profile),response=await api.get(),data=await response.json();
+  assert.equal(response.status,200);assert.equal(data.shops.length,4);assert(!JSON.stringify(data).includes('private'));
+  for(const denied of [null,{...profile,active:false},{...profile,permissions:{'home.day_revenue':false}}]){
+   assert.equal(access.canViewHomeDayRevenue(denied),false);const restricted=endpoint(denied);assert.equal((await restricted.get()).status,403);assert.equal(restricted.reads(),0);
+  }
 });

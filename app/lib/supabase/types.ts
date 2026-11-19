@@ -63,6 +63,7 @@ export const USER_STORES = [
 ];
 
 export const PERMISSION_OPTIONS = [
+  { id: "home.day_revenue", label: "Dagomzetten op startscherm bekijken" },
   { id: "winkel.view", label: "Winkel bekijken" },
   { id: "bruidstaarten.view", label: "Bruidstaarten bekijken" },
   { id: "stores.ziekerstraat", label: "Winkel Ziekerstraat" },

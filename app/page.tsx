@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ProductionAppIcon, strikIcons } from "./StrikUI";
 import { filterVisibleMainNavigationItems } from "./featureVisibility";
 import { getFeatureVisibilitySettings } from "./lib/appSettings";
-import { filterAllowedItems, hasFullAccess } from "./lib/auth/access";
+import { filterAllowedItems, canViewHomeDayRevenue } from "./lib/auth/access";
 import HomeDayRevenue from "./HomeDayRevenue";
 import { getCurrentProfile } from "./lib/auth/session";
 import type { UserProfile } from "./lib/supabase/types";
@@ -147,7 +147,7 @@ export default async function Home() {
             <p className="mt-6 max-w-lg text-sm font-bold leading-relaxed text-[#49342d]/75 sm:text-base xl:mt-7">
               Fijn dat je er bent. Alles wat je vandaag nodig hebt, vind je vanuit hier.
             </p>
-            {hasFullAccess(profile) && <HomeDayRevenue />}
+            {canViewHomeDayRevenue(profile) && <HomeDayRevenue />}
           </div>
 
           <div className="relative hidden justify-center lg:flex">
