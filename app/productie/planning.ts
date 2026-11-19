@@ -36,6 +36,7 @@ export type Task = {
   recipePlan?: RecipePlanSettings;
   weddingCode?: string; weddingDeliveryDate?: string; completedQuantity?:number;
   stockFulfillmentId?:string;
+  sortOrder?: number;
   productionStage?: { stepId: string; steps?: string[]; sources: { taskId: string; quantity: number }[] };
 };
 export type PreparationChoice = { include?: boolean; date?: string; daysBefore?: number; departmentId?: DepartmentId; operation?: string; minutes?: number | null; sourceTaskId?: string };
@@ -425,6 +426,8 @@ export function validProductionSteps(value: unknown): value is string[] {
     && value.every(step => typeof step === "string" && (PRODUCTION_STEP_OPTIONS as readonly string[]).includes(step));
 }
 export const PRODUCTION_ROUTES = [
+  // Fresh finishing is handled in the daily daystart, outside batch production.
+  { recipeId: "recipe-new-1792222628720", steps: ["Produceren"], stockStep: 0 },
   { recipeId: "recipe-new-1782226444084", steps: ["Produceren", "Afbakken"], stockStep: 0 },
   { recipeId: "recipe-new-1783506022927", steps: ["Interieur maken", "Storten", "Plakken", "Afwerken"], stockStep: 3 },
   { recipeId: "recipe-new-1782249922037", steps: ["Spuiten", "Doorhalen"], stockStep: 1, unitLabel: "doosjes", packSize: 10 },

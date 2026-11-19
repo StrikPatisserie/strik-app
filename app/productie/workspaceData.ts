@@ -107,6 +107,7 @@ export function validWorkspace(value: unknown, recipes: DemoRecipe[]): value is 
     for (const t of state.tasks) {
       if (!t || !ids.has(t.itemId) || typeof t.id !== "string" || !t.id || tasks.has(t.id) || !Number.isFinite(t.quantity) || t.quantity <= 0 || t.quantity > 1000000 || !["planned","active","done","blocked"].includes(t.status) || !["manual","shop","order","routine"].includes(t.source) || !DEPARTMENTS.some(d => d.id === t.departmentId) || typeof t.operation !== "string" || !t.operation.trim() || typeof t.note !== "string" || t.note.length > 10000 || typeof t.batchId !== "string" || !t.batchId || typeof t.recordsOutput !== "boolean") return false;
       if(t.recipePlan!==undefined && !validRecipePlan(t.recipePlan))return false;
+      if(t.sortOrder!==undefined && (!Number.isSafeInteger(t.sortOrder) || t.sortOrder<0 || t.sortOrder>1000000))return false;
       if(t.completedQuantity!==undefined && (t.status!=="done" || !Number.isFinite(t.completedQuantity) || t.completedQuantity<=0 || t.completedQuantity>1000000))return false;
       if(t.stockFulfillmentId!==undefined){
         const stock=stockFulfillments?.[t.id],item=state.items.find(row=>row.id===t.itemId);

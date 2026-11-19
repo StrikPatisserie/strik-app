@@ -120,11 +120,12 @@ export type RecipeTaskCluster = {
 };
 
 /** Presentation only: keep a shared batch once, with all of its real consumers. */
-export function recipeTaskClusters(tasks: Task[], links: Map<string, RecipeLink[]>): RecipeTaskCluster[] {
+export function recipeTaskClusters(tasks: Task[], links: Map<string, RecipeLink[]>, splitUnlinked = false): RecipeTaskCluster[] {
+  const ordered = splitUnlinked || tasks.some(task => task.sortOrder !== undefined);
   const clusters = new Map<string, RecipeTaskCluster>();
   for (const task of tasks) {
     const family = links.get(task.id) || [];
-    const key = family.length ? JSON.stringify(family.map(link => link.rootId).sort()) : "unlinked";
+    const key = family.length ? JSON.stringify(family.map(link => link.rootId).sort()) : ordered ? `unlinked:${task.id}` : "unlinked";
     const cluster = clusters.get(key) || { key, name: family.length === 1 ? family[0].name : undefined, links: family, tasks: [] };
     cluster.tasks.push(task);
     clusters.set(key, cluster);
@@ -147,11 +148,12 @@ export function recipeTaskClusters(tasks: Task[], links: Map<string, RecipeLink[
     }
     // A recipe's preparation stays before its finishing steps, regardless of save order.
     for (const task of cluster.tasks) depth(task);
-    cluster.tasks.sort((a, b) => depths.get(a.id)! - depths.get(b.id)!);
+    cluster.tasks.sort((a, b) => depths.get(a.id)! - depths.get(b.id)! || (a.sortOrder ?? Number.MAX_SAFE_INTEGER) - (b.sortOrder ?? Number.MAX_SAFE_INTEGER));
   }
   return [...clusters.values()].sort((a, b) => {
     const rank = (cluster: RecipeTaskCluster) => !cluster.links.length ? 2 : cluster.links.length > 1 ? 0 : 1;
-    return rank(a) - rank(b) || (a.name || a.links.map(link => link.name).join(" · ")).localeCompare(b.name || b.links.map(link => link.name).join(" · "), "nl-NL") || a.key.localeCompare(b.key);
+    const position = (cluster: RecipeTaskCluster) => Math.min(...cluster.tasks.map(task => task.sortOrder ?? Number.MAX_SAFE_INTEGER));
+    return position(a) - position(b) || rank(a) - rank(b) || (a.name || a.links.map(link => link.name).join(" · ")).localeCompare(b.name || b.links.map(link => link.name).join(" · "), "nl-NL") || a.key.localeCompare(b.key);
   });
 }
 
@@ -166,4 +168,26 @@ export function recipeDayClusters(tasks: Task[], allTasks: Task[], links: Map<st
     tasks: cluster.tasks.filter(task => !generatedBatches.has(task.batchId) || !links.get(task.id)?.some(link => link.rootId !== task.id)),
     preparations: cluster.tasks.filter(task => generatedBatches.has(task.batchId) && links.get(task.id)?.some(link => link.rootId !== task.id)),
   }));
+}
+
+/** Save only the display order. Recipe families and quantities remain intact. */
+export function reorderDayTasks(tasks: Task[], ids: string[], date: string, departmentId: Task["departmentId"], beforeId: string | null, links: Map<string, RecipeLink[]>): Task[] {
+  const lane = tasks.filter(task => task.date === date && task.departmentId === departmentId);
+  const selected = new Set(ids);
+  if (!ids.length || ids.some(id => !lane.some(task => task.id === id))) throw Error("Deze taak staat niet in de gekozen dag en afdeling.");
+  if (beforeId !== null && !lane.some(task => task.id === beforeId)) throw Error("De gekozen positie is niet meer beschikbaar.");
+  if (beforeId && selected.has(beforeId)) return tasks;
+  const clusters = recipeTaskClusters(lane, links, true);
+  const moving = clusters.filter(cluster => cluster.tasks.some(task => selected.has(task.id)));
+  const destination = clusters.find(cluster => cluster.tasks.some(task => task.id === beforeId));
+  // Within a family, individual steps can move; between families the family stays together.
+  const withinFamily = moving.length === 1 && moving[0] === destination;
+  const movingIds = withinFamily ? selected : new Set(moving.flatMap(cluster => cluster.tasks.map(task => task.id)));
+  const ordered = clusters.flatMap(cluster => cluster.tasks);
+  const remaining = ordered.filter(task => !movingIds.has(task.id));
+  const anchor = withinFamily ? beforeId : destination?.tasks.find(task => !movingIds.has(task.id))?.id;
+  const index = anchor ? remaining.findIndex(task => task.id === anchor) : remaining.length;
+  remaining.splice(index < 0 ? remaining.length : index, 0, ...ordered.filter(task => movingIds.has(task.id)));
+  const positions = new Map(remaining.map((task, index) => [task.id, index + 1]));
+  return tasks.map(task => positions.has(task.id) ? { ...task, sortOrder: positions.get(task.id)! } : task);
 }

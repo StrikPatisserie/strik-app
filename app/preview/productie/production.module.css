@@ -1496,3 +1496,5 @@
 .holidayOptellerFooter { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; padding-top:12px; color:#5d715e; font-size:12px; }
 @media(max-width:450px) { .holidayProductTotal li { grid-template-columns:48px minmax(0,1fr); gap:3px 8px; }.holidayProductTotal li > :last-child { grid-column:2; }.holidayProductTotal > summary { font-size:13px; } }
 @media(prefers-reduced-motion:reduce) { .holidayProductTotal > summary svg { transition:none; } }
+
+.root [data-task-sort-before=true] { box-shadow: 0 -3px 0 #1b3344; }

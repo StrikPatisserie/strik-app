@@ -20,10 +20,12 @@ export type PreparationProposal = { quantity: number; recipeCount?: number; rows
 
 const stableQuantity=(n:number)=>Math.round(n*1e9)/1e9;
 
-/** Daily whipped cream stays in the recipe but is optional as a separate task. */
+/** Daily creams stay in recipes, with separate preparation available on request. */
 function separatelyPlannedByDefault(name: string): boolean {
-  const words = name.toLocaleLowerCase("nl-NL").split(/[^\p{L}]+/u);
-  return !(words.includes("slagroom") && words.some(word => /^(gezoet|opgeklopt)e?$/.test(word)));
+  const words = name.normalize("NFD").replace(/\p{M}/gu, "").toLocaleLowerCase("nl-NL").split(/[^a-z]+/);
+  const dailyWhippedCream = words.includes("slagroom") && words.some(word => /^(gezoet|opgeklopt)e?$/.test(word));
+  const dailyButterCream = words.includes("room") && words.includes("botercreme");
+  return !dailyWhippedCream && !dailyButterCream;
 }
 
 /** New orders start on the same day, including nested preparations. */
@@ -180,7 +182,7 @@ function buildPlan(state:PreviewState,recipes:DemoRecipe[],command:PlanCommand,o
   // Do not spread untrusted dependency metadata from the browser into a task.
   const draft=command.task;
   const root:Task={id:draft.id,itemId:draft.itemId,departmentId:draft.departmentId,date:draft.date,quantity:proposal.quantity,operation:draft.operation,status:draft.status,
-    note:draft.note,source:draft.source,batchId:draft.batchId,recordsOutput:!isBakeOffTask(draft) && draft.recordsOutput,
+    note:draft.note,source:draft.source,batchId:draft.batchId,...(draft.sortOrder!==undefined?{sortOrder:draft.sortOrder}:{}),recordsOutput:!isBakeOffTask(draft) && draft.recordsOutput,
     ...(draft.minutes!==undefined?{minutes:draft.minutes}:{}),...(draft.dueDate?{dueDate:draft.dueDate}:{}),...(draft.dependsOn?{dependsOn:draft.dependsOn}:{}),
     ...(included.length?{requires:included.filter(r=>directIds.has(r.recipeId)).map(r=>taskIds.get(r.recipeId)!)}:{}),
     recipePlan:{amount:command.amount,amountMode:command.amountMode,...(command.preparation?{preparation:{daysBefore:command.preparation.daysBefore,...(command.preparation.combine!==undefined?{combine:command.preparation.combine}:{}),choices:Object.fromEntries(proposal.rows.filter(r=>command.preparation!.choices[r.recipeId]).map(r=>{const c=command.preparation!.choices[r.recipeId];return [r.recipeId,{...(c.include!==undefined?{include:c.include}:{}),...(c.date?{date:c.date}:{}),...(c.daysBefore!==undefined?{daysBefore:c.daysBefore}:{}),...(c.departmentId?{departmentId:c.departmentId}:{}),...(c.operation!==undefined?{operation:c.operation}:{}),...(c.minutes!==undefined?{minutes:c.minutes}:{}),...(c.sourceTaskId?{sourceTaskId:c.sourceTaskId}:{})}];}))}}:{})}};

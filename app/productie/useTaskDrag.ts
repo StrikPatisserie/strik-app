@@ -6,16 +6,23 @@ import type {DepartmentId} from "./planning";
 type TaskDragOptions={
   frameRef:RefObject<HTMLElement|null>;
   enabled:boolean;
-  onMove:(id:string,date:string,departmentId:DepartmentId)=>void|Promise<unknown>;
+  onMove:(id:string,date:string,departmentId:DepartmentId,beforeId?:string|null)=>void|Promise<unknown>;
   onDragChange?:(id:string|null)=>void;
 };
 type DragSession={
   id:string;pointerId:number;handle:HTMLElement;card:HTMLElement;
   startX:number;startY:number;x:number;y:number;offsetX:number;offsetY:number;
   scale:number;active:boolean;ghost:HTMLElement|null;target:HTMLElement|null;
-  frame:number;removeListeners:()=>void;
+  before:HTMLElement|null;frame:number;removeListeners:()=>void;
 };
 const targetSelector="[data-task-date]";
+
+export function taskDropBefore(target: HTMLElement, y: number, source: HTMLElement | null): string | null | undefined {
+  const markers = [...target.querySelectorAll<HTMLElement>("[data-task-sort-id]")].filter(node => !!node.dataset.taskSortId && node.getBoundingClientRect().height > 0);
+  if (!markers.length) return undefined;
+  return markers.find(node => !node.contains(source) && !source?.contains(node) && y < node.getBoundingClientRect().top + node.getBoundingClientRect().height / 2)?.dataset.taskSortId ?? null;
+}
+
 
 function makeGhost(card:HTMLElement){
   const ghost=card.cloneNode(true) as HTMLElement;
@@ -85,6 +92,7 @@ export default function useTaskDrag(options:TaskDragOptions){
     delete drag.handle.dataset.taskDragPressed;
     delete drag.card.dataset.taskDragging;
     if(drag.target)delete drag.target.dataset.taskDragOver;
+    if(drag.before)delete drag.before.dataset.taskSortBefore;
     if(drag.handle.hasPointerCapture?.(drag.pointerId))drag.handle.releasePointerCapture(drag.pointerId);
     if(drag.active)latest.current.onDragChange?.(null);
   },[]);
@@ -111,7 +119,7 @@ export default function useTaskDrag(options:TaskDragOptions){
       event.preventDefault();
       event.stopPropagation();
       const rect=card.getBoundingClientRect();
-      const drag:DragSession={id,pointerId:event.pointerId,handle,card,startX:event.clientX,startY:event.clientY,x:event.clientX,y:event.clientY,offsetX:event.clientX-rect.left,offsetY:event.clientY-rect.top,scale:rect.width/(card.offsetWidth||rect.width||1),active:false,ghost:null,target:null,frame:0,removeListeners:()=>{}};
+      const drag:DragSession={id,pointerId:event.pointerId,handle,card,startX:event.clientX,startY:event.clientY,x:event.clientX,y:event.clientY,offsetX:event.clientX-rect.left,offsetY:event.clientY-rect.top,scale:rect.width/(card.offsetWidth||rect.width||1),active:false,ghost:null,target:null,before:null,frame:0,removeListeners:()=>{}};
       session.current=drag;
       handle.dataset.taskDragPressed="true";
       handle.setPointerCapture?.(event.pointerId);
@@ -124,10 +132,18 @@ export default function useTaskDrag(options:TaskDragOptions){
       }
       function updateTarget(){
         const target=findTarget();
-        if(target===drag.target)return;
-        if(drag.target)delete drag.target.dataset.taskDragOver;
-        drag.target=target;
-        if(target)target.dataset.taskDragOver="true";
+        if(target!==drag.target){
+          if(drag.target)delete drag.target.dataset.taskDragOver;
+          drag.target=target;
+          if(target)target.dataset.taskDragOver="true";
+        }
+        const beforeId=target?taskDropBefore(target,drag.y,drag.card):undefined;
+        const before=beforeId?[...target!.querySelectorAll<HTMLElement>("[data-task-sort-id]")].find(node=>node.dataset.taskSortId===beforeId)||null:null;
+        if(before!==drag.before){
+          if(drag.before)delete drag.before.dataset.taskSortBefore;
+          drag.before=before;
+          if(before)before.dataset.taskSortBefore="true";
+        }
       }
       function draw(){
         drag.frame=0;
@@ -176,9 +192,13 @@ export default function useTaskDrag(options:TaskDragOptions){
           window.addEventListener("click",blockClick,true);
           window.addEventListener("pointerdown",removeClick,true);
         }
+        const beforeId=target?taskDropBefore(target,drag.y,drag.card):undefined;
         cancelDrag();
         const changed=date!==origin?.dataset.taskDate||department!==origin?.dataset.taskDepartment;
-        if(changed&&date&&department&&/^\d{4}-\d{2}-\d{2}$/.test(date)&&latest.current.enabled)void latest.current.onMove(drag.id,date,department as DepartmentId);
+        if((changed||beforeId!==undefined)&&date&&department&&/^\d{4}-\d{2}-\d{2}$/.test(date)&&latest.current.enabled){
+          if(beforeId===undefined)void latest.current.onMove(drag.id,date,department as DepartmentId);
+          else void latest.current.onMove(drag.id,date,department as DepartmentId,beforeId);
+        }
       }
       const cancelPointer=(event:PointerEvent)=>{if(event.pointerId===drag.pointerId)cancelDrag();};
       const otherPointer=(event:PointerEvent)=>{if(event.pointerId!==drag.pointerId)cancelDrag();};

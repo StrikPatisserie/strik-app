@@ -8,7 +8,7 @@ const exportsObject = {};
 vm.runInNewContext(ts.transpileModule(fs.readFileSync('app/productie/recipeGroups.ts', 'utf8'), {
  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText, { exports: exportsObject, Map });
-const { recipeGroups, recipeLinks, recipeTaskClusters, recipeDayClusters } = exportsObject;
+const { recipeGroups, recipeLinks, recipeTaskClusters, recipeDayClusters, reorderDayTasks } = exportsObject;
 
 function task(id, changes = {}) {
  return { id, itemId: 'cake', batchId: `batch-${id}`, date: '2026-11-05', operation: 'Afmaken', ...changes };
@@ -150,4 +150,25 @@ test('day bundles hide only automatic batches, keeping manual work, follow-ups, 
  assert.equal(filtered[0].preparations[0].id, 'auto-follow', 'A generated follow-up remains bundled when its first step is outside the current filter');
  const old = recipeTaskClusters(tasks, links);
  assert.equal(old.flatMap(group => group.tasks).length, tasks.length, 'Existing non-bundled grouping stays available');
+});
+
+
+test('manual order survives a save/reload and only affects the selected day and category', () => {
+ const tasks=[task('a',{departmentId:'dessert'}),task('b',{departmentId:'dessert'}),task('c',{departmentId:'dessert'}),task('other',{departmentId:'bak'}),task('tomorrow',{departmentId:'dessert',date:'2026-11-06'})];
+ const original=structuredClone(tasks),links=new Map();
+ const next=reorderDayTasks(tasks,['c'],'2026-11-05','dessert','a',links);
+ const loaded=JSON.parse(JSON.stringify(next));
+ assert.equal(recipeTaskClusters(loaded.filter(t=>t.departmentId==='dessert'&&t.date==='2026-11-05'),links).flatMap(c=>c.tasks.map(t=>t.id)).join(','),'c,a,b');
+ assert.deepEqual(tasks,original);assert.equal(next[3],tasks[3]);assert.equal(next[4],tasks[4]);
+ const bottom=reorderDayTasks(loaded,['c'],'2026-11-05','dessert',null,links);
+ assert.equal(recipeTaskClusters(bottom.filter(t=>t.departmentId==='dessert'&&t.date==='2026-11-05'),links).flatMap(c=>c.tasks.map(t=>t.id)).join(','),'a,b,c');
+ assert.throws(()=>reorderDayTasks(tasks,['other'],'2026-11-05','dessert','a',links));
+});
+
+test('reordering between recipes keeps a recipe family together and preserves dependencies and quantities', () => {
+ const tasks=[task('root',{departmentId:'dessert',quantity:10,requires:['prep']}),task('prep',{itemId:'cream',generatedFor:'root',departmentId:'dessert',quantity:5}),task('other',{departmentId:'dessert',quantity:20})];
+ const links=recipeLinks(tasks,items);
+ const next=reorderDayTasks(tasks,['root'],'2026-11-05','dessert',null,links);
+ assert.equal(recipeTaskClusters(next,links).flatMap(c=>c.tasks.map(t=>t.id)).join(','),'other,prep,root');
+ for(const original of tasks){const changed={...next.find(t=>t.id===original.id)};delete changed.sortOrder;assert.deepEqual(changed,original);}
 });

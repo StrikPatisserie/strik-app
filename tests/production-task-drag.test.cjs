@@ -57,7 +57,7 @@ function harness({enabled=true,scale=1,scrollable=false}={}){
  render();
  function event(changes={}){return {pointerId:1,pointerType:'touch',button:0,isPrimary:true,detail:1,nativeEvent:{pointerId:1},clientX:55,clientY:70,currentTarget:handle,preventDefault(){this.prevented=true;},stopPropagation(){this.stopped=true;},...changes};}
  function fire(name,changes={}){const value=event(changes);if(Object.hasOwn(changes,'pointerId')&&changes.pointerId===undefined)delete value.pointerId;for(const listener of [...(windowListeners.get(name)||[])])listener.callback(value);return value;}
- return {frame,body,origin,destination,dateTab,card,handle,moves,changes,render,event,fire,
+ return {element,frame,body,origin,destination,dateTab,card,handle,moves,changes,render,event,fire,
   start:changes=>api.getHandleProps('task-1').onPointerDown(event(changes)),
   move:changes=>fire('pointermove',changes),end:changes=>fire('pointerup',changes),
   flush(){for(const [id,callback]of [...frames]){frames.delete(id);callback();}},
@@ -199,4 +199,21 @@ test('the dedicated handle moves with a mouse or pen and does not trigger a nati
   assert.deepEqual(h.moves,[['task-1','2026-11-11','luxe']]);
   assert.equal(h.ghost,undefined);h.expireClicks();h.close();
  }
+});
+
+
+test('touch dragging within a day highlights the insertion point and saves the new position',()=>{
+ const h=harness();h.card.dataset.taskSortId='task-1';
+ const second=h.element(h.origin,{taskId:'task-2',taskSortId:'task-2'},{left:0,top:150,right:300,bottom:250});
+ h.target(h.origin);h.start();h.move({clientX:80,clientY:160});h.flush();
+ assert.equal(second.dataset.taskSortBefore,'true');h.end({clientX:80,clientY:160});
+ assert.deepEqual(h.moves,[['task-1','2026-11-10','dessert','task-2']]);
+ assert.equal(second.dataset.taskSortBefore,undefined);h.close();
+});
+
+test('touch dragging below the last task appends it in the same day',()=>{
+ const h=harness();h.card.dataset.taskSortId='task-1';
+ h.element(h.origin,{taskId:'task-2',taskSortId:'task-2'},{left:0,top:150,right:300,bottom:250});
+ h.target(h.origin);h.start();h.move({clientX:80,clientY:300});h.end({clientX:80,clientY:300});
+ assert.deepEqual(h.moves,[['task-1','2026-11-10','dessert',null]]);h.close();
 });

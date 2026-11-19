@@ -374,7 +374,7 @@ test('new plans start all preparations on day zero despite old preferences, and 
 });
 
 test('daily sweetened and whipped cream are unchecked but remain selectable with their real recipe quantity', () => {
- for(const name of ['Gezoete slagroom','Opgeklopte slagroom','Slagroom opgeklopt','SLAGROOM GEZOET']){
+ for(const name of ['Gezoete slagroom','Opgeklopte slagroom','Slagroom opgeklopt','SLAGROOM GEZOET','Room/Botercreme','Room/botercrème','ROOM / BOTERCREME']){
   const {state,recipes,command}=fixture();
   recipes.find(row=>row.id==='foam').name=name;
   let proposal=rules.preparationProposal(state,recipes,command);
@@ -473,4 +473,22 @@ test('baking off repeats separately while stock output and preparation needs sta
 test('baking off cannot create a second set of recipe preparations',()=>{
  const {state,recipes,command}=fixture();command.task.departmentId='brood';command.task.operation='Afbakken';
  assert.throws(()=>rules.buildRecipePlan(state,recipes,command),/Plan de halffabricaten bij Produceren/);assert.equal(state.tasks.length,0);
+});
+
+
+test('the autumn caramel hazelnut flan only plans production; historical stage snapshots stay intact',()=>{
+ const {state,recipes,command}=fixture(),id='recipe-new-1792222628720';
+ recipes[0].id=id;state.items[0].recipeId=id;state.items[0].id=`recipe:${id}`;command.task.itemId=state.items[0].id;delete command.preparation;
+ const next=rules.buildRecipePlan(state,recipes,command),root=next.tasks.find(t=>t.id==='order-1');
+ assert.equal(next.tasks.length,1);assert.equal(root.operation,'Produceren');assert.equal(root.recordsOutput,true);
+ assert.equal(planning.productionRoute(state.items[0],root).steps.join(','),'Produceren');
+ const historical={...root,productionStage:{...root.productionStage,steps:['Produceren','Afwerken'],index:1}};
+ assert.equal(planning.productionRoute(state.items[0],historical).steps.join(','),'Produceren,Afwerken');
+});
+
+test('a saved manual position remains present after recipe refresh',()=>{
+ const {state,recipes,command}=fixture();command.task.sortOrder=3;
+ const next=rules.buildRecipePlan(state,recipes,command),root=next.tasks.find(t=>t.id==='order-1');
+ const refreshed=rules.refreshRecipePlan(next,recipes,root.id,rules.currentPlanCommand(next,root));
+ assert.equal(refreshed.tasks.find(t=>t.id===root.id).sortOrder,3);assert(workspace.validWorkspace(refreshed,recipes));
 });

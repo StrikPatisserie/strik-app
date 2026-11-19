@@ -6,7 +6,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import useScreenLayout from "../../productie/useScreenLayout";
 import usePhysicalKeyboard from "../../productie/usePhysicalKeyboard";
-import useTaskDrag from "../../productie/useTaskDrag";
+import useTaskDrag, {taskDropBefore} from "../../productie/useTaskDrag";
 import useProductionUpdates from "../../productie/useProductionUpdates";
 import {decodeReloadView,RELOAD_VIEW_KEY} from "../../productie/productionUpdates";
 import QuickTaskCompletion from "../../productie/QuickTaskCompletion";
@@ -17,6 +17,7 @@ import {productionDay,type WorkCommand} from "../../productie/productionWork";
 import {departmentDayWork,taskWorkSummary} from "../../productie/workSummary";
 import WeddingWeekLane from "../../productie/WeddingWeekLane";
 import QuickRecipeForm from "../../productie/QuickRecipeForm";
+import RecipeReferences from "../../productie/RecipeReferences";
 import ProductionStageForm from "../../productie/ProductionStageForm";
 import ProductionStepsField from "../../productie/ProductionStepsField";
 import ProductionPartyPicker, { selectedPartySources } from "../../productie/ProductionPartyPicker";
@@ -30,7 +31,7 @@ import {applyProductionRequest,type RequestCommand} from "../../productie/reques
 import ProductionWeekOffer from "../../productie/ProductionWeekOffer";
 import ProductionItemPicker from "../../productie/ProductionItemPicker";
 import SearchableChoice from "../../productie/SearchableChoice";
-import { recipeGroups, recipeLinks, recipeDayClusters, type RecipeTaskCluster } from "../../productie/recipeGroups";
+import { recipeGroups, recipeLinks, recipeDayClusters, recipeTaskClusters, reorderDayTasks, type RecipeTaskCluster } from "../../productie/recipeGroups";
 import CleaningWeekLane from "../../productie/CleaningWeekLane";
 import { scheduleWedding, type WeddingProductionOrder } from "../../productie/weddingPlanning";
 const OfferManager=dynamic(()=>import("../../bakkerij/recepturen/RecepturenApp"),{loading:()=> <p role="status">Aanbiedingbeheer laden…</p>});
@@ -127,6 +128,8 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
   const [view, setView] = useState<View>(()=>productionView(initialView));
   const [board, setBoard] = useState<BoardId>(()=>canonicalBoardId(initialBoard && (!live || departmentsFor(initialBoard).some(d=>live.departments.includes(d.id))) ? initialBoard : live && !live.departments.includes("dessert") ? (live.departments.includes("bak") || live.departments.includes("brood") ? "bak" : "chocolade") : "patisserie"));
   const [weekAnchor, setWeek] = useState(()=>initialWeek || (demo ? DEMO_WEEK : mondayOf(today)));
+  const [referenceView,setReferenceView]=useState<"recipes"|"thicknesses">("recipes");
+  const [thicknessAdd,setThicknessAdd]=useState(0);
   const [layout,setLayout]=useState(initialLayout);
   const newLayout=layout==="new";
   const [collapsed,setCollapsed]=useState<string[]>([]);
@@ -292,16 +295,19 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
     try{return await persist({...state,tasks:transitionTask(state.tasks,id,status,state.items)},"Status opgeslagen.");}catch(e){return (e as Error).message;}
   }
   async function fullscreen(){try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen();}catch{notify("Volledig scherm is niet beschikbaar in deze browser.",true);}}
-  async function move(id:string,date:string,departmentId:DepartmentId) {
+  async function move(id:string,date:string,departmentId:DepartmentId,beforeId?:string|null) {
     if(savingRef.current)return "Wacht tot de vorige wijziging is opgeslagen.";
     const previousDay=day;
     try {
       const ids: string[] = id.startsWith("preparation:") ? JSON.parse(id.slice("preparation:".length)) : [id];
-      if(ids.every(id=>state.tasks.some(task=>task.id===id&&task.date===date&&task.departmentId===departmentId))){setDragged(null);return;}
+      const sameLane=ids.every(id=>state.tasks.some(task=>task.id===id&&task.date===date&&task.departmentId===departmentId));
+      if(sameLane&&beforeId===undefined){setDragged(null);return;}
       if(departmentId==="bruidstaarten")throw Error("Kies een productieafdeling voor deze taak.");
-      const next={...state,tasks:moveTasks(state.tasks,ids,date,departmentId)};
+      let tasks=sameLane?state.tasks:moveTasks(state.tasks,ids,date,departmentId);
+      if(beforeId!==undefined)tasks=reorderDayTasks(tasks,ids,date,departmentId,beforeId,taskRecipeLinks);
+      const next={...state,tasks};
       setMovingTask(id);setDay(date);
-      const error=await persist(next,`Taak verplaatst naar ${dateLabel(date,true)}.`,undefined,undefined,{optimistic:true});
+      const error=await persist(next,sameLane?"Volgorde opgeslagen.":`Taak verplaatst naar ${dateLabel(date,true)}.`,undefined,undefined,{optimistic:true});
       if(error)setDay(current=>current===date?previousDay:current);
       return error;
     }
@@ -468,6 +474,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
     return <article
       key={task.id}
       data-task-id={task.id}
+      data-task-sort-id={task.id}
       data-task-department={task.departmentId}
       data-task-drag-kind="production"
       className={`${n.card} ${n[task.status]} ${modal?.type === "detail" && modal.id === task.id ? n.selected : ""}`}
@@ -539,7 +546,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
     </article>;
   }
   function clusteredTaskCards(tasks: Task[]) {
-    if (!newLayout) return tasks.map(taskCard);
+    if (!newLayout) return recipeTaskClusters(tasks, taskRecipeLinks).flatMap(cluster => cluster.tasks).map(taskCard);
     return recipeDayClusters(tasks, state.tasks, taskRecipeLinks).map(cluster => {
       if (!cluster.links.length) return <Fragment key={cluster.key}>{cluster.tasks.map(task => newTaskCard(task))}</Fragment>;
       const shared = cluster.links.length > 1;
@@ -560,7 +567,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
           {cluster.tasks.map(task => newTaskCard(task, cluster))}
         </>}
         {cluster.preparations.length > 0 && <><article className={`${n.preparationBundle} ${doneParts === cluster.preparations.length ? n.done : activeParts ? n.active : ""}`}
-          data-task-id={dragId} data-task-department={cluster.preparations[0].departmentId} data-task-drag-kind="production"
+          data-task-id={dragId} data-task-sort-id={cluster.preparations[0].id} data-task-department={cluster.preparations[0].departmentId} data-task-drag-kind="production"
           data-preparation-ids={cluster.preparations.map(task => task.id).join(" ")} data-preparation-date={date}
           draggable={canManage && !saving && movableParts.length > 0}
           onDragStart={event => { event.dataTransfer.setData("text/plain", dragId); setDragged(dragId); }} onDragEnd={() => setDragged(null)}>
@@ -588,9 +595,9 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
     const warningOnly=issues.length>0&&!task.stockFulfillmentId&&task.status!=="active"&&task.status!=="blocked";
     const showStatus=!!task.stockFulfillmentId||task.status==="active"||task.status==="blocked"||issues.length>0;
     const finishing=preparationRoots.has(task.id);
-    const step=finishing&&item.kind==="product"&&/^(Maken|Produceren|Decoreren \/ afmaken|Afmaken)$/i.test(task.operation)?"Afwerken":task.operation;
+    const step=finishing&&!productionRoute(item,task)&&item.kind==="product"&&/^(Maken|Produceren|Decoreren \/ afmaken|Afmaken)$/i.test(task.operation)?"Afwerken":task.operation;
     const displayName=finishing?`${item.name} · ${step.toLocaleLowerCase("nl-NL")}`:item.name;
-    return <article key={task.id} data-task-id={task.id} data-task-department={task.departmentId} data-task-drag-kind="production" data-task-saving={movingTask===task.id||undefined} className={`${s.taskCard} ${s[`task_${task.status}`]}`} draggable={canManage && !saving && task.status !== "done"} onDragStart={e => { e.dataTransfer.setData("text/plain", task.id); e.dataTransfer.effectAllowed = "move"; setDragged(task.id); }} onDragEnd={() => setDragged(null)}>
+    return <article key={task.id} data-task-id={task.id} data-task-sort-id={task.id} data-task-department={task.departmentId} data-task-drag-kind="production" data-task-saving={movingTask===task.id||undefined} className={`${s.taskCard} ${s[`task_${task.status}`]}`} draggable={canManage && !saving && task.status !== "done"} onDragStart={e => { e.dataTransfer.setData("text/plain", task.id); e.dataTransfer.effectAllowed = "move"; setDragged(task.id); }} onDragEnd={() => setDragged(null)}>
       {canManage&&task.status!=="done"&&<button type="button" data-task-drag-handle draggable={false} disabled={saving} className={s.taskDragHandle} aria-label={`Versleep ${item.name}`} title="Sleep naar een andere dag of afdeling" {...touchDrag.getHandleProps(task.id)} onClick={event=>{touchDrag.getHandleProps(task.id).onClick(event);if(!event.defaultPrevented)setModal({type:"detail",id:task.id});}}><Icon name="move" size={16}/></button>}
       <div className={s.taskControls}>
         <button disabled={!canManage || saving || !!task.stockFulfillmentId} className={s.taskCheck} aria-label={`${task.stockFulfillmentId ? "Uit voorraad" : task.status === "done" ? "Aantal corrigeren" : "Afronden"}: ${item.name} · ${task.operation}`} aria-pressed={task.status === "done"} onClick={() => task.status === "done" ? setModal({ type: "correct-output", id: task.id }) : changeStatus(task.id, "done")}>{task.status === "done" ? <Icon name="check" size={12} /> : task.status === "active" ? <Icon name="play" size={12} /> : null}</button>
@@ -675,7 +682,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
     <main className={s.main} data-production-content={view!=="planning"?"":undefined}><div className={s.fitCanvas}>
       {view!=="planning" && <><div className={s.previewBar}><span><i />{demo ? "Preview · voorbeeldgegevens" : "STRAK gepland · gedeelde werkversie"}</span><span>{demo ? (storageError ? "Bewaren niet mogelijk · wijzigingen vervallen bij herladen" : "Wijzigingen blijven alleen in deze browser") : saving ? "Bezig met opslaan…" : `Opgeslagen in Supabase · bijgewerkt ${syncedAt ? new Intl.DateTimeFormat("nl-NL",{timeZone:"Europe/Amsterdam",hour:"2-digit",minute:"2-digit"}).format(new Date(syncedAt)) : ""}`}</span>{demo ? <button onClick={() => setModal({ type: "reset" })}>Herstel voorbeeld</button> : <button disabled={saving} onClick={()=>void onRefresh?.()}>Verversen</button>}</div>
       <header className={s.header}><div className={s.heading}><h1>{NAV.find(n => n.id === view)?.label || "Instellingen"}</h1></div>
-        <div className={s.headerActions}>{(view === "catalog" || view === "recipes") && canManage && <button className={s.primaryButton} onClick={() => setModal({ type: "item" })}><Icon name="plus" />Los onderdeel toevoegen</button>}</div>
+        <div className={s.headerActions}>{view === "recipes" && referenceView === "thicknesses" && !live?.readOnlyPreview && <button className={s.primaryButton} onClick={()=>setThicknessAdd(value=>value+1)}><Icon name="plus" />Uitroldikte toevoegen</button>}{view === "recipes" && referenceView === "recipes" && !demo && !live?.readOnlyPreview && <Link className={s.primaryButton} href="/bakkerij/productie/recepten/nieuw"><Icon name="plus" />Nieuw recept</Link>}{(view === "catalog" || view === "recipes" && referenceView === "recipes") && canManage && <button className={view === "recipes" ? s.secondaryButton : s.primaryButton} onClick={() => setModal({ type: "item" })}><Icon name="plus" />Los onderdeel toevoegen</button>}</div>
       </header></>}
 
       <ProductionMobileNavigation active={view} canManage={canManage} canManageData={canManageData} canBakery={canBakery} demo={demo} onNavigate={navigate} />
@@ -700,7 +707,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
             const total = tasks.reduce((sum, t) => sum + (t.minutes || 0), 0);
             return <div className={`${s.departmentRow} ${s[`tone_${dep.tone}`]}`} data-department={dep.id} data-empty={newLayout&&!tasks.length||undefined} data-collapsed={newLayout&&collapsed.includes(dep.id)||undefined} key={dep.id}>
               <div className={s.departmentLabel} title={`${dep.name} · ${tasks.filter(t=>t.status==="done").length}/${tasks.length} klaar · ${durationLabel(total)} gepland`}><span className={s.departmentMark} />{newLayout?<h2><button type="button" className={n.groupToggle} title={dep.name} aria-label={dep.name} aria-expanded={!collapsed.includes(dep.id)} onClick={()=>setCollapsed(current=>current.includes(dep.id)?current.filter(id=>id!==dep.id):[...current,dep.id])}>{departmentBadge(dep.id)}</button></h2>:<h2>{dep.name}</h2>}<span>{tasks.filter(t => t.status === "done").length}/{tasks.length} klaar</span><small><Icon name="clock" size={12} />{durationLabel(total)} gepland</small>{newLayout && canManage && <button type="button" className={s.categoryAdd} disabled={saving} aria-label={`Productie toevoegen · ${dep.name}`} title={`Productie toevoegen · ${dep.name}`} onClick={() => setModal({type:"task",date:day,departmentId:dep.id})}><Icon name="plus" size={14}/></button>}</div>
-              {days.map(d => <div key={d} data-task-date={d} data-task-department={dep.id} data-task-drag-kind="production" className={`${s.dayCell} ${d === day ? s.mobileSelectedDay : ""} ${d === today ? s.todayCell : ""} ${dragged ? s.dropTarget : ""}`} onDragOver={e => { if (canManage && !saving && dragged) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }} onDrop={e => { e.preventDefault(); if (canManage && !saving && dragged) move(dragged, d, dep.id); }} aria-label={`${dep.name} · ${dateLabel(d, true)}`}>
+              {days.map(d => <div key={d} data-task-date={d} data-task-department={dep.id} data-task-drag-kind="production" className={`${s.dayCell} ${d === day ? s.mobileSelectedDay : ""} ${d === today ? s.todayCell : ""} ${dragged ? s.dropTarget : ""}`} onDragOver={e => { if (canManage && !saving && dragged) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }} onDrop={e => { e.preventDefault(); if (canManage && !saving && dragged) move(dragged, d, dep.id, taskDropBefore(e.currentTarget,e.clientY,frameRef.current?.querySelector<HTMLElement>(`[data-task-id="${CSS.escape(dragged)}"]`)||null)); }} aria-label={`${dep.name} · ${dateLabel(d, true)}`}>
                 {clusteredTaskCards(tasks.filter(t => t.date === d))}
                 {!newLayout && <div className={s.dayCellFooter}>{dayWork(dep.id,d)}{canManage && <button className={s.cellAdd} disabled={saving} aria-label={`Taak toevoegen · ${dep.name} · ${dateLabel(d, true)}`} onClick={() => setModal({ type: "task", date: d, departmentId: dep.id, fromCell: true })}><Icon name="plus" size={14} /><span>Toevoegen</span></button>}</div>}
                 {menuCollapsed && !canManage && !tasks.some(t => t.date === d) && <span className={s.emptyCell}>—</span>}
@@ -715,14 +722,14 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
         <div className={s.sectionIntro}><p>Alles wat je maakt, ook zonder uitgewerkt recept.</p><span>{state.items.filter(i=>i.kind==="product").length} eindproducten · {state.items.filter(i=>i.kind==="component").length} halffabricaten</span></div>
         <div className={s.listToolbar}><Search value={query} onChange={setQuery} placeholder="Zoek op naam of artikelnummer…" /><select aria-label="Type onderdeel" value={kindFilter} onChange={e => setKindFilter(e.target.value)}><option value="all">Alle typen</option><option value="product">Eindproducten</option><option value="component">Halffabricaten</option><option value="activity">Werkzaamheden</option></select><DepartmentSelect value={department} onChange={setDepartment} /></div>
         <div className={s.catalogList}><div className={s.listHeader}><span>Eindproduct / halffabricaat</span><span>Afdeling</span><span>Recept</span><span /></div>{catalog.map(item => <div className={s.catalogRow} key={item.id}><button className={s.itemName} onClick={() => setModal({ type: "item-detail", id: item.id })}><span className={`${s.itemGlyph} ${s[`tone_${DEPARTMENTS.find(d => d.id === item.departmentId)!.tone}`]}`}><Icon name={item.kind === "activity" ? "clock" : item.kind === "component" ? "box" : "book"} /></span><span><strong>{item.name}</strong><small><span className={`${s.typeBadge} ${item.kind==="component"?s.halfBadge:s.finalBadge}`}>{KIND_LABELS[item.kind]}</span> · {productionUnit(item)}{item.productionBlocked && " · Recept controleren"}{item.articleNumber && ` · ${item.articleNumber}`}</small></span></button><span className={s.catalogDepartment}>{item.departmentUnconfirmed ? "Afdeling controleren" : departmentName(item.departmentId)}</span><span className={item.recipeId ? s.recipeLinked : s.recipeMissing}>{item.recipeId ? <><Icon name="link" size={13} />Gekoppeld</> : item.kind==="activity"?"Werkinstructie":<span className={s.recipeMissingBadge}>Zonder recept</span>}</span><button disabled={!canManage || saving || item.productionBlocked} className={s.planButton} onClick={() => setModal({ type: "task", itemId: item.id, departmentId: item.departmentId, date: day })}><Icon name="plus" size={14} />Inplannen</button></div>)}{catalog.length === 0 && <Empty title="Geen onderdelen gevonden" text="Pas de zoekopdracht of filters aan." />}</div>
-      </> : view === "recipes" ? <>
+      </> : view === "recipes" ? <RecipeReferences view={referenceView} onView={setReferenceView} demo={demo} readOnly={!!live?.readOnlyPreview} addRequest={thicknessAdd}>
         <div className={s.sectionIntro}><p>Zoek een werkrecept of los onderdeel. Hoeveelheden worden op de productiekaart omgerekend.</p>{!demo && canManageData && <Link className={s.secondaryButton} href="/bakkerij/productie/beheer/recepten">Recepten beheren</Link>}</div>
         <div className={s.listToolbar}><Search value={query} onChange={setQuery} placeholder="Zoek naam, artikel, ingrediënt of instructie…"/><select aria-label="Type recept" value={kindFilter} onChange={e=>setKindFilter(e.target.value)}><option value="all">Alle recepten & onderdelen</option><option value="product">Eindproducten</option><option value="component">Halffabricaten</option><option value="activity">Werkzaamheden</option><option value="unlinked">Zonder recept</option><option value="incomplete">Recept aanvullen</option></select><DepartmentSelect value={department} onChange={setDepartment}/></div>
         <div className={s.workRecipeList}><div className={s.workRecipeHeading}><span>Recept / onderdeel</span><span>Afdeling</span><span>Basisopbrengst</span><span>Inhoud</span></div>{state.items.filter(item=>{
           const recipe=recipeList.find(r=>r.id===item.recipeId);
           return !item.id.startsWith("wedding:") && (department==="all" || item.departmentId===department) && (kindFilter==="all" || (kindFilter==="unlinked"?!recipe&&item.kind!=="activity":kindFilter==="incomplete"?!!recipe&&(!recipe.yield||!recipe.ingredients.length||!recipe.steps.length):item.kind===kindFilter)) && matchesProductionSearch(query,[item.name,item.articleNumber,item.note,...(recipe?.ingredients.map(i=>i.name) || []),...(recipe?.steps || [])]);
         }).sort((a,b)=>a.name.localeCompare(b.name,"nl-NL")).map(item=>{const recipe=recipeList.find(r=>r.id===item.recipeId);return <button key={item.id} className={s.workRecipeRow} onClick={()=>setModal({type:"item-detail",id:item.id})}><span><strong>{item.name}</strong><small><span className={`${s.typeBadge} ${item.kind==="component"?s.halfBadge:s.finalBadge}`}>{KIND_LABELS[item.kind]}</span>{item.articleNumber && ` · ${item.articleNumber}`}{item.productionBlocked && " · Recept controleren"}{!recipe && item.kind!=="activity" && <span className={s.recipeMissingBadge}>Zonder recept</span>}{recipe && !recipe.ingredients.length && <span className={s.recipeMissingBadge}>Leeg recept</span>}</small></span><span className={s.workRecipeDepartment}>{departmentName(item.departmentId)}</span><span>{recipe?.yield?`${quantity(recipe.yield)} ${productionUnit(item)}`:recipe?"Nog invullen":"—"}</span><span className={s.workRecipeContents}>{recipe?`${recipe.ingredients.length} ingrediënten · ${recipe.steps.length} stappen`:item.kind==="activity"?"Werkinstructie":"Koppelen of nieuw recept"}<Icon name="chevron" size={14}/></span></button>;})}</div>
-      </> : view === "ingredients" ? <>
+      </RecipeReferences> : view === "ingredients" ? <>
         <div className={s.sectionIntro}><p>Gedeelde grondstoffen en leveranciersspecificaties voor alle afdelingen.</p><span>SpecsPlaza</span></div>
         <div className={s.infoNote}><Icon name="link" /><p>{demo ? "Voorbeeld van de bestaande SpecsPlaza-koppeling." : "Specificaties worden gedeeld met het grondstoffenbeheer."} {canManageData && <Link href="/bakkerij/productie/beheer/ingredienten">Open grondstoffenbeheer</Link>}</p></div>
         <div className={s.ingredientList}>{ingredientList.map(i => <article key={i.id}><div className={s.itemGlyph}><Icon name="leaf" /></div><div><h2>{i.name}</h2><p>{i.supplier} · {i.unit}</p></div><div className={s.ingredientSpec}><span className={i.linked ? s.recipeLinked : s.recipeMissing}>{i.linked && <Icon name="link" size={13} />}{i.specification}</span><small>{demo ? "Voorbeeld allergenen" : "Allergenen"}: {i.allergens}</small></div></article>)}</div>
