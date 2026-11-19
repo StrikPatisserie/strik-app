@@ -145,7 +145,7 @@ export function combineProductionOrders(batches: ProductionBatchSeed[], legacyOr
 }
 
 export type ProductionChange = { key: string; label: string; before: number; after: number; detail: string };
-export type ProductionChecklist = { revision: number; planRevision: number; planVersion: string; lockedAt: string | null; updatedAt: string; changes: ProductionChange[]; orderChanges?: ProductionCustomerChange[]; supplements?: ProductionSupplement[] };
+export type ProductionChecklist = { revision: number; planRevision: number; planVersion: string; lockedAt: string | null; updatedAt: string; changes: ProductionChange[]; orderChanges?: ProductionCustomerChange[]; pendingOrderChanges?: ProductionCustomerChange[]; supplements?: ProductionSupplement[] };
 
 export function productionPlanVersion(rows: ProductionSeedRow[]) {
   return JSON.stringify(rows.filter(row => row.orders + row.stock > 0).map(row => [row.key, row.label, row.orders, row.stock, ...(["winkel", "online", "b2b", "onbekend"] as const).map(source => row.orderSources?.[source] || 0), productionRecipientVersion(row)]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))));

@@ -1563,7 +1563,7 @@ export default function ProductionPlanningClient({
       supplementName: supplement.name, startDate: supplement.date, date: supplement.date,
       createdAt: supplement.createdAt, createdByName: supplement.createdByName,
       storeOrders: [], rows: [...supplement.rows].sort(compareProductionRows),
-      checklist: { ...batch.checklist!, changes: [], orderChanges: [], supplements: [], planRevision: supplement.planRevision },
+      checklist: { ...batch.checklist!, changes: [], orderChanges: [], pendingOrderChanges: [], supplements: [], planRevision: supplement.planRevision },
     }))]);
     const grandRows = aggregateProductionRows(batchViews.flatMap((batch) => batch.rows));
 
@@ -1615,7 +1615,12 @@ export default function ProductionPlanningClient({
     }));
   }
 
-  async function saveProduction(batch: ProductionBatchSeed, action: "quantity" | "revise" | "supplement", row?: WorkingRow, quantity?: number, extra?: { date: string; customerIds: string[] }) {
+  const pendingRounds = overview.batches.filter(batch => !batch.supplementId && batch.checklist?.pendingOrderChanges?.length);
+  const pendingCustomers = new Map(pendingRounds.flatMap(batch => (batch.checklist?.pendingOrderChanges || []).map(group => [group.id, group] as const)));
+  const pendingB2B = [...pendingCustomers.values()].filter(group => group.source === "b2b").length;
+  const pendingOther = pendingCustomers.size - pendingB2B;
+
+  async function saveProduction(batch: ProductionBatchSeed, action: "quantity" | "supplement", row?: WorkingRow, quantity?: number, extra?: { date: string; customerIds: string[] }) {
     if (savingProduction) return false;
     setProductionNoticeBatch(batch.id);
     if (demoMode) {
@@ -1634,8 +1639,8 @@ export default function ProductionPlanningClient({
         throw new Error(result.message || "Productie opslaan is mislukt.");
       }
       const list = result.list;
-      setLiveBatches(current => current?.map(item => item.id === (batch.parentBatchId || batch.id) ? {...item, rows: list.rows, checklist: result.checklist || {revision: list.revision, planRevision: list.plan_revision, lockedAt: list.locked_at, planVersion: item.checklist?.lockedAt ? item.checklist.planVersion : productionPlanVersion(list.rows), updatedAt: list.updated_at, supplements: list.supplements || [], changes: item.checklist?.changes || [], orderChanges: item.checklist?.orderChanges || []}} : item) || null);
-      setProductionNotice(action === "supplement" ? "Extra productiedag opgeslagen. Letters op dezelfde datum staan samen op één lijst. Print de bijgewerkte lijst opnieuw." : action === "revise" ? "Nieuwe versie opgeslagen. Print de bijgewerkte productielijst voor de bakkers." : "Productievoortgang opgeslagen.");
+      setLiveBatches(current => current?.map(item => item.id === (batch.parentBatchId || batch.id) ? {...item, rows: list.rows, checklist: result.checklist || {revision: list.revision, planRevision: list.plan_revision, lockedAt: list.locked_at, planVersion: item.checklist?.lockedAt ? item.checklist.planVersion : productionPlanVersion(list.rows), updatedAt: list.updated_at, supplements: list.supplements || [], changes: item.checklist?.changes || [], orderChanges: [], pendingOrderChanges: item.checklist?.pendingOrderChanges || []}} : item) || null);
+      setProductionNotice(action === "supplement" ? "Extra productiedag opgeslagen. Letters op dezelfde datum staan samen op één lijst. Print de bijgewerkte lijst opnieuw." : "Productievoortgang opgeslagen.");
       return true;
     } catch (error) {
       setProductionNotice(error instanceof Error ? error.message : "Opslaan is mislukt.");
@@ -1704,10 +1709,15 @@ export default function ProductionPlanningClient({
 
       {!demoMode && liveBatches && !warning && <B2BProductionPlanning plans={b2bPlans} batches={overview.batches.filter(batch => !batch.supplementId)} season={season} onSaved={()=>setRefreshVersion(value=>value+1)}/>}
 
+      {pendingRounds.length > 0 && <section className={`${styles.attention} ${styles.pendingProduction}`} aria-label="Nog inplannen">
+        <div><h2>Nog inplannen</h2><p>{pendingB2B > 0 && <span>{pendingB2B} B2B-bestelling{pendingB2B === 1 ? "" : "en"}</span>}{pendingOther > 0 && <span>{pendingOther} andere bestelling{pendingOther === 1 ? "" : "en"}</span>}</p></div>
+        <div className={styles.pendingActions}>{pendingRounds.map(batch => <button type="button" key={batch.id} className={styles.button} disabled={savingProduction || Boolean(warning)} onClick={() => { setProductionNotice(""); setReviseBatch(batch); }}>Extra letters · {new Intl.DateTimeFormat("nl-NL", { day: "numeric", month: "short" }).format(new Date(`${batch.date}T12:00:00`))}</button>)}</div>
+      </section>}
+
       {(liveUnplannedCount > 0 || overview.unplanned.length > 0) && <section className={styles.attention}>
-        <h2>Nog niet aan een productiedag gekoppeld</h2>
+        <h2>Geen passende vaste productiedag</h2>
         {liveUnplannedCount > 0 && <p>{liveUnplannedCount} centrale orderregel(s) zijn nog niet volledig ingepland.</p>}
-        {overview.unplanned.length > 0 && <p>{overview.unplanned.length} bestaande bestelling(en): {overview.unplanned.slice(0, 6).join(" · ")}{overview.unplanned.length > 6 ? ` · +${overview.unplanned.length - 6}` : ""}</p>}
+        {overview.unplanned.length > 0 && <p>{overview.unplanned.length} bestelling(en) nog inplannen: {overview.unplanned.slice(0, 6).join(" · ")}{overview.unplanned.length > 6 ? ` · +${overview.unplanned.length - 6}` : ""}</p>}
       </section>}
 
       <div className={styles.rounds}>
@@ -1735,7 +1745,6 @@ export default function ProductionPlanningClient({
               {batch.supplementId ? <>Aangemaakt {batch.createdAt ? formatDeadline(batch.createdAt) : ""}{batch.createdByName ? ` door ${batch.createdByName}` : ""} · versie {batch.checklist?.planRevision}</> : batch.checklist?.lockedAt ? <>Vastgezet op {formatDeadline(batch.checklist.lockedAt)} · versie {batch.checklist.planRevision}. Tik op het aantal om gemaakte aantallen te registreren.</> : <>Bestellen tot {formatDeadline(batch.deadlineAt)}. Gemaakte aantallen kun je nu al registreren.</>}
             </div>
             {productionNotice && productionNoticeBatch === batch.id && <p role="status" className={styles.checklistNote}>{productionNotice}</p>}
-            {!!batch.checklist?.changes.length && <div className={styles.changeNotice} role="status"><strong>Bestellingen gewijzigd na vastzetten</strong><p>{batch.checklist.changes.length} gewijzigde letterregel(s). De productielijst blijft staan totdat je deze wijzigingen controleert.</p><button type="button" className={styles.button} disabled={savingProduction || Boolean(warning)} onClick={() => {setProductionNotice(""); setReviseBatch(batch);}}>Wijzigingen bekijken</button></div>}
             <ProductionTable rows={batch.rows} saving={savingProduction}
               onSourceDialogChange={open => setSourceDialogBatch(open ? batch.id : "")}
               onToggleComplete={demoMode ? row => toggleProductionRow(batch, row) : !loading && !warning ? row => { void saveProduction(batch, "quantity", row, productionRowIsComplete(row) ? 0 : row.orders + row.stock); } : undefined}
@@ -1799,7 +1808,6 @@ export default function ProductionPlanningClient({
       </form></div>}
       {reviseBatch && <ProductionChangesDialog batch={reviseBatch} saving={savingProduction} notice={productionNotice}
         onClose={() => setReviseBatch(null)}
-        onRevise={async () => { if (await saveProduction(reviseBatch, "revise")) setReviseBatch(null); }}
         onSchedule={async (date, customerIds) => { if (await saveProduction(reviseBatch, "supplement", undefined, undefined, { date, customerIds })) setReviseBatch(null); }} />}
       {startDistributionOpen && (
         <StartDistributionDialog

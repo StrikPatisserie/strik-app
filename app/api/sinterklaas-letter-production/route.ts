@@ -7,7 +7,7 @@ import { createAdminClient } from "@/app/lib/supabase/admin";
 import { loadProductionWordPressOrders } from "@/app/sinterklaas/sinterklaasServerApi";
 import { loadCentralProduction } from "@/app/sinterklaas/letters/productie/productionData.server";
 import { combineProductionOrders, hydrateProductionRecipients, productionDeadlinePassed, productionPlanVersion, reviseProductionRows, setProductionQuantity } from "@/app/sinterklaas/letters/productie/productionChecklist";
-import { createProductionSupplement, mergeProductionSupplementsByDate, productionChecklistView, reviseProductionAllocations, type ProductionSupplement } from "@/app/sinterklaas/letters/productie/productionSupplements";
+import { createProductionSupplement, mergeProductionSupplementsByDate, productionChecklistView, type ProductionSupplement } from "@/app/sinterklaas/letters/productie/productionSupplements";
 import type { ProductionSeedRow } from "@/app/sinterklaas/letters/productie/productionSources";
 
 export const runtime = "nodejs";
@@ -82,6 +82,7 @@ export async function POST(request: Request) {
   if (!data || typeof data !== "object") return jsonError("Ongeldig verzoek.");
   const { batchId, revision, action, key, quantity } = data;
   if (typeof batchId !== "string" || !/^[0-9a-f-]{36}$/i.test(batchId) || (!Number.isSafeInteger(revision) || Number(revision) < 0) || !["quantity", "revise", "supplement"].includes(String(action))) return jsonError("Ongeldige productielijst.");
+  if (action === "revise") return jsonError("Een vastgezette productielijst blijft behouden. Plan extra letters in op een extra productiedag.", 409);
   try {
     const db = createAdminClient() as unknown as SupabaseClient;
     const batchResult = await db.from("letter_production_batches").select("status,order_deadline_at,season").eq("id", batchId).maybeSingle();
@@ -117,15 +118,11 @@ export async function POST(request: Request) {
           createdBy: profile?.id || null, createdByName: profile?.full_name || "",
         });
         supplements = mergeProductionSupplementsByDate([...supplements, supplement]);
-      } else {
-        const revised = reviseProductionAllocations(rows, supplements, currentRows!);
-        rows = revised.rows;
-        supplements = revised.supplements;
       }
     }
     const now = new Date().toISOString();
     const lockedAt = list?.locked_at || (productionDeadlinePassed({status: batchResult.data.status, deadlineAt: batchResult.data.order_deadline_at}) ? now : null);
-    const values = { rows, supplements, revision: (list?.revision || 0) + 1, plan_revision: (list?.plan_revision || 1) + (action === "revise" ? 1 : 0), locked_at: lockedAt, updated_at: now, updated_by: profile?.id };
+    const values = { rows, supplements, revision: (list?.revision || 0) + 1, plan_revision: list?.plan_revision || 1, locked_at: lockedAt, updated_at: now, updated_by: profile?.id };
     const updated = list
       ? await db.from("letter_production_checklists").update(values).eq("batch_id", batchId).eq("revision", list.revision).select(columns).maybeSingle()
       : await db.from("letter_production_checklists").insert({ batch_id: batchId, ...values }).select(columns).maybeSingle();

@@ -243,7 +243,7 @@ test('live orders can increase, shrink or disappear while actual production and 
  }
  assert.equal(f.saved.revision,1,'reading changed demand does not rewrite actual production');
 });
-test('freezing reconciles the latest order totals and preserves early-made and cancelled quantities',async()=>{
+test('freezing reconciles current demand once and later removals cannot revise the production record',async()=>{
  const f=endpointFixture({locked:false,existing:false});
  const key=row().key;
  assert.equal((await f.api.POST(f.request({batchId:id,revision:0,action:'quantity',key,quantity:28}))).status,200);
@@ -257,9 +257,13 @@ test('freezing reconciles the latest order totals and preserves early-made and c
  const writes=f.writes.length;await get();assert.equal(f.writes.length,writes);
  f.setCurrent(batch({status:'IN_PRODUCTION',rows:[]}));
  const changed=(await (await get()).json()).batches[0];
- assert.equal(changed.checklist.changes[0].after,0);
- assert.equal((await f.api.POST(f.request({batchId:id,revision:2,action:'revise',planVersion:changed.checklist.planVersion}))).status,200);
- assert.equal(f.saved.rows[0].produced,28);assert.equal(helper.productionSurplus(f.saved.rows),28);
+ assert.equal(changed.checklist.changes.length,0);
+ assert.equal(changed.checklist.orderChanges.length,0);
+ assert.equal(changed.checklist.pendingOrderChanges.length,0);
+ assert.equal((await f.api.POST(f.request({batchId:id,revision:2,action:'revise',planVersion:changed.checklist.planVersion}))).status,409);
+ assert.equal(f.saved.rows[0].orders,40);assert.equal(f.saved.rows[0].produced,28);
+ assert.equal(helper.productionRemaining(f.saved.rows),12);
+ assert.equal(f.writes.length,writes);
 });
 test('freezing cannot overwrite a simultaneous production correction',async()=>{
  const f=endpointFixture({locked:false,existing:true,freezeRace:true});
@@ -300,17 +304,18 @@ test('checkmarks persist absolute quantities, and stale or simultaneous writes c
  const race=endpointFixture({race:true});assert.equal((await race.api.POST(race.request(payload))).status,409);assert.equal(race.writes.length,0);
  assert.equal(f.writes.every(w=>w.table==='letter_production_checklists'),true);
 });
-test('revising requires the exact reviewed live plan and keeps progress while advancing the paper version',async()=>{
+test('even an exact live plan cannot replace a frozen paper list',async()=>{
  const f=endpointFixture();f.setCurrent(batch({status:'IN_PRODUCTION',rows:[row({orders:30})]}));
  const payload={batchId:id,revision:1,action:'revise',planVersion:helper.productionPlanVersion([row()])};
  assert.equal((await f.api.POST(f.request(payload))).status,409);assert.equal(f.writes.length,0);
  payload.planVersion=helper.productionPlanVersion([row({orders:30})]);
- assert.equal((await f.api.POST(f.request(payload))).status,200);assert.equal(f.saved.rows[0].orders,30);assert.equal(f.saved.plan_revision,2);
+ assert.equal((await f.api.POST(f.request(payload))).status,409);assert.equal(f.saved.rows[0].orders,20);assert.equal(f.saved.plan_revision,1);
+ assert.equal(f.writes.length,0);
 });
 
-test('frozen historical lists retain delivered letters and their checkmarks through GET and reviewed revisions', async () => {
+test('frozen historical lists retain delivered letters and queue only additional demand', async () => {
  const fixture = endpointFixture({existing: false});
- const central = batch({status: 'IN_PRODUCTION', rows: [row({orders: 2, stock: 8, orderSources: {online: 2}})]});
+ const central = batch({status: 'IN_PRODUCTION', rows: [row({orders: 2, stock: 8, orderSources: {online: 2}, recipients: [{id: 'central-online', source: 'online', customerName: 'Bestaande klant', quantity: 2, date: '2026-11-06'}]})]});
  const orders = historicalB2BOrders();
  fixture.setCurrent(central);
  fixture.setWordPressOrders({letters: [], b2b: orders});
@@ -355,23 +360,30 @@ test('frozen historical lists retain delivered letters and their checkmarks thro
  }]});
  fixture.setWordPressOrders({letters: [], b2b: [...orders.map((order) => ({...order, delivered: true})), additional]});
  const review = (await (await get()).json()).batches[0];
- assert.equal(review.checklist.changes.length, 1);
- assert.equal(review.checklist.changes[0].before, 10);
- assert.equal(review.checklist.changes[0].after, 12);
+ assert.equal(review.checklist.changes.length, 0);
+ assert.equal(review.checklist.orderChanges.length, 0);
+ assert.equal(review.checklist.pendingOrderChanges.length, 1);
+ assert.equal(review.checklist.pendingOrderChanges[0].customerName, additional.customerName);
+ assert.equal(review.checklist.pendingOrderChanges[0].extra, 2);
+ assert.equal(review.checklist.pendingOrderChanges[0].items[0].before, 0);
+ assert.equal(review.checklist.pendingOrderChanges[0].items[0].after, 2);
  const revised = await fixture.api.POST(fixture.request({
   batchId: id, revision: fixture.saved.revision, action: 'revise',
   planVersion: review.checklist.planVersion,
  }));
- assert.equal(revised.status, 200);
- assert.equal(helper.productionTotals(fixture.saved.rows).orders, 48);
+ assert.equal(revised.status, 409);
+ assert.equal(helper.productionTotals(fixture.saved.rows).orders, 46);
  assert.equal(helper.productionTotals(fixture.saved.rows).produced, 54);
- assert.equal(helper.productionRemaining(fixture.saved.rows), 2);
+ assert.equal(helper.productionRemaining(fixture.saved.rows), 0);
+ assert.deepEqual(plain(fixture.saved), frozen);
+ assert.equal(fixture.writes.length, writesBeforeRead);
  for (const row of frozen.rows.filter((row) => row.key.endsWith('|logo'))) {
   assert.deepEqual(plain(fixture.saved.rows.find((next) => next.key === row.key)), row);
  }
  const final = (await (await get()).json()).batches[0];
  assert.equal(final.checklist.changes.length, 0);
- assert.equal(final.checklist.planRevision, 2);
+ assert.equal(final.checklist.planRevision, 1);
+ assert.equal(final.checklist.pendingOrderChanges[0].extra, 2);
 });
 
 test('deadline automation requires the exact existing cron secret; missing or malformed credentials are rejected',()=>{
@@ -629,4 +641,41 @@ test('stock recipients do not hide genuinely unattributed customer quantities',(
  assert.equal(combined[0].orders,15);assert.equal(combined[0].stock,5);assert.equal(combined[0].produced,8);
  assert.equal(combined[0].orderSources.onbekend,3);
  assert.equal(helper.productionChanges(combined,current).length,0);
+});
+
+
+test('Doornik pickup and source disappearance never undo a frozen production day', async () => {
+ for (const source of ['winkel', 'online']) {
+  const f=endpointFixture({existing:false});
+  f.setCurrent(batch({status:'IN_PRODUCTION',rows:[]}));
+  const order={id:'doornik',code:'CL26-010',customerName:'Doornik',source,status:'besteld',pickupDate:'2026-11-06',lines:['J','L','F','P','R'].map(letter=>({letter,chocolate:'melk',size:'klein',style:'spuit',quantity:1,logo:false,notes:'',specialRequests:[]}))};
+  order.lines.push({...order.lines[1],chocolate:'puur'});
+  f.setWordPressOrders({letters:[order],b2b:[]});
+  const get=async()=> (await (await f.api.GET(new Request('https://app.strik-patisserie.nl/api/sinterklaas-letter-production'))).json()).batches[0];
+  const initial=await get();
+  assert.equal(helper.productionTotals(initial.rows).orders,6);
+  for (const item of initial.rows) assert.equal((await f.api.POST(f.request({batchId:id,revision:f.saved.revision,action:'quantity',key:item.key,quantity:1}))).status,200);
+  const saved=plain(f.saved), writes=f.writes.length;
+  for (const letters of [[{...order,status:'opgehaald',pickedUp:true}],[]]) {
+   f.setWordPressOrders({letters,b2b:[]});
+   const next=await get();
+   assert.deepEqual(plain(next.rows),saved.rows);
+   assert.equal(helper.productionTotals(next.rows).produced,6);
+   assert.equal(next.checklist.changes.length,0);
+   assert.equal(next.checklist.orderChanges.length,0);
+   assert.equal(next.checklist.pendingOrderChanges.length,0);
+   assert.equal(f.writes.length,writes);
+   assert.deepEqual(plain(f.saved),saved);
+  }
+ }
+});
+
+test('the extra-demand queue excludes fulfilment, reductions and metadata-only changes', () => {
+ const saved=[customerRow([recipient('A',10),recipient('B',4)])];
+ const current=[customerRow([recipient('A',7,{customerName:'Updated name'}),recipient('C',3)])];
+ const changes=plain(supplements.pendingProductionOrders(saved,current));
+ assert.equal(changes.length,1);assert.equal(changes[0].id,'b2b:C');assert.equal(changes[0].extra,3);
+ const extra={...extraDetails(),name:'Extra',planRevision:1,rows:[customerRow([recipient('C',3)])]};
+ assert.equal(supplements.pendingProductionOrders(supplements.combinedProductionRows(saved,[extra]),current).length,0);
+ assert.equal(supplements.pendingProductionOrders(saved,[customerRow([recipient('A',10,{customerName:'Updated name'}),recipient('B',4)])]).length,0);
 });

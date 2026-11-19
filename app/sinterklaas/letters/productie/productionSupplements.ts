@@ -1,4 +1,4 @@
-import { productionChanges, productionPlanVersion, reviseProductionRows } from "./productionChecklist";
+import { productionPlanVersion, reviseProductionRows } from "./productionChecklist";
 import { aggregateProductionRows, productionRecipientVersion, type ProductionRecipient, type ProductionSeedRow } from "./productionSources";
 
 type ProductionSupplementRecord = {
@@ -92,6 +92,15 @@ export function productionCustomerChanges(saved: ProductionSeedRow[], current: P
   return [...groups.values()].sort((a, b) => a.customerName.localeCompare(b.customerName, "nl"));
 }
 
+// A frozen list is a production record, not a live shopping basket. Only extra
+// demand can be scheduled separately; fulfilment and reductions never revise it.
+export function pendingProductionOrders(saved: ProductionSeedRow[], current: ProductionSeedRow[]): ProductionCustomerChange[] {
+  return productionCustomerChanges(saved, current).flatMap(group => {
+    const items = group.items.filter(item => item.after > item.before);
+    return items.length ? [{ ...group, items, extra: items.reduce((sum, item) => sum + item.after - item.before, 0) }] : [];
+  });
+}
+
 export function productionChecklistView(list: { rows: ProductionSeedRow[]; supplements?: ProductionSupplement[]; revision: number; plan_revision: number; locked_at: string | null; updated_at: string }, current: ProductionSeedRow[]) {
   const supplements = mergeProductionSupplementsByDate(list.supplements || []);
   const combined = combinedProductionRows(list.rows, supplements);
@@ -99,13 +108,14 @@ export function productionChecklistView(list: { rows: ProductionSeedRow[]; suppl
     revision: list.revision, planRevision: list.plan_revision,
     planVersion: productionPlanVersion(current), lockedAt: list.locked_at,
     updatedAt: list.updated_at, supplements,
-    changes: list.locked_at ? productionChanges(combined, combinedProductionRows(current)) : [],
-    orderChanges: list.locked_at ? productionCustomerChanges(combined, combinedProductionRows(current)) : [],
+    changes: [],
+    orderChanges: [],
+    pendingOrderChanges: list.locked_at ? pendingProductionOrders(combined, combinedProductionRows(current)) : [],
   };
 }
 
 export function createProductionSupplement(rows: ProductionSeedRow[], supplements: ProductionSupplement[], current: ProductionSeedRow[], selectedCustomers: string[], details: Omit<ProductionSupplement, "rows" | "name" | "planRevision">) {
-  const changes = productionCustomerChanges(combinedProductionRows(rows, supplements), combinedProductionRows(current));
+  const changes = pendingProductionOrders(combinedProductionRows(rows, supplements), combinedProductionRows(current));
   const selected = new Set(selectedCustomers);
   if (!selected.size || selected.size !== selectedCustomers.length || [...selected].some(id => !changes.some(item => item.id === id && item.extra > 0))) {
     throw new Error("Kies klanten met extra letters. Controleer de nieuwste wijzigingen.");

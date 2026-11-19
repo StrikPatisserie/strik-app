@@ -292,3 +292,8 @@ button.sourceBadge:focus-visible { outline: 2px solid currentColor; outline-offs
 .reviseOption p { margin: 8px 0; }
 .reviseOption label { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 @media (max-width: 520px) { .changesDialog { padding: 14px; } .customerChangeHead { align-items: start; flex-direction: column; gap: 4px; } .customerChangeHead span { margin-left: 27px; } }
+
+.pendingProduction { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.pendingProduction p { display:flex; gap:12px; margin:0; }
+.pendingActions { display:flex; gap:8px; flex-wrap:wrap; }
+.pendingActions button { font-size:12px; padding:8px 12px; }
