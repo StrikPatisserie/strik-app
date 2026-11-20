@@ -76,6 +76,37 @@ function request(url, body, method = 'POST') { return new Request(`https://examp
 async function expectOK(response) { assert.equal(response.status, 200, JSON.stringify(await response.clone().json())); return response.json(); }
 function workBody(taskId, id) { return { revision: 1, id, command: { kind: 'complete', taskId, who: id, minutes: 20, quantity: 10, crewSize: 1 } }; }
 function recipeBody(store, id) { const command = workRecipe.editableWorkRecipe(store.current.planner.data, store.current.recipes.data, `recipe:${id}`); command.ingredients[0].quantity = 150; return { revision: 1, recipeRevision: 1, scope: 'permanent', who: 'Feline', command }; }
+test('unused decoration deletion persists without removing recipes or invoice history', async () => {
+    const store = sharedStore(), decoration = pure('app/productie/decorations.ts').initialDecorations()[0];
+    store.current.recipes.data.ingredients.push(decoration);
+    store.current.recipes.data.invoiceImports = [{id:'invoice',lines:[{matchedIngredientId:decoration.id}]}];
+    store.history.recipes.set(1, structuredClone(store.current.recipes.data));
+    const before = structuredClone(store.current.recipes.data), incoming = {...structuredClone(before),storageRevision:1};
+    incoming.ingredients = incoming.ingredients.filter(item => item.id !== decoration.id);
+    const saved = await store.app()('app/productie/recipeStore.server.ts').saveSharedRecipes(structuredClone(store.current.recipes),incoming,manager);
+    assert(!saved.ingredients.some(item => item.id === decoration.id));
+    assert.deepEqual(JSON.parse(JSON.stringify(saved.recipes)),before.recipes);
+    assert.deepEqual(JSON.parse(JSON.stringify(saved.invoiceImports)),before.invoiceImports);
+    assert.equal(store.stats().writes,1);
+});
+test('concurrent decoration deletion and a new recipe link cannot leave dangling references', async () => {
+    for (const deletionFirst of [false,true]) {
+        const store = sharedStore(), decoration = pure('app/productie/decorations.ts').initialDecorations()[0];
+        store.current.recipes.data.ingredients.push(decoration);
+        const base = structuredClone(store.current.recipes.data);
+        store.history.recipes.set(1,base);
+        const deletion = structuredClone(base), linked = structuredClone(base);
+        deletion.ingredients = deletion.ingredients.filter(item => item.id !== decoration.id);
+        linked.recipes[0].ingredients.push({ingredientId:decoration.id,unit:'stuk',quantity:10,costContribution:0});
+        store.current.recipes = {...store.current.recipes,revision:2,data:deletionFirst?deletion:linked};
+        store.history.recipes.set(2,structuredClone(store.current.recipes.data));
+        const incoming = {...(deletionFirst?linked:deletion),storageRevision:1};
+        const before = structuredClone(store.current.recipes);
+        await assert.rejects(store.app()('app/productie/recipeStore.server.ts').saveSharedRecipes(structuredClone(store.current.recipes),incoming,manager), error => error.status === 409);
+        assert.deepEqual(store.current.recipes,before);
+        assert.equal(store.stats().writes,0);
+    }
+});
 test('merge preserves unrelated records and never resurrects deleted records', () => {
     const base = { tasks: [{ id: 'a', n: 1 }, { id: 'b', n: 2 }], history: [] };
     const mine = { ...base, tasks: [{ id: 'a', n: 3 }, base.tasks[1]] };

@@ -26,6 +26,7 @@ import {
 import PackagingList from "./PackagingList";
 import RecipeDetail from "./RecipeDetail";
 import DecorationsList from "./DecorationsList";
+import { validateDecorationRemoval } from "../../productie/decorations";
 import { resolveDecorationCosts } from "./utils";
 import RecipeDataImport, { type ImportKind } from "./RecipeDataImport";
 import RecipesList from "./RecipesList";
@@ -1319,6 +1320,15 @@ export default function RecepturenApp({
     setSyncStatus("Decoratie opgeslagen; gekoppelde kostprijzen bijgewerkt.");
   }
 
+  async function deleteDecoration(item: Ingredient) {
+    const ingredients = ingredientItems.filter(ingredient => ingredient.id !== item.id);
+    validateDecorationRemoval(ingredientItems, ingredients, recipeItems);
+    setSyncStatus("Decoratie verwijderen…");
+    const result = await saveRecepturenData({ingredients,recipes:recipeItems,packagingItems,invoiceImports:invoiceItems,hefeOrderHistory,bakeryHome,manualProductionPlanningItems:manualPlanningItems});
+    if (!result.ok) { setSyncStatus(`Niet verwijderd: ${result.message}`); throw Error(result.message); }
+    setSyncStatus("Decoratie verwijderd.");
+  }
+
   async function saveIngredientSpecification(updated: Ingredient, expected: Ingredient, mode?: IngredientSpecificationSaveMode) {
     setSyncStatus("Productspecificatie opslaan…");
     try {
@@ -2208,7 +2218,7 @@ export default function RecepturenApp({
             onCreateRecipe={() => createRecipe("semiFinished")}
           />
         )}
-        {beheerView === "decoraties" && <DecorationsList ingredients={ingredientItems} recipes={recipeItems} onSave={saveDecoration}/>}
+        {beheerView === "decoraties" && <DecorationsList ingredients={ingredientItems} recipes={recipeItems} onSave={saveDecoration} onDelete={deleteDecoration}/>}
         {beheerView === "ingredienten" && (
           <IngredientsList
             ingredients={ingredientItems}

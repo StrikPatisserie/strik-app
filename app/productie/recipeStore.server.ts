@@ -1,5 +1,5 @@
 import "server-only";
-import { validateDecorations } from "./decorations";
+import { validateDecorations, validateDecorationRemoval } from "./decorations";
 import { resolveDecorationCosts, recalculateRecipeCosts } from "../bakkerij/recepturen/utils";
 import { readEditBase, retryConcurrentSave } from "./concurrentEditing.server";
 import { ConcurrentChangeError, mergeConcurrentChanges } from "./concurrentChanges";
@@ -54,6 +54,8 @@ export async function saveSharedRecipes(current:ProductionDocument<RecepturenDat
       if (error instanceof ConcurrentChangeError) throw new ProductionStoreError(error.message, 409);
       throw error;
     }
+    try { validateDecorationRemoval([...base.ingredients, ...latest.data.ingredients], data.ingredients, data.recipes); }
+    catch (error) { throw new ProductionStoreError(error instanceof Error ? error.message : "Deze decoratie wordt nog gebruikt. Ververs de pagina.", 409); }
     validateDecorations(data.ingredients);
     const decorationIds = new Set(data.ingredients.filter(i=>i.decoration).map(i=>i.id));
     for (const recipe of data.recipes) if (recipe.ingredients.some(line=>decorationIds.has(line.ingredientId) && line.unit !== "stuk")) throw new ProductionStoreError("Vul decoraties in stuks in bij het recept.",400);

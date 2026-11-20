@@ -1,4 +1,16 @@
-import type { Ingredient } from "../bakkerij/recepturen/types";
+import type { Ingredient, Recipe } from "../bakkerij/recepturen/types";
+
+export function decorationRecipes(id: string, recipes: Recipe[]) {
+  return recipes.filter(recipe => recipe.ingredients.some(line => line.ingredientId === id));
+}
+
+/** Check the merged document too: another editor may have just linked a recipe. */
+export function validateDecorationRemoval(previous: Ingredient[], ingredients: Ingredient[], recipes: Recipe[]) {
+  const remaining = new Set(ingredients.map(item => item.id));
+  const removed = new Set(previous.filter(item => item.decoration && !remaining.has(item.id)).map(item => item.id));
+  const linked = recipes.filter(recipe => recipe.ingredients.some(line => removed.has(line.ingredientId)));
+  if (linked.length) throw Error(`Deze decoratie wordt nog gebruikt in: ${linked.map(recipe => recipe.name).join(", ")}. Verwijder of vervang de decoratie eerst in deze recepten.`);
+}
 
 /** Stable IDs survive changes to a descriptive code or a seasonal design. */
 export function initialDecorations(): Ingredient[] {
