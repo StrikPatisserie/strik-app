@@ -263,7 +263,7 @@ function ProductionRound({ batch, complete, keepOpen, actions, children }: Reado
   }, [visible]);
 
   const contentId = `production-round-${batch.id}`;
-  return <section ref={sectionRef} className={styles.round} data-complete={complete}>
+  return <section ref={sectionRef} className={styles.round} data-complete={complete} data-supplement={Boolean(batch.supplementId)}>
     <div className={styles.roundHead}>
       <div className={styles.roundDate}>
         <p className={styles.roundLabel}>{batch.supplementId ? "Extra productiedag" : "Hoofdproductiedag"}</p>

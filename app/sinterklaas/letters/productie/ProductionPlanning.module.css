@@ -53,6 +53,14 @@
 .roundSummary { display: flex; flex-wrap: wrap; gap: 10px 24px; align-items: center; padding: 10px 18px; border-bottom: 1px solid var(--b2b-border); font-size: 11px; color: var(--b2b-muted); }
 .roundSummary b { margin-left: 5px; color: var(--b2b-ink); font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
 .roundSummary .remaining b { color: var(--b2b-accent); font-weight: 600; }
+/* Extra runs are secondary to the three main production days. */
+.round[data-supplement="true"] { margin-left: 18px; border-color: #c9d9e3; border-radius: 10px; }
+.round[data-supplement="true"] .roundHead { gap: 8px 18px; padding: 10px 14px; border-top: 2px solid #88aabd; border-bottom-color: #d5e2ea; border-radius: 10px 10px 0 0; background: #edf4f8; }
+.page .round[data-supplement="true"] .roundLabel { margin-bottom: 2px; font-size: 10px; color: #496b7e; }
+.page .round[data-supplement="true"] .roundDate h2 { font-size: 15px; color: #294d62; }
+.round[data-supplement="true"] .roundSummary { gap: 8px 18px; padding: 8px 14px; }
+.round[data-supplement="true"][data-complete="true"] .roundHead { background: #f0f4f6; border-top-color: #b1c5d0; }
+
 .tables { padding: 0 18px 8px; }
 .tableSection + .tableSection { margin-top: 12px; }
 .sectionHeading { display: flex; align-items: center; gap: 10px; padding: 12px 0 8px; }
@@ -203,6 +211,10 @@ button.sourceBadge:focus-visible { outline: 2px solid currentColor; outline-offs
 }
 @media(max-width: 600px) {
   .planning { gap: 16px; }
+  .round[data-supplement="true"] { margin-left: 6px; }
+  .round[data-supplement="true"] .roundHead { padding: 9px 10px; }
+  .round[data-supplement="true"] .roundSummary { padding: 8px 10px; }
+
   .summaryHead, .roundHead { padding: 14px 12px; }
   .metrics { gap: 14px 22px; }
   .metrics dd { font-size: 17px; }
