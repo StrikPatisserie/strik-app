@@ -42,7 +42,7 @@ export function validateSetup(id: string, year: number, input: SeasonConfig) {
   return { owner: input.owner.trim(), startDate: input.startDate, endDate: input.endDate, assortment: input.assortment.trim(), instructions: input.instructions.trim(), letters: input.letters, business: input.business, mailing: input.mailing, pricesChecked: true, batches: input.letters ? input.batches.map(b=>({start:b.start,date:b.date,deadline:b.deadline,pickup:b.pickup})) : [] } satisfies SeasonConfig;
 }
 export function validateClosure(notes: ClosureNotes) {
-  if (!notes || notes.reviewed!==true || ![notes.good,notes.improve,notes.next,notes.exceptions].every(v=>typeof v==="string"&&v.length<=10000) || !notes.good.trim() || !notes.improve.trim() || !notes.next.trim()) throw Error("Vul de evaluatie en tips voor volgend jaar in en bevestig de controle.");
+  if (!notes || notes.reviewed!==true || ![notes.good,notes.improve,notes.next,notes.exceptions].every(v=>typeof v==="string"&&v.length<=10000)) throw Error("Bevestig de controle en controleer de toelichting bij open punten.");
   return notes;
 }
 const number = (v: unknown) => Number.isFinite(Number(v)) ? Number(v) : 0;

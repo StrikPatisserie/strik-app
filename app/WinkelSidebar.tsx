@@ -12,7 +12,7 @@ import { filterAllowedItems } from "./lib/auth/access";
 import type { UserProfile } from "./lib/supabase/types";
 
 const mainNavItems = [
-  { href: "/feestdagen", label: "Feestdagen", icon: strikIcons.strikAgenda },
+  { href: "/feestdagen", label: "Feestdagen", icon: strikIcons.feestdagen },
   { href: "/winkel", label: "Winkel", icon: strikIcons.winkel },
   { href: "/ijs", label: "IJssalons", icon: strikIcons.ijs },
   { href: "/bakkerij/logistiek", label: "Logistiek", icon: strikIcons.logistiek },

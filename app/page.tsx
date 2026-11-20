@@ -42,7 +42,7 @@ const baseSections = [
     subtitle: "Overzicht en acties",
     icon: strikIcons.management,
   },
-  { href: "/feestdagen", title: "Feestdagen", subtitle: "Actieve seizoenen, bestellingen en evaluaties", icon: strikIcons.strikAgenda, variant: "feestdagen" as "feestdagen" | "vierdaagse" | "sinterklaas" | "kerst" },
+  { href: "/feestdagen", title: "Feestdagen", subtitle: "Seizoenen, bestellingen en jaarassortiment", icon: strikIcons.feestdagen, variant: "feestdagen" as "feestdagen" | "vierdaagse" | "sinterklaas" | "kerst" },
 ];
 
 export const dynamic = "force-dynamic";

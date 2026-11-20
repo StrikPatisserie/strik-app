@@ -18,8 +18,9 @@ test('summary separates store/online channels, cancellations and combined B2B mo
  const central={orders:[{id:'web',channel:'ONLINE',fulfillment_status:'NEW',gift_wrap:true,gift_wrap_price_cents:25},{id:'store-duplicate',channel:'STORE'}],items:[{order_id:'web',quantity:2,unit_price_cents:1395},{order_id:'store-duplicate',quantity:99,unit_price_cents:100}]};
  const s=model.seasonSummary(sources,central);assert.equal(s.storeLetters,4);assert.equal(s.onlineLetters,2);assert.equal(s.onlineValue,28.4);assert.equal(s.b2bValueExVat,100);assert.equal(s.combinedOrders,1);assert.equal(s.openCount,2);
 });
-test('closure requires explicit review and lessons, preserving free text',()=>{
+test('closure requires explicit review and preserves optional notes',()=>{
  assert.throws(()=>model.validateClosure({good:'Goed',improve:'Sneller',next:'Extra ronde',reviewed:false,exceptions:''}));
+ assert.doesNotThrow(()=>model.validateClosure({good:'',improve:'',next:'',reviewed:true,exceptions:''}));
  assert.equal(model.validateClosure({good:'Goed',improve:'Sneller',next:'Extra ronde',reviewed:true,exceptions:''}).next,'Extra ronde');
 });
 test('old tabs cannot modify closed, future or disabled modules; mixed B2B can finish in the active holiday',async()=>{
