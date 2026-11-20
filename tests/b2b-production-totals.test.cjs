@@ -146,13 +146,28 @@ test('delivered B2B rows are visibly completed while production-only and cancell
     assert.doesNotMatch(pending, /completedOrder|completionStatus/);
   }
 });
-test('production button permission is resolved on the server for both seasons', async () => {
+test('production button permission is resolved on the shared holiday server page for both seasons', async () => {
   const access = load('app/lib/auth/access.ts');
-  for (const file of ['app/sinterklaas/b2b/page.tsx', 'app/kerst/b2b/page.tsx']) for (const role of ['manager', 'logistiek', 'winkel']) {
+  function children(node) { return !node || typeof node !== 'object' ? [] : Array.isArray(node) ? node.flatMap(children) : [node, ...children(node.props?.children)]; }
+  for (const season of ['sint', 'kerst']) for (const role of ['manager', 'logistiek', 'winkel']) {
     const dummy = () => null, current = { id: 'u', active: true, role, permissions: {} };
-    const page = loader({ '../../lib/auth/session': { getCurrentProfile: async () => current }, '../../lib/auth/access': access, './SinterklaasB2BClient': { default: dummy }, '../../sinterklaas/b2b/SinterklaasB2BClient': { default: dummy } })(file);
-    const tree = await page.default({}); assert.equal(tree.props.children.props.canViewProduction, role !== 'winkel');
+    const page = loader({
+      '../../StrikUI': { StrikShell: dummy },
+      '../../lib/auth/session': { requireCurrentProfile: async () => current },
+      '../../lib/auth/access': { ...access, canAccessPath: () => true },
+      '../server': { getSeasons: async () => [{ season, year: 2026, state: 'active', config: { business: true } }] },
+      '../../sinterklaas/b2b/SinterklaasB2BClient': { default: dummy },
+    })('app/feestdagen/bedrijven/page.tsx');
+    const tree = await page.default({searchParams: Promise.resolve({seizoen: season})});
+    const client = children(tree).find(node => node.props && 'canViewProduction' in node.props);
+    assert(client); assert.equal(client.props.canViewProduction, role !== 'winkel');
   }
+});
+test('saved per-product logo surcharges never become production articles or change package quantities', () => {
+  const withLogo = order({orderText: order().orderText.replace(' · € 10,00', ' · eigen logo · € 10,00') + ' · logo € 1,25 p.s. ex btw inbegrepen'});
+  const data = result([withLogo]);
+  assert.equal(data.products.length, 1); assert.equal(data.products[0].quantity, 30);
+  assert.equal(data.products[0].product, 'Speculaasbrok · zonder amandel');
 });
 test('the existing B2B button opens current totals and the existing production checkbox immediately removes an order without changing its other fields', async () => {
   const states = [], effects = [], pending = [], writes = [];

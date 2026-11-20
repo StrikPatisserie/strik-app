@@ -89,6 +89,8 @@ type B2BProductLine = {
   unitPriceEx: string;
   manualPrice: boolean;
   withLogo: boolean;
+  logoUnitPriceEx?: string;
+  logoPriceDraft?: string;
   letterChocolate?: B2BLetterLine["chocolate"] | "";
   packageLetter?: string;
 };
@@ -138,7 +140,7 @@ type B2BFormState = {
 };
 
 const CHRISTMAS_CATALOG: Product[] = christmasProducts.map(product => ({ ...product, id: `kerst-${product.id}`, description: product.detail, image: product.image || "", options: [product.detail], shelfLifeInfo: [], allergens: [], tiers: BUSINESS_FOLDER_PRICE_TIERS, accent: "green" }));
-const PRODUCT_CATALOG = [products[0], products[1], ...folderProducts, ...b2bExtraProducts, ...CHRISTMAS_CATALOG];
+const PRODUCT_CATALOG = [products[0], products[1], ...folderProducts, ...b2bExtraProducts, ...CHRISTMAS_CATALOG].map(product => ({ ...product, logoAvailable: true, logoBlockedChoices: [] }));
 const MANUAL_PRODUCT_CATALOG = PRODUCT_CATALOG.filter(
   (product) => product.id !== "chocoladeletter" && product.id !== "chocolade-vormletter"
 );
@@ -165,6 +167,35 @@ function moneyNumber(value: string) {
     .replace(",", ".");
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+// B2B staff can price every logo independently; published folder quotes keep
+// their original surcharge when imported. Amounts here are per piece, ex VAT.
+function defaultLogoPrice(line: Pick<B2BProductLine, "productId" | "description">) {
+  return /(?:^|[\s-])(?:kerst|paas)?stol(?:len)?(?:$|[\s-])/i.test(`${line.productId} ${line.description}`) ? 1 : 0.5;
+}
+
+function lineLogoPrice(line: B2BProductLine) {
+  return line.logoUnitPriceEx === undefined ? defaultLogoPrice(line) : roundCents(moneyNumber(line.logoUnitPriceEx));
+}
+
+function validLogoAmount(value: string) {
+  return /^\d+(?:[.,]\d{1,2})?$/.test(value.trim()) && Number(value.replace(",", ".")) <= 10000;
+}
+
+function validLogoPrice(line: B2BProductLine) {
+  const value = line.logoPriceDraft ?? line.logoUnitPriceEx;
+  return !line.withLogo || value === undefined || validLogoAmount(value);
+}
+
+function withLogoPrice(line: B2BProductLine, value: string) {
+  // Keep the last valid amount while someone clears/types into the field.
+  // This prevents an incomplete or invalid value from changing an agreed base price.
+  if (!validLogoAmount(value)) return { ...line, logoPriceDraft: value };
+  const next = { ...line, logoUnitPriceEx: decimalInput(Number(value.replace(",", "."))), logoPriceDraft: value };
+  return { ...next, ...(line.manualPrice && line.withLogo ? {
+    unitPriceEx: decimalInput(Math.max(0, moneyNumber(line.unitPriceEx) + lineLogoPrice(next) - lineLogoPrice(line))),
+  } : {}) };
 }
 
 function catalogProduct(productId: string) {
@@ -204,9 +235,9 @@ function internalChoiceLabel(product: Product, choice: string) {
 }
 
 function lineDescription(line: B2BProductLine) {
-  if (line.productId === CUSTOM_PRODUCT_ID) return line.description.trim();
+  if (line.productId === CUSTOM_PRODUCT_ID) return line.description.trim() ? `${line.description.trim()}${line.withLogo ? " · eigen logo" : ""}` : "";
   const product = catalogProduct(line.productId);
-  if (!product) return line.description.trim();
+  if (!product) return `${line.description.trim()}${line.withLogo ? " · eigen logo" : ""}`;
   const choice = visibleChoiceLabel(product, line.choice);
   const includeChoice = choice && choice !== "Standaard";
   const withLogo = line.withLogo && productSupportsLogo(product, line.choice);
@@ -246,7 +277,7 @@ function automaticPriceBreakdown(
   // Adding the retail surcharge here again charged it twice and mixed VAT bases.
   const optionSurcharge = 0;
   const logoSurcharge = line.withLogo && productSupportsLogo(product, line.choice)
-    ? productLogoPrice(false)
+    ? lineLogoPrice(line)
     : 0;
   return {
     line,
@@ -333,7 +364,7 @@ function productLinesTotalIncl(lines: B2BProductLine[]) {
       const configured = configuredProduct(product, line.choice);
       const tier = tierFor(configured, Math.max(1, quantities.get(line.productId) || line.quantity));
       const unitIncl = roundCents(productUnitPrice(configured, tier, true) +
-        (line.withLogo && productSupportsLogo(product, line.choice) ? productLogoPrice(true) : 0));
+        (line.withLogo ? roundCents(lineLogoPrice(line) * 1.09) : 0));
       return total + roundCents(line.quantity * unitIncl);
     }
     return total + roundCents(line.quantity * moneyNumber(line.unitPriceEx) * 1.09);
@@ -341,11 +372,11 @@ function productLinesTotalIncl(lines: B2BProductLine[]) {
 }
 
 function logoTotal(lines: B2BProductLine[]) {
-  return roundCents(lines.reduce((sum, line) => sum + (line.withLogo ? line.quantity * productLogoPrice(false) : 0), 0));
+  return roundCents(lines.reduce((sum, line) => sum + (line.withLogo ? line.quantity * lineLogoPrice(line) : 0), 0));
 }
 
 function unitPriceWithoutLogo(line: B2BProductLine) {
-  return roundCents(Math.max(0, moneyNumber(line.unitPriceEx) - (line.withLogo ? productLogoPrice(false) : 0)));
+  return roundCents(Math.max(0, moneyNumber(line.unitPriceEx) - (line.withLogo ? lineLogoPrice(line) : 0)));
 }
 
 function letterPriceLine(line: B2BLetterLine, products: B2BProductLine[]) {
@@ -357,7 +388,7 @@ function letterPriceLine(line: B2BLetterLine, products: B2BProductLine[]) {
 function serializeOrderText(lines: B2BProductLine[], otherText: string, deliveryLine = "") {
   const orderLines = lines
     .filter((line) => line.quantity > 0 && lineDescription(line))
-    .map((line) => `${line.quantity} × ${lineDescription(line)} · ${money(moneyNumber(line.unitPriceEx))} p.s. ex btw · ${money(roundCents(line.quantity * moneyNumber(line.unitPriceEx)))}`);
+    .map((line) => `${line.quantity} × ${lineDescription(line)} · ${money(moneyNumber(line.unitPriceEx))} p.s. ex btw · ${money(roundCents(line.quantity * moneyNumber(line.unitPriceEx)))}${line.withLogo ? ` · logo ${money(lineLogoPrice(line))} p.s. ex btw inbegrepen` : ""}`);
   if (deliveryLine) orderLines.push(deliveryLine);
 
   return [
@@ -405,7 +436,7 @@ function parseOrderText(value: string, preservePrices = false): { productLines: 
   const [productPart, ...otherParts] = value.split(`\n${OTHER_ORDER_HEADING}\n`);
   const unparsedRows: string[] = [];
   const savedProductLines = productPart.split("\n").slice(1).flatMap((row, index) => {
-    const match = row.match(/^(\d+) × (.+) · €\s?([\d.,]+) p\.s\. ex btw · €\s?[\d.,]+$/);
+    const match = row.match(/^(\d+) × (.+) · €\s?([\d.,]+) p\.s\. ex btw · €\s?[\d.,]+(?: · logo €\s?([\d.,]+) p\.s\. ex btw inbegrepen)?$/);
     if (!match) {
       if (row.trim()) unparsedRows.push(row);
       return [];
@@ -415,11 +446,12 @@ function parseOrderText(value: string, preservePrices = false): { productLines: 
       id: `saved-product-${index}`,
       productId: catalogMatch?.product.id || CUSTOM_PRODUCT_ID,
       choice: catalogMatch?.choice || "",
-      description: catalogMatch?.product.name || match[2],
+      description: catalogMatch?.product.name || match[2].replace(/ · eigen logo$/i, ""),
       quantity: Number(match[1]),
       unitPriceEx: decimalInput(moneyNumber(match[3])),
       manualPrice: true,
-      withLogo: Boolean(catalogMatch?.withLogo),
+      withLogo: Boolean(catalogMatch?.withLogo || / · eigen logo$/i.test(match[2])),
+      logoUnitPriceEx: match[4] ? decimalInput(moneyNumber(match[4])) : / · eigen logo$/i.test(match[2]) ? decimalInput(productLogoPrice(false)) : undefined,
       letterChocolate: catalogMatch && "letterChocolate" in catalogMatch ? catalogMatch.letterChocolate : "",
       packageLetter: catalogMatch && "packageLetter" in catalogMatch ? catalogMatch.packageLetter : "",
     }];
@@ -488,15 +520,15 @@ function effectiveOrderTotal(order: SinterklaasB2BOrder) {
 }
 
 function withProductLogo(line: B2BProductLine, requested: boolean) {
-  const product = catalogProduct(line.productId);
-  const withLogo = Boolean(product && requested && productSupportsLogo(product, line.choice));
+  const withLogo = requested;
   const delta = Number(withLogo) - Number(line.withLogo);
   return {
     ...line,
     withLogo,
+    logoUnitPriceEx: line.logoUnitPriceEx ?? (requested ? decimalInput(defaultLogoPrice(line)) : undefined),
     // A manually agreed unit price already includes the previous logo choice.
     // Change only the logo amount; keep the agreed base price intact.
-    ...(line.manualPrice && delta ? { unitPriceEx: decimalInput(Math.max(0, moneyNumber(line.unitPriceEx) + delta * productLogoPrice(false))) } : {}),
+    ...(line.manualPrice && delta ? { unitPriceEx: decimalInput(Math.max(0, moneyNumber(line.unitPriceEx) + delta * lineLogoPrice(line))) } : {}),
   };
 }
 
@@ -628,6 +660,10 @@ function formStateFromOrder(order: SinterklaasB2BOrder | null | undefined, seaso
     ...line, withLogo: b2bLetterHasLogo(order, line),
     ...(line.style === "vorm" ? { size: "groot" as const } : {}),
   }));
+  // Earlier general logo agreements used the old folder surcharge.
+  if (order.logo?.trim() && letterLines.some(line => line.withLogo) && !parsedOrder.productLines.some(line => line.withLogo)) {
+    parsedOrder.productLines = parsedOrder.productLines.map(line => ["chocoladeletter", "chocolade-vormletter"].includes(line.productId) && line.logoUnitPriceEx === undefined ? { ...line, logoUnitPriceEx: decimalInput(productLogoPrice(false)) } : line);
+  }
   const productLines = letterLines.length && !parseLetterGroup(order.letterOrderText) ? syncLetterProductLines(parsedOrder.productLines, letterLines) : parsedOrder.productLines;
 
   return {
@@ -1130,11 +1166,19 @@ export function B2BOrderForm({
     }));
   }
 
+  function editLogoPrice(line: B2BProductLine, value: string) {
+    updateProductLine(line.id, withLogoPrice(line, value));
+  }
+
+  function logoPriceInput(line: B2BProductLine, label: string, grouped = false) {
+    return <label className={styles.logoPrice}><span>Logo / stuk excl. btw</span><input aria-label={`Logokosten ${label}`} type="text" inputMode="decimal" value={line.logoPriceDraft ?? line.logoUnitPriceEx ?? decimalInput(lineLogoPrice(line))} onChange={event => editLogoPrice(line, event.target.value)} aria-invalid={!validLogoPrice(line)}/>{grouped && <small>Voor deze soort en dit formaat.</small>}</label>;
+  }
+
   function editBasePrice(line: B2BProductLine, value: string) {
     setBasePriceInputs(current => ({ ...current, [line.id]: value }));
     const base = Number(value.replace(",", "."));
     if (value.trim() && Number.isFinite(base) && base >= 0) {
-      updateProductLine(line.id, { unitPriceEx: decimalInput(base + (line.withLogo ? productLogoPrice(false) : 0)), manualPrice: true });
+      updateProductLine(line.id, { unitPriceEx: decimalInput(base + (line.withLogo ? lineLogoPrice(line) : 0)), manualPrice: true });
     }
   }
 
@@ -1152,12 +1196,13 @@ export function B2BOrderForm({
       const productLines = current.productLines.map(line => withProductLogo(line, withLogo));
       return { ...current, letterLines, productLines: syncLetterProductLines(productLines, letterLines) };
     });
-    setAddFeedback(withLogo ? "Logo aangezet bij alle geschikte bestelregels. Je kunt het hieronder per regel weer uitzetten." : "Logo uitgezet bij alle bestelregels.");
+    setAddFeedback(withLogo ? "Logo aangezet bij alle bestelregels. Je kunt het hieronder per regel weer uitzetten." : "Logo uitgezet bij alle bestelregels.");
   }
 
   function updateProductDraft(patch: Partial<B2BProductLine>) {
     setProductDraft((current) => {
-      const next = patch.withLogo === undefined ? { ...current, ...patch } : withProductLogo({ ...current, ...patch, withLogo: current.withLogo }, patch.withLogo);
+      const priced = patch.logoPriceDraft === undefined ? current : withLogoPrice(current, patch.logoPriceDraft);
+      const next = patch.withLogo === undefined ? { ...priced, ...patch } : withProductLogo({ ...priced, ...patch, withLogo: current.withLogo }, patch.withLogo);
       const product = catalogProduct(next.productId);
       if (product && !productSupportsLogo(product, next.choice)) Object.assign(next, withProductLogo(next, false));
       if (!product || !validProductChoice(product, next.choice)) return { ...next, unitPriceEx: next.manualPrice ? next.unitPriceEx : "" };
@@ -1187,6 +1232,7 @@ export function B2BOrderForm({
       setAddFeedback("Vul een geldige prijs in.");
       return;
     }
+    if (!validLogoPrice(productDraft)) { setAddFeedback("Vul geldige logokosten in (0 of meer, maximaal 2 decimalen)."); return; }
     const description = lineDescription(productDraft);
     if (!description) {
       setAddFeedback("Vul eerst een omschrijving in.");
@@ -1206,6 +1252,7 @@ export function B2BOrderForm({
         (line.packageLetter || "") === (lineToAdd.packageLetter || "") &&
         line.description.trim() === lineToAdd.description.trim() &&
         line.withLogo === lineToAdd.withLogo &&
+        lineLogoPrice(line) === lineLogoPrice(lineToAdd) &&
         line.manualPrice === lineToAdd.manualPrice &&
         moneyNumber(line.unitPriceEx) === moneyNumber(lineToAdd.unitPriceEx)
       );
@@ -1334,6 +1381,7 @@ export function B2BOrderForm({
       setMessage("De letterregels wijken af van de bedrijfsverdeling. Herstel de aantallen en logo’s voordat je opslaat.");
       return;
     }
+    if (form.productLines.some(line => !validLogoPrice(line))) { setStep(2); setMessage("Vul geldige logokosten in (0 of meer, maximaal 2 decimalen)."); return; }
     if (hasInvalidBasePrice()) {
       setStep(2);
       setMessage("Vul een geldige stukprijs in.");
@@ -1460,6 +1508,7 @@ export function B2BOrderForm({
       if (delivery.active && form.deliveryPricing.mode !== "unpriced" && delivery.amountIncl === null) { setStep(1); setMessage("Vul een geldige bezorgpostcode in of geef handmatig de bezorgkosten inclusief btw op."); return; }
     }
     if (next === 3 && form.status === "akkoord" && b2bProductionLetters({ id: initialOrder?.id || "new", orderText: serializeOrderText(form.productLines, form.orderText), letterLines: form.letterLines, logo: form.logo }).issues.length) { setStep(2); setMessage("Kies de chocoladesmaak bij de combinatieproducten."); return; }
+    if (next === 3 && form.productLines.some(line => !validLogoPrice(line))) { setStep(2); setMessage("Vul geldige logokosten in (0 of meer, maximaal 2 decimalen)."); return; }
     if (next === 3 && hasInvalidBasePrice()) { setStep(2); setMessage("Vul een geldige stukprijs in."); return; }
     setStep(next);
   }
@@ -1476,17 +1525,17 @@ export function B2BOrderForm({
     if (!count && !packageLetters.length && editable) return null;
     return <div className={styles.cart} aria-label={editable ? "Bestelling aanpassen" : "Bestelling controleren"}>
       <div className={styles.cartHead}><h3>{count ? `Bestelling · ${count} ${count === 1 ? "regel" : "regels"}` : "Jouw bestelling"}</h3><span>{form.productLines.reduce((sum, line) => sum + line.quantity, 0)} artikelen</span></div>
-      {count > 0 && <div className={styles.cartColumns} aria-hidden="true"><span>Artikel</span><span>Aantal</span><span>Prijs / stuk<br/><small>excl. btw en logo</small></span><span>Logo<br/><small>{money(productLogoPrice(false))} excl. btw</small></span><span>Regeltotaal<br/><small>excl. btw</small></span><span/></div>}
+      {count > 0 && <div className={styles.cartColumns} aria-hidden="true"><span>Artikel</span><span>Aantal</span><span>Prijs / stuk<br/><small>excl. btw en logo</small></span><span>Logo<br/><small>tarief per stuk excl. btw</small></span><span>Regeltotaal<br/><small>excl. btw</small></span><span/></div>}
       {looseLetters.map((line, index) => {
         const price = letterPriceLine(line, form.productLines);
         const base = price ? unitPriceWithoutLogo(price) : 0;
-        const logo = line.withLogo ? roundCents(line.quantity * productLogoPrice(false)) : 0;
+        const logo = line.withLogo && price ? roundCents(line.quantity * lineLogoPrice(price)) : 0;
         const amount = roundCents(line.quantity * base + logo);
         return <div key={line.id} className={styles.cartRow} data-order-item="letter" data-item-id={line.id}>
           <div className={styles.cartArticle}><span className={styles.letterMark}>{line.letter}</span><div><strong>{line.style === "vorm" ? "Vormletter" : "Spuitletter"} {line.letter}</strong><p>{line.chocolate === "melk" ? "Melk" : line.chocolate === "puur" ? "Puur" : "Wit"} · {line.size === "groot" ? "Groot" : "Klein"}</p>{line.exceptions.length > 0 && <div className={styles.itemTags}>{line.exceptions.map(exception => <span key={exception} data-exception={exception}>{exception === "vegan" && <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M19 4C10 4 5 8 5 15c0 3 2 5 5 5 7 0 9-7 9-16Z"/><path d="M6 18c3-4 6-6 10-9"/></svg>}{B2B_LETTER_EXCEPTIONS.find(item => item.id === exception)?.label || exception}</span>)}</div>}{editable ? <label className={styles.decorationField}>Decoratie<input aria-label={`Decoratie letterregel ${index + 1}: ${line.letter}`} maxLength={240} placeholder="Bijv. blauwe balletjes" value={line.decoration || ""} onChange={event => updateLetterLine(line.id, { decoration: event.target.value })}/></label> : line.decoration && <p className={styles.decorationNote}>Decoratie · {line.decoration}</p>}</div></div>
           <div className={styles.cartQuantity}>{editable ? <label><span>Aantal</span><input aria-label={`Aantal letterregel ${index + 1}: ${line.letter}`} type="number" min="1" max="10000" value={line.quantity} onChange={event => updateLetterLine(line.id, { quantity: Math.max(1, Number(event.target.value) || 1) })}/></label> : <strong>{line.quantity}×</strong>}</div>
           <div className={styles.cartUnit}><span>Prijs / stuk</span><strong>{money(base)}</strong><small>{price?.manualPrice ? "Prijsafspraak" : "Folderprijs"}</small></div>
-          <div className={styles.cartLogo}>{editable ? <label data-selected={Boolean(line.withLogo)}><input type="checkbox" aria-label={`Logo op letterregel ${index + 1}: ${line.letter} · ${line.chocolate} · ${line.size}`} checked={Boolean(line.withLogo)} onChange={event => updateLetterLine(line.id, { withLogo: event.target.checked })}/><span>{line.withLogo ? "Met logo" : "Zonder logo"}<small>{line.withLogo ? `+ ${money(logo)}` : "+ € 0,00"}</small></span></label> : <span>{line.withLogo ? `Met logo · + ${money(logo)}` : "Zonder logo"}</span>}</div>
+          <div className={styles.cartLogo}>{editable ? <label data-selected={Boolean(line.withLogo)}><input type="checkbox" aria-label={`Logo op letterregel ${index + 1}: ${line.letter} · ${line.chocolate} · ${line.size}`} checked={Boolean(line.withLogo)} onChange={event => updateLetterLine(line.id, { withLogo: event.target.checked })}/><span>{line.withLogo ? "Met logo" : "Zonder logo"}<small>{line.withLogo ? `+ ${money(logo)}` : "+ € 0,00"}</small></span></label> : <span>{line.withLogo ? `Met logo · + ${money(logo)}` : "Zonder logo"}</span>}{editable && line.withLogo && price && logoPriceInput(price, `letterregel ${index + 1}: ${line.letter}`, true)}</div>
           <div className={styles.cartAmount}><span>Regeltotaal</span><strong>{money(amount)}</strong><small>{line.quantity} × {money(base)}{logo > 0 ? ` + ${money(logo)} logo` : ""}</small></div>
           {editable && <button type="button" aria-label={`Letterregel ${index + 1} verwijderen`} className={styles.removeItem} onClick={() => setLetterLines(form.letterLines.filter(item => item.id !== line.id))}>×</button>}
         </div>;
@@ -1494,7 +1543,7 @@ export function B2BOrderForm({
       {productRows.map(line => {
         const product = catalogProduct(line.productId);
         const base = unitPriceWithoutLogo(line);
-        const logo = line.withLogo ? roundCents(line.quantity * productLogoPrice(false)) : 0;
+        const logo = line.withLogo ? roundCents(line.quantity * lineLogoPrice(line)) : 0;
         const title = lineDescription({...line, withLogo: false});
         return <div key={line.id} className={styles.cartRow} data-order-item="product" data-item-id={line.id}>
           <div className={styles.cartArticle}><div><strong><B2BProductText text={title}/></strong>{product && productHasLetterChoice(product) && editable && <label className={styles.packageLetterField}><span>Letter</span><select aria-label={`Letter in ${title}`} value={productLetterChoice(product, line.choice)} onChange={event => updateProductLine(line.id, { choice: productChoiceWithLetter(product, line.choice, event.target.value) })}>{PACKAGE_LETTERS.map(letter => <option key={letter} value={letter}>{letter}</option>)}</select></label>}{product && combinationProduct(product.id) && editable && <div className={styles.packageFields}>
@@ -1504,7 +1553,9 @@ export function B2BOrderForm({
           <div className={styles.cartQuantity}>{editable ? <label><span>Aantal</span><input aria-label={`Aantal ${title}`} type="number" min="1" max="10000" value={line.quantity} onChange={event => updateProductLine(line.id, { quantity: Math.max(1, Number(event.target.value) || 1) })}/></label> : <strong>{line.quantity}×</strong>}</div>
           <div className={styles.cartUnit}>{editable ? <label><span>Prijs / stuk excl. logo</span><input aria-label={`Prijs ${title}`} type="text" inputMode="decimal" value={basePriceInputs[line.id] ?? decimalInput(base)} onChange={event => editBasePrice(line, event.target.value)} onBlur={() => finishBasePrice(line.id)}/></label> : <strong>{money(base)}</strong>}{line.manualPrice && product && !product.manualPriceOnly && editable && <button type="button" className={styles.priceReset} onClick={() => updateProductLine(line.id, { manualPrice: false })}>Folderprijs gebruiken</button>}</div>
           <div className={styles.cartLogo}>
-            {product && productSupportsLogo(product, line.choice) ? editable ? <label data-selected={line.withLogo}><input aria-label={`Logo op ${title}`} type="checkbox" checked={line.withLogo} onChange={event => updateProductLine(line.id, { withLogo: event.target.checked })}/><span>{line.withLogo ? "Met logo" : "Zonder logo"}<small>{line.withLogo ? `+ ${money(logo)}` : "+ € 0,00"}</small></span></label> : <span>{line.withLogo ? `Met logo · + ${money(logo)}` : "Zonder logo"}</span> : <small>Niet beschikbaar</small>}
+            {editable ? <label data-selected={line.withLogo}><input aria-label={`Logo op ${title}`} type="checkbox" checked={line.withLogo} onChange={event => updateProductLine(line.id, { withLogo: event.target.checked })}/><span>{line.withLogo ? "Met logo" : "Zonder logo"}<small>{line.withLogo ? `+ ${money(logo)}` : "+ € 0,00"}</small></span></label> : <span>{line.withLogo ? `Met logo · + ${money(logo)}` : "Zonder logo"}</span> }
+            {editable && line.withLogo && logoPriceInput(line, title)}
+            {!editable && line.withLogo && <small>{money(lineLogoPrice(line))} per stuk excl. btw</small>}
             {line.withLogo && product?.logoPlacement && <small>Logo op {product.logoPlacement}</small>}
           </div>
           <div className={styles.cartAmount}><span>Regeltotaal</span><strong>{money(roundCents(line.quantity * base + logo))}</strong><small>{line.quantity} × {money(base)}{logo > 0 ? ` + ${money(logo)} logo` : ""}</small></div>
@@ -1616,7 +1667,7 @@ export function B2BOrderForm({
               if (productId === "letters") { setProductTab("letters"); return; }
               const nextProduct = catalogProduct(productId), choices = nextProduct ? choicesForProduct(nextProduct) : [];
               setProductTab("products");
-              updateProductDraft({ productId, choice: choices.length === 1 ? choices[0] : "__unset__", description: nextProduct?.name || "", unitPriceEx: "", quantity: 1, manualPrice: !nextProduct || Boolean(nextProduct.manualPriceOnly), withLogo: false, letterChocolate: "", packageLetter: "" });
+              updateProductDraft({ productId, choice: choices.length === 1 ? choices[0] : "__unset__", description: nextProduct?.name || "", unitPriceEx: "", quantity: 1, manualPrice: !nextProduct || Boolean(nextProduct.manualPriceOnly), withLogo: false, logoUnitPriceEx: undefined, logoPriceDraft: undefined, letterChocolate: "", packageLetter: "" });
             }}>
               <option value="" disabled>Kies een artikel</option>
               {season !== "kerst" && <option value="letters">{form.productLines.some(line => line.productId === "sint-pakket-op-maat") ? "Chocoladeletters · los of in pakket" : "Losse chocoladeletters"}</option>}
@@ -1639,7 +1690,7 @@ export function B2BOrderForm({
                 <option value="" disabled>Kies formaat</option><option value="groot">Groot</option>{letterDraft.style !== "vorm" && <option value="klein">Klein</option>}
               </select></label>
               <label className={styles.field}>Aantal<input data-order-draft aria-label="Aantal letters" type="number" min="1" max="10000" value={letterDraft.quantity || ""} onChange={event => updateLetterDraft({ quantity: Number(event.target.value) })} /></label>
-              <label className={styles.logoChoice}><input aria-label="Eigen logo op deze letters" type="checkbox" checked={Boolean(letterDraft.withLogo)} onChange={event => updateLetterDraft({ withLogo: event.target.checked })} /><span>Eigen logo op deze letters<small>+ {money(productLogoPrice(false))} per letter excl. btw</small></span></label>
+              <label className={styles.logoChoice}><input aria-label="Eigen logo op deze letters" type="checkbox" checked={Boolean(letterDraft.withLogo)} onChange={event => updateLetterDraft({ withLogo: event.target.checked })} /><span>Eigen logo op deze letters<small>+ {money(0.5)} per letter excl. btw · hieronder aanpasbaar</small></span></label>
               <details className={styles.letterExtras}><summary>Bijzondere wensen</summary>              <fieldset className={styles.exceptions}><legend>Bijzondere wensen</legend><div>{B2B_LETTER_EXCEPTIONS.map(({ id, label }) => <label key={id}><input type="checkbox" checked={letterDraft.exceptions.includes(id)} onChange={event => updateLetterDraft({ exceptions: event.target.checked ? [...letterDraft.exceptions, id] : letterDraft.exceptions.filter(value => value !== id) })} />{label}</label>)}</div></fieldset></details>
               <label className={`${styles.field} ${styles.fullWidth}`}>Decoratie (optioneel)<input aria-label="Decoratie op deze letters" maxLength={240} placeholder="Bijv. blauwe balletjes in plaats van rood" value={letterDraft.decoration || ""} onChange={event => updateLetterDraft({ decoration: event.target.value })}/></label>
               <div className={styles.addLine}><button type="button" className={styles.button} onClick={addLetterToOrder}>+ Letter toevoegen</button></div>
@@ -1657,8 +1708,8 @@ export function B2BOrderForm({
                 <p className={styles.combinationHint}>De letter gaat mee in de letterplanning. Het pakket blijft één bestelartikel.</p>
               </>}
               <label className={styles.field}>Aantal<input data-order-draft aria-label="Aantal producten" type="number" min="1" max="10000" value={productDraft.quantity || ""} onChange={event => updateProductDraft({ quantity: Number(event.target.value) })} /></label>
-              {draftProduct?.manualPriceOnly ? <label className={styles.field}>Afgesproken pakketprijs excl. btw<input aria-label="Afgesproken pakketprijs excl. btw" data-order-draft type="number" min="0" step="0.01" value={productDraft.unitPriceEx} onChange={event => updateProductDraft({unitPriceEx: event.target.value, manualPrice: true})}/><small>Vaste prijs voor de complete inhoud, inclusief afgesproken verpakking. Beschrijf hieronder de inhoud en uitzonderingen.</small></label> : <details className={styles.letterExtras}><summary>Prijs aanpassen{productDraft.unitPriceEx ? ` · € ${productDraft.unitPriceEx.replace(".", ",")} excl. btw` : ""}</summary>              <label className={styles.field}>Prijs p.s. excl. btw<input data-order-draft type="number" min="0" step="0.01" value={productDraft.unitPriceEx} onChange={event => updateProductDraft({ unitPriceEx: event.target.value, manualPrice: true })} /></label></details>}
-              {draftProduct && productSupportsLogo(draftProduct, productDraft.choice) && <label className={styles.field}><span><input type="checkbox" aria-label="Eigen logo op dit product" checked={productDraft.withLogo} onChange={event => updateProductDraft({ withLogo: event.target.checked })} /> Eigen logo · + {money(productLogoPrice(false))} p.s. excl. btw</span>{draftProduct.logoPlacement && <small>Logo op {draftProduct.logoPlacement}</small>}</label>}
+              {draftProduct?.manualPriceOnly ? <label className={styles.field}>Afgesproken pakketprijs excl. btw<input aria-label="Afgesproken pakketprijs excl. btw" data-order-draft type="number" min="0" step="0.01" value={productDraft.unitPriceEx} onChange={event => updateProductDraft({unitPriceEx: event.target.value, manualPrice: true})}/><small>Vaste prijs voor de complete inhoud, inclusief afgesproken verpakking. Beschrijf hieronder de inhoud en uitzonderingen.</small></label> : <details className={styles.letterExtras}><summary>Prijs aanpassen{productDraft.unitPriceEx ? ` · € ${productDraft.unitPriceEx.replace(".", ",")} excl. btw` : ""}</summary>              <label className={styles.field}>Prijs p.s. excl. btw<input data-order-draft type="number" min="0" step="0.01" value={productDraft.unitPriceEx} onChange={event => updateProductDraft({ unitPriceEx: event.target.value, manualPrice: true })} />{productDraft.withLogo && <small>Dit bedrag is inclusief het gekozen logo.</small>}</label></details>}
+              {productDraft.productId && <div><label className={styles.field}><span><input type="checkbox" aria-label="Eigen logo op dit product" checked={productDraft.withLogo} onChange={event => updateProductDraft({ withLogo: event.target.checked })} /> Eigen logo · + {money(lineLogoPrice(productDraft))} p.s. excl. btw</span>{draftProduct?.logoPlacement && <small>Logo op {draftProduct.logoPlacement}</small>}</label>{productDraft.withLogo && <label className={styles.field}>Logokosten per stuk excl. btw<input data-order-draft aria-label="Logokosten nieuw product" inputMode="decimal" value={productDraft.logoPriceDraft ?? productDraft.logoUnitPriceEx ?? decimalInput(lineLogoPrice(productDraft))} onChange={event => updateProductDraft({logoPriceDraft: event.target.value})} aria-invalid={!validLogoPrice(productDraft)}/></label>}</div>}
               <div className={styles.addLine}><button type="button" className={styles.button} onClick={addProductToOrder}>+ Product toevoegen</button></div>
             </div>
           </div>
@@ -1676,7 +1727,7 @@ export function B2BOrderForm({
           </label>
           <details className={`${styles.extra} ${styles.orderNotes}`}>
             <summary>Afspraken & notities{extraDataCount ? ` · ${extraDataCount} ingevuld` : ""}</summary>
-          {form.productLines.some(line => { const product = catalogProduct(line.productId); return product && productSupportsLogo(product, line.choice); }) && <div className={styles.cartBulk}><span>Logo’s in één keer instellen:</span><button type="button" onClick={() => applyLogoToAll(true)}>Logo bij alle geschikte artikelen</button><button type="button" onClick={() => applyLogoToAll(false)}>Alle logo’s uit</button></div>}
+          {form.productLines.length > 0 && <div className={styles.cartBulk}><span>Logo’s in één keer instellen:</span><button type="button" onClick={() => applyLogoToAll(true)}>Logo bij alle artikelen</button><button type="button" onClick={() => applyLogoToAll(false)}>Alle logo’s uit</button></div>}
             <div className={styles.fieldGrid}>
               <label className={`${styles.field} ${styles.fullWidth}`}>Afspraken voor de klant<textarea rows={2} value={form.orderText} onChange={event => setField("orderText", event.target.value)} /><small>Worden opgenomen in de bestelling en klantbevestiging.</small></label>
               <label className={`${styles.field} ${styles.fullWidth}`}>Interne notitie<textarea rows={2} value={form.importantNotes} onChange={event => setField("importantNotes", event.target.value)} /><small>Alleen voor het team.</small></label>
@@ -1712,7 +1763,7 @@ export function B2BOrderForm({
           </select></label>
           <div className={styles.total}>
             <h3>{form.letterGroup ? "Verkoopprijs" : "Prijsopbouw"} <small>excl. btw</small></h3>
-            <details className={styles.priceDetails}><summary>Prijsopbouw bekijken</summary>            {!form.letterGroup && <dl className={styles.priceBreakdown}><div><dt>Producten</dt><dd>{money(productsEx)}</dd></div><div data-price-part="logos"><dt>Logo’s{logosCount > 0 && <small>{logosCount} × {money(productLogoPrice(false))}</small>}</dt><dd>{money(logosEx)}</dd></div>{hasDelivery && <div data-price-part="delivery"><dt>Bezorgkosten<small>{delivery.amountIncl === null ? "Nog niet ingesteld" : `${money(deliveryIncl)} incl. btw`}</small></dt><dd>{delivery.amountEx === null ? "—" : money(deliveryEx)}</dd></div>}{manualTotal && <div><dt>Prijsafspraak</dt><dd>{money(roundCents(total - calculatedTotalEx - deliveryEx))}</dd></div>}</dl>}</details>
+            <details className={styles.priceDetails}><summary>Prijsopbouw bekijken</summary>            {!form.letterGroup && <dl className={styles.priceBreakdown}><div><dt>Producten</dt><dd>{money(productsEx)}</dd></div><div data-price-part="logos"><dt>Logo’s{logosCount > 0 && <small>{logosCount} artikelen · tarief per regel</small>}</dt><dd>{money(logosEx)}</dd></div>{hasDelivery && <div data-price-part="delivery"><dt>Bezorgkosten<small>{delivery.amountIncl === null ? "Nog niet ingesteld" : `${money(deliveryIncl)} incl. btw`}</small></dt><dd>{delivery.amountEx === null ? "—" : money(deliveryEx)}</dd></div>}{manualTotal && <div><dt>Prijsafspraak</dt><dd>{money(roundCents(total - calculatedTotalEx - deliveryEx))}</dd></div>}</dl>}</details>
             <div className={styles.payableTotal}><span>Totaal excl. btw</span><strong>{form.letterGroup && !manualTotal ? "Nog niet afgesproken" : money(total)}</strong></div>
             {(!form.letterGroup || manualTotal) && <div className={styles.inclusiveTotal} data-price-part="inclusive-total"><span>Totaal incl. 9% btw</span><strong>{money(totalIncl)}</strong><small>{hasDelivery && delivery.amountIncl === null ? "Bezorgkosten nog niet afzonderlijk vastgelegd." : hasDelivery ? "Inclusief bezorgkosten en eventuele prijsafspraken." : manualTotal || form.productLines.some(line => line.manualPrice) ? "Inclusief eventuele prijsafspraken" : "Vergelijk met de folderprijs incl. btw."}</small></div>}
             <details className={styles.totalAgreement}><summary>Totaalafspraak aanpassen</summary>

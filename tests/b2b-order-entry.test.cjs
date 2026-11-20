@@ -292,7 +292,7 @@ test('10 letters with a logo and 3 packages without retain separate charges thro
   assert.equal(saved.letterLines[0].withLogo,true);
   const letterPrice=parsed.productLines.find(line=>line.productId==='chocoladeletter'),packagePrice=parsed.productLines.find(line=>line.productId==='stafwerk');
   assert.equal(letterPrice.quantity,10);assert.equal(letterPrice.withLogo,true);assert.equal(packagePrice.withLogo,false);
-  assert.equal(Number(letterPrice.unitPriceEx),13.26); // 12.80 ex VAT + 0.46 logo
+  assert.equal(Number(letterPrice.unitPriceEx),13.30); // 12.80 ex VAT + 0.50 logo
   assert.equal(Number(packagePrice.unitPriceEx),Number(sint.productUnitPrice(sint.products.find(p=>p.id==='stafwerk'),sint.tierFor(sint.products.find(p=>p.id==='stafwerk'),3),false)));
   const reopened=entry('sint',{...saved,id:'logo-saved',updatedAt:'2026-10-22'});
   const checkbox=nodes(reopened.render(),n=>n.type==='input'&&n.props['aria-label']?.startsWith('Logo op letterregel'))[0];
@@ -310,7 +310,7 @@ test('the same letter can be split into quantities with and without logos, while
   assert.deepEqual(JSON.parse(JSON.stringify(saved.letterLines.map(line=>[line.quantity,line.withLogo]))),[[20,true],[5,false]]);
   assert.equal(prices.length,2);
   const plain=prices.find(line=>!line.withLogo),logo=prices.find(line=>line.withLogo);
-  assert.equal(Math.round((Number(logo.unitPriceEx)-Number(plain.unitPriceEx))*100),46);
+  assert.equal(Math.round((Number(logo.unitPriceEx)-Number(plain.unitPriceEx))*100),50);
   const configured={...sint.products.find(p=>p.id==='chocoladeletter'),retailPriceIncl:13.95};
   assert.equal(Number(plain.unitPriceEx),sint.productUnitPrice(configured,sint.tierFor(configured,25),false));
 });
@@ -319,7 +319,7 @@ test('bulk logos remain reversible per article and manually agreed unit prices c
   const ui=entry();ui.field('Bedrijfsnaam / klantnaam *','Alle artikelen');ui.button('Verder naar producten →');
   addLetters(ui,10,false);addPackage(ui,3,false);
   ui.field('Prijs Stafwerk pakket','20');
-  ui.button('Logo bij alle geschikte artikelen');
+  ui.button('Logo bij alle artikelen');
   ui.check('Logo op Stafwerk pakket',false);
   ui.button('Bestelling controleren →');await ui.submit();
   let saved=ui.calls[0],prices=ui.parse(saved.orderText).productLines;
@@ -328,7 +328,7 @@ test('bulk logos remain reversible per article and manually agreed unit prices c
   const reopened=entry('sint',{...saved,id:'manual',updatedAt:'2026-10-22'});reopened.button('Verder naar producten →');
   reopened.check('Logo op Stafwerk pakket',true);
   reopened.button('Bestelling controleren →');await reopened.submit();
-  assert.equal(reopened.parse(reopened.calls[0].orderText).productLines.find(p=>p.productId==='stafwerk').unitPriceEx,'20.46');
+  assert.equal(reopened.parse(reopened.calls[0].orderText).productLines.find(p=>p.productId==='stafwerk').unitPriceEx,'20.50');
 });
 
 test('removing all logos clears only the generated logo agreement',async()=>{
@@ -339,13 +339,13 @@ test('removing all logos clears only the generated logo agreement',async()=>{
   assert.equal(reopened.calls[0].logo,'');assert.equal(reopened.calls[0].letterLines[0].withLogo,false);assert.doesNotMatch(reopened.calls[0].orderText,/eigen logo/);
 });
 
-test('bulk logos skip catalogue articles that do not support a logo',async()=>{
+test('bulk logos include every catalogue article, including previously excluded marzipan',async()=>{
   const ui=entry();ui.field('Bedrijfsnaam / klantnaam *','Ondersteunde producten');ui.button('Verder naar producten →');addLetters(ui,10,false);
   ui.button('+ Artikel toevoegen');const product=sint.products.find(item=>item.id==='marsepein-letter');
   ui.field('Product',product.id);ui.field('Variant',product.variants[0].label);ui.field('Aantal producten','3');ui.button('+ Product toevoegen');
-  ui.button('Logo bij alle geschikte artikelen');ui.button('Bestelling controleren →');await ui.submit();
+  ui.button('Logo bij alle artikelen');ui.button('Bestelling controleren →');await ui.submit();
   assert.equal(ui.calls[0].letterLines[0].withLogo,true);
-  assert.equal(ui.parse(ui.calls[0].orderText).productLines.find(line=>line.productId==='marsepein-letter').withLogo,false);
+  assert.equal(ui.parse(ui.calls[0].orderText).productLines.find(line=>line.productId==='marsepein-letter').withLogo,true);
 });
 
 test('the API normalizer retains explicit true/false line choices while older orders keep their general logo fallback',()=>{
@@ -390,17 +390,17 @@ test('an older general logo agreement is priced immediately when editing: 366.00
 test('logos adjust a manually agreed total instead of disappearing into an unchanged override',async()=>{
   const original=legacyLogoRequest();original.logo='';original.letterLines=original.letterLines.map(line=>({...line,withLogo:false}));
   const ui=entry('sint',original);ui.button('Verder naar producten →');
-  ui.field('Afgesproken totaal excl. btw','350');ui.button('Logo bij alle geschikte artikelen');
-  assert.equal(nodes(ui.render(),n=>n.props?.['aria-label']==='Afgesproken totaal excl. btw')[0].props.value,'363.80');
+  ui.field('Afgesproken totaal excl. btw','350');ui.button('Logo bij alle artikelen');
+  assert.equal(nodes(ui.render(),n=>n.props?.['aria-label']==='Afgesproken totaal excl. btw')[0].props.value,'365.00');
   const priceParts=nodes(ui.render(),n=>n.props?.className==='priceBreakdown')[0];
-  assert.match(label(priceParts),/Producten€\s?366,00Logo’s30 × €\s?0,46€\s?13,80Prijsafspraak€\s?-16,00/);
+  assert.match(label(priceParts),/Producten€\s?366,00Logo’s30 artikelen · tarief per regel€\s?15,00Prijsafspraak€\s?-16,00/);
   ui.check('Logo op letterregel 2: P · puur · groot',false);
-  assert.equal(nodes(ui.render(),n=>n.props?.['aria-label']==='Afgesproken totaal excl. btw')[0].props.value,'363.34');
-  assert.match(label(nodes(ui.render(),n=>n.props?.['data-price-part']==='inclusive-total')[0]),/€\s?396,04/,'a genuine total agreement uses its own VAT total');
+  assert.equal(nodes(ui.render(),n=>n.props?.['aria-label']==='Afgesproken totaal excl. btw')[0].props.value,'364.50');
+  assert.match(label(nodes(ui.render(),n=>n.props?.['data-price-part']==='inclusive-total')[0]),/€\s?397,31/,'a genuine total agreement uses its own VAT total');
   ui.button('Bestelling controleren →');await ui.submit();
-  assert.equal(ui.calls[0].totalExVat.replace(/\s/g,''),'€363,34');
+  assert.equal(ui.calls[0].totalExVat.replace(/\s/g,''),'€364,50');
   const again=entry('sint',{...ui.calls[0],id:'manual-reopen'});
-  assert.equal(nodes(again.render(),n=>n.props?.['aria-label']==='Afgesproken totaal excl. btw')[0].props.value,'363.34');
+  assert.equal(nodes(again.render(),n=>n.props?.['aria-label']==='Afgesproken totaal excl. btw')[0].props.value,'364.50');
 });
 
 function folderQuote(lines) {
@@ -408,7 +408,7 @@ function folderQuote(lines) {
     delivery:{method:'pickup',momentType:'date',date:'2026-11-24'},selection:{lines} });
 }
 
-test('30 letters with logos have identical folder and B2B totals, including a split milk/vegan order',async()=>{
+test('new B2B logo rates are exclusive of VAT while published folder quotes keep their original rate',async()=>{
   const ui=entry();ui.field('Bedrijfsnaam / klantnaam *','Prijscontrole');ui.button('Verder naar producten →');
   addLetters(ui,29,true,'P');addLetters(ui,1,true,'P','puur',true);
   const quote=folderQuote([
@@ -416,9 +416,9 @@ test('30 letters with logos have identical folder and B2B totals, including a sp
     {productId:'chocoladeletter',quantity:1,withLogo:true,letter:{letter:'P',chocolate:'puur',size:'groot',exceptions:['vegan']}},
   ]);
   assert.equal(quote.order.totalExVat,'379.80');assert.match(quote.order.priceAgreement,/414,00 incl/);
-  assert.match(label(nodes(ui.render(),n=>n.props?.['data-price-part']==='inclusive-total')[0]),/414,00/);
+  assert.match(label(nodes(ui.render(),n=>n.props?.['data-price-part']==='inclusive-total')[0]),/415,50/);
   ui.button('Bestelling controleren →');await ui.submit();
-  assert.equal(ui.calls[0].totalExVat.replace(/\s/g,''),'€379,80');
+  assert.equal(ui.calls[0].totalExVat.replace(/\s/g,''),'€381,00');
   assert.equal(ui.calls[0].letterLines.length,2);
   assert.equal(ui.calls[0].letterLines[1].exceptions[0],'vegan');
 });
@@ -428,7 +428,7 @@ test('both sizes and styles of letters match folder prices at every tier boundar
   for(const productId of ['chocoladeletter','chocolade-vormletter']) for(const size of ['klein','groot']) for(const quantity of [1,24,25,50,51,100,101,200,201]) for(const withLogo of [false,true]) {
     if(productId==='chocolade-vormletter'&&size==='klein') continue;
     const quote=folderQuote([{productId,quantity,withLogo,letter:{letter:'S',chocolate:'melk',size,exceptions:[]}}]);
-    const result=ui.prices([{id:'letter',productId,choice:productId==='chocolade-vormletter'?'':size==='groot'?'Groot':'Klein',description:'Letter',quantity,unitPriceEx:'0',manualPrice:false,withLogo}]);
+    const result=ui.prices([{id:'letter',productId,choice:productId==='chocolade-vormletter'?'':size==='groot'?'Groot':'Klein',description:'Letter',quantity,unitPriceEx:'0',manualPrice:false,withLogo,logoUnitPriceEx:'0.46'}]);
     assert.equal(result.ex,Number(quote.order.totalExVat));
     assert.ok(quote.order.priceAgreement.includes(`${new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR'}).format(result.incl)} incl. btw`));
   }
@@ -444,7 +444,7 @@ test('all automatic Sint variants and tier boundaries match the folder, includin
     for(const choice of variants) for(const quantity of [1,24,25,50,51,100,101,200,201]) for(const withLogo of [false,true]) {
       if(withLogo&&!sint.productSupportsLogo(product,choice)) continue;
       const quote=folderQuote([{productId:product.id,choice,quantity,withLogo}]);
-      const result=ui.prices([{id:'compare',productId:product.id,choice,description:product.name,quantity,unitPriceEx:'0',manualPrice:false,withLogo}]);
+      const result=ui.prices([{id:'compare',productId:product.id,choice,description:product.name,quantity,unitPriceEx:'0',manualPrice:false,withLogo,logoUnitPriceEx:'0.46'}]);
       const context=`${product.id}: ${choice}, ${quantity}, logo=${withLogo}`;
       assert.equal(result.ex,Number(quote.order.totalExVat),context);
       assert.ok(quote.order.priceAgreement.includes(`${new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR'}).format(result.incl)} incl. btw`),context);
@@ -503,7 +503,7 @@ test('postcode delivery is added once, survives the existing API text contract, 
     reopened.button('Verder naar producten →');reopened.button('Bestelling controleren →');await reopened.submit();
     assert.equal(reopened.calls[0].totalExVat,saved.totalExVat);
     assert.equal(reopened.calls[0].orderText,saved.orderText);
-    if(season==='sint') assert.match(label(reopened.render()),/354,95/,'retain exact inclusive product and delivery prices');
+    if(season==='sint') assert.match(label(reopened.render()),/356,20/,'retain exact inclusive product and delivery prices');
   }
 });
 
@@ -515,11 +515,11 @@ test('manual delivery overrides survive postcode changes and reopening; pickup r
   const re=entry('sint',{...saved,id:'manual-delivery',updatedAt:'now'});
   re.field('Bezorgkosten incl. btw','0');re.button('Verder naar producten →');re.button('Bestelling controleren →');await re.submit();
   assert.equal(re.parse(re.calls[0].orderText).delivery.amountIncl,0);
-  assert.equal(re.calls[0].totalExVat.replace(/\s/g,''),'€316,50');
+  assert.equal(re.calls[0].totalExVat.replace(/\s/g,''),'€317,50');
   const pickup=entry('sint',{...saved,id:'manual-delivery',updatedAt:'now'});
   pickup.button('Afhalen');pickup.button('Verder naar producten →');pickup.button('Bestelling controleren →');await pickup.submit();
   assert.equal(pickup.parse(pickup.calls[0].orderText).delivery,null);
-  assert.equal(pickup.calls[0].totalExVat.replace(/\s/g,''),'€316,50');
+  assert.equal(pickup.calls[0].totalExVat.replace(/\s/g,''),'€317,50');
   const reset=entry('sint',{...saved,id:'manual-delivery',updatedAt:'now'});
   reset.button('Postcodetarief gebruiken');reset.button('Verder naar producten →');reset.button('Bestelling controleren →');await reset.submit();
   assert.equal(reset.parse(reset.calls[0].orderText).delivery.amountIncl,14.95);
@@ -683,4 +683,101 @@ test('custom Sint packages retain their agreed price and included production let
   assert.equal(nodes(removed.render(), n => n.props?.['data-order-item'] === 'package-letter').length, 2, 'included letters remain available for repair in both form views');
   removed.button('Pakketletterregel 1 verwijderen');
   assert.equal(nodes(removed.render(), n => n.props?.['data-order-item'] === 'package-letter').length, 0);
+});
+
+function addChristmasProduct(ui, id, quantity = 10, withLogo = true) {
+  const product = kerst.christmasProducts.find(p => p.id === id);
+  ui.field('Product', `kerst-${id}`); ui.field('Variant', product.detail);
+  ui.field('Aantal producten', String(quantity)); ui.check('Eigen logo op dit product', withLogo);
+  return product;
+}
+
+test('every Christmas product offers a logo: both stollen default to 1.00 ex VAT and other products to 0.50', () => {
+  const ui = entry('kerst'); ui.field('Bedrijfsnaam / klantnaam *', 'Logoprijzen'); ui.button('Verder naar producten →');
+  for (const product of kerst.christmasProducts) {
+    addChristmasProduct(ui, product.id);
+    const input = nodes(ui.render(), n => n.props?.['aria-label'] === 'Logokosten nieuw product')[0];
+    assert.equal(Number(input.props.value), product.id.startsWith('stol-') ? 1 : 0.5, product.id);
+  }
+});
+
+test('a custom stol logo price survives the API contract, save and reopen and adjusts its automatic total once', async () => {
+  const ui = entry('kerst'); ui.field('Bedrijfsnaam / klantnaam *', 'Stol met logo'); ui.button('Verder naar producten →');
+  const product = addChristmasProduct(ui, 'stol-groot');
+  ui.field('Logokosten nieuw product', '1,25'); ui.button('+ Product toevoegen');
+  ui.button('Bestelling controleren →'); await ui.submit();
+  const saved = ui.calls[0], line = ui.parse(saved.orderText).productLines[0];
+  assert.equal(line.logoUnitPriceEx, '1.25'); assert.equal(line.withLogo, true);
+  assert.equal(Number(line.unitPriceEx), kerst.christmasUnitPrice(product, 10, false) + 1.25);
+  assert.match(saved.orderText, /logo €\s*1,25 p\.s\. ex btw inbegrepen/);
+  const api = load('app/sinterklaas/sinterklaasApi.ts', {'./b2bLetterLines': letters});
+  const wire = api.normalizeB2BOrder({...saved, id: 'logo-stol'});
+  const reopened = entry('kerst', wire); reopened.button('Verder naar producten →');
+  assert.equal(nodes(reopened.render(), n => n.props?.['aria-label'] === 'Logokosten Kerststol · 800 gram · met amandelspijs')[0].props.value, '1.25');
+  reopened.button('Bestelling controleren →'); await reopened.submit();
+  assert.equal(reopened.calls[0].orderText, saved.orderText); assert.equal(reopened.calls[0].totalExVat, saved.totalExVat);
+});
+
+test('changing a logo rate preserves a manual base price through invalid typing, correction, removal and adding it again', async () => {
+  const ui = entry(); ui.field('Bedrijfsnaam / klantnaam *', 'Eigen prijs'); ui.button('Verder naar producten →');
+  ui.field('Product', 'stafwerk'); ui.field('Variant', sint.productChoiceCandidates(sint.products.find(p=>p.id==='stafwerk'))[0]); ui.field('Aantal producten','3'); ui.check('Eigen logo op dit product',true); ui.button('+ Product toevoegen'); ui.field('Prijs Stafwerk pakket', '20');
+  for (const invalid of ['', '-99', 'abc', '1.234', '10001', 'Infinity']) {
+    ui.field('Logokosten Stafwerk pakket', invalid); ui.button('Bestelling controleren →'); await ui.submit();
+    assert.equal(ui.calls.length, 0); assert.match(ui.step(), /Producten/);
+    assert.match(label(ui.render()), /geldige logokosten/);
+  }
+  ui.field('Logokosten Stafwerk pakket', '1,25');
+  ui.check('Logo op Stafwerk pakket', false); ui.check('Logo op Stafwerk pakket', true);
+  ui.button('Bestelling controleren →'); await ui.submit();
+  const line = ui.parse(ui.calls[0].orderText).productLines[0];
+  assert.equal(line.unitPriceEx, '21.25'); assert.equal(line.logoUnitPriceEx, '1.25');
+  assert.equal(ui.calls[0].totalExVat.replace(/\s/g, ''), '€63,75');
+});
+
+test('a logo can be free without losing the logo request and custom products retain their selected rate', async () => {
+  const ui = entry(); ui.field('Bedrijfsnaam / klantnaam *', 'Maatwerk'); ui.button('Verder naar producten →');
+  ui.field('Product', 'anders'); ui.field('Omschrijving', 'Eigen traktatie');
+  ui.field('Aantal producten', '4'); ui.field('Prijs p.s. excl. btw', '10');
+  ui.check('Eigen logo op dit product', true); ui.field('Logokosten nieuw product', '0'); ui.button('+ Product toevoegen');
+  ui.button('Bestelling controleren →'); await ui.submit();
+  const saved = ui.calls[0], line = ui.parse(saved.orderText).productLines[0];
+  assert.equal(line.description, 'Eigen traktatie'); assert.equal(line.withLogo, true);
+  assert.equal(line.logoUnitPriceEx, '0.00'); assert.equal(line.unitPriceEx, '10.00');
+  assert.equal(saved.logo, 'Eigen logo volgens orderregels');
+  const reopened = entry('sint', {...saved, id:'custom-logo'}); reopened.button('Verder naar producten →');
+  reopened.field('Logokosten Eigen traktatie', '0,75'); reopened.button('Bestelling controleren →'); await reopened.submit();
+  assert.equal(reopened.calls[0].totalExVat.replace(/\s/g,''), '€43,00');
+});
+
+test('a custom logo rate changes only the logo difference in an agreed order total, including after reopening', async () => {
+  const ui = entry('kerst'); ui.field('Bedrijfsnaam / klantnaam *', 'Prijsafspraak'); ui.button('Verder naar producten →');
+  addChristmasProduct(ui, 'stol-klein'); ui.button('+ Product toevoegen');
+  ui.field('Afgesproken totaal excl. btw', '100'); ui.field('Logokosten Kleine kerststol · 375 gram · met amandelspijs', '1,50');
+  ui.button('Bestelling controleren →'); await ui.submit();
+  assert.equal(ui.calls[0].totalExVat.replace(/\s/g,''), '€105,00');
+  const reopened = entry('kerst', {...ui.calls[0], id: 'agreed-logo'}); reopened.button('Verder naar producten →');
+  reopened.field('Logokosten Kleine kerststol · 375 gram · met amandelspijs', '2'); reopened.button('Bestelling controleren →'); await reopened.submit();
+  assert.equal(reopened.calls[0].totalExVat.replace(/\s/g,''), '€110,00');
+});
+
+test('different logo rates on the same product remain separate and combination letters still reach production', async () => {
+  const ui = entry(); ui.field('Bedrijfsnaam / klantnaam *', 'Verschillende logos'); ui.button('Verder naar producten →');
+  for (const rate of ['0.75','1.25']) {
+    ui.field('Product','speculaasbrok-met-letter'); ui.field('Variant','Speculaasbrok zonder amandel · kleine spuitletter');
+    ui.field('Aantal producten','3'); ui.field('Chocolade in pakket','wit'); ui.field('Letter bij speculaasbrok','M');
+    ui.check('Eigen logo op dit product',true); ui.field('Logokosten nieuw product',rate); ui.button('+ Product toevoegen');
+  }
+  ui.button('Bestelling controleren →'); await ui.submit();
+  const saved = ui.calls[0], prices = ui.parse(saved.orderText).productLines;
+  assert.equal(prices.length, 2); assert.deepEqual(Array.from(prices, p=>p.logoUnitPriceEx), ['0.75','1.25']);
+  const production = combinations.b2bProductionLetters({...saved, id:'combination-logo'});
+  assert.equal(production.lines.reduce((sum,line)=>sum+line.quantity,0),6);
+  assert(production.lines.every(line=>line.letter==='M' && line.chocolate==='wit' && line.withLogo));
+});
+
+
+test('an unnamed custom product cannot be added by only enabling a logo', () => {
+  const ui=entry(); ui.field('Bedrijfsnaam / klantnaam *','Omschrijving nodig'); ui.button('Verder naar producten →');
+  ui.field('Product','anders'); ui.field('Prijs p.s. excl. btw','10'); ui.check('Eigen logo op dit product',true);
+  ui.button('+ Product toevoegen'); assert.match(label(ui.render()),/Vul eerst een omschrijving in/);
 });
