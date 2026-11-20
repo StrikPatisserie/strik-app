@@ -7,6 +7,7 @@ import type { IngredientView } from "./workspaceData";
 import { WORK_RECIPE_UNITS, workRecipeComponentError, type WorkRecipeComponent, type WorkRecipeInput } from "./workRecipe";
 import SearchableChoice from "./SearchableChoice";
 import s from "./requests.module.css";
+import recipeStyle from "./QuickRecipeForm.module.css";
 
 type ComponentRow = Omit<WorkRecipeComponent, "quantity"> & { key: number; quantity: string };
 type LoadedRecipe = {
@@ -146,7 +147,6 @@ export default function QuickRecipeForm({ item, ingredients, getRevision, recipe
   return <form className={`${s.panel} ${s.form}`} onSubmit={submit}>
     <p>{scope === "once" ? "Alleen voor deze productie. Het vaste recept blijft bewaard." : editing ? "Vast werkrecept aanpassen. Controleer daarna de geplande producties." : "Werkrecept vastleggen. Controleer daarna de allergenen in receptenbeheer."}</p>
     {loaded?.notice && <p role="status">{loaded.notice}</p>}
-    {editing && <p>Herstel een koppeling door de juiste grondstof of het juiste halffabricaat te kiezen. Je kunt een regel ook verwijderen of het soort onderdeel wijzigen.</p>}
     <label>Jouw naam<input name="who" required minLength={2} maxLength={80} disabled={busy} /></label>
     {taskId && editing && !loaded?.requiresPermanent && <label>Toepassen
       <select value={scope} onChange={event => setScope(event.target.value as "once" | "permanent")} disabled={busy}>
@@ -154,15 +154,14 @@ export default function QuickRecipeForm({ item, ingredients, getRevision, recipe
         <option value="permanent">Vast recept aanpassen</option>
       </select>
     </label>}
-    {scope === "permanent" && <ProductionStepsField value={productionSteps} onChange={setProductionSteps} disabled={busy}/>}
-    <label>Basisopbrengst ({item.unit})<input name="yield" type="number" min="0.000001" max="1000000" step="any" required disabled={busy} defaultValue={draft?.yield} /></label>
+    <label>Batchgrootte ({item.unit})<input name="yield" type="number" min="0.000001" max="1000000" step="any" required disabled={busy} defaultValue={draft?.yield} /></label>
     {rows.map((row, index) => {
       const choices = row.kind === "ingredient" ? ingredients : semiFinished;
       const missing = Boolean(row.linkedId) && !choices.some(choice => choice.id === row.linkedId);
       const rowError = missing || showValidation ? rowErrors[index] : undefined;
       const errorId = `recipe-line-${row.key}-error`;
       const label = row.kind === "ingredient" ? "Grondstof" : "Halffabricaat";
-      return <fieldset key={row.key} className={s.form}>
+      return <fieldset key={row.key} className={`${recipeStyle.line} ${editing ? "" : recipeStyle.newLine}`}>
         <legend>Receptregel {index + 1}</legend>
         {editing && <label>Soort onderdeel
           <select value={row.kind} disabled={busy} onChange={event => updateRow(row.key, { kind: event.target.value as ComponentRow["kind"], linkedId: "" })}>
@@ -170,11 +169,11 @@ export default function QuickRecipeForm({ item, ingredients, getRevision, recipe
             <option value="semiFinished">Halffabricaat</option>
           </select>
         </label>}
-        <SearchableChoice label={label} name={`component-${row.key}`} value={row.linkedId}
+        <div className={recipeStyle.choice}><SearchableChoice label={label} name={`component-${row.key}`} value={row.linkedId}
           choices={row.kind === "ingredient" ? ingredientChoices : semiFinishedChoices}
           disabled={busy} required invalid={Boolean(rowError)} describedBy={rowError ? errorId : undefined}
           placeholder={`Zoek ${label.toLocaleLowerCase("nl-NL")}${row.kind === "ingredient" ? " of leverancier" : ""}…`}
-          onChange={linkedId => updateRow(row.key, { linkedId })}/>
+          onChange={linkedId => updateRow(row.key, { linkedId })}/></div>
         <label>Hoeveelheid<input name={`quantity-${row.key}`} type="number" min="0.000001" max="1000000" step="any" required disabled={busy} value={row.quantity} onChange={event => updateRow(row.key, { quantity: event.target.value })} /></label>
         <label>Eenheid
           <select name={`unit-${row.key}`} disabled={busy} value={row.unit} onChange={event => updateRow(row.key, { unit: event.target.value })}>
@@ -182,16 +181,17 @@ export default function QuickRecipeForm({ item, ingredients, getRevision, recipe
             {WORK_RECIPE_UNITS.map(unit => <option key={unit}>{unit}</option>)}
           </select>
         </label>
-        {rowError && <p id={errorId} role="alert" className={s.error}>{missing ? "Deze koppeling bestaat niet meer. " : ""}{rowError}</p>}
-        {(editing || rows.length > 1) && <button type="button" disabled={busy} onClick={() => setRows(current => current.filter(line => line.key !== row.key))}>Regel verwijderen</button>}
+        {rowError && <p id={errorId} role="alert" className={`${s.error} ${recipeStyle.error}`}>{missing ? "Deze koppeling bestaat niet meer. " : ""}{rowError}</p>}
+        {(editing || rows.length > 1) && <button type="button" className={recipeStyle.remove} aria-label={`Receptregel ${index + 1} verwijderen`} disabled={busy} onClick={() => setRows(current => current.filter(line => line.key !== row.key))}>×</button>}
       </fieldset>;
     })}
-    <button type="button" disabled={busy || rows.length >= (editing ? 100 : 50)} onClick={() => addRow("ingredient")}>+ Grondstof</button>
+    <div className={recipeStyle.actions}><button type="button" disabled={busy || rows.length >= (editing ? 100 : 50)} onClick={() => addRow("ingredient")}>+ Grondstof</button>
+    {editing && <button type="button" disabled={busy || rows.length >= 100} onClick={() => addRow("semiFinished")}>+ Halffabricaat</button>}</div>
+    {scope === "permanent" && <ProductionStepsField value={productionSteps} onChange={setProductionSteps} disabled={busy}/>}
     {editing && <>
-      <button type="button" disabled={busy || rows.length >= 100} onClick={() => addRow("semiFinished")}>+ Halffabricaat</button>
-      <label>Werkvoorbereiding<textarea name="workInstructions" rows={3} maxLength={10000} disabled={busy} defaultValue={draft?.workInstructions} /></label>
+      <label>Voorbereiding<textarea name="workInstructions" rows={3} maxLength={10000} disabled={busy} defaultValue={draft?.workInstructions} /></label>
     </>}
-    <label>Werkwijze<textarea name="instructions" rows={4} required={!editing} maxLength={10000} disabled={busy} placeholder="Hoe maken jullie dit?" defaultValue={draft?.instructions} /></label>
+    <label>Bereiding<textarea name="instructions" rows={4} required={!editing} maxLength={10000} disabled={busy} placeholder="Hoe maken jullie dit?" defaultValue={draft?.instructions} /></label>
     {editing && <label>Afwerking<textarea name="finishingInstructions" rows={3} maxLength={10000} disabled={busy} defaultValue={draft?.finishingInstructions} /></label>}
     {error && <p role="alert" className={s.error}>{error}</p>}
     <button type="submit" disabled={busy}>{busy ? "Opslaan…" : "Werkrecept opslaan"}</button>

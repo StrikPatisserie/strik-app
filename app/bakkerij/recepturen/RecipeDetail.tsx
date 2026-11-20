@@ -77,14 +77,12 @@ const recipeEditSections: Array<{
   label: string;
   hint: string;
 }> = [
-  { id: "basis", label: "Verpakking & productie", hint: "Foto, planning en logboek" },
-  { id: "stappen", label: "Stappen", hint: "Bereiding" },
-  { id: "notities", label: "Notities", hint: "Allergenen" },
+  { id: "basis", label: "Overige receptgegevens", hint: "Verpakking, foto en productieregistraties" },
+  { id: "notities", label: "Etikettering & notities", hint: "Allergenen en interne opmerkingen" },
 ];
 
 type RecipeEditSection =
   | "basis"
-  | "stappen"
   | "notities";
 
 type RecipeImportResponse = {
@@ -1791,6 +1789,32 @@ export default function RecipeDetail({
               </div>
             </div>
 
+            <section className="border-t border-[#e6ddd2] p-3 sm:p-5" aria-label="Stappen en bereiding">
+              <div className="grid gap-4 xl:grid-cols-2">
+                <div className="xl:col-span-2"><ProductionStepsField value={draft.productionSteps} onChange={productionSteps => updateDraft({ productionSteps })}/></div>
+                <ArrayEditor
+                  title="Bereiding"
+                  values={draft.preparationSteps}
+                  onChange={(values) => updateDraft({ preparationSteps: values })}
+                  placeholder="Beschrijf de volgende stap"
+                />
+                <ArrayEditor
+                  title="Voorbereiding"
+                  values={draft.workInstructions}
+                  onChange={(values) => updateDraft({ workInstructions: values })}
+                  placeholder="Stap voor bakkers op de werkvloer"
+                />
+                {draft.type === "finalProduct" && (
+                  <ArrayEditor
+                    title="Afwerking"
+                    values={draft.finishingSteps}
+                    onChange={(values) => updateDraft({ finishingSteps: values })}
+                    placeholder="Laatste controle of afwerking"
+                  />
+                )}
+              </div>
+            </section>
+
             <div className="border-t border-[#e6ddd2]">
               <div className="divide-y divide-[#e6ddd2]">
                 {recipeEditSections.map((section) => {
@@ -2275,40 +2299,14 @@ export default function RecipeDetail({
               </EditorBlock>
               )}
 
-              {activeEditSection === "stappen" && (
-              <div className="grid gap-4 xl:grid-cols-2">
-                <div className="xl:col-span-2"><ProductionStepsField value={draft.productionSteps} onChange={productionSteps => updateDraft({ productionSteps })}/></div>
-                <ArrayEditor
-                  title="Productiestappen"
-                  values={draft.preparationSteps}
-                  onChange={(values) => updateDraft({ preparationSteps: values })}
-                  placeholder="Beschrijf de volgende stap"
-                />
-                <ArrayEditor
-                  title="Werkmodus stappen"
-                  values={draft.workInstructions}
-                  onChange={(values) => updateDraft({ workInstructions: values })}
-                  placeholder="Stap voor bakkers op de werkvloer"
-                />
-                {draft.type === "finalProduct" && (
-                  <ArrayEditor
-                    title="Afwerking"
-                    values={draft.finishingSteps}
-                    onChange={(values) => updateDraft({ finishingSteps: values })}
-                    placeholder="Laatste controle of afwerking"
-                  />
-                )}
+              {activeEditSection === "notities" && (
+              <EditorBlock title="Allergenen en opmerkingen">
                 <ArrayEditor
                   title="Benodigd materiaal"
                   values={draft.equipment}
                   onChange={(values) => updateDraft({ equipment: values })}
                   placeholder="Bijv. ring, spatel, thermomixer"
                 />
-              </div>
-              )}
-
-              {activeEditSection === "notities" && (
-              <EditorBlock title="Allergenen en opmerkingen">
                 <div className="grid gap-3 lg:grid-cols-2">
                   <EditTextField
                     label="Allergenen"
@@ -4153,10 +4151,12 @@ function BakkerRecipeCard({
   const [quantityInputFocused, setQuantityInputFocused] = useState(false);
   const selectedScaleRow =
     scalableRows.find((row) => row.id === scaleIngredientId) || scalableRows[0];
-  const cleanPreparationSteps = cleanRecipeSteps(recipe.preparationSteps);
-  const steps = cleanPreparationSteps.length
-    ? cleanPreparationSteps
-    : recipe.workInstructions || [];
+  const steps = [...new Set([
+    ...cleanRecipeSteps(recipe.workInstructions || []),
+    ...cleanRecipeSteps(recipe.preparationSteps),
+    ...cleanRecipeSteps(recipe.finishingSteps || []),
+  ])];
+  const productionSteps = recipe.productionSteps || defaultProductionSteps({ recipeId: recipe.id, name: recipe.name }) || ["Produceren"];
   const madeToday = productionLogForRecipe(recipe).some(
     (entry) => entry.date === todayIsoDate()
   );
@@ -4218,8 +4218,6 @@ function BakkerRecipeCard({
             </div>
           </div>
           <div className={styles.actions}>
-            <button type="button" onClick={onStart} disabled={incomplete} title={incomplete ? "Vul eerst de ontbrekende hoeveelheden en batchgrootte in." : undefined} className={`${styles.action} ${isStarted ? styles.primaryAction : ""}`}>Start</button>
-            <button type="button" onClick={onMarkMade} disabled={incomplete} className={`${styles.action} ${madeToday ? styles.primaryAction : ""}`}>✓ Gemaakt</button>
             <button type="button" onClick={onPrint} className={styles.action}>Print</button>
             {onEdit && <button type="button" onClick={onEdit} className={styles.action}>Bewerken</button>}
             <button type="button" onClick={onClose} className={styles.action} aria-label="Sluit receptkaart">×</button>
@@ -4264,8 +4262,6 @@ function BakkerRecipeCard({
           )}
         </dl>
 
-        {labeling}
-
         <section className={styles.ingredients} aria-label="Ingrediënten">
           <div className={styles.sectionHeading}><h3>Ingrediënten</h3><span>{rows.length} regels</span></div>
           {rows.length ? <ul>{rows.map((row) => <li key={row.id} className={styles.ingredientRow}>
@@ -4275,13 +4271,23 @@ function BakkerRecipeCard({
           </li>)}</ul> : <p className="p-3 text-xs text-[#82786e]">Nog geen ingrediënten.</p>}
         </section>
 
-        {steps.length > 0 && <details className={styles.compactDetails}>
-          <summary>Bereiding · {steps.length} stappen</summary>
-          <ol className="grid gap-2">{steps.map((step, index) => <li key={`${step}-${index}`} className="flex gap-2"><span className="font-bold text-[#315e42]">{index + 1}.</span><span>{step}</span></li>)}</ol>
-        </details>}
+        <section className={styles.recipeSection} aria-label="Productiestappen">
+          <h3>Productiestappen</h3>
+          <ol className={styles.stageList}>{productionSteps.map((step,index)=><li key={step}><span>{index+1}</span>{step}{index===productionSteps.length-1&&<small>Voorraad</small>}</li>)}</ol>
+          <p className={styles.stageHint}>Voorraad telt mee als de laatste stap in de weekplanning is afgerond.</p>
+        </section>
+        <section className={styles.recipeSection} aria-label="Bereiding">
+          <h3>Bereiding</h3>
+          {steps.length ? <ol className="grid gap-2">{steps.map((step, index) => <li key={`${step}-${index}`} className="flex gap-2"><span className="font-bold text-[#315e42]">{index + 1}.</span><span>{step}</span></li>)}</ol> : <p className={styles.stageHint}>Nog geen bereiding ingevuld.</p>}
+        </section>
+        {labeling}
 
         <details className={styles.compactDetails}>
-          <summary>Productie{latestMadeEntry ? ` · ${formatDate(latestMadeEntry.date)}` : ""}</summary>
+          <summary>Geregistreerde productie{latestMadeEntry ? ` · ${formatDate(latestMadeEntry.date)}` : ""}</summary>
+          <div className={styles.actions}>
+            <button type="button" onClick={onStart} disabled={incomplete} title={incomplete ? "Vul eerst de ontbrekende hoeveelheden en batchgrootte in." : undefined} className={`${styles.action} ${isStarted ? styles.primaryAction : ""}`}>Start</button>
+            <button type="button" onClick={onMarkMade} disabled={incomplete} className={`${styles.action} ${madeToday ? styles.primaryAction : ""}`}>✓ Gemaakt</button>
+          </div>
           {productionHistory.length ? <div className="grid gap-2">{productionHistory.map((entry) => <div key={entry.id} className="grid grid-cols-[5rem_minmax(0,1fr)_auto] gap-2">
             <span>{formatDate(entry.date)}</span><span className="truncate text-[#82786e]">{entry.note || "Gemaakt"}</span><strong>{quantityLabel(entry.quantity, productionUnit)}</strong>
           </div>)}</div> : <p className="text-[#82786e]">Nog geen productie geregistreerd.</p>}

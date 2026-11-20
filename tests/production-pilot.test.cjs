@@ -360,3 +360,39 @@ test('a changed bakery recipe reaches the planner while existing party steps sta
   assert.equal(task(state, 'finish-original').productionStage.steps.join('|'), 'Opspuiten|Afwerken');
   assert(planning.validProductionStages(state));
 });
+
+
+test('planned time and crew survive saving, refreshing and follow-up production steps', () => {
+  const catalog = [{ ...recipe('team-cake', 100), productionSteps: ['Storten', 'Afwerken'] }];
+  const first = command('team-make', 'team-cake', 100, 'Storten');
+  first.task.minutes = 30; first.task.plannedCrewSize = 3;
+  let state = recipes.buildRecipePlan(stateFor(catalog), catalog, first);
+  assert.equal(task(state, 'team-make').minutes, 30);
+  assert.equal(task(state, 'team-make').plannedCrewSize, 3);
+  state = JSON.parse(JSON.stringify(state));
+  assert(workspace.validWorkspace(state, catalog));
+  const update = recipes.currentPlanCommand(state, task(state, 'team-make'));
+  update.task.plannedCrewSize = 2;
+  state = recipes.refreshRecipePlan(state, catalog, 'team-make', update);
+  assert.equal(task(state, 'team-make').plannedCrewSize, 2);
+  state = finish(state, 'team-make');
+  assert.equal(task(state, 'team-make').recordsOutput, false);
+  const next = command('team-finish', 'team-cake', 60, 'Afwerken', [{ taskId: 'team-make', quantity: 60 }]);
+  next.task.minutes = 20; next.task.plannedCrewSize = 4;
+  state = recipes.buildRecipePlan(state, catalog, next);
+  assert.equal(task(state, 'team-finish').plannedCrewSize, 4);
+  assert.equal(task(state, 'team-finish').minutes, 20);
+  assert.equal(task(state, 'team-finish').status, 'planned');
+  assert(workspace.validWorkspace(state, catalog));
+  for (const crew of [0, -1, 1.5, 21, NaN]) {
+    const invalid = structuredClone(state);
+    task(invalid, 'team-finish').plannedCrewSize = crew;
+    assert.equal(workspace.validWorkspace(invalid, catalog), false);
+    const invalidPlan = command('invalid', 'team-cake', 100, 'Storten');
+    invalidPlan.task.plannedCrewSize = crew;
+    assert.throws(() => recipes.buildRecipePlan(stateFor(catalog), catalog, invalidPlan), /personen/);
+  }
+  const legacy = recipes.buildRecipePlan(stateFor(catalog), catalog, command('legacy-team', 'team-cake', 100, 'Storten'));
+  assert(workspace.validWorkspace(legacy, catalog));
+  assert.equal(task(legacy, 'legacy-team').plannedCrewSize, undefined);
+});

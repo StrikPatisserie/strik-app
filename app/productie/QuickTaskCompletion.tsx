@@ -24,7 +24,7 @@ export default function QuickTaskCompletion({ state, task, item, recipes, busy, 
   const [measuredMinutes] = useState(() => timer
     ? Math.max(1, Math.round(elapsedMilliseconds(timer, Date.now()) / 60000)) : undefined);
   const [enteredMinutes, setMinutes] = useState<string | null>(null);
-  const [crew, setCrew] = useState(String(timer?.crewSize ?? 1));
+  const [crew, setCrew] = useState(String(timer?.crewSize ?? task.plannedCrewSize ?? 1));
   const [quantity, setQuantity] = useState(String(task.quantity));
   const [today] = useState(() => productionDay(new Date().toISOString()));
   const [productionDate, setProductionDate] = useState(task.date < today ? task.date : today);

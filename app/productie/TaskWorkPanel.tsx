@@ -24,7 +24,7 @@ export default function TaskWorkPanel({state,task,item,recipes,busy,onCommand}:{
   try{baseQuantity=convertRecipeQuantity(recipe.yield,recipe.unit,item.unit);}
   catch{ /* Only offer base recipes when their yield matches the task unit. */ }
  }
- const [who,setWho]=useState(timer?.who||''),[crew,setCrew]=useState(String(timer?.crewSize??1));
+ const [who,setWho]=useState(timer?.who||''),[crew,setCrew]=useState(String(timer?.crewSize??task.plannedCrewSize??1));
  const [checking,setChecking]=useState(false),[enteredMinutes,setMinutes]=useState<string|null>(null),[quantity,setQuantity]=useState(String(task.quantity)),[error,setError]=useState('');
  const needsOutputs=needsSoezenOutputs(item,task);
  const [outputs,setOutputs]=useState(()=>batchOutputDraft());

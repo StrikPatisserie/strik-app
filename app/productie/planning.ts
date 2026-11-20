@@ -27,7 +27,7 @@ export type Item = {
 };
 export type Task = {
   id: string; itemId: string; departmentId: DepartmentId; date: string;
-  quantity: number; operation: string; status: TaskStatus; minutes?: number;
+  quantity: number; operation: string; status: TaskStatus; minutes?: number; plannedCrewSize?: number;
   note: string; source: "manual" | "shop" | "order" | "routine";
   dueDate?: string; dependsOn?: string; batchId: string; recordsOutput: boolean;
   requires?: string[]; generatedFor?: string;
@@ -325,6 +325,7 @@ export function addTask(state: PreviewState, task: Task): PreviewState {
   if (!Object.hasOwn(SOURCE_LABELS, task.source)) throw Error("Onbekende herkomst.");
   if (!task.operation.trim() || task.operation.length > 100) throw Error("Vul een korte werkzaamheid in.");
   if (!Number.isFinite(task.quantity) || task.quantity <= 0 || task.quantity > 1000000) throw Error("Vul een geldig aantal groter dan nul in.");
+  if (task.plannedCrewSize !== undefined && (!Number.isInteger(task.plannedCrewSize) || task.plannedCrewSize < 1 || task.plannedCrewSize > 20)) throw Error("Kies 1 tot 20 personen.");
   if (task.minutes !== undefined && (!Number.isFinite(task.minutes) || task.minutes < 0 || task.minutes > 1440)) throw Error("Vul een geldige werktijd in.");
   if (task.status !== "planned") throw Error("Een nieuwe taak begint als gepland.");
   if (!task.batchId || (task.recordsOutput && item.kind === "activity")) throw Error("Deze werkzaamheid levert geen voorraad op.");
@@ -563,6 +564,7 @@ export function buildProductionStage(state: PreviewState, draft: Task): PreviewS
     id: draft.id, itemId: draft.itemId, departmentId: draft.departmentId, date: draft.date,
     quantity: draft.quantity, note: draft.note, source: draft.source,
     ...(draft.minutes !== undefined ? { minutes: draft.minutes } : {}),
+    ...(draft.plannedCrewSize !== undefined ? { plannedCrewSize: draft.plannedCrewSize } : {}),
     ...(draft.dueDate ? { dueDate: draft.dueDate } : {}),
     productionStage: {
       stepId: stage.stepId,

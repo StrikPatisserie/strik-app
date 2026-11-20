@@ -76,3 +76,11 @@
 @media(max-width:1100px) { .tableHeader, .row { grid-template-columns: 4px minmax(0,1fr) 4.5rem 6rem 5rem 6rem; } .kind { display: none; } }
 @media(max-width:760px) { .tableHeader { display: none; } .row { grid-template-columns: 4px minmax(0,1fr); min-height: 44px; } .row > .cell { display: none; } .mobileMeta { display: block; } .card { padding: 12px; border-radius: 16px; } .cardHeader { flex-wrap: wrap; } .card h2 { font-size: 20px; } .ingredientRow { grid-template-columns: minmax(0,1fr) auto 60px; gap: 6px; } }
 @media(pointer:coarse) { .row, .action, .toolbarButton, .tinyToggle, .labelPanel > summary, .compactDetails > summary { min-height: 44px; } .toolbarButton { width: 44px; } .search input, .labelPanel input:not([type=checkbox]), .labelPanel select, .labelPanel textarea, .quantityRow input { font-size: 16px; } }
+
+.recipeSection { margin-top:12px; border:1px solid #dfdfd3; border-radius:10px; padding:12px; font-size:13px; }
+.recipeSection h3 { font-size:13px; font-weight:750; margin:0 0 10px; }
+.stageList { display:flex; flex-wrap:wrap; gap:7px; padding:0; margin:0; list-style:none; }
+.stageList li { display:flex; align-items:center; gap:7px; border-radius:7px; padding:7px 10px; background:#edf2e7; color:#315e42; font-weight:650; }
+.stageList li > span { opacity:.65; font-size:11px; }
+.stageList small { font-size:10px; font-weight:500; }
+.stageHint { margin:10px 0 0; font-size:12px; color:#68705f; }

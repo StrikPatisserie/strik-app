@@ -125,10 +125,8 @@ export default function NewRecipeForm() {
           <label className={s.wide}>Receptnaam<input required autoFocus maxLength={160} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })}/></label>
           <label>Soort<select value={draft.type} onChange={event => setDraft({ ...draft, type: event.target.value as NewRecipeInput["type"] })}><option value="finalProduct">Eindproduct</option><option value="semiFinished">Halffabricaat</option></select></label>
           <label>Afdeling<select value={draft.departmentId} onChange={event => setDraft({ ...draft, departmentId: event.target.value as DepartmentId })}>{DEPARTMENTS.filter(row => catalog.departments.includes(row.id)).map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
-          <label>Basisopbrengst<input required inputMode="decimal" value={yieldText} onChange={event => setYieldText(event.target.value)} placeholder="Bijv. 84"/></label>
+          <label>Batchgrootte<input required inputMode="decimal" value={yieldText} onChange={event => setYieldText(event.target.value)} placeholder="Bijv. 84"/></label>
           <label>Eenheid<select value={draft.unit} onChange={event => setDraft({ ...draft, unit: event.target.value as RecipeUnit })}>{units.map(unit => <option key={unit}>{unit}</option>)}</select></label>
-          <label>Artikelnummer<input maxLength={80} value={draft.articleNumber} onChange={event => setDraft({ ...draft, articleNumber: event.target.value })}/></label>
-          <label>Productgroep<input maxLength={100} list="recipe-product-groups" value={draft.productGroup} placeholder={DEPARTMENTS.find(row => row.id === draft.departmentId)?.name} onChange={event => setDraft({ ...draft, productGroup: event.target.value })}/><datalist id="recipe-product-groups">{catalog.productGroups.map(group => <option key={group} value={group}/>)}</datalist></label>
         </div>
       </fieldset>
       <fieldset disabled={busy} className={s.section}><legend>Grondstoffen & halffabricaten</legend>
@@ -141,8 +139,12 @@ export default function NewRecipeForm() {
         </div>)}</div>
         <div className={s.actions}><button type="button" disabled={lines.length >= 100} onClick={() => { setLines(current => [...current, { key: nextKey.current++, kind: "ingredient", linkedId: "", quantity: "", unit: "gram" }]); setDirty(true); }}>+ Grondstof</button><button type="button" disabled={lines.length >= 100} onClick={() => { setLines(current => [...current, { key: nextKey.current++, kind: "semiFinished", linkedId: "", quantity: "", unit: "kg" }]); setDirty(true); }}>+ Halffabricaat</button></div>
       </fieldset>
-      <fieldset disabled={busy} className={s.section}><legend>Werkwijze</legend><label>Voorbereiding<textarea rows={3} maxLength={10000} value={draft.instructions} onChange={event => setDraft({ ...draft, instructions: event.target.value })}/></label><label>Bereiding<textarea rows={5} maxLength={10000} value={draft.workInstructions} onChange={event => setDraft({ ...draft, workInstructions: event.target.value })}/></label><label>Afwerking<textarea rows={3} maxLength={10000} value={draft.finishingInstructions} onChange={event => setDraft({ ...draft, finishingInstructions: event.target.value })}/></label><ProductionStepsField value={draft.productionSteps || []} onChange={productionSteps => { setDraft({ ...draft, productionSteps }); setDirty(true); }} disabled={busy}/></fieldset>
-      <fieldset disabled={busy} className={s.section}><legend>Allergenen & details</legend>
+      <ProductionStepsField value={draft.productionSteps || []} onChange={productionSteps => { setDraft({ ...draft, productionSteps }); setDirty(true); }} disabled={busy}/>
+      <fieldset disabled={busy} className={s.section}><legend>Bereiding</legend><label>Voorbereiding<textarea rows={3} maxLength={10000} value={draft.instructions} onChange={event => setDraft({ ...draft, instructions: event.target.value })}/></label><label>Bereiding<textarea rows={5} maxLength={10000} value={draft.workInstructions} onChange={event => setDraft({ ...draft, workInstructions: event.target.value })}/></label><label>Afwerking<textarea rows={3} maxLength={10000} value={draft.finishingInstructions} onChange={event => setDraft({ ...draft, finishingInstructions: event.target.value })}/></label></fieldset>
+      <details className={s.details}><summary>Etikettering, foto & overige gegevens</summary><fieldset disabled={busy} className={s.section}><legend>Overige gegevens</legend><div className={s.grid}>
+          <label>Artikelnummer<input maxLength={80} value={draft.articleNumber} onChange={event => setDraft({ ...draft, articleNumber: event.target.value })}/></label>
+          <label>Productgroep<input maxLength={100} list="recipe-product-groups" value={draft.productGroup} placeholder={DEPARTMENTS.find(row => row.id === draft.departmentId)?.name} onChange={event => setDraft({ ...draft, productGroup: event.target.value })}/><datalist id="recipe-product-groups">{catalog.productGroups.map(group => <option key={group} value={group}/>)}</datalist></label>
+        </div>
         <p className={s.hint}>Uit de gekoppelde grondstoffen en halffabricaten: <strong>{linkedAllergens.join(", ") || "nog controleren"}</strong></p>
         <label>Aanvullende allergenen<input value={allergensText} onChange={event => setAllergensText(event.target.value)} placeholder="Gescheiden door komma’s" maxLength={2000}/></label>
         <label>Benodigdheden<textarea rows={2} maxLength={2000} value={draft.equipment} onChange={event => setDraft({ ...draft, equipment: event.target.value })}/></label>
@@ -151,6 +153,7 @@ export default function NewRecipeForm() {
         {photoBusy && <p role="status">Foto laden…</p>}{photoError && <p role="alert" className={s.error}>{photoError}</p>}
         {photo && <div className={s.photo}><Image unoptimized width={160} height={130} src={photo.dataUrl} alt={`Receptfoto ${draft.name || "nieuw recept"}`}/><button type="button" onClick={() => { void selectPhoto(); setDirty(true); }}>Foto verwijderen</button></div>}
       </fieldset>
+      </details>
       <fieldset disabled={busy} className={s.section}><legend>Opslaan</legend><label>Jouw naam<input required minLength={2} maxLength={80} autoComplete="name" value={who} onChange={event => setWho(event.target.value)}/></label><p className={s.hint}>Het recept wordt als concept opgeslagen. Controleer de allergenen voordat je ze met klanten deelt.</p></fieldset>
       {error && <p ref={errorRef} tabIndex={-1} role="alert" className={s.error}>{error}</p>}
       <div className={s.footer}><span>{draft.name || "Nieuw recept"}</span><button className={s.primary} type="submit" disabled={busy || photoBusy}>{busy ? "Opslaan…" : "Recept opslaan"}</button></div>

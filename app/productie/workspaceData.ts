@@ -128,6 +128,7 @@ export function validWorkspace(value: unknown, recipes: DemoRecipe[]): value is 
       if(t.weddingCode!==undefined && (typeof t.weddingCode!=="string" || !t.weddingCode || t.weddingCode.length>100))return false;
       if(t.weddingDeliveryDate!==undefined)addDays(t.weddingDeliveryDate,0);
       addDays(t.date, 0); if (t.dueDate) { addDays(t.dueDate, 0); if (t.date > t.dueDate) return false; }
+      if (t.plannedCrewSize !== undefined && (!Number.isInteger(t.plannedCrewSize) || t.plannedCrewSize < 1 || t.plannedCrewSize > 20)) return false;
       if (t.minutes !== undefined && (!Number.isFinite(t.minutes) || t.minutes < 0 || t.minutes > 1440)) return false;
       if (t.requires!==undefined && (!Array.isArray(t.requires) || t.requires.length>250 || new Set(t.requires).size!==t.requires.length || t.requires.some(id=>typeof id!=="string" || !id || id===t.id))) return false;
       if(t.materialNeeds!==undefined && (!t.materialNeeds || typeof t.materialNeeds!=="object" || Array.isArray(t.materialNeeds) || Object.keys(t.materialNeeds).length>250 || Object.entries(t.materialNeeds).some(([id,amount])=>!t.requires?.includes(id)||!Number.isFinite(amount)||amount<=0||amount>1000000)))return false;

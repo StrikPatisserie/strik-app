@@ -144,3 +144,18 @@ test('the scheduled total retains the team estimate when an active task is compl
  assert.equal(running.scheduledLaborMinutes,120);assert.equal(finished.scheduledLaborMinutes,120);
  assert.equal(finished.doneLaborMinutes,90);assert.equal(finished.plannedLaborMinutes,0);
 });
+
+
+test('a planned team determines the estimate without creating an actual time registration', () => {
+ const planned=task('team',{minutes:30,plannedCrewSize:3});
+ const workspace=state([planned]);
+ assert.equal(departmentDayWork(workspace).get('dessert:2026-11-10').plannedLaborMinutes,90);
+ assert.deepEqual(normal(taskWorkSummary(workspace,planned)),{fromStock:false});
+ planned.status='active';workspace.productionWork.timers.team={crewSize:2};
+ assert.equal(departmentDayWork(workspace).get('dessert:2026-11-10').plannedLaborMinutes,60);
+ planned.status='done';workspace.productionWork.completions.team={unmeasured:true};
+ const totals=departmentDayWork(workspace).get('dessert:2026-11-10');
+ assert.equal(totals.scheduledLaborMinutes,90);
+ assert.equal(totals.doneLaborMinutes,0);assert.equal(totals.doneMissingCount,1);
+ assert.equal(taskWorkSummary(workspace,planned).crewSize,undefined);
+});

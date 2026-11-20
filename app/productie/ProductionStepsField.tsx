@@ -16,16 +16,18 @@ export default function ProductionStepsField({ value, onChange, disabled = false
     onChange(next);
   }
   return <fieldset className={s.field} disabled={disabled}>
-    <legend>Stappen voor de planning</legend>
+    <legend>Productiestappen</legend>
+    <details className={s.choices}><summary>Stappen kiezen</summary>
     <div className={s.options}>{PRODUCTION_STEP_OPTIONS.map(step => <label key={step}>
       <input type="checkbox" checked={value.includes(step)} disabled={value.length === 1 && value[0] === step} onChange={() => toggle(step)}/>{step}
-    </label>)}</div>
+    </label>)}</div></details>
     <ol className={s.sequence}>{value.map((step, index) => <li key={step}>
-      <span>{index + 1}. {step}{index === value.length - 1 && <small>Klaar</small>}</span>
+      <span>{index + 1}. {step}{index === value.length - 1 && <small>Voorraad</small>}</span>
       {value.length > 1 && <span className={s.actions}>
         <button type="button" aria-label={`${step} eerder`} disabled={index === 0} onClick={() => move(index, -1)}>↑</button>
         <button type="button" aria-label={`${step} later`} disabled={index === value.length - 1} onClick={() => move(index, 1)}>↓</button>
       </span>}
     </li>)}</ol>
+    <p className={s.hint}>Telt pas mee als voorraad nadat <strong>{value.at(-1) || "de laatste stap"}</strong> in de planning is afgerond.</p>
   </fieldset>;
 }

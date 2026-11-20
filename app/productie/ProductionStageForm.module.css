@@ -154,3 +154,7 @@
 }
 
 .party input { border:1px solid #b5c7ad; border-radius:6px; padding:9px; color:#1c3444; font:inherit; min-width:0; }
+
+.fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:12px; }
+.fields label { display:grid; gap:6px; font-size:14px; }
+.fields input,.fields select { min-width:0; width:100%; padding:10px; border:1px solid #c3d3bc; border-radius:6px; font:inherit; background:white; }

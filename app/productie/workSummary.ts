@@ -72,7 +72,7 @@ export function departmentDayWork(state: PreviewState, recipes?: DemoRecipe[]): 
       const crewSize = task.status === "active"
         ? state.productionWork?.timers?.[task.id]?.crewSize
         : task.status === "done" ? state.productionWork?.completions?.[task.id]?.crewSize : undefined;
-      estimate = task.minutes * (validCrewSize(crewSize) ? crewSize : 1);
+      estimate = task.minutes * (validCrewSize(crewSize) ? crewSize : validCrewSize(task.plannedCrewSize) ? task.plannedCrewSize : 1);
     } else if (view && !view.overrides[task.id]) {
       const estimateKey = JSON.stringify([task.itemId, task.operation.trim().toLowerCase(), task.quantity]);
       if (!estimates.has(estimateKey)) {
