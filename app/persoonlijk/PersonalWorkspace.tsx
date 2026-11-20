@@ -50,6 +50,13 @@ export default function PersonalWorkspace({ownerId="",demo=false,compact=false,i
   const timer=setTimeout(async()=>{setLoading(true);try{const params=new URLSearchParams({view:compact?"todo":view,search,offset:String(offset)});if(book)params.set("notebook",book);const result=await json(`/api/persoonlijk?${params}`);if(!cancelled&&serial===listSerial.current){setNotes(result.notes);setBooks(result.notebooks.map((item:{notebook:string})=>item.notebook));setTotal(result.total);}}catch(e){if(!cancelled&&serial===listSerial.current){if([401,403].includes((e as Error&{status?:number}).status||0)){setNotes([]);setBooks([]);setDraft(null);setSaved(null);}setError((e as Error).message);}}finally{if(!cancelled&&serial===listSerial.current)setLoading(false);}},search?250:0);
   return()=>{clearTimeout(timer);cancelled=true;};
  },[demo,demoNotes,view,book,search,offset,epoch,compact]);
+ useEffect(()=>{
+  if(compact||loading||initialOpened.current||noteSerial.current!==0)return;
+  const notebook=books.find(isTodoNotebook);if(!notebook)return;
+  initialOpened.current=true;void selectBook(notebook);
+ // Select TO DO once after loading, without overriding a link or a manual selection.
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ },[books,loading,compact]);
  function leave(){if(savingLock.current){setError("Wacht even tot de wijziging is opgeslagen.");return false;}if(dirty){setError("Sla je wijzigingen eerst op, of kies ‘Wijzigingen verwerpen’.");return false;}setError("");return true;}
  function filter(next:View,notebook=""){if(!leave())return;setView(next);setBook(notebook);setOffset(0);setDraft(null);setSaved(null);noteSerial.current++;}
  function showNote(note:PersonalNote){setHistories(current=>({...current,[note.id]:reopenTimeline(current[note.id],note)}));setDraft(note);setSaved(note);setBook(note.notebook);setEditing(false);setError("");}
