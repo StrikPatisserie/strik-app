@@ -18,6 +18,7 @@ export type ChocolateLetterLine = {
 export type LetterOrderActor = { id: string; name: string };
 export type LetterOrderAudit = { actor: LetterOrderActor; at: string; action: "created" | "updated"; changes: { field: string; before: unknown; after: unknown }[] };
 export type ChocolateLetterOrder = {
+  delivery?: import("./letters/storeLetterDelivery").StoreLetterDelivery | null;
   createdBy?: LetterOrderActor | null;
   audit?: LetterOrderAudit[];
   id: string;

@@ -12,6 +12,7 @@ type Props = {
   status: string;
   tone?: "ready" | "closed";
   statusNote?: string;
+  delivery?: boolean;
   amount: string;
   amountHint?: string;
   openAmount?: boolean;
@@ -23,11 +24,12 @@ type Props = {
 export default function LetterOrderCard(props: Props) {
   const [expanded, setExpanded] = useState(false);
   const detailId = useId();
-  return <article className={styles.order}>
+  return <article className={styles.order} data-delivery={props.delivery || undefined}>
     <div className={styles.rowMain}>
       <div className={styles.date}>{props.date}<small>{props.location}</small></div>
       <div className={styles.customer}>
         <p className={styles.code}>{props.code}</p>
+        {props.delivery && <span className={styles.deliveryBadge}>BEZORGEN · 10:00–14:00 uur</span>}
         <h3>{props.customer}</h3>
         <p className={styles.summary}>{props.summary}</p>
         {props.warning && <div className={styles.warning}>{props.warning}</div>}

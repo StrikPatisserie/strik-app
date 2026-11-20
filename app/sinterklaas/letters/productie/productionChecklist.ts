@@ -1,3 +1,4 @@
+import { storeLetterDeliveryAddress } from "../storeLetterDelivery";
 import type { ProductionCustomerChange, ProductionSupplement } from "./productionSupplements";
 import { b2bLetterHasLogo, b2bLetterDecoration } from "../../b2bLetterLines";
 import { b2bProductionLetters } from "../../b2bCombinationLetters";
@@ -106,7 +107,7 @@ export function combineProductionOrders(batches: ProductionBatchSeed[], legacyOr
       }
       order.lines.forEach((line) => {
         const identity = legacyLineIdentity(line);
-        addOrderLine(date, identity.key, identity.label, line.quantity, productionOrderSource(order.source), {id:`wordpress:${order.id}`,customerName:order.customerName,code:order.code,shop:order.shop || order.pickupLocation,date:order.pickupDate,notes:[order.giftWrap?"Inpakken in cadeaupapier":"",order.notes].filter(Boolean).join(" · ")});
+        addOrderLine(date, identity.key, identity.label, line.quantity, productionOrderSource(order.source), {id:`wordpress:${order.id}`,customerName:order.customerName,code:order.code,shop:order.shop || order.pickupLocation,date:order.pickupDate,...(order.delivery ? {delivery:{address:storeLetterDeliveryAddress(order.delivery),phone:order.phone}} : {}),notes:[order.giftWrap?"Inpakken in cadeaupapier":"",order.notes].filter(Boolean).join(" · ")});
       });
     });
 

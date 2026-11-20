@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { useProductionPrint, type PrepareProductionPrint } from "./useProductionPrint";
 import type { ProductionBatchSeed } from "./ProductionPlanningClient";
 import { productionSections, productionVariant } from "./productionPresentation";
-import { productionRecipientsFor, productionSourceBreakdown } from "./productionSources";
+import { productionDistributionRecipients } from "./productionSources";
 import styles from "./ProductionPrint.module.css";
 
 const CRATES = [
@@ -12,6 +12,7 @@ const CRATES = [
   {id:"voorraad",number:2,label:"Winkelvoorraad"},
   {id:"online",number:3,label:"Online Lettershop"},
   {id:"b2b",number:4,label:"B2B-bestellingen"},
+  {id:"bezorgen",number:5,label:"Bezorgen · 10:00–14:00"},
   {id:"onbekend",number:0,label:"Herkomst controleren"},
 ] as const;
 const shops:Record<string,string>={ziekerstraat:"Ziekerstraat",heyendaal:"Heyendaal",daalseweg:"Daalseweg",lent:"Lent"};
@@ -23,7 +24,7 @@ export function ProductionDistributionSheet({batch}:Readonly<{batch:ProductionBa
   const rows=batch.rows.filter(row=>row.orders+row.stock>0);
   const total=rows.reduce((sum,row)=>sum+row.orders+row.stock,0);
   const crates=CRATES.map(crate=>({...crate,groups:productionSections(rows).flatMap(section=>section.groups.flatMap(group=>group.rows.flatMap(row=>{
-    const recipients=productionRecipientsFor(row,crate.id);
+    const recipients=productionDistributionRecipients(row,crate.id);
     if(!recipients.length)return [];
     return [{row,recipients,variant:productionVariant(row.label),style:section.label,group:group.label,total:recipients.reduce((sum,item)=>sum+item.quantity,0)}];
   })))})).filter(crate=>crate.groups.length);
@@ -34,22 +35,23 @@ export function ProductionDistributionSheet({batch}:Readonly<{batch:ProductionBa
       <div className={styles.summary}><dl><div><dt>Totaal te verdelen</dt><dd>{total}</dd></div></dl><p>Pak per krat de juiste letter, smaak, het formaat en de uitvoering. Verdeel daarna per klant of vestiging.</p></div>
       {unresolved>0&&<p className={styles.warning}><strong>EERST CONTROLEREN:</strong> bij {unresolved} letters ontbreekt een sluitende klant- of winkelverdeling. Deze aantallen staan apart gemarkeerd; vul geen klantnaam op eigen inschatting in.</p>}
       {!!batch.checklist?.changes.length&&<p className={styles.warning}><strong>VERDELING NIET ACTUEEL.</strong> Neem eerst de gewijzigde bestellingen over in de app en print opnieuw.</p>}
-      <p className={styles.crateGuide}>Overzicht van alle letters. De aantallen per krat en klant volgen hieronder. Printen verandert geen productie- of bestelstatus.</p>
+      <p className={styles.crateGuide}>Overzicht van alle letters. De aantallen per krat en klant volgen hieronder. Bezorgorders staan apart in krat 5; stuur deze niet mee als winkelafhaling. Printen verandert geen productie- of bestelstatus.</p>
     </header>
-    <table className={`${styles.table} ${styles.distributionOverview}`}><thead><tr className={styles.columns}><th>Letter / uitvoering</th>{CRATES.slice(0,4).map(crate=><th key={crate.id}>{crate.number} · {crate.label}</th>)}<th>Totaal</th></tr></thead><tbody>{productionSections(rows).flatMap(section=>section.groups.flatMap(group=>group.rows.map(row=>{
-      const variant=productionVariant(row.label),sources=new Map(productionSourceBreakdown(row).map(item=>[item.id,item.quantity]));
-      return <tr key={row.key} className={styles.row}><th scope="row"><strong>{variant.letter} · {group.label} · {section.label}</strong>{variant.extras.length>0&&<span className={styles.overviewExtras}> · {variant.extras.map(extra=>extra.toLowerCase()==="logo"?"LOGO!":extra).join(" · ")}</span>}{(sources.get("onbekend")||0)>0&&<div>Herkomst onbekend: {sources.get("onbekend")}</div>}</th>{CRATES.slice(0,4).map(crate=><td key={crate.id} className={styles.quantity}>{sources.get(crate.id)||"—"}</td>)}<td className={styles.total}>{row.orders+row.stock}</td></tr>;
+    <table className={`${styles.table} ${styles.distributionOverview}`}><thead><tr className={styles.columns}><th>Letter / uitvoering</th>{CRATES.slice(0,5).map(crate=><th key={crate.id}>{crate.number} · {crate.label}</th>)}<th>Totaal</th></tr></thead><tbody>{productionSections(rows).flatMap(section=>section.groups.flatMap(group=>group.rows.map(row=>{
+      const variant=productionVariant(row.label),sources=new Map(CRATES.map(crate=>[crate.id,productionDistributionRecipients(row,crate.id).reduce((sum,item)=>sum+item.quantity,0)]));
+      return <tr key={row.key} className={styles.row}><th scope="row"><strong>{variant.letter} · {group.label} · {section.label}</strong>{variant.extras.length>0&&<span className={styles.overviewExtras}> · {variant.extras.map(extra=>extra.toLowerCase()==="logo"?"LOGO!":extra).join(" · ")}</span>}{(sources.get("onbekend")||0)>0&&<div>Herkomst onbekend: {sources.get("onbekend")}</div>}</th>{CRATES.slice(0,5).map(crate=><td key={crate.id} className={styles.quantity}>{sources.get(crate.id)||"—"}</td>)}<td className={styles.total}>{row.orders+row.stock}</td></tr>;
     })))}</tbody></table>
     {crates.map(crate=><section key={crate.id} className={styles.crateSection} aria-label={crate.label}>
       <h2 className={styles.crateTitle}>{crate.number?`Krat ${crate.number} / `:""}{crate.label}<span>{crate.groups.reduce((sum,group)=>sum+group.total,0)} stuks</span></h2>
       {Array.from(crate.groups.reduce((customers,group)=>{
         group.recipients.forEach(item=>{
-          const identity=JSON.stringify([item.id,"shop" in item?item.shop:"","date" in item?item.date:""]);
+          const identity=JSON.stringify([item.id,"shop" in item?item.shop:"","date" in item?item.date:"",item.delivery]);
           const customer=customers.get(identity)||{item,lines:[] as {group:typeof group;quantity:number;combinationProduct?:string}[]};
           customer.lines.push({group,quantity:item.quantity,combinationProduct:item.combinationProduct});customers.set(identity,customer);
         });return customers;
-      },new Map<string,{item:(typeof crate.groups)[number]["recipients"][number];lines:{group:(typeof crate.groups)[number];quantity:number;combinationProduct?:string}[]}>())).map(([identity,{item,lines}])=><div key={identity} className={styles.customerCutout}>
+      },new Map<string,{item:(typeof crate.groups)[number]["recipients"][number];lines:{group:(typeof crate.groups)[number];quantity:number;combinationProduct?:string}[]}>())).map(([identity,{item,lines}])=><div key={identity} className={styles.customerCutout} data-delivery={Boolean(item.delivery)}>
         <header className={styles.cutoutHeader}><strong>{item.customerName}</strong>{lines.every(({group})=>group.variant.extras.some(extra=>extra.toLowerCase()==="logo"))&&logoMark()}{"code" in item&&item.code&&!item.code.startsWith("b2b-")&&<small>{item.code}</small>}{"shop" in item&&item.shop&&<span>{shops[item.shop]||item.shop}</span>}{"date" in item&&item.date&&<span>{date(item.date)}</span>}</header>
+        <div>{item.delivery && <p className={styles.deliveryMark}><strong>BEZORGEN · 10:00–14:00 uur</strong><br/>{item.delivery.address}{item.delivery.phone && <><br/>Tel. {item.delivery.phone}</>}</p>}</div>
         <div className={styles.cutoutLines}>{lines.map(({group,quantity,combinationProduct},index)=><div key={`${group.row.key}-${index}`} className={styles.cutoutLine} data-unresolved={item.unresolved||undefined}>
           <span className={styles.checkBox} aria-label="Verdeling afvinken"/><strong data-distribution-quantity={quantity}>{quantity}×</strong><span><b>{group.variant.letter}</b> · {group.group} · {group.style}</span>
           {!lines.every(({group})=>group.variant.extras.some(extra=>extra.toLowerCase()==="logo"))&&group.variant.extras.some(extra=>extra.toLowerCase()==="logo")&&logoMark()}

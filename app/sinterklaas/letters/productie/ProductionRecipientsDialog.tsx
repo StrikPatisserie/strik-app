@@ -61,6 +61,7 @@ export default function ProductionRecipientsDialog({ row, source, onClose }: Rea
             <strong>{item.unresolved && "! "}{item.customerName}</strong>
             {details && <small>{details}</small>}
             {item.combinationProduct && <small className={styles.recipientCombination}>Combinatie · {item.combinationProduct}</small>}
+            {item.delivery && <p className={styles.recipientDelivery}><strong>BEZORGEN · 10:00–14:00 uur</strong><br/>{item.delivery.address}{item.delivery.phone && <><br/>Tel. {item.delivery.phone}</>}</p>}
             {item.notes && <p>{item.notes}</p>}
           </div>
           <b className={styles.recipientQuantity}>{item.quantity}×</b>

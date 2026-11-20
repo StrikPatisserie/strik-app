@@ -1,6 +1,8 @@
 "use client";
 
 import Image from "next/image";
+import { businessPostcode } from "../../lib/businessDeliveryPricing";
+import { LETTER_DELIVERY_MINIMUM_CENTS, LETTER_DELIVERY_WINDOW, storeLetterDeliveryFee, storeLetterDeliveryError, storeLetterDeliveryAddress } from "./storeLetterDelivery";
 import { useEffect, useRef, useState } from "react";
 import { formatPickupDate } from "@/app/lettershop/formatPickupDate";
 import { lettershopShopLabel } from "@/app/lettershop/shops";
@@ -115,6 +117,10 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", st
   const [shop, setShop] = useState(
     initialOrder?.shop || initialOrder?.pickupLocation || defaultShop
   );
+  const [deliveryEnabled, setDeliveryEnabled] = useState(Boolean(initialOrder?.delivery));
+  const [deliveryAddress, setDeliveryAddress] = useState(initialOrder?.delivery?.address || "");
+  const [deliveryPostcode, setDeliveryPostcode] = useState(initialOrder?.delivery?.postcode || "");
+  const [deliveryCity, setDeliveryCity] = useState(initialOrder?.delivery?.city || "");
   const [giftWrap, setGiftWrap] = useState(initialOrder?.giftWrap || false);
   const [paid, setPaid] = useState(initialOrder?.paid || false);
   const [review, setReview] = useState(false);
@@ -132,9 +138,12 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", st
   // Keep a previously agreed wrapping rate when editing an existing order.
   const originalCount = initialOrder?.lines.reduce((sum, item) => sum + item.quantity, 0) || 0;
   const originalBaseCents = initialOrder?.lines.reduce((sum, item) => sum + item.quantity * (PRICE_CENTS[item.size] + (item.logo ? 50 : 0)), 0) || 0;
-  const previousWrapCents = initialOrder?.giftWrap && originalCount > 0 ? (initialOrder.totalCents - originalBaseCents) / originalCount : null;
+  const previousWrapCents = initialOrder?.giftWrap && originalCount > 0 ? (initialOrder.totalCents - (initialOrder.delivery?.feeCents || 0) - originalBaseCents) / originalCount : null;
   const wrapPriceCents = previousWrapCents === 100 || previousWrapCents === LETTER_GIFT_WRAP_PRICE_CENTS ? previousWrapCents : LETTER_GIFT_WRAP_PRICE_CENTS;
-  const totalCents = lines.reduce((sum, item) => sum + item.quantity * (PRICE_CENTS[item.size] + (item.logo ? 50 : 0)), giftWrap ? count * wrapPriceCents : 0);
+  const subtotalCents = lines.reduce((sum, item) => sum + item.quantity * (PRICE_CENTS[item.size] + (item.logo ? 50 : 0)), giftWrap ? count * wrapPriceCents : 0);
+  const deliveryFeeCents = deliveryEnabled ? storeLetterDeliveryFee(deliveryPostcode) : 0;
+  const delivery = deliveryEnabled ? { address: deliveryAddress.trim(), postcode: businessPostcode(deliveryPostcode), city: deliveryCity.trim(), feeCents: deliveryFeeCents || 0 } : null;
+  const totalCents = subtotalCents + (deliveryFeeCents || 0);
   const recordedPaidAmountCents = initialOrder ? getPaidAmountCents(initialOrder) : 0;
   const paidAmount = initialOrder ? recordedPaidAmountCents : paid ? totalCents : 0;
   const openAmount = Math.max(0, totalCents - paidAmount);
@@ -197,9 +206,10 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", st
     if (lines.length === 0) return "Voeg eerst minimaal één letter toe.";
     if (name.trim().length < 2) return "Vul de naam van de klant in.";
     if (phone.trim().length < 6) return "Vul een telefoonnummer in.";
-    if (!pickupDate || !normalizeLetterShop(shop)) return "Kies de afhaaldatum en de winkel.";
+    if (!pickupDate || !normalizeLetterShop(shop)) return "Kies de leverdatum en de verantwoordelijke winkel.";
+    if (delivery) { const message = storeLetterDeliveryError(delivery, subtotalCents); if (message) return message; }
     if (pickupDate !== initialOrder?.pickupDate && !availableDates.includes(pickupDate)) {
-      return "Deze afhaaldatum is niet beschikbaar. Kies een datum uit de lijst.";
+      return "Deze leverdatum is niet beschikbaar. Kies een datum uit de lijst.";
     }
     if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return "Controleer het e-mailadres.";
     if (totalBelowPaidAmount) {
@@ -219,7 +229,7 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", st
         const latestDates = await refreshAvailableDates();
         if (!latestDates.includes(pickupDate)) {
           setReview(false);
-          throw new Error("De deadline voor deze afhaaldatum is verstreken. Kies een andere datum.");
+          throw new Error("De deadline voor deze leverdatum is verstreken. Kies een andere datum.");
         }
       }
       const sendCustomerEmail = Boolean(email.trim());
@@ -230,6 +240,7 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", st
         phone: phone.trim(),
         pickupDate,
         pickupLocation: shop,
+        delivery,
         shop,
         year: pickupDate.slice(0, 4),
         source: "winkel",
@@ -249,6 +260,7 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", st
         initialOrder.pickupDate !== pickupDate ||
         initialOrder.shop !== shop ||
         initialOrder.giftWrap !== giftWrap ||
+        JSON.stringify(initialOrder.delivery || null) !== JSON.stringify(delivery) ||
         customerLinesChanged
       ));
       const saved = initialOrder
@@ -277,12 +289,17 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", st
     </section>
 
     <section className="rounded-2xl border border-[#e4ded5] bg-white p-4">
-      <div className="mb-3 flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#547762] text-sm font-black text-white">2</span><h3 className="text-lg font-black">Klant en afhalen</h3></div>
+      <div className="mb-3 flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#547762] text-sm font-black text-white">2</span><h3 className="text-lg font-black">Klant en levering</h3></div>
+      <fieldset className="mb-4">
+        <legend className="mb-2 text-sm font-black">Afhalen of bezorgen?</legend>
+        <div className="flex flex-wrap gap-2">{[{value:false,label:"Afhalen in de winkel"},{value:true,label:"Laten bezorgen"}].map(option => <button key={option.label} type="button" aria-pressed={deliveryEnabled === option.value} onClick={() => { setDeliveryEnabled(option.value); setReview(false); }} className={`min-h-12 rounded-xl border-2 px-4 py-2 text-sm font-black ${deliveryEnabled === option.value ? "border-[#547762] bg-[#547762] text-white" : "border-[#d5ddd0] bg-white"}`}>{option.label}</button>)}</div>
+        <p className="mt-2 text-xs font-semibold text-[#6b645b]">Bezorgen vanaf € 50,00 aan producten, exclusief bezorgkosten · altijd {LETTER_DELIVERY_WINDOW} uur.</p>
+      </fieldset>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="text-sm font-black">Naam klant *<input value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" className={`${inputClass} mt-1`} /></label>
         <label className="text-sm font-black">Telefoonnummer *<input value={phone} onChange={(event) => setPhone(event.target.value)} type="tel" autoComplete="tel" className={`${inputClass} mt-1`} /></label>
         <div className="text-sm font-black">
-          <label htmlFor="store-letter-pickup-date">Afhaaldatum *</label>
+          <label htmlFor="store-letter-pickup-date">{deliveryEnabled ? "Bezorgdatum *" : "Afhaaldatum *"}</label>
           <select id="store-letter-pickup-date" value={pickupDate} onChange={(event) => setPickupDate(event.target.value)} className={`${inputClass} mt-1`}>
             <option value="">Kies beschikbare datum</option>
             {initialOrder?.pickupDate && !availableDates.includes(initialOrder.pickupDate) && (
@@ -293,20 +310,31 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", st
           <div className="mt-1 flex items-center justify-between gap-2 text-xs font-medium text-[#6b645b]">
             <span>
               {!availableDates.length
-                ? "Geen nieuwe afhaaldatums beschikbaar."
+                ? "Geen nieuwe leverdatums beschikbaar."
                 : selectedDeadline
                   ? <>Dezelfde rondes als online · <strong className="text-[#385846]">bestellen uiterlijk {selectedDeadline}.</strong></>
                   : pickupDate
-                    ? "De deadline voor deze bestaande afhaaldatum is verstreken."
-                    : "Kies een afhaaldatum; daarna zie je de bijbehorende deadline."}
+                    ? "De deadline voor deze bestaande leverdatum is verstreken."
+                    : "Kies een leverdatum; daarna zie je de bijbehorende deadline."}
             </span>
             <button type="button" disabled={refreshingDates} onClick={() => void refreshAvailableDates().catch((refreshError) => setError(refreshError instanceof Error ? refreshError.message : "Datums verversen is mislukt."))} className="shrink-0 font-bold text-[#547762] underline disabled:opacity-50">{refreshingDates ? "Laden..." : "Ververs"}</button>
           </div>
         </div>
-        <label className="text-sm font-black">Afhaalwinkel *<select value={shop} onChange={(event) => { setShop(event.target.value); setReview(false); }} className={`${inputClass} mt-1`}><option value="">Kies winkel</option>{shop && !SHOPS.some((item) => item.value === shop) && <option value={shop}>{shop} (bestaand)</option>}{SHOPS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+        <label className="text-sm font-black">{deliveryEnabled ? "Verantwoordelijke winkel *" : "Afhaalwinkel *"}<select value={shop} onChange={(event) => { setShop(event.target.value); setReview(false); }} className={`${inputClass} mt-1`}><option value="">Kies winkel</option>{shop && !SHOPS.some((item) => item.value === shop) && <option value={shop}>{shop} (bestaand)</option>}{SHOPS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
         {otherStoreNotice && <p role="status" className="rounded-xl border border-[#e6d39a] bg-[#fff6df] p-3 text-sm font-semibold leading-relaxed text-[#79581c] sm:col-span-2">{otherStoreNotice}</p>}
-        <label className="text-sm font-black sm:col-span-2">E-mailadres <span className="font-normal">(optioneel)</span><input value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" placeholder="klant@voorbeeld.nl" className={`${inputClass} mt-1`} /><span className="mt-1 block text-xs font-medium text-[#6b645b]">Met e-mailadres sturen we een mooie bestelbevestiging en de dag vóór afhalen een herinnering. Zonder e-mailadres sturen we niets naar de klant.</span></label>
+        <label className="text-sm font-black sm:col-span-2">E-mailadres <span className="font-normal">(optioneel)</span><input value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" placeholder="klant@voorbeeld.nl" className={`${inputClass} mt-1`} /><span className="mt-1 block text-xs font-medium text-[#6b645b]">Met e-mailadres sturen we een bestelbevestiging en de dag vóór {deliveryEnabled ? "bezorgen" : "afhalen"} een herinnering. Zonder e-mailadres sturen we niets naar de klant.</span></label>
       </div>
+      {deliveryEnabled && <fieldset className="mt-4 rounded-xl border-2 border-[#86aec1] bg-[#edf5fa] p-3 sm:p-4">
+        <legend className="px-1 text-base font-black text-[#254d63]">Bezorgen · {LETTER_DELIVERY_WINDOW} uur</legend>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="text-sm font-black sm:col-span-2">Straat en huisnummer *<input value={deliveryAddress} onChange={event => { setDeliveryAddress(event.target.value); setReview(false); }} autoComplete="street-address" maxLength={240} className={`${inputClass} mt-1`} /></label>
+          <label className="text-sm font-black">Postcode *<input value={deliveryPostcode} onChange={event => { setDeliveryPostcode(event.target.value); setReview(false); }} autoComplete="postal-code" placeholder="6511 AB" maxLength={8} className={`${inputClass} mt-1`} /><span className="mt-1 block text-xs font-medium">Vanaf vier cijfers zie je het tarief. Vul voor bezorgen ook de twee letters in.</span></label>
+          <label className="text-sm font-black">Plaats *<input value={deliveryCity} onChange={event => { setDeliveryCity(event.target.value); setReview(false); }} autoComplete="address-level2" maxLength={120} className={`${inputClass} mt-1`} /></label>
+        </div>
+        <p aria-live="polite" className="mt-3 font-black text-[#254d63]">Bezorgkosten: {deliveryFeeCents === null ? "vul een geldige postcode in" : money(deliveryFeeCents)} <span className="text-xs font-medium">incl. btw · hetzelfde postcodetarief als B2B</span></p>
+        {subtotalCents < LETTER_DELIVERY_MINIMUM_CENTS && <p role="status" className="mt-2 text-sm font-bold text-[#9a3412]">Voeg nog {money(LETTER_DELIVERY_MINIMUM_CENTS - subtotalCents)} aan producten toe om te kunnen bezorgen.</p>}
+        <p className="mt-2 text-xs font-semibold">Deze bestelling staat apart bij ‘Bezorgen’ op de verdeellijst. De dag ervoor krijgt info@strik-patisserie.nl een bezorgoverzicht.</p>
+      </fieldset>}
       <div className="mt-4 flex flex-wrap gap-3">
         <label className="flex items-center gap-2 rounded-xl border border-[#d5ddd0] px-3 py-2 text-sm font-bold"><input type="checkbox" checked={giftWrap} onChange={(event) => setGiftWrap(event.target.checked)} className="h-5 w-5 accent-[#547762]" />Alles in cadeaupapier · + {money(wrapPriceCents)} per letter</label>
         {recordedPaidAmountCents > 0 ? (
@@ -331,9 +359,10 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", st
       {error && <p role="alert" className="mt-3 rounded-lg bg-[#fff1e9] p-3 text-sm font-bold text-[#a63f2b]">{error}</p>}
       {review ? <div className="mt-3 space-y-2 rounded-xl bg-white p-3 text-sm">
         <p><strong>{name}</strong> · {phone}{email ? ` · ${email}` : ""}</p>
-        <p>Afhalen: <strong>{friendlyDate(pickupDate)}</strong> · {shop}</p>
+        {delivery ? <div className="rounded-lg border-2 border-[#86aec1] bg-[#edf5fa] p-3 text-[#254d63]"><p className="font-black">BEZORGEN · {friendlyDate(pickupDate)} · {LETTER_DELIVERY_WINDOW} uur</p><p>{storeLetterDeliveryAddress(delivery)}</p><p className="mt-1 text-xs">Verantwoordelijke winkel: {shop}</p></div> : <p>Afhalen: <strong>{friendlyDate(pickupDate)}</strong> · {shop}</p>}
+        {delivery && <p>Producten {money(subtotalCents)} + bezorgen {money(delivery.feeCents)} = <strong>{money(totalCents)}</strong></p>}
         <ul className="border-y border-[#e4ded5] py-2">{lines.map((line) => <li key={line.id}><strong>{line.quantity}×</strong> {lineName(line)}{line.logo ? " · logo" : ""}{line.specialRequests?.length ? ` · ${line.specialRequests.join(", ")}` : ""}</li>)}</ul>
-        <p>{count} letters · {giftWrap ? "cadeaupapier" : "niet ingepakt"} · {paidAmount > 0 ? fullyPaid ? `volledig betaald (${money(paidAmount)})` : `${money(paidAmount)} betaald · ${money(openAmount)} open` : "betalen bij afhalen"}</p>
+        <p>{count} letters · {giftWrap ? "cadeaupapier" : "niet ingepakt"} · {paidAmount > 0 ? fullyPaid ? `volledig betaald (${money(paidAmount)})` : `${money(paidAmount)} betaald · ${money(openAmount)} open` : delivery ? "betaling nog regelen vóór bezorging" : "betalen bij afhalen"}</p>
         {reopenProduction && <p className="rounded-lg bg-[#fff3dc] p-2 font-bold text-[#70460e]">De letters zijn gewijzigd; de productie wordt opnieuw opengezet.</p>}
         {recordedPaidAmountCents > 0 && openAmount > 0 && <p className="rounded-lg bg-[#fff3dc] p-2 font-bold text-[#70460e]">Alleen de bijbestelling van {money(openAmount)} blijft openstaan.</p>}
         {otherStoreNotice && <p className="rounded-xl border border-[#e6d39a] bg-[#fff6df] p-3 font-semibold leading-relaxed text-[#79581c]">{otherStoreNotice}</p>}

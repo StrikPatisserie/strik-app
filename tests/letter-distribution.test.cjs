@@ -251,3 +251,21 @@ test('the real production screen saves its first early quantity with revision ze
   assert(stockButton);assert.equal(Boolean(stockButton.props.disabled),false);
  }finally{effects.forEach(effect=>effect?.cleanup?.());}
 });
+
+
+test('store deliveries go to a separate crate with date, address and phone without doubling any quantities',()=>{
+ const order={id:'delivered',code:'CL-DELIVERY',customerName:'Bezorgklant',source:'winkel',shop:'Heyendaal',pickupDate:'2026-11-06',status:'besteld',phone:'0612345678',notes:'Bel aan',giftWrap:true,delivery:{address:'Teststraat 12',postcode:'6511 AB',city:'Nijmegen',feeCents:995},lines:[line({quantity:5})]};
+ const pickup={...order,id:'pickup',code:'CL-PICKUP',customerName:'Afhaalklant',delivery:null,lines:[line({quantity:3})]};
+ const result=helper.combineProductionOrders([batch()],[order,pickup],[]).batches[0];
+ const sheet=ProductionDistributionSheet({batch:result});
+ const sections=elements(sheet,n=>n.type==='section');
+ const collection=sections.find(n=>n.props['aria-label']==='Winkelbestellingen');
+ const delivery=sections.find(n=>n.props['aria-label']==='Bezorgen · 10:00–14:00');
+ assert.match(text(collection),/Afhaalklant/);assert.doesNotMatch(text(collection),/Bezorgklant/);
+ assert.match(text(delivery),/BEZORGEN · 10:00–14:00.*Teststraat 12, 6511 AB Nijmegen.*0612345678/s);
+ assert.match(text(delivery),/6 november 2026/);assert.match(text(delivery),/Inpakken in cadeaupapier/);
+ assert.equal(elements(sheet,n=>n.props['data-distribution-quantity']).reduce((sum,n)=>sum+n.props['data-distribution-quantity'],0),8);
+ assert.equal(result.rows[0].orderSources.winkel,8);
+ const changed=helper.combineProductionOrders([batch()],[{...order,delivery:{...order.delivery,address:'Andere straat 3'}},pickup],[]).batches[0];
+ assert.equal(helper.productionChanges(result.rows,changed.rows)[0].detail,'Verdeling per klant gewijzigd');
+});

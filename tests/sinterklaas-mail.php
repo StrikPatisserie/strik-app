@@ -11,6 +11,9 @@ define('STRIK_SINTERKLAAS_RECIPIENT', 'bakery@example.invalid');
 $mail_calls = array();
 $mail_results = array();
 $options = array();
+if (!class_exists('WP_Error')) { class WP_Error { public $code; public $message; public $data; function __construct($code, $message, $data = array()) { $this->code=$code; $this->message=$message; $this->data=$data; } } }
+$wpdb = new class { public $prefix = 'test_'; function prepare($sql, $value) { return $sql; } function get_var($sql) { global $test_lock_busy; return !empty($test_lock_busy) && strpos($sql, 'GET_LOCK') !== false ? '0' : '1'; } };
+
 function add_action($name, $callback) {}
 function absint($value) { return abs((int) $value); }
 function esc_html($value) { return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8'); }
@@ -159,3 +162,62 @@ $old = strik_sinterklaas_letter_save(new TestLetterRequest($legacy), false);
 $old_edit = strik_sinterklaas_letter_save(new TestLetterRequest(array('id' => 'legacy-order', 'notes' => 'Nieuw', '_actor' => array('id' => 'staff-2', 'name' => 'Medewerker Twee'))), false);
 check($old_edit['createdBy'] === null, 'Unknown historical creator is not invented.');
 echo "PASS order creator, edit history, unchanged saves and legacy provenance\n";
+
+// Delivery storage, mail and reminders. All mail stays in the local capture.
+reset_mails();
+$options = array();
+$delivery_input = fixture();
+$delivery_input['id'] = 'delivery-test';
+$delivery_input['delivery'] = array('address'=>'Teststraat 12', 'postcode'=>'6511ab', 'city'=>'Nijmegen', 'feeCents'=>1);
+$delivery_input['totalCents'] = 999999; // Neither the fee nor total is trusted.
+$delivery_saved = strik_sinterklaas_letter_save(new TestLetterRequest($delivery_input));
+check(is_array($delivery_saved) && $delivery_saved['delivery']['postcode'] === '6511 AB', 'Delivery address persists normalized.');
+check($delivery_saved['delivery']['feeCents'] === 995 && $delivery_saved['totalCents'] === 8095, 'Server recalculates products, wrapping and postcode price.');
+check(count($mail_calls) === 2, 'Delivery sends the normal internal and customer confirmation.');
+foreach ($mail_calls as $mail) {
+    check(has($mail['body'], 'BEZORGEN') && has($mail['body'], '10:00–14:00') && has($mail['body'], 'Teststraat 12'), 'Both confirmations contain delivery details.');
+    check(!has($mail['body'], '<strong>Afhalen:</strong>') && !has($mail['body'], 'Neem bij het afhalen'), 'Delivery must not tell the customer to collect.');
+}
+check(has($mail_calls[0]['subject'], 'BEZORGEN'), 'Internal subject highlights delivery.');
+$patch = strik_sinterklaas_letter_save(new TestLetterRequest(array('id'=>'delivery-test','productionDone'=>true)), false);
+check($patch['delivery'] === $delivery_saved['delivery'] && $patch['totalCents'] === 8095, 'Status-only updates preserve address and price.');
+$small = $delivery_input; $small['id']='too-small'; $small['lines'][0]['quantity']=3;
+reset_mails(); $rejected=strik_sinterklaas_letter_save(new TestLetterRequest($small));
+check($rejected instanceof WP_Error && $rejected->code === 'delivery_minimum' && count($mail_calls) === 0, 'Delivery costs cannot reach the 50 euro minimum.');
+$invalid=$delivery_input; $invalid['id']='incomplete'; $invalid['delivery']['postcode']='6511';
+check(strik_sinterklaas_letter_save(new TestLetterRequest($invalid)) instanceof WP_Error, 'A complete address is required server-side.');
+$paid = $delivery_saved; $paid['id']='paid-delivery'; $paid['paidAmountCents']=$paid['totalCents'];
+$paid = strik_sinterklaas_letter_save(new TestLetterRequest($paid), false);
+check(strik_sinterklaas_letter_save(new TestLetterRequest(array('id'=>$paid['id'],'delivery'=>null)), false) instanceof WP_Error, 'Removing paid delivery cannot silently lower the paid total.');
+$pickup = strik_sinterklaas_letter_save(new TestLetterRequest(array('id'=>'delivery-test','delivery'=>null)), false);
+check($pickup['delivery'] === null && $pickup['totalCents'] === 7100, 'Switching an unpaid balance to pickup removes delivery and its fee.');
+$fail_option_key=STRIK_SINTERKLAAS_LETTERS_OPTION_NAME;reset_mails();
+$unavailable=$delivery_input;$unavailable['id']='failed-storage';
+check(strik_sinterklaas_letter_save(new TestLetterRequest($unavailable)) instanceof WP_Error && count($mail_calls)===0, 'Failed persistence never sends a confirmation.');
+unset($fail_option_key);
+echo "PASS delivery price, minimum, address, paid totals, switching and storage guards\n";
+
+$tomorrow=(new DateTimeImmutable('now',new DateTimeZone('Europe/Amsterdam')))->modify('+1 day')->format('Y-m-d');
+$digest_order=$delivery_saved;$digest_order['pickupDate']=$tomorrow;$digest_order['customerEmail']='';$digest_order['sendCustomerEmail']=false;
+$excluded=array();
+foreach (array('pickup','cancelled','completed','different-date') as $kind) { $x=$digest_order;$x['id']=$kind; if($kind==='pickup')$x['delivery']=null;if($kind==='cancelled')$x['status']='geannuleerd';if($kind==='completed')$x['pickedUp']=true;if($kind==='different-date')$x['pickupDate']='2026-01-01';$excluded[$kind]=$x; }
+$options=array();reset_mails();
+$digest_orders=array_merge(array('delivery-test'=>$digest_order),$excluded);
+$result=strik_sinterklaas_send_delivery_digest($digest_orders,$tomorrow);
+check($result['state']==='sent' && $result['orders']===1 && count($mail_calls)===1 && $mail_calls[0]['to']==='info@strik-patisserie.nl', 'Only tomorrow active deliveries appear, independent of customer email.');
+foreach(array('morgen chocoladeletters bezorgen','Teststraat 12','10:00–14:00','5x G','0612345678') as $part) check(has($mail_calls[0]['body'],$part), 'Delivery digest contains '.$part);
+check(strik_sinterklaas_send_delivery_digest($digest_orders,$tomorrow)['state']==='already-sent' && count($mail_calls)===1, 'Same delivery overview is never sent twice.');
+$options=array();reset_mails(array(false,true));
+check(strik_sinterklaas_send_delivery_digest($digest_orders,$tomorrow)['state']==='failed', 'Mail failure is recorded.');
+check(strik_sinterklaas_send_delivery_digest($digest_orders,$tomorrow)['state']==='sent' && count($mail_calls)===2, 'Confirmed failure can be retried.');
+$options=array();reset_mails();$mail_after_send=function(){throw new RuntimeException('connection lost');};
+check(strik_sinterklaas_send_delivery_digest($digest_orders,$tomorrow)['state']==='uncertain', 'Ambiguous mail is held for checking.');
+$mail_after_send=null;
+check(strik_sinterklaas_send_delivery_digest($digest_orders,$tomorrow)['state']==='uncertain' && count($mail_calls)===1, 'Ambiguous send is not automatically duplicated.');
+$options=array();reset_mails();$test_lock_busy=true;
+check(strik_sinterklaas_send_delivery_digest($digest_orders,$tomorrow)['state']==='busy' && count($mail_calls)===0, 'Concurrent reminder cannot send twice.');
+$test_lock_busy=false;
+$options=array(STRIK_SINTERKLAAS_LETTERS_OPTION_NAME=>$digest_orders);reset_mails();
+$cron=strik_sinterklaas_send_letter_reminders(null);
+check($cron['delivery']['state']==='sent' && count($mail_calls)===1, 'Existing daily reminder route includes the internal delivery overview.');
+echo "PASS tomorrow delivery digest, no-email customers, exclusions, retries and deduplication\n";

@@ -81,3 +81,6 @@
 @media(pointer: coarse) {
   .rowButton, .toggle, .page .remove button { min-height: 44px; }
 }
+
+.order[data-delivery="true"] { border-left: 4px solid #477e9a; background: #f3f8fb; }
+.deliveryBadge { display: inline-block; margin: 5px 0; padding: 5px 8px; border: 1px solid #7fa4b8; border-radius: 5px; background: #e4f0f7; color: #254d63; font-size: 11px; font-weight: 800; }

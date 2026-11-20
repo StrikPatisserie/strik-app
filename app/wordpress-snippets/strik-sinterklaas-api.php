@@ -317,6 +317,61 @@ function strik_sinterklaas_sanitize_letter_lines($lines) {
 }
 }
 
+// Serialize read/modify/write of the shared letter option, including reminders.
+function strik_sinterklaas_letters_locked($callback) {
+    global $wpdb;
+    $lock = 'strik_letters_' . md5($wpdb->prefix);
+    if ((string) $wpdb->get_var($wpdb->prepare('SELECT GET_LOCK(%s, 5)', $lock)) !== '1') return new WP_Error('letters_busy', 'De letterbestellingen worden al bijgewerkt. Probeer opnieuw.', array('status'=>409));
+    try { return call_user_func($callback); }
+    finally { $wpdb->get_var($wpdb->prepare('SELECT RELEASE_LOCK(%s)', $lock)); }
+}
+
+// Store-letter delivery uses the same inclusive postcode tariff as B2B.
+// Keep the table in parity with app/lib/businessDeliveryPricing.ts (tested).
+function strik_sinterklaas_letter_delivery_rate($postcode) {
+    $prefix = (int) substr($postcode, 0, 4);
+    $rates = array(array(6511,6514,995),array(6516,6542,995),array(6601,6605,1495),array(6561,6562,1695),array(6641,6642,1195),array(6573,6573,1195),array(6571,6572,1195),array(6581,6581,695),array(6582,6582,1000),array(6663,6663,1200),array(6515,6515,1695),array(6543,6560,1395),array(6563,6564,1395),array(6574,6574,1195),array(6584,6585,1195));
+    foreach ($rates as $rate) if ($prefix >= $rate[0] && $prefix <= $rate[1]) return $rate[2];
+    return 1000;
+}
+function strik_sinterklaas_letter_product_price($lines) {
+    $total = 0;
+    foreach ($lines as $line) $total += $line['quantity'] * (($line['size'] === 'klein' ? 895 : 1395) + (!empty($line['logo']) ? 50 : 0));
+    return $total;
+}
+function strik_sinterklaas_prepare_letter_delivery($input, $existing) {
+    $delivery = isset($input['delivery']) ? $input['delivery'] : null;
+    if ($delivery !== null && !is_array($delivery)) return new WP_Error('invalid_delivery', 'Controleer de bezorggegevens.', array('status'=>400));
+    if ($delivery === null && empty($existing['delivery'])) return $input;
+    $lines = strik_sinterklaas_sanitize_letter_lines(isset($input['lines']) ? $input['lines'] : array());
+    $count = array_sum(array_column($lines, 'quantity'));
+    $wrap = 25;
+    if (!empty($existing['giftWrap']) && !empty($existing['lines'])) {
+        $old_count = array_sum(array_column($existing['lines'], 'quantity'));
+        $old_fee = isset($existing['delivery']['feeCents']) ? (int) $existing['delivery']['feeCents'] : 0;
+        $old_wrap = $old_count > 0 ? ((int) $existing['totalCents'] - $old_fee - strik_sinterklaas_letter_product_price($existing['lines'])) / $old_count : 0;
+        if ($old_wrap == 100 || $old_wrap == 25) $wrap = (int) $old_wrap;
+    }
+    $subtotal = strik_sinterklaas_letter_product_price($lines) + (!empty($input['giftWrap']) ? $wrap * $count : 0);
+    $input['delivery'] = null;
+    $input['totalCents'] = $subtotal;
+    if ($delivery === null) return $input;
+    if ($subtotal < 5000) return new WP_Error('delivery_minimum', 'Bezorgen kan vanaf € 50,00 bestelwaarde, exclusief bezorgkosten.', array('status'=>400));
+    $address = strik_sinterklaas_text(isset($delivery['address']) ? $delivery['address'] : '', 240);
+    $city = strik_sinterklaas_text(isset($delivery['city']) ? $delivery['city'] : '', 120);
+    $postcode = strtoupper(preg_replace('/\s+/', '', isset($delivery['postcode']) ? (string) $delivery['postcode'] : ''));
+    if (strlen($address) < 4 || !preg_match('/\d/', $address) || strlen($city) < 2 || !preg_match('/^[1-9][0-9]{3}[A-Z]{2}$/', $postcode)) return new WP_Error('delivery_address', 'Vul straat, huisnummer, volledige postcode en plaats in.', array('status'=>400));
+    if (empty($input['pickupDate']) || !strik_sinterklaas_date($input['pickupDate']) || empty($input['phone'])) return new WP_Error('delivery_contact', 'Vul een bezorgdatum en telefoonnummer in.', array('status'=>400));
+    $fee = strik_sinterklaas_letter_delivery_rate($postcode);
+    $input['delivery'] = array('address'=>$address, 'postcode'=>substr($postcode,0,4).' '.substr($postcode,4), 'city'=>$city, 'feeCents'=>$fee);
+    $input['totalCents'] = $subtotal + $fee;
+    return $input;
+}
+function strik_sinterklaas_letter_delivery_address($order) {
+    $delivery = $order['delivery'];
+    return $delivery['address'] . ', ' . $delivery['postcode'] . ' ' . $delivery['city'];
+}
+
 if (!function_exists('strik_sinterklaas_sanitize_letter_order')) {
 function strik_sinterklaas_sanitize_letter_order($order, $existing = array()) {
     if (!is_array($order)) return null;
@@ -360,6 +415,7 @@ function strik_sinterklaas_sanitize_letter_order($order, $existing = array()) {
         'phone' => isset($order['phone']) ? strik_sinterklaas_text($order['phone'], 80) : '',
         'shop' => isset($order['shop']) ? strik_sinterklaas_text($order['shop'], 120) : '',
         'pickupDate' => $pickup_date,
+        'delivery' => isset($order['delivery']) && is_array($order['delivery']) ? $order['delivery'] : null,
         'pickupLocation' => isset($order['pickupLocation']) ? strik_sinterklaas_text($order['pickupLocation'], 120) : '',
         'source' => $source,
         'sourceKey' => isset($order['sourceKey']) ? strik_sinterklaas_text($order['sourceKey'], 180) : '',
@@ -424,8 +480,8 @@ function strik_sinterklaas_create_letter_mail_body($order, $for_customer = false
         '',
         'Klant: ' . $order['customerName'],
         'Ordernummer: ' . $order['code'],
-        'Ophaaldatum: ' . ($order['pickupDate'] ?: '-'),
-        'Ophaallocatie: ' . ($order['pickupLocation'] ?: $order['shop'] ?: '-'),
+        (!empty($order['delivery']) ? 'BEZORGEN 10:00–14:00 uur: ' : 'Ophaaldatum: ') . ($order['pickupDate'] ?: '-'),
+        !empty($order['delivery']) ? 'Bezorgadres: ' . strik_sinterklaas_letter_delivery_address($order) : 'Ophaallocatie: ' . ($order['pickupLocation'] ?: $order['shop'] ?: '-'),
         'Telefoon: ' . ($order['phone'] ?: '-'),
         'E-mail: ' . ($order['customerEmail'] ?: '-'),
         '',
@@ -451,7 +507,7 @@ function strik_sinterklaas_create_letter_mail_body($order, $for_customer = false
 
     if ($for_customer) {
         $lines[] = '';
-        $lines[] = 'Neem dit ordernummer mee bij het ophalen. Dan vinden we uw bestelling sneller.';
+        $lines[] = !empty($order['delivery']) ? 'Wij bezorgen tussen 10:00 en 14:00 uur op het opgegeven adres.' : 'Neem dit ordernummer mee bij het ophalen. Dan vinden we uw bestelling sneller.';
         $lines[] = '';
         $lines[] = 'We nemen contact op als er iets onduidelijk is. Deze bevestiging is automatisch verstuurd.';
     } else {
@@ -465,6 +521,7 @@ function strik_sinterklaas_create_letter_mail_body($order, $for_customer = false
 
 if (!function_exists('strik_sinterklaas_letter_mail_html')) {
 function strik_sinterklaas_letter_mail_html($order, $reminder = false, $updated = false, $internal = false) {
+    $delivery = !empty($order['delivery']);
     $name = esc_html($order['customerName']);
     $code = esc_html($order['code']);
     $date = !empty($order['pickupDate']) ? esc_html(date('d-m-Y', strtotime($order['pickupDate']))) : '-';
@@ -480,7 +537,9 @@ function strik_sinterklaas_letter_mail_html($order, $reminder = false, $updated 
     $intro = $reminder
         ? 'Morgen liggen uw chocoladeletters voor u klaar. We zien u graag in de winkel!'
         : ($updated ? 'Hieronder vindt u de nieuwste gegevens van uw chocoladeletterbestelling.' : 'Wat leuk dat u chocoladeletters bij Strik heeft besteld. Wij maken ze met zorg voor u klaar.');
+    if ($delivery && $reminder) $intro = 'Morgen bezorgen wij uw chocoladeletters tussen 10:00 en 14:00 uur op onderstaand adres.';
     if ($internal) $title = $updated ? 'Gewijzigde winkelbestelling' : 'Nieuwe winkelbestelling';
+    if ($delivery) $title = 'BEZORGEN · ' . $title;
     $items = '';
     $has_special_request = false;
     foreach ($order['lines'] as $line) {
@@ -507,7 +566,9 @@ function strik_sinterklaas_letter_mail_html($order, $reminder = false, $updated 
     } else {
         $payment = 'U betaalt bij het afhalen in de winkel.';
     }
-    $heading = $reminder ? 'Ophaalherinnering' : ($updated ? 'Gewijzigde bestelling' : 'Bestelbevestiging');
+    if ($delivery && $open_amount_cents > 0) $payment = 'Nog te betalen: € ' . number_format($open_amount_cents / 100, 2, ',', '.') . '. Regel de betaling vóór bezorging met de winkel.';
+    if ($delivery) $price .= '<p style="margin:6px 0;font-size:14px;">Inclusief bezorgkosten: € ' . esc_html(number_format($order['delivery']['feeCents'] / 100, 2, ',', '.')) . '</p>';
+    $heading = $reminder ? ($delivery ? 'Bezorgherinnering' : 'Ophaalherinnering') : ($updated ? 'Gewijzigde bestelling' : 'Bestelbevestiging');
     if ($internal) $heading = $updated ? 'Gewijzigde interne bestelkopie' : 'Interne bestelkopie';
     $greeting = $internal
         ? '<p style="margin:0 0 18px;font-size:16px;line-height:1.55;"><strong>Klant:</strong> ' . $name . '</p>'
@@ -524,7 +585,7 @@ function strik_sinterklaas_letter_mail_html($order, $reminder = false, $updated 
     }
     $payment_html = $internal
         ? '<p style="margin:16px 0 0;font-size:14px;line-height:1.5;color:#536b57;"><strong>Betaald:</strong> € ' . esc_html(number_format($paid_amount_cents / 100, 2, ',', '.')) . '<br><strong>Nog open:</strong> € ' . esc_html(number_format($open_amount_cents / 100, 2, ',', '.')) . '</p>'
-        : '<p style="margin:20px 0 0;font-size:14px;line-height:1.5;color:#536b57;">' . esc_html($payment) . ' Neem bij het afhalen gerust dit ordernummer mee: <strong>' . $code . '</strong>.</p>';
+        : '<p style="margin:20px 0 0;font-size:14px;line-height:1.5;color:#536b57;">' . esc_html($payment) . ($delivery ? ' Uw ordernummer: <strong>' : ' Neem bij het afhalen gerust dit ordernummer mee: <strong>') . $code . '</strong>.</p>';
     $closing = $internal
         ? 'Automatische interne back-up · aangenomen in de winkel.<br>De bestelling staat ook in de Strik Team app.'
         : 'Vragen of verhinderd? Neem dan even contact met ons op.<br><strong>Tot snel bij Strik!</strong>';
@@ -542,7 +603,7 @@ function strik_sinterklaas_letter_mail_html($order, $reminder = false, $updated 
         . '<tr><td style="padding:25px 28px;background:#fffdf8;border-radius:0 0 16px 16px;">'
         . $greeting
         . '<div style="padding:18px;background:#f1f7ef;border-radius:12px;"><p style="margin:0 0 10px;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#547762;">' . esc_html($heading) . ' · ' . $code . '</p>'
-        . '<p style="margin:0 0 7px;font-size:16px;"><strong>Afhalen:</strong> ' . $date . '</p><p style="margin:0;font-size:15px;"><strong>Winkel:</strong> ' . $shop . '</p>' . $contacts . '</div>'
+        . ($delivery ? '<p style="margin:0 0 7px;font-size:18px;"><strong>BEZORGEN: ' . $date . ' · 10:00–14:00 uur</strong></p><p style="margin:0;font-size:15px;"><strong>Bezorgadres:</strong> ' . esc_html(strik_sinterklaas_letter_delivery_address($order)) . '</p>' : '<p style="margin:0 0 7px;font-size:16px;"><strong>Afhalen:</strong> ' . $date . '</p><p style="margin:0;font-size:15px;"><strong>Winkel:</strong> ' . $shop . '</p>') . $contacts . '</div>'
         . '<h2 style="margin:22px 0 7px;font-size:17px;">' . ($internal ? 'Bestelling' : 'Uw bestelling') . '</h2><table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;">' . $items . '</table>'
         . $notes . $wrap . $allergen_note . $price . $payment_html
         . '<p style="margin:24px 0 0;font-size:14px;line-height:1.5;">' . $closing . '</p>'
@@ -559,7 +620,7 @@ function strik_sinterklaas_letter_customer_mail_html($order, $reminder = false, 
 if (!function_exists('strik_sinterklaas_letter_internal_details')) {
 function strik_sinterklaas_letter_internal_details($order) {
     $details = array();
-    foreach (array('customerName', 'customerEmail', 'phone', 'pickupDate', 'pickupLocation', 'shop', 'notes', 'totalCents', 'giftWrap') as $field) {
+    foreach (array('customerName', 'customerEmail', 'phone', 'pickupDate', 'pickupLocation', 'shop', 'notes', 'totalCents', 'giftWrap', 'delivery') as $field) {
         $details[$field] = isset($order[$field]) ? $order[$field] : '';
     }
     $details['lines'] = array_map(function ($line) {
@@ -587,7 +648,7 @@ function strik_sinterklaas_send_letter_emails($order, $existing = array(), $inte
         $order['bakeryEmailSentAt'] = '';
         $sent = wp_mail(
             STRIK_SINTERKLAAS_RECIPIENT,
-            ($internal_updated ? 'Gewijzigde winkelbestelling chocoladeletters ' : 'Winkelbestelling chocoladeletters ') . $order['code'] . ' - ' . $order['customerName'] . ' - ' . ($order['pickupDate'] ?: 'geen datum'),
+            (!empty($order['delivery']) ? 'BEZORGEN · ' : '') . ($internal_updated ? 'Gewijzigde winkelbestelling chocoladeletters ' : 'Winkelbestelling chocoladeletters ') . $order['code'] . ' - ' . $order['customerName'] . ' - ' . ($order['pickupDate'] ?: 'geen datum'),
             strik_sinterklaas_letter_mail_html($order, false, $internal_updated, true),
             $headers
         );
@@ -630,8 +691,61 @@ function strik_sinterklaas_send_letter_emails($order, $existing = array(), $inte
 }
 }
 
+function strik_sinterklaas_delivery_digest_orders($orders, $tomorrow) {
+    $result = array();
+    foreach ($orders as $order) {
+        if (!is_array($order) || empty($order['delivery']) || (isset($order['source']) && $order['source'] !== 'winkel')) continue;
+        if (!isset($order['pickupDate']) || $order['pickupDate'] !== $tomorrow || !empty($order['pickedUp']) || (isset($order['status']) && in_array($order['status'], array('opgehaald', 'geannuleerd'), true))) continue;
+        $result[$order['id']] = $order;
+    }
+    ksort($result);
+    return $result;
+}
+function strik_sinterklaas_delivery_digest_html($orders, $tomorrow) {
+    $html = '<!doctype html><html lang="nl"><meta charset="utf-8"><body style="font-family:Arial,sans-serif;color:#244b37;background:#f3f7f0;padding:24px;"><div style="max-width:650px;margin:auto;background:white;padding:24px;"><h1>Let op: morgen chocoladeletters bezorgen</h1><p><strong>' . esc_html(date('d-m-Y', strtotime($tomorrow))) . ' · altijd 10:00–14:00 uur</strong></p><p>Houd deze bestellingen apart voor bezorging. Controleer ook logo’s, cadeaupapier en betaling.</p>';
+    foreach ($orders as $order) {
+        $open = max(0, $order['totalCents'] - strik_sinterklaas_letter_paid_amount($order));
+        $html .= '<section style="border:2px solid #477e9a;padding:16px;margin:18px 0;"><h2>' . esc_html($order['code'] . ' · ' . $order['customerName']) . '</h2><p><strong>BEZORGEN · 10:00–14:00 uur</strong><br>' . esc_html(strik_sinterklaas_letter_delivery_address($order)) . '<br>Telefoon: ' . esc_html($order['phone']) . '<br>Winkel: ' . esc_html($order['shop']) . '</p><p>' . nl2br(esc_html(implode("\n", strik_sinterklaas_letter_summary_lines($order)))) . '</p>';
+        if (!empty($order['giftWrap'])) $html .= '<p><strong>Alles in cadeaupapier.</strong></p>';
+        if (!empty($order['notes'])) $html .= '<p>Opmerking: ' . nl2br(esc_html($order['notes'])) . '</p>';
+        $html .= '<p>' . ($open > 0 ? '<strong>Nog € ' . esc_html(number_format($open / 100, 2, ',', '.')) . ' afrekenen vóór bezorging.</strong>' : 'Volledig betaald.') . '</p></section>';
+    }
+    return $html . '<p>De actuele bestellingen en verdeellijsten staan in de <a href="https://app.strik-patisserie.nl/sinterklaas/letters/winkel">Strik Team app</a>.</p></div></body></html>';
+}
+function strik_sinterklaas_send_delivery_digest($orders, $tomorrow) {
+    $deliveries = strik_sinterklaas_delivery_digest_orders($orders, $tomorrow);
+    if (empty($deliveries)) return array('orders'=>0, 'state'=>'empty');
+    $html = strik_sinterklaas_delivery_digest_html($deliveries, $tomorrow);
+    $receipt_key = 'strik_letter_delivery_' . hash('sha256', $tomorrow . '|' . $html);
+    global $wpdb;
+    $lock = 'strik_letter_delivery_' . md5($wpdb->prefix);
+    if ((string) $wpdb->get_var($wpdb->prepare('SELECT GET_LOCK(%s, 5)', $lock)) !== '1') return array('orders'=>count($deliveries), 'state'=>'busy');
+    try {
+        $receipt = get_option($receipt_key, array());
+        if (!empty($receipt['state']) && in_array($receipt['state'], array('sent', 'sending'), true)) return array('orders'=>count($deliveries), 'state'=>$receipt['state'] === 'sent' ? 'already-sent' : 'uncertain');
+        // Persist the intent before sending. An interrupted/ambiguous send is
+        // held for checking instead of blindly sending the same overview twice.
+        $receipt = array('state'=>'sending', 'date'=>$tomorrow, 'at'=>wp_date(DATE_ATOM));
+        update_option($receipt_key, $receipt, false);
+        if (get_option($receipt_key) !== $receipt) return array('orders'=>count($deliveries), 'state'=>'storage-failed');
+        try {
+            $ok = wp_mail('info@strik-patisserie.nl', 'Let op: morgen chocoladeletters bezorgen · ' . date('d-m-Y', strtotime($tomorrow)) . ' · ' . count($deliveries) . ' bestelling(en)', $html, array('Content-Type: text/html; charset=UTF-8', 'From: Strik Patisserie <info@strik-patisserie.nl>', 'Reply-To: info@strik-patisserie.nl'));
+        } catch (Throwable $error) {
+            return array('orders'=>count($deliveries), 'state'=>'uncertain');
+        }
+        $receipt['state'] = $ok ? 'sent' : 'failed';
+        update_option($receipt_key, $receipt, false);
+        return array('orders'=>count($deliveries), 'state'=>get_option($receipt_key) === $receipt ? $receipt['state'] : 'uncertain');
+    } finally {
+        $wpdb->get_var($wpdb->prepare('SELECT RELEASE_LOCK(%s)', $lock));
+    }
+}
+
 if (!function_exists('strik_sinterklaas_send_letter_reminders')) {
 function strik_sinterklaas_send_letter_reminders($request) {
+    return strik_sinterklaas_letters_locked(function () use ($request) { return strik_sinterklaas_send_letter_reminders_unlocked($request); });
+}
+function strik_sinterklaas_send_letter_reminders_unlocked($request) {
     $tomorrow = (new DateTimeImmutable('now', new DateTimeZone('Europe/Amsterdam')))->modify('+1 day')->format('Y-m-d');
     $orders = strik_sinterklaas_get_orders(STRIK_SINTERKLAAS_LETTERS_OPTION_NAME);
     $sent = 0;
@@ -647,7 +761,7 @@ function strik_sinterklaas_send_letter_reminders($request) {
 
         $ok = wp_mail(
             $order['customerEmail'],
-            'Morgen liggen uw chocoladeletters klaar - Strik Patisserie',
+            !empty($order['delivery']) ? 'Morgen bezorgen wij uw chocoladeletters · 10:00–14:00 - Strik Patisserie' : 'Morgen liggen uw chocoladeletters klaar - Strik Patisserie',
             strik_sinterklaas_letter_customer_mail_html($order, true),
             array(
                 'Content-Type: text/html; charset=UTF-8',
@@ -667,7 +781,8 @@ function strik_sinterklaas_send_letter_reminders($request) {
         strik_sinterklaas_save_orders(STRIK_SINTERKLAAS_LETTERS_OPTION_NAME, $orders);
     }
 
-    return rest_ensure_response(array('date' => $tomorrow, 'sent' => $sent, 'failed' => $failed));
+    $delivery_result = strik_sinterklaas_send_delivery_digest($orders, $tomorrow);
+    return rest_ensure_response(array('date' => $tomorrow, 'sent' => $sent, 'failed' => $failed, 'delivery' => $delivery_result));
 }
 }
 
@@ -872,12 +987,16 @@ function strik_sinterklaas_filter_orders($orders, $request, $date_key) {
 
 if (!function_exists('strik_sinterklaas_letter_get')) {
 function strik_sinterklaas_letter_get($request) {
+    return strik_sinterklaas_letters_locked(function () use ($request) { return strik_sinterklaas_letter_get_unlocked($request); });
+}
+function strik_sinterklaas_letter_get_unlocked($request) {
     $orders = strik_sinterklaas_get_orders(STRIK_SINTERKLAAS_LETTERS_OPTION_NAME);
     $orders = strik_sinterklaas_ensure_letter_order_numbers($orders);
     $orders = strik_sinterklaas_ensure_letter_payment_amounts($orders);
     $filtered = strik_sinterklaas_filter_orders($orders, $request, 'pickupDate');
 
     return rest_ensure_response(array(
+        'features' => array('storeLetterDelivery' => true),
         'orders' => array_values($filtered),
         'total' => count($filtered),
         'generatedAt' => wp_date(DATE_ATOM),
@@ -907,6 +1026,9 @@ function strik_sinterklaas_letter_customer_lines($lines) {
 
 if (!function_exists('strik_sinterklaas_letter_save')) {
 function strik_sinterklaas_letter_save($request, $send_emails = true) {
+    return strik_sinterklaas_letters_locked(function () use ($request, $send_emails) { return strik_sinterklaas_letter_save_unlocked($request, $send_emails); });
+}
+function strik_sinterklaas_letter_save_unlocked($request, $send_emails = true) {
     $params = $request->get_json_params();
     if (!is_array($params)) {
         return new WP_Error('strik_sinterklaas_invalid_json', 'Geen geldige letterbestelling ontvangen.', array('status' => 400));
@@ -917,6 +1039,9 @@ function strik_sinterklaas_letter_save($request, $send_emails = true) {
     $existing = $id !== '' && isset($orders[strik_sinterklaas_order_key($id)])
         ? $orders[strik_sinterklaas_order_key($id)]
         : array();
+    $input = strik_sinterklaas_prepare_letter_delivery(array_merge($existing, $params), $existing);
+    if ($input instanceof WP_Error) return $input;
+    $params = array_merge($params, array('totalCents' => isset($input['totalCents']) ? $input['totalCents'] : 0, 'delivery' => isset($input['delivery']) ? $input['delivery'] : null));
     $existing_paid_amount_cents = strik_sinterklaas_letter_paid_amount($existing);
     $requested_total_cents = isset($params['totalCents'])
         ? absint($params['totalCents'])
@@ -939,7 +1064,7 @@ function strik_sinterklaas_letter_save($request, $send_emails = true) {
     $order['audit'] = isset($existing['audit']) && is_array($existing['audit']) ? $existing['audit'] : array();
     $actor_input = isset($params['_actor']) && is_array($params['_actor']) ? $params['_actor'] : array();
     $actor = array('id' => strik_sinterklaas_text(isset($actor_input['id']) ? $actor_input['id'] : '', 120), 'name' => strik_sinterklaas_text(isset($actor_input['name']) ? $actor_input['name'] : '', 180));
-    $fields = array('customerName', 'customerEmail', 'phone', 'shop', 'pickupDate', 'pickupLocation', 'status', 'notes', 'lines', 'giftWrap', 'paidAmountCents', 'totalCents', 'productionDone', 'pickedUp');
+    $fields = array('customerName', 'customerEmail', 'phone', 'shop', 'pickupDate', 'pickupLocation', 'status', 'notes', 'lines', 'giftWrap', 'paidAmountCents', 'totalCents', 'productionDone', 'pickedUp', 'delivery');
     $changes = array();
     foreach ($fields as $field) {
         $before = isset($existing[$field]) ? $existing[$field] : null;
@@ -954,6 +1079,7 @@ function strik_sinterklaas_letter_save($request, $send_emails = true) {
     $email_changed = !empty($existing) && isset($existing['customerEmail']) && $existing['customerEmail'] !== $order['customerEmail'];
     $details_changed = !empty($existing) && (
         $email_changed
+        || (isset($existing['delivery']) ? $existing['delivery'] : null) !== $order['delivery']
         || (isset($existing['pickupDate']) ? $existing['pickupDate'] : '') !== $order['pickupDate']
         || (isset($existing['shop']) ? $existing['shop'] : '') !== $order['shop']
         || strik_sinterklaas_letter_customer_lines(isset($existing['lines']) ? $existing['lines'] : array()) !== strik_sinterklaas_letter_customer_lines($order['lines'])
@@ -963,12 +1089,17 @@ function strik_sinterklaas_letter_save($request, $send_emails = true) {
         $order['customerConfirmationSentAt'] = '';
         $order['customerConfirmationError'] = '';
     }
-    if ($email_changed) {
+    if ($email_changed || (isset($existing['delivery']) ? $existing['delivery'] : null) !== $order['delivery']) {
         $order['customerReminderSentForDate'] = '';
         $order['customerReminderError'] = '';
     }
 
     $order = strik_sinterklaas_assign_letter_order_number($order, $orders);
+    $order_key = strik_sinterklaas_order_key($order['id']);
+    $orders[$order_key] = $order;
+    strik_sinterklaas_save_orders(STRIK_SINTERKLAAS_LETTERS_OPTION_NAME, $orders);
+    $stored = strik_sinterklaas_get_orders(STRIK_SINTERKLAAS_LETTERS_OPTION_NAME);
+    if (!isset($stored[$order_key]) || $stored[$order_key] !== $order) return new WP_Error('letter_storage_failed', 'Bestelling niet opgeslagen; er is geen bevestiging verstuurd. Probeer opnieuw.', array('status'=>503));
 
     if ($send_emails) {
         $internal_changed = !empty($existing)
@@ -1613,6 +1744,9 @@ function strik_sinterklaas_delete_order($request, $option_name) {
 
 if (!function_exists('strik_sinterklaas_letter_delete')) {
 function strik_sinterklaas_letter_delete($request) {
+    return strik_sinterklaas_letters_locked(function () use ($request) { return strik_sinterklaas_letter_delete_unlocked($request); });
+}
+function strik_sinterklaas_letter_delete_unlocked($request) {
     return strik_sinterklaas_delete_order($request, STRIK_SINTERKLAAS_LETTERS_OPTION_NAME);
 }
 }

@@ -1,3 +1,4 @@
+import { normalizeStoreLetterDelivery } from "./letters/storeLetterDelivery";
 import type {
   B2BLetterLine,
   ChocolateLetterChocolate,
@@ -95,6 +96,7 @@ export function normalizeLetterOrder(value: unknown): ChocolateLetterOrder | nul
     shop: textFrom(value.shop),
     pickupDate: textFrom(value.pickupDate),
     pickupLocation: textFrom(value.pickupLocation),
+    delivery: normalizeStoreLetterDelivery(value.delivery),
     source: value.source === "online" ? "online" : "winkel",
     sourceKey: textFrom(value.sourceKey),
     sourceImportedAt: textFrom(value.sourceImportedAt),

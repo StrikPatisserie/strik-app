@@ -309,3 +309,6 @@ button.sourceBadge:focus-visible { outline: 2px solid currentColor; outline-offs
 .pendingProduction p { display:flex; gap:12px; margin:0; }
 .pendingActions { display:flex; gap:8px; flex-wrap:wrap; }
 .pendingActions button { font-size:12px; padding:8px 12px; }
+
+.deliveryBadge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 6px; border: 1px solid #7fa4b8; border-radius: 4px; background: #e4f0f7; color: #254d63; font-size: 10px; font-weight: 800; }
+.recipientDelivery { padding: 8px; border: 1px solid #7fa4b8; background: #edf5fa; color: #254d63; }

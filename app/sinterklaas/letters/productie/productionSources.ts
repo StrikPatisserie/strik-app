@@ -4,6 +4,7 @@ export type ProductionSource = ProductionOrderSource | "voorraad";
 export type ProductionRecipient = {
   id: string; source: ProductionSource; quantity: number; customerName: string;
   code?: string; shop?: string; date?: string; notes?: string; combinationProduct?: string;
+  delivery?: { address: string; phone: string };
 };
 
 export type ProductionSeedRow = {
@@ -75,7 +76,7 @@ export function aggregateProductionRows(rows: readonly ProductionSeedRow[]): Pro
 }
 
 export function productionRecipientVersion(row: ProductionSeedRow) {
-  return JSON.stringify((row.recipients || []).map(item => [item.source,item.id,item.customerName,item.code||"",item.shop||"",item.date||"",item.notes||"",item.quantity,...(item.combinationProduct?[item.combinationProduct]:[])]).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))));
+  return JSON.stringify((row.recipients || []).map(item => [item.source,item.id,item.customerName,item.code||"",item.shop||"",item.date||"",item.notes||"",item.quantity,...(item.combinationProduct?[item.combinationProduct]:[]),...(item.delivery?[item.delivery.address,item.delivery.phone]:[])]).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))));
 }
 
 // Never guess a customer when an older list contains only totals.
@@ -85,7 +86,7 @@ export function productionRecipientsFor(row: ProductionSeedRow, source: Producti
   const combined = new Map<string, ProductionRecipient>();
   for (const item of row.recipients || []) {
     if (item.source !== source || item.quantity <= 0) continue;
-    const key = JSON.stringify([item.id, item.customerName, item.code, item.shop, item.date, item.notes, item.combinationProduct]);
+    const key = JSON.stringify([item.id, item.customerName, item.code, item.shop, item.date, item.notes, item.combinationProduct, item.delivery]);
     const existing = combined.get(key);
     combined.set(key, {...item, quantity: item.quantity + (existing?.quantity || 0)});
   }
@@ -108,4 +109,12 @@ export function productionDeliveryDates(row: ProductionSeedRow) {
     }
   }
   return [...dates].sort(([a], [b]) => a.localeCompare(b)).map(([date, quantity]) => ({ date, quantity }));
+}
+
+// Delivery orders keep their original production source, but must not be packed
+// into a shop's pickup crate as well. Every recipient belongs to one crate.
+export function productionDistributionRecipients(row: ProductionSeedRow, crate: ProductionSource | "bezorgen") {
+  if (crate === "bezorgen") return productionRecipientsFor(row, "winkel").filter(item => Boolean(item.delivery));
+  const recipients = productionRecipientsFor(row, crate);
+  return crate === "winkel" ? recipients.filter(item => !item.delivery) : recipients;
 }

@@ -2,19 +2,20 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
+const path = require('node:path');
 const ts = require('typescript');
 
 function load(file, imports = {}, globals = {}) {
   const exports = {};
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(file, 'utf8'), {compilerOptions: {module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022}}).outputText,
-    {exports, URL, Request, Response, ...globals, require: name => name in imports ? imports[name] : require(name)});
+    {exports, URL, Request, Response, AbortSignal, ...globals, require: name => name in imports ? imports[name] : name.startsWith('.') ? load(path.resolve(path.dirname(file),name+'.ts'), imports, globals) : require(name)});
   return exports;
 }
 const access = load('app/lib/auth/access.ts');
 const stores = load('app/sinterklaas/letterStoreAccess.ts', {'../lib/auth/access': access});
 const profile = (store = 'heyendaal') => ({active: true, role: 'winkel', email: `strikpatisserie${store}@gmail.com`, store, permissions: {}});
 const row = (id, shop, source = 'winkel') => ({id, shop, pickupLocation: shop, source, customerName: `Klant ${id}`, year: '2026', lines: [{letter: 'S', quantity: 1}]});
-function server(who, initial = [row('own', 'Heyendaal'), row('foreign', 'Lent'), row('online', 'Heyendaal', 'online')]) {
+function server(who, initial = [row('own', 'Heyendaal'), row('foreign', 'Lent'), row('online', 'Heyendaal', 'online')], deliverySupported = true) {
   let records = structuredClone(initial);
   const calls = [];
   const loaded = load('app/sinterklaas/sinterklaasServerApi.ts', {
@@ -24,7 +25,7 @@ function server(who, initial = [row('own', 'Heyendaal'), row('foreign', 'Lent'),
   }, {process: {env: {WORDPRESS_SINTERKLAAS_API_BASE: 'https://example.invalid/wp-json/strik/v1', WORDPRESS_SINTERKLAAS_API_KEY: 'test-only'}}, fetch: async (url, options = {}) => {
     const method = options.method || 'GET';
     calls.push({url: new URL(url), method, body: options.body});
-    if (method === 'GET') return Response.json({orders: structuredClone(records), total: records.length, generatedAt: 'test'});
+    if (method === 'GET') return Response.json({features:{storeLetterDelivery:deliverySupported}, orders: structuredClone(records), total: records.length, generatedAt: 'test'});
     const body = options.body ? JSON.parse(options.body) : {};
     if (method === 'DELETE') { records = records.filter(order => order.id !== (new URL(url).searchParams.get('id') || body.id)); return Response.json({deleted: true}); }
     const found = records.find(order => order.id === body.id);
@@ -131,3 +132,16 @@ test('personal shop staff see and edit every store, never online orders', async(
 });
 
 test('Heyendaalseweg shared iPad keeps its store scope under its real account name',()=>assert.equal(JSON.stringify(stores.getLetterStoreScope({...profile(),email:'strikpatisserieheyendaalseweg@gmail.com',store:null})),JSON.stringify(['heyendaal'])));
+
+
+test('delivery survives the store boundary while an old backend fails before any write', async()=>{
+ const delivery={address:'Teststraat 12',postcode:'6511 AB',city:'Nijmegen',feeCents:995};
+ const unsupported=server(profile(),[],false);
+ const rejected=await unsupported.mutate('POST',{...row('new','Heyendaal'),delivery});
+ assert.equal(rejected.status,503);assert.equal(unsupported.calls.filter(c=>c.method!=='GET').length,0);
+ const supported=server(profile(),[],true);
+ const saved=await supported.mutate('POST',{...row('new','Heyendaal'),delivery});
+ assert.equal(saved.status,200);assert.deepEqual((await saved.json()).delivery,delivery);
+ assert.equal((await supported.mutate('PATCH',{id:'new',productionDone:true})).status,200);
+ assert.deepEqual((await (await supported.get()).json()).orders[0].delivery,delivery);
+});

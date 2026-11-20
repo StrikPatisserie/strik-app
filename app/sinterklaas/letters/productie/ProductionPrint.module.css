@@ -179,3 +179,7 @@
   .unconfirmedPrint .paperViewport { display: none !important; }
   .unconfirmedPrint .printGuard { display: block; color: #000; background: #fff; padding: 10mm; }
 }
+
+.deliveryMark { padding: 6px 9px; margin: 3px 0 7px; border: 2px solid #234d63; color: #173b50; font-size: 12px; line-height: 1.45; }
+.customerCutout[data-delivery="true"] { border: 2px solid #234d63; }
+@media print { .deliveryMark { color: #000; border-color: #000; } .customerCutout[data-delivery="true"] { border-color: #000; } }

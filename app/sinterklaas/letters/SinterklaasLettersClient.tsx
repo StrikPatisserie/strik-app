@@ -1,5 +1,7 @@
 "use client";
 
+import { storeLetterDeliveryAddress } from "./storeLetterDelivery";
+
 import { b2bLetterDecoration, b2bLetterHasLogo } from "../b2bLetterLines";
 
 import { useEffect, useMemo, useState } from "react";
@@ -480,7 +482,7 @@ function OrderRow({
     order.bakeryEmailSentAt &&
       `Bakkerijmail: ${formatDateTime(order.bakeryEmailSentAt)}`,
     order.pickedUpAt && `Opgehaald: ${formatDateTime(order.pickedUpAt)}`,
-    order.customerReminderSentForDate && `Ophaalherinnering: ${order.customerReminderSentForDate}`,
+    order.customerReminderSentForDate && `${order.delivery ? "Bezorgherinnering" : "Ophaalherinnering"}: ${order.customerReminderSentForDate}`,
   ].filter(Boolean);
   const isDone = order.productionDone || order.status === "klaar";
   const isOnline = order.source === "online";
@@ -496,18 +498,19 @@ function OrderRow({
     const mailErrors = [order.bakeryEmailError && `Interne mail: ${order.bakeryEmailError}`, order.customerConfirmationError && `Klantbevestiging: ${order.customerConfirmationError}`, order.customerReminderError && `Ophaalherinnering: ${order.customerReminderError}`].filter(Boolean);
     return <LetterOrderCard
       date={formatDate(order.pickupDate)}
-      location={order.pickupLocation || order.shop || "Geen locatie"}
+      location={order.delivery ? `${order.delivery.postcode} ${order.delivery.city}` : order.pickupLocation || order.shop || "Geen locatie"}
+      delivery={Boolean(order.delivery)}
       code={`${order.code} · ${totalPieces(order)} letters`}
       customer={order.customerName}
       summary={order.lines.map(lineLabel).join(" · ")}
-      status={statusLabel(order)}
+      status={isPickedUp && order.delivery ? "Bezorgd" : statusLabel(order)}
       tone={isPickedUp || order.status === "geannuleerd" ? "closed" : isDone ? "ready" : undefined}
       statusNote={order.customerConfirmationSentAt ? "Bevestiging verstuurd" : undefined}
       amount={formatMoney(order.totalCents)}
       amountHint={order.status === "geannuleerd" ? undefined : openAmount > 0 ? `Nog ${formatMoney(openAmount)}` : paidAmount > 0 ? "Betaald" : "Bij afhalen"}
       openAmount={openAmount > 0}
       action={<button type="button" className={listStyles.rowButton} onClick={() => onEdit(order)}>Wijzig</button>}
-      warning={remarks || mailErrors.length ? <>{remarks && <p>Let op: {remarks}</p>}{mailErrors.map((message, index) => <p key={index}>{message}</p>)}</> : undefined}
+      warning={order.delivery || remarks || mailErrors.length ? <>{order.delivery && <p><strong>Bezorgadres:</strong> {storeLetterDeliveryAddress(order.delivery)}</p>}{remarks && <p>Let op: {remarks}</p>}{mailErrors.map((message, index) => <p key={index}>{message}</p>)}</> : undefined}
     >
       <div className={listStyles.detailGrid}>
         <div>
@@ -521,14 +524,14 @@ function OrderRow({
           {order.customerEmail && <p><a href={`mailto:${order.customerEmail}`}>{order.customerEmail}</a></p>}
           {order.phone && <p><a href={`tel:${order.phone}`}>{order.phone}</a></p>}
           <p>Totaal {formatMoney(order.totalCents)} · betaald {formatMoney(paidAmount)} · open {formatMoney(openAmount)}</p>
-          <p className={listStyles.muted}>Afrekenen bij afhalen in Bake-it.</p>
+          <p className={listStyles.muted}>{order.delivery ? `Bezorgkosten ${formatMoney(order.delivery.feeCents)} inbegrepen. Regel een openstaand bedrag vóór bezorging in Bake-it.` : "Afrekenen bij afhalen in Bake-it."}</p>
           {extraLines.filter((line) => typeof line === "string" && !/^(E-mail|Telefoon|Winkel):/.test(line)).map((line, index) => <p className={listStyles.muted} key={index}>{line}</p>)}
           {isDone && <p className={listStyles.muted}>Productie klaar: {doneAtLabel || "datum onbekend"}</p>}
         </div>
       </div>
       <LetterOrderHistory order={order} />
       <div className={listStyles.detailActions}>
-        {order.status !== "geannuleerd" && <button type="button" className={isPickedUp ? listStyles.button : listStyles.primary} disabled={updatingId === order.id} onClick={() => onTogglePickedUp(order)}>{updatingId === order.id ? "Bezig…" : isPickedUp ? "Ophalen terugdraaien" : openAmount === 0 ? "Meegegeven" : "Open bedrag afrekenen & meegeven"}</button>}
+        {order.status !== "geannuleerd" && <button type="button" className={isPickedUp ? listStyles.button : listStyles.primary} disabled={updatingId === order.id} onClick={() => onTogglePickedUp(order)}>{updatingId === order.id ? "Bezig…" : isPickedUp ? order.delivery ? "Bezorging terugdraaien" : "Ophalen terugdraaien" : order.delivery ? openAmount === 0 ? "Bezorgd" : "Open bedrag afrekenen & bezorgd" : openAmount === 0 ? "Meegegeven" : "Open bedrag afrekenen & meegeven"}</button>}
         <button type="button" className={`${listStyles.quiet} ${listStyles.danger}`} disabled={updatingId === `${order.id}-delete`} onClick={() => onDelete(order)}>{updatingId === `${order.id}-delete` ? "Bezig…" : "Bestelling verwijderen"}</button>
       </div>
     </LetterOrderCard>;
@@ -544,6 +547,7 @@ function OrderRow({
           : "border-[#e4ded5] bg-white"
       }`}
     >
+      {order.delivery && <p className={listStyles.deliveryBadge}>BEZORGEN · 10:00–14:00 uur · {storeLetterDeliveryAddress(order.delivery)}</p>}
       <div className="grid gap-3 lg:grid-cols-[9rem_minmax(0,1fr)_15rem]">
         <div
           className={`border-l-4 pl-2 ${
@@ -555,7 +559,7 @@ function OrderRow({
           }`}
         >
           <p className="text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#8b8278]">
-            Ophaaldatum
+            {order.delivery ? "Bezorgdatum" : "Ophaaldatum"}
           </p>
           <p className="text-base font-black text-[#1a1815]">
             {formatDate(order.pickupDate)}
@@ -667,7 +671,7 @@ function OrderRow({
                 : "bg-[#24551d] text-white"
             }`}
           >
-            {updatingId === order.id ? "..." : isPickedUp ? "Ophalen terugdraaien" : openAmount === 0 ? "Meegegeven" : "Open bedrag afrekenen & meegeven"}
+            {updatingId === order.id ? "..." : isPickedUp ? order.delivery ? "Bezorging terugdraaien" : "Ophalen terugdraaien" : order.delivery ? openAmount === 0 ? "Bezorgd" : "Open bedrag afrekenen & bezorgd" : openAmount === 0 ? "Meegegeven" : "Open bedrag afrekenen & meegeven"}
           </button>}
           <button
             type="button"
@@ -1249,14 +1253,17 @@ export default function SinterklaasLettersClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year]);
 
+  const [deliveryFilter, setDeliveryFilter] = useState("");
+
   const visibleOrders = useMemo(() => {
     const sourceOrders = mode === "winkel"
       ? orders.filter((order) => order.source === "winkel" && canViewStoreLetterOrder(storeScope, order) && (!selectedShop || letterOrderShop(order) === selectedShop))
       : orders;
+    const filtered = sourceOrders.filter(order => !deliveryFilter || (deliveryFilter === "bezorgen" ? Boolean(order.delivery) : !order.delivery));
     const term = search.trim().toLocaleLowerCase("nl-NL");
-    if (!term) return sourceOrders;
+    if (!term) return filtered;
 
-    return sourceOrders.filter((order) =>
+    return filtered.filter((order) =>
       [
         order.customerName,
         order.code,
@@ -1265,6 +1272,7 @@ export default function SinterklaasLettersClient({
         order.sourceKey,
         order.pickupDate,
         order.pickupLocation,
+        order.delivery ? `bezorgen bezorging ${storeLetterDeliveryAddress(order.delivery)}` : "afhalen",
         order.shop,
         order.lines.map(lineLabel).join(" "),
       ]
@@ -1272,7 +1280,7 @@ export default function SinterklaasLettersClient({
         .toLocaleLowerCase("nl-NL")
         .includes(term)
     );
-  }, [mode, orders, search, selectedShop, storeScope]);
+  }, [mode, orders, search, selectedShop, storeScope, deliveryFilter]);
 
   const visibleB2BOrders = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("nl-NL");
@@ -1333,10 +1341,10 @@ export default function SinterklaasLettersClient({
     const pickedUp = order.pickedUp || order.status === "opgehaald";
     const openAmount = openAmountCents(order);
     const confirmed = window.confirm(pickedUp
-      ? `Ophalen van ${order.customerName} terugdraaien? De betaling in Bake-it wordt hierdoor niet aangepast.`
+      ? `${order.delivery ? "Bezorging" : "Ophalen"} van ${order.customerName} terugdraaien? De betaling in Bake-it wordt hierdoor niet aangepast.`
       : isFullyPaid(order)
-        ? `Is bestelling ${order.code} van ${order.customerName} aan de klant meegegeven? De betaling staat al als gedaan gemarkeerd.`
-        : `Staat het openstaande bedrag van ${formatMoney(openAmount)} in Bake-it als afgerekend en is bestelling ${order.code} meegegeven?`);
+        ? `Is bestelling ${order.code} van ${order.customerName} ${order.delivery ? "op het bezorgadres afgeleverd" : "aan de klant meegegeven"}? De betaling staat al als gedaan gemarkeerd.`
+        : `Staat het openstaande bedrag van ${formatMoney(openAmount)} in Bake-it als afgerekend en is bestelling ${order.code} ${order.delivery ? "op het bezorgadres afgeleverd" : "meegegeven"}?`);
     if (!confirmed) return;
 
     setUpdatingId(order.id);
@@ -1517,14 +1525,15 @@ export default function SinterklaasLettersClient({
     const outstanding = visibleOrders.filter((order) => !order.pickedUp && order.status !== "opgehaald" && order.status !== "geannuleerd").reduce((total, order) => total + openAmountCents(order), 0);
     return <div className={listStyles.page}>
       <LetterOrdersHeader channel="winkel" showOnline={showOnline} action={<button type="button" className={listStyles.primary} disabled={storeScope !== null && !storeScope.length} onClick={openNewOrderDialog}>+ Nieuwe winkelbestelling</button>} />
-      <div className={listStyles.meta}><span>Bestellingen <b>{visibleOrders.length}</b></span><span>Letters <b>{visibleOrders.reduce((total, order) => total + totalPieces(order), 0)}</b></span><span>Nog af te rekenen <b>{formatMoney(outstanding)}</b></span></div>
+      <div className={listStyles.meta}><span>Bestellingen <b>{visibleOrders.length}</b></span><span>Letters <b>{visibleOrders.reduce((total, order) => total + totalPieces(order), 0)}</b></span><span>Nog bezorgen <b>{visibleOrders.filter(order => order.delivery && !order.pickedUp && !["opgehaald","geannuleerd"].includes(order.status)).length}</b></span><span>Nog af te rekenen <b>{formatMoney(outstanding)}</b></span></div>
       <div className={listStyles.tools}>
         <input className={listStyles.search} aria-label="Zoek winkelbestellingen" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Zoek klant, ordernummer of letter…" />
-        {storeScope?.length === 1 ? <span className={listStyles.scope}>Afhaalwinkel: <b>{letterShopName(storeScope[0])}</b></span> : <select aria-label="Filter op afhaalwinkel" value={selectedShop} onChange={(event) => setSelectedShop(event.target.value)}><option value="">{storeScope === null || storeScope.length === LETTER_ORDER_SHOPS.length ? "Alle winkels" : "Mijn winkels"}</option>{LETTER_ORDER_SHOPS.filter((shop) => storeScope === null || storeScope.includes(shop.id)).map((shop) => <option key={shop.id} value={shop.id}>{shop.name}</option>)}</select>}
+        {storeScope?.length === 1 ? <span className={listStyles.scope}>Winkel: <b>{letterShopName(storeScope[0])}</b></span> : <select aria-label="Filter op afhaalwinkel" value={selectedShop} onChange={(event) => setSelectedShop(event.target.value)}><option value="">{storeScope === null || storeScope.length === LETTER_ORDER_SHOPS.length ? "Alle winkels" : "Mijn winkels"}</option>{LETTER_ORDER_SHOPS.filter((shop) => storeScope === null || storeScope.includes(shop.id)).map((shop) => <option key={shop.id} value={shop.id}>{shop.name}</option>)}</select>}
+        <select aria-label="Filter op levering" value={deliveryFilter} onChange={event => setDeliveryFilter(event.target.value)}><option value="">Afhalen en bezorgen</option><option value="bezorgen">Bezorgen</option><option value="afhalen">Afhalen</option></select>
         <input className={listStyles.year} aria-label="Jaar winkelbestellingen" inputMode="numeric" value={year} onChange={(event) => setYear(event.target.value)} />
         <button type="button" className={listStyles.button} onClick={() => void loadOrders(year, search)}>↻ Ververs</button>
       </div>
-      <p className={listStyles.helper}>Met e-mailadres ontvangt de klant een bestelbevestiging en de dag vóór afhalen een herinnering.</p>
+      <p className={listStyles.helper}>Bezorgorders zijn blauw gemarkeerd · bezorgen tussen 10:00 en 14:00. De klant ontvangt met e-mailadres een bevestiging en herinnering; info@strik-patisserie.nl krijgt de dag vóór bezorgen een overzicht.</p>
       {storeScope !== null && !storeScope.length && <p role="alert" className={listStyles.error}>Aan dit account is nog geen winkel gekoppeld. Vraag beheer om dit in te stellen.</p>}
       {error && <p role="alert" className={listStyles.error}>{error}</p>}
       {notice && <p role="status" className={listStyles.notice}>{notice}</p>}
@@ -1536,7 +1545,7 @@ export default function SinterklaasLettersClient({
         </section>)}
         {!loading && !visibleOrders.length && <p className={listStyles.empty}>Nog geen winkelbestellingen gevonden.</p>}
       </div>
-      <p className={listStyles.footer}><span>{visibleOrders.length} {visibleOrders.length === 1 ? "bestelling" : "bestellingen"} zichtbaar</span><span>Gesorteerd op ophaaldatum · bedragen incl. btw</span></p>
+      <p className={listStyles.footer}><span>{visibleOrders.length} {visibleOrders.length === 1 ? "bestelling" : "bestellingen"} zichtbaar</span><span>Gesorteerd op leverdatum · bedragen incl. btw</span></p>
       {formOpen && <LetterOrderDialog order={editingOrder} mode={mode} defaultShop={letterShopName(selectedShop) || defaultShop} storeScope={storeScope} pickupDates={pickupDates} pickupDeadlines={pickupDeadlines} onClose={closeOrderDialog} onSaved={handleSavedOrder} />}
     </div>;
   }

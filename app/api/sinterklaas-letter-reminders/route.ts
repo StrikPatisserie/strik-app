@@ -14,8 +14,13 @@ export async function GET(request: Request) {
 
   try {
     const response = await fetch(url, { method: "POST", cache: "no-store", signal: AbortSignal.timeout(30000) });
-    if (!response.ok) return Response.json({ message: "Ophaalherinneringen konden niet worden verstuurd.", wordpressStatus: response.status }, { status: 502 });
-    return Response.json(await response.json());
+    if (!response.ok) return Response.json({ message: "Letterherinneringen konden niet worden verstuurd.", wordpressStatus: response.status }, { status: 502 });
+    const result = await response.json();
+    const deliveryState = result.delivery?.state;
+    if (result.failed > 0 || (deliveryState && !["empty", "sent", "already-sent"].includes(deliveryState))) {
+      return Response.json({ ...result, message: "Niet alle herinneringen zijn bevestigd. Controleer de mailstatus vóór opnieuw versturen." }, { status: 502 });
+    }
+    return Response.json(result);
   } catch {
     return Response.json({ message: "WordPress-mail is tijdelijk niet bereikbaar." }, { status: 502 });
   }

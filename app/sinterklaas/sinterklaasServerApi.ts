@@ -202,6 +202,14 @@ export async function proxySinterklaasMutation(
       let params: Record<string, unknown>;
       try { params = JSON.parse(body); } catch { return jsonError("Geen geldige bestelling ontvangen."); }
       if (!params || typeof params !== "object" || Array.isArray(params)) return jsonError("Geen geldige bestelling ontvangen.");
+      if (params.delivery) {
+        const capabilityUrl = new URL(request.url); capabilityUrl.search = "";
+        const capabilityResponse = await fetch(getWordPressUrl(endpoint, capabilityUrl.toString()), { cache: "no-store", signal: AbortSignal.timeout(15000) });
+        const capability = await readWordPressResponse(capabilityResponse);
+        if (!capabilityResponse.ok || !capability || typeof capability !== "object" || !("features" in capability) || !capability.features || typeof capability.features !== "object" || !("storeLetterDelivery" in capability.features) || capability.features.storeLetterDelivery !== true) {
+          return jsonError("Bezorgen is nog niet beschikbaar in de bestelopslag. De bestelling is niet opgeslagen; probeer later opnieuw.", 503);
+        }
+      }
       // Identity always comes from the authenticated server session, never browser input.
       delete params.createdBy; delete params.updatedBy; delete params.audit;
       params._actor = { id: profile.id, name: profile.full_name?.trim() || profile.email };
