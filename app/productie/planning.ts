@@ -416,8 +416,9 @@ export function validProductionRequests(value:unknown):value is ProductionReques
  * their sequence when a recipe is edited. */
 export const PRODUCTION_STEP_OPTIONS = [
   "Deeg zetten", "Beslag maken", "Produceren", "Interieur maken",
-  "Interieur vullen", "Vullen", "Storten", "Spuiten", "Opspuiten", "Opspuiten & aanzetten", "Doorhalen en afwerken", "Rollen & afmaken", "Bakken", "Afbakken",
-  "Lossen", "Plakken", "Doorhalen", "Afwerken", "Product maken & afbakken",
+  "Interieur vullen", "Inslaan", "Vullen", "Storten", "Gieten", "Spuiten", "Opspuiten", "Afspuiten", "Opspuiten & aanzetten",
+  "Doorhalen en afwerken", "Rollen & afmaken", "Bakken", "Afbakken", "Lossen", "Plakken", "Kapsel plakken",
+  "Snijden", "Plaat snijden", "Inrollen", "Doorhalen", "Afwerken", "Product maken & afbakken",
 ] as const;
 export function validProductionSteps(value: unknown): value is string[] {
   return Array.isArray(value) && value.length > 0 && value.length <= PRODUCTION_STEP_OPTIONS.length

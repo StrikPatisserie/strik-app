@@ -327,3 +327,36 @@ test('Steventje stages keep monthly sheets available for weekly filling and fini
   assert.equal(state.tasks.filter(row => row.recordsOutput && row.status === 'done').reduce((sum, row) => sum + row.completedQuantity, 0), 126);
   assert(planning.validProductionStages(state));
 });
+
+
+test('bakery sheet operations carry partly finished cream pastries forward without counting them twice', () => {
+  const id = 'recipe-new-1782996258758';
+  const catalog = [{ ...recipe(id, 100), productionSteps: ['Inslaan', 'Doorhalen', 'Afwerken'] }];
+  let state = recipes.buildRecipePlan(stateFor(catalog), catalog, command('cream', id, 100, 'Inslaan'));
+  state = finish(state, 'cream');
+  state = recipes.buildRecipePlan(state, catalog, command('coat', id, 60, 'Doorhalen', [{ taskId: 'cream', quantity: 60 }]));
+  state = finish(state, 'coat');
+  state = recipes.buildRecipePlan(state, catalog, command('decorate', id, 40, 'Afwerken', [{ taskId: 'coat', quantity: 40 }]));
+  state = finish(state, 'decorate');
+  assert.equal(planning.remainingParty(state, task(state, 'cream')), 40);
+  assert.equal(planning.remainingParty(state, task(state, 'coat')), 20);
+  assert.equal(state.tasks.filter(row => row.recordsOutput).reduce((sum, row) => sum + row.completedQuantity, 0), 40);
+  assert(planning.validProductionStages(state));
+});
+
+test('a changed bakery recipe reaches the planner while existing party steps stay intact', () => {
+  const id = 'cake';
+  const original = [{ ...recipe(id, 100), productionSteps: ['Opspuiten', 'Afwerken'] }];
+  let state = recipes.buildRecipePlan(stateFor(original), original, command('original', id, 100, 'Opspuiten'));
+  state = finish(state, 'original');
+  const savedTasks = JSON.stringify(state.tasks);
+  const changed = [{ ...recipe(id, 100), productionSteps: ['Inslaan', 'Doorhalen', 'Afwerken'] }];
+  state = workspace.syncRecipeCatalog(state, { recipes: [], manualProductionPlanningItems: [] }, changed);
+  assert.equal(JSON.stringify(state.tasks), savedTasks);
+  assert.equal(planning.productionRoute(state.items[0]).steps.join('|'), 'Inslaan|Doorhalen|Afwerken');
+  assert.equal(planning.productionRoute(state.items[0], task(state, 'original')).steps.join('|'), 'Opspuiten|Afwerken');
+  state = recipes.buildRecipePlan(state, changed, command('finish-original', id, 40, 'Afwerken', [{ taskId: 'original', quantity: 40 }]));
+  state = finish(state, 'finish-original');
+  assert.equal(task(state, 'finish-original').productionStage.steps.join('|'), 'Opspuiten|Afwerken');
+  assert(planning.validProductionStages(state));
+});
