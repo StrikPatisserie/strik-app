@@ -1,3 +1,4 @@
+import { getActiveSeason } from "@/app/feestdagen/server";
 import { loadReadyProductionRecipients } from "../productie/productionReadiness.server";
 import { createClient } from "@supabase/supabase-js";
 import { requireAdminProfile } from "@/app/lib/auth/session";
@@ -11,13 +12,15 @@ export const dynamic = "force-dynamic";
 
 export default async function OnlineLetterOrdersPage() {
   await requireAdminProfile();
+  const edition=await getActiveSeason("sint");
+  const year=edition?.year || new Date().getFullYear();
   const { url } = requireSupabasePublicConfig();
   const supabase = createClient(url, requireSupabaseServiceRoleKey(), {
     auth: { autoRefreshToken: false, persistSession: false },
   });
   const { data, error } = await supabase.from("letter_orders")
     .select("id,revision,order_number,customer_name,customer_email,phone,notes,requested_date,pickup_location,gift_wrap,gift_wrap_price_cents,fulfillment_status,created_at,letter_order_items(id,product_id,quantity,logo,logo_storage_path,unit_price_cents,logo_price_cents,letter_products(letter,flavour,size,style))")
-    .eq("channel", "ONLINE").order("created_at", { ascending: false }).limit(100);
+    .eq("channel", "ONLINE").gte("requested_date",`${year}-01-01`).lt("requested_date",`${year+1}-01-01`).order("created_at", { ascending: false }).limit(100);
   const orders = (data || []) as unknown as OnlineLetterOrder[];
   if (orders.length) {
     const { data: states, error: stateError } = await supabase.rpc("lettershop_order_edit_states", { p_order_ids: orders.map(order => order.id) });

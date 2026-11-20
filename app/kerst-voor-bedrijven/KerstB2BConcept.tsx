@@ -42,7 +42,7 @@ function VatToggle({ includeVat, onChange }: Readonly<{ includeVat: boolean; onC
   </div>;
 }
 
-export default function KerstB2BConcept() {
+export default function KerstB2BConcept({seasonYear = new Date().getFullYear()}: {seasonYear?:number}) {
   const [includeVat, setIncludeVat] = useState(true);
   const [choices, setChoices] = useState<Record<string, string>>({});
   const [singles, setSingles] = useState<Record<string, number>>({});
@@ -86,7 +86,7 @@ export default function KerstB2BConcept() {
   function productName(id: string, name: string) { return id === "krans-puur" && vegan ? `${name} · vegan uitvoering` : name; }
 
   const offerText = [
-    "Beste Strik Patisserie,", "", "Graag ontvang ik een vrijblijvende offerte voor Kerst 2026.", "",
+    "Beste Strik Patisserie,", "", `Graag ontvang ik een vrijblijvende offerte voor Kerst ${seasonYear}.`, "",
     `Bedrijf: ${contact.company.trim()}`, `Contactpersoon: ${contact.contactName.trim()}`, `E-mail: ${contact.email.trim()}`,
     ...(contact.phone.trim() ? [`Telefoon: ${contact.phone.trim()}`] : []), "",
     ...(selectedSingles.length ? ["LOSSE KERSTCADEAUS", ...selectedSingles.flatMap(({ product, count }) => [
@@ -136,7 +136,7 @@ export default function KerstB2BConcept() {
         </nav>
         <div className={styles.heroContent}>
           <div>
-            <p className={styles.eyebrow}>Zakelijk genieten · Kerst 2026</p>
+            <p className={styles.eyebrow}>Zakelijk genieten · Kerst {seasonYear}</p>
             <h1>KERST <span>Met een Strik</span></h1>
             <p className={styles.intro}>Een klein gebaar. Een groots bedankje.<br />Ambachtelijke cadeaus voor collega&apos;s en relaties.</p>
             <a href="#kerstpakket" className={styles.heroLink}>Stel jouw kerstpakket samen <span aria-hidden="true">↘</span></a>
@@ -237,6 +237,6 @@ export default function KerstB2BConcept() {
         <p className={styles.smallNote}>Je aanvraag komt rechtstreeks bij Strik binnen. Een aanvraag is vrijblijvend en nog geen bestelling.</p>
       </form>}
     </FolderDialog>}
-    <BusinessFolderSeasonIntro />
+    <BusinessFolderSeasonIntro seasonYear={seasonYear} />
   </main>;
 }

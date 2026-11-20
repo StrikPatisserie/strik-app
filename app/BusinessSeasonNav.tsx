@@ -15,6 +15,7 @@ export default function BusinessSeasonNav({
       className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border bg-white/85 p-2 text-sm font-bold text-[#49342d]"
       style={{ borderColor: colors.border, boxShadow: `inset 3px 0 0 ${colors.accent}` }}
     >
+      <Link href="/feestdagen" className="px-2 text-xs">← Feestdagen</Link>
       <span className="px-2 text-xs text-[#7b7268]">
         {section === "home" ? "Menu" : section === "orders" ? "Bestellingen" : "Nieuwsbrief"}
       </span>

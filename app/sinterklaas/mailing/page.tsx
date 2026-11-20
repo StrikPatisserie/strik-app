@@ -1,7 +1,2 @@
-import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
-import SinterklaasMailingClient from "./SinterklaasMailingClient";
-import BusinessSeasonNav from "../../BusinessSeasonNav";
-
-export default function SinterklaasMailingPage() {
-  return <StrikShell wide><StrikPageHeader title="Sinterklaasnieuwsbrief" description="Eén contactenlijst voor Sint en Kerst" icon={strikIcons.newsManagement} /><BusinessSeasonNav season="sint" section="mailing" /><SinterklaasMailingClient /></StrikShell>;
-}
+import {redirect} from "next/navigation";
+export default async function Page({searchParams}:{searchParams:Promise<{q?:string;jaar?:string}>}){const q=await searchParams;const query=new URLSearchParams({seizoen:"sint",...(q.q?{q:q.q}:{}),...(q.jaar?{jaar:q.jaar}:{})});redirect(`/feestdagen/nieuwsbrief?${query}`);}

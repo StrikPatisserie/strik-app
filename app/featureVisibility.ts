@@ -16,17 +16,6 @@ export const defaultFeatureVisibility: FeatureVisibilitySettings = {
 
 export const SEASONAL_NAVIGATION_SETTINGS = [
   { key: "ijsNavigation", href: "/ijs", title: "IJssalons menu" },
-  {
-    key: "vierdaagseNavigation",
-    href: "/vierdaagse",
-    title: "Vierdaagse menu",
-  },
-  {
-    key: "sinterklaasNavigation",
-    href: "/sinterklaas",
-    title: "Sinterklaas menu",
-  },
-  { key: "kerstNavigation", href: "/kerst", title: "Kerst menu" },
 ] as const satisfies readonly {
   key: keyof FeatureVisibilitySettings;
   href: string;

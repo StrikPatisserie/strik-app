@@ -1,3 +1,6 @@
+import { getSeasonArchive } from "@/app/feestdagen/server";
+import { HOLIDAYS } from "@/app/feestdagen/model";
+import SeasonArchivePanel from "@/app/feestdagen/SeasonArchivePanel";
 import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
@@ -262,6 +265,8 @@ export default async function ManagementHolidayEvaluationPage({
       getEvaluationRecipeLinks(holiday.slug),
       getEvaluationRecipeOptions(),
     ]);
+  const seasonDefinition = HOLIDAYS.find(h => `${h.slug}-${holiday.year}` === holiday.slug);
+  const seasonArchive = seasonDefinition ? await getSeasonArchive(seasonDefinition.id, Number(holiday.year)) : null;
   const pageTitle = holiday.title;
   const recipeSummary = recipeFinancialSummary(recipeLinks);
   const recipeMargin =
@@ -346,6 +351,7 @@ export default async function ManagementHolidayEvaluationPage({
           recipeOptions={recipeOptions}
         />
 
+        {seasonArchive && <SeasonArchivePanel archive={seasonArchive} />}
         <EvaluationDocumentEditor slug={holiday.slug} document={document} />
 
         {holiday.files.length || holiday.group === "feestdag" ? (

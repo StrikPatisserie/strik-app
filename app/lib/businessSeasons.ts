@@ -9,8 +9,8 @@ export const businessSeasonColors = {
 } as const;
 
 export const businessSeasons = {
-  sint: { name: "Sinterklaas", shortName: "Sint", home: "/sinterklaas/bedrijven", orders: "/sinterklaas/b2b", mailing: "/sinterklaas/mailing", folder: "https://app.strik-patisserie.nl/sint-voor-bedrijven" },
-  kerst: { name: "Kerst", shortName: "Kerst", home: "/kerst", orders: "/kerst/b2b", mailing: "/kerst/mailing", folder: "https://app.strik-patisserie.nl/kerst-voor-bedrijven" },
+  sint: { name: "Sinterklaas", shortName: "Sint", home: "/feestdagen/sint", orders: "/feestdagen/bedrijven?seizoen=sint", mailing: "/feestdagen/nieuwsbrief?seizoen=sint", folder: "https://app.strik-patisserie.nl/sint-voor-bedrijven" },
+  kerst: { name: "Kerst", shortName: "Kerst", home: "/feestdagen/kerst", orders: "/feestdagen/bedrijven?seizoen=kerst", mailing: "/feestdagen/nieuwsbrief?seizoen=kerst", folder: "https://app.strik-patisserie.nl/kerst-voor-bedrijven" },
 } as const;
 
 export function orderBelongsToSeason(order: { season?: string }, season: BusinessSeason) {

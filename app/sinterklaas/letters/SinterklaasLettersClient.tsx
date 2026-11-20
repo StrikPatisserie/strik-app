@@ -1200,6 +1200,7 @@ export default function SinterklaasLettersClient({
   pickupDeadlines,
   showOnline = true,
   storeScope = null,
+  initialYear,
 }: Readonly<{
   mode: Mode;
   defaultShop?: string;
@@ -1207,8 +1208,9 @@ export default function SinterklaasLettersClient({
   pickupDeadlines?: Record<string, string>;
   showOnline?: boolean;
   storeScope?: LetterStoreScope;
+  initialYear?: string;
 }>) {
-  const [year, setYear] = useState(() => currentYear());
+  const [year, setYear] = useState(() => initialYear || currentYear());
   const [search, setSearch] = useState("");
   const [selectedShop, setSelectedShop] = useState(storeScope?.length === 1 ? storeScope[0] : "");
   const [orders, setOrders] = useState<ChocolateLetterOrder[]>([]);
@@ -1220,7 +1222,7 @@ export default function SinterklaasLettersClient({
   const [formOpen, setFormOpen] = useState(false);
   const [onlineImportOpen, setOnlineImportOpen] = useState(false);
   const [onlineImportText, setOnlineImportText] = useState("");
-  const [onlineImportYear, setOnlineImportYear] = useState(() => currentYear());
+  const [onlineImportYear, setOnlineImportYear] = useState(() => initialYear || currentYear());
   const [onlineImporting, setOnlineImporting] = useState(false);
   const [onlineImportMessage, setOnlineImportMessage] = useState("");
   const [editingOrder, setEditingOrder] = useState<ChocolateLetterOrder | null>(

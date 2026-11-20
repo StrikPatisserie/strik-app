@@ -19,6 +19,7 @@ function server(who, initial = [row('own', 'Heyendaal'), row('foreign', 'Lent'),
   let records = structuredClone(initial);
   const calls = [];
   const loaded = load('app/sinterklaas/sinterklaasServerApi.ts', {
+    '@/app/feestdagen/server': {checkSeasonMutation:async()=>{}},
     'server-only': {}, 'next/server': {NextResponse: {json: (data, init) => Response.json(data, init)}},
     '../lib/auth/access': access, '../lib/auth/session': {getCurrentProfile: async () => who}, './letterStoreAccess': stores,
     './sinterklaasApi': load('app/sinterklaas/sinterklaasApi.ts', {'./b2bLetterLines':load('app/sinterklaas/b2bLetterLines.ts')}),

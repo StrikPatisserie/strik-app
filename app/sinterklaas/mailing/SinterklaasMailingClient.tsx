@@ -110,8 +110,8 @@ const templateConfig: Record<SendKind, TemplateConfig> = {
   },
 };
 
-async function mailingApi(selection: FolderSelection, method = "GET", body?: unknown) {
-  const response = await fetch(`/api/sinterklaas-mailing?year=${year}&season=${selection}`, {
+async function mailingApi(selection: FolderSelection, method = "GET", body?: unknown, selectedYear = year) {
+  const response = await fetch(`/api/sinterklaas-mailing?year=${selectedYear}&season=${selection}`, {
     method,
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
@@ -228,11 +228,12 @@ function EmailPreview({ subject, body, folderUrl, selection, kerstFolderUrl }: R
   );
 }
 
-export default function SinterklaasMailingClient({ season = "sint" }: { season?: BusinessSeason }) {
+export default function SinterklaasMailingClient({ season = "sint", initialYear }: { season?: BusinessSeason; initialYear?: string }) {
+  const year = initialYear || String(new Date().getFullYear());
   const [selection, setSelection] = useState<FolderSelection>(season);
-  const [campaign, setCampaign] = useState<Campaign>(() => defaultsFor(season));
+  const [campaign, setCampaign] = useState<Campaign>(() => ({ ...defaultsFor(season), year }));
   const [loaded, setLoaded] = useState(false);
-  const api = useCallback((method = "GET", body?: unknown) => mailingApi(selection, method, body), [selection]);
+  const api = useCallback((method = "GET", body?: unknown) => mailingApi(selection, method, body, year), [selection, year]);
   const [message, setMessage] = useState("Mailing laden...");
   const [saving, setSaving] = useState(false);
   const [sendProgress, setSendProgress] = useState(0);
@@ -257,11 +258,11 @@ export default function SinterklaasMailingClient({ season = "sint" }: { season?:
   useEffect(() => {
     let active = true;
     setLoaded(false); setSelected([]); setPending(null); setExpanded("");
-    setCampaign(defaultsFor(selection)); setMessage("Mailing laden...");
+    setCampaign({ ...defaultsFor(selection), year }); setMessage("Mailing laden...");
     void api()
       .then(async (data) => {
         if (!active) return;
-        const { campaign: loaded, migrated } = migrateCampaign(data, defaultsFor(selection));
+        const { campaign: loaded, migrated } = migrateCampaign(data, { ...defaultsFor(selection), year });
         setCampaign(loaded);
         if (!data.needsImport && !migrated) {
           setMessage(""); setLoaded(true);
@@ -276,7 +277,7 @@ export default function SinterklaasMailingClient({ season = "sint" }: { season?:
       })
       .catch((error) => { if (active) setMessage(error instanceof Error ? error.message : "Mailing laden mislukt."); });
     return () => { active = false; };
-  }, [api, selection]);
+  }, [api, selection, year]);
 
   const patch = (value: Partial<Campaign>) => setCampaign((current) => ({ ...current, ...value }));
   const patchCustomer = (id: string, value: Partial<Customer>) => patch({ customers: campaign.customers.map((customer) => customer.id === id ? { ...customer, ...value } : customer) });

@@ -42,21 +42,7 @@ const baseSections = [
     subtitle: "Overzicht en acties",
     icon: strikIcons.management,
   },
-  {
-    href: "/vierdaagse",
-    title: "Vierdaagse",
-    subtitle: "Kraam, terras en bediening",
-    icon: strikIcons.strikAgenda,
-    variant: "vierdaagse" as const,
-  },
-  {
-    href: "/sinterklaas",
-    title: "Sinterklaas",
-    subtitle: "Letters en B2B",
-    icon: strikIcons.sinterklaas,
-    variant: "sinterklaas" as const,
-  },
-  { href: "/kerst", title: "Kerst", subtitle: "B2B en nieuwsbrief", icon: strikIcons.kerst, variant: "kerst" as const },
+  { href: "/feestdagen", title: "Feestdagen", subtitle: "Actieve seizoenen, bestellingen en evaluaties", icon: strikIcons.strikAgenda, variant: "feestdagen" as "feestdagen" | "vierdaagse" | "sinterklaas" | "kerst" },
 ];
 
 export const dynamic = "force-dynamic";

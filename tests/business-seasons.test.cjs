@@ -36,8 +36,8 @@ test('Sint and Christmas share one order identity, mixed orders appear in both, 
   assert.equal(seasons.orderBelongsToSeason({}, 'sint'), true);
   const nav = load('app/BusinessSeasonNav.tsx', { './lib/businessSeasons': seasons });
   const links = collect(nav.default({ season: 'kerst' }), n => n.type === 'next/link');
-  assert.deepEqual(links.map(n => n.props.href), ['/sinterklaas/b2b', '/kerst/b2b', '/kerst/mailing']);
-  assert.equal(links.find(n => n.props['aria-current'] === 'page').props.href, '/kerst/b2b');
+  assert.deepEqual(links.map(n => n.props.href), ['/feestdagen','/feestdagen/bedrijven?seizoen=sint','/feestdagen/bedrijven?seizoen=kerst','/feestdagen/nieuwsbrief?seizoen=kerst']);
+  assert.equal(links.find(n => n.props['aria-current'] === 'page').props.href, '/feestdagen/bedrijven?seizoen=kerst');
 });
 test('Christmas entry uses the full Christmas catalogue and the published VAT/staffel prices, without changing Sint', () => {
   assert.equal(b2b.formStateFromOrder(null, 'kerst').department, 'bakkerij');

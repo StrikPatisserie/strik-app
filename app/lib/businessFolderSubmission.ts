@@ -19,7 +19,7 @@ export async function sendBusinessFolderQuote(payload: unknown): Promise<string>
       body: JSON.stringify(payload), signal: controller.signal,
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok || data.ok !== true || typeof data.reference !== "string" || !/^(SINT|KERST)26-[A-F0-9]{12}$/.test(data.reference)) {
+    if (!response.ok || data.ok !== true || typeof data.reference !== "string" || !/^(SINT|KERST)\d{2}-[A-F0-9]{12}$/.test(data.reference)) {
       throw new Error(data.message || "De ontvangst van je aanvraag is nog niet bevestigd. Probeer opnieuw; je ingevulde aanvraag blijft staan.");
     }
     const quote = payload as { season?: unknown; requestId?: unknown } | null;

@@ -130,7 +130,7 @@ function strik_sinterklaas_save_orders($option_name, $orders) {
         );
     });
 
-    $orders = array_slice($orders, 0, STRIK_SINTERKLAAS_MAX_ORDERS, true);
+    // Preserve all years. Completed editions also receive an immutable app archive.
     update_option($option_name, $orders, false);
 }
 }
@@ -694,7 +694,7 @@ function strik_sinterklaas_send_letter_emails($order, $existing = array(), $inte
 function strik_sinterklaas_delivery_digest_orders($orders, $tomorrow) {
     $result = array();
     foreach ($orders as $order) {
-        if (!is_array($order) || empty($order['delivery']) || (isset($order['source']) && $order['source'] !== 'winkel')) continue;
+        if (!is_array($order) || !strik_holiday_order_open($order,'letters') || empty($order['delivery']) || (isset($order['source']) && $order['source'] !== 'winkel')) continue;
         if (!isset($order['pickupDate']) || $order['pickupDate'] !== $tomorrow || !empty($order['pickedUp']) || (isset($order['status']) && in_array($order['status'], array('opgehaald', 'geannuleerd'), true))) continue;
         $result[$order['id']] = $order;
     }
@@ -753,6 +753,7 @@ function strik_sinterklaas_send_letter_reminders_unlocked($request) {
 
     foreach ($orders as $key => $order) {
         if (!is_array($order)) continue;
+        if (!strik_holiday_order_open($order, 'letters')) continue;
         if (isset($order['source']) && $order['source'] !== 'winkel') continue;
         if (empty($order['sendCustomerEmail']) || empty($order['customerEmail']) || !is_email($order['customerEmail'])) continue;
         if (!isset($order['pickupDate']) || $order['pickupDate'] !== $tomorrow) continue;
@@ -1029,6 +1030,7 @@ function strik_sinterklaas_letter_save($request, $send_emails = true) {
     return strik_sinterklaas_letters_locked(function () use ($request, $send_emails) { return strik_sinterklaas_letter_save_unlocked($request, $send_emails); });
 }
 function strik_sinterklaas_letter_save_unlocked($request, $send_emails = true) {
+    $season_check = strik_holiday_guard($request, 'letters'); if (is_wp_error($season_check)) return $season_check;
     $params = $request->get_json_params();
     if (!is_array($params)) {
         return new WP_Error('strik_sinterklaas_invalid_json', 'Geen geldige letterbestelling ontvangen.', array('status' => 400));
@@ -1275,6 +1277,7 @@ function strik_business_folder_quote($request) {
     $input = $request->get_json_params();
     if (!is_array($input) || empty($input['order']) || empty($input['snapshot']) || empty($input['quoteText']) || !preg_match('/^[a-f0-9-]{36}$/', isset($input['requestId']) ? $input['requestId'] : '') || !preg_match('/^[a-f0-9]{64}$/', isset($input['payloadHash']) ? $input['payloadHash'] : '')) return new WP_Error('invalid_quote', 'Ongeldige aanvraag.', array('status' => 400));
     return strik_business_b2b_locked(function () use ($input) {
+        if (!strik_holiday_order_open($input['order'],'business')) return new WP_Error('holiday_closed','Dit seizoen is nog niet open voor aanvragen.',array('status'=>409));
         $orders = strik_sinterklaas_get_orders(STRIK_SINTERKLAAS_B2B_OPTION_NAME);
         $id = 'folder-' . $input['requestId'];
         $key = strik_sinterklaas_order_key($id);
@@ -1290,7 +1293,7 @@ function strik_business_folder_quote($request) {
             $meta = array('requestId' => $input['requestId'], 'reference' => strik_sinterklaas_text($input['reference'], 40), 'payloadHash' => $input['payloadHash'], 'receivedAt' => wp_date(DATE_ATOM), 'snapshot' => $input['snapshot'], 'quoteText' => strik_sinterklaas_textarea($input['quoteText'], 50000), 'b2bStoredAt' => '', 'mailState' => 'pending', 'mailSentAt' => '', 'mailError' => '');
             $order = strik_sinterklaas_sanitize_b2b_order(array_merge($input['order'], array('id' => $id, 'status' => 'aanvraag', 'entered' => false, 'productionScheduled' => false, 'productionDone' => false, 'packed' => false, 'delivered' => false)), array('folderQuote' => $meta));
             if (!$order || $order['customerEmail'] === '' || !in_array($order['season'], array('sint', 'kerst'), true)) return new WP_Error('invalid_quote', 'Controleer de aanvraaggegevens.', array('status' => 400));
-            if (count($orders) >= STRIK_SINTERKLAAS_MAX_ORDERS) return new WP_Error('quote_capacity', 'De aanvraag kan nu niet worden opgeslagen.', array('status' => 503));
+            if (count(array_filter($orders,function($o) use ($input) { return isset($o['year']) && (string)$o['year'] === (string)$input['order']['year']; })) >= STRIK_SINTERKLAAS_MAX_ORDERS) return new WP_Error('quote_capacity', 'De aanvraag kan nu niet worden opgeslagen.', array('status' => 503));
             $rate_key = 'strik_quote_rate_' . md5(strtolower($order['customerEmail']));
             $attempts = (int) get_transient($rate_key);
             if ($attempts >= 10) return new WP_Error('quote_rate_limit', 'Te veel aanvragen. Probeer later opnieuw.', array('status' => 429));
@@ -1604,6 +1607,7 @@ function strik_sinterklaas_b2b_save($request) {
     return strik_business_b2b_locked(function () use ($request) { return strik_sinterklaas_b2b_save_unlocked($request); });
 }
 function strik_sinterklaas_b2b_save_unlocked($request) {
+    $season_check = strik_holiday_guard($request, 'business'); if (is_wp_error($season_check)) return $season_check;
     $params = $request->get_json_params();
     if (!is_array($params)) {
         return new WP_Error('strik_sinterklaas_invalid_json', 'Geen geldige B2B-bestelling ontvangen.', array('status' => 400));
@@ -1747,6 +1751,7 @@ function strik_sinterklaas_letter_delete($request) {
     return strik_sinterklaas_letters_locked(function () use ($request) { return strik_sinterklaas_letter_delete_unlocked($request); });
 }
 function strik_sinterklaas_letter_delete_unlocked($request) {
+    $season_check = strik_holiday_guard($request, 'letters'); if (is_wp_error($season_check)) return $season_check;
     return strik_sinterklaas_delete_order($request, STRIK_SINTERKLAAS_LETTERS_OPTION_NAME);
 }
 }
@@ -1756,6 +1761,7 @@ function strik_sinterklaas_b2b_delete($request) {
     return strik_business_b2b_locked(function () use ($request) { return strik_sinterklaas_b2b_delete_unlocked($request); });
 }
 function strik_sinterklaas_b2b_delete_unlocked($request) {
+    $season_check = strik_holiday_guard($request, 'business'); if (is_wp_error($season_check)) return $season_check;
     $id = strik_sinterklaas_request_id($request);
     $params = $request->get_json_params();
     $reason = is_array($params) && isset($params['reason']) ? strik_sinterklaas_text($params['reason'], 40) : '';
@@ -1867,6 +1873,7 @@ function strik_business_b2b_reminders_unlocked($today, $dry_run = false) {
     $orders = strik_sinterklaas_get_orders(STRIK_SINTERKLAAS_B2B_OPTION_NAME);
     $result = array('date' => $today, 'eligible' => 0, 'sent' => 0, 'failed' => 0, 'uncertain' => 0, 'alreadySent' => 0, 'dryRun' => $dry_run);
     foreach ($orders as $key => $order) {
+        if (!strik_holiday_order_open($order,'business')) continue;
         $attention = strik_business_b2b_attention($order, $today);
         if (!$attention) continue;
         $result['eligible']++;
@@ -2084,6 +2091,9 @@ function strik_business_mailing_prepare($input, $selection) {
 
 if (!function_exists('strik_sinterklaas_mailing_save')) {
 function strik_sinterklaas_mailing_save($request) {
+    return strik_business_b2b_locked(function () use ($request) { $check=strik_holiday_guard($request,'mailing'); return is_wp_error($check)?$check:strik_sinterklaas_mailing_save_holiday_unlocked($request); });
+}
+function strik_sinterklaas_mailing_save_holiday_unlocked($request) {
     $input = $request->get_json_params();
     if (!is_array($input)) return new WP_Error('invalid_mailing', 'Ongeldige mailing.', array('status' => 400));
     $campaign = strik_business_mailing_prepare($input, strik_business_mailing_selection($request->get_param('season')));
@@ -2116,6 +2126,9 @@ function strik_sinterklaas_mailing_html($body, $folder_url, $kind, $year, $selec
         . '<tr><td bgcolor="#244b37" style="padding:20px 30px;font-family:Arial,sans-serif;font-size:12px;line-height:1.6;color:#f9e7cd;"><strong>Strik Patisserie</strong> &middot; Nijmegen &middot; <a href="mailto:info@strik-patisserie.nl" style="color:#ffffff;">info@strik-patisserie.nl</a><br>Je ontvangt deze zakelijke mail omdat je contact hebt gehad met Strik Patisserie. Geen mails meer ontvangen? Antwoord met <strong>afmelden</strong>.</td></tr></table></td></tr></table></body></html>';
 }
 function strik_sinterklaas_mailing_send($request) {
+    return strik_business_b2b_locked(function () use ($request) { $check=strik_holiday_guard($request,'mailing'); return is_wp_error($check)?$check:strik_sinterklaas_mailing_send_holiday_unlocked($request); });
+}
+function strik_sinterklaas_mailing_send_holiday_unlocked($request) {
     $input = $request->get_json_params();
     if (!is_array($input) || empty($input['campaign'])) return new WP_Error('invalid_mailing', 'Ongeldige verzending.', array('status' => 400));
     $selection = strik_business_mailing_selection($request->get_param('season'));
@@ -2232,3 +2245,60 @@ add_action('rest_api_init', function () {
         ),
     ));
 });
+
+// Holiday lifecycle. Closing takes both existing order locks before capturing
+// the source so an in-flight save cannot fall outside the year archive.
+function strik_holiday_open($season, $year, $module = '') {
+    $states = get_option('strik_holiday_seasons', array());
+    $key = $season . ':' . $year;
+    if (!isset($states[$key])) return (int) $year <= 2026;
+    $state = $states[$key];
+    return $state['state'] === 'active' && ($module === '' || !empty($state['config'][$module]));
+}
+function strik_holiday_order_open($order, $kind) {
+    $year = strik_sinterklaas_year(isset($order['year']) ? $order['year'] : '', isset($order['pickupDate']) ? $order['pickupDate'] : (isset($order['deliveryDate']) ? $order['deliveryDate'] : ''));
+    $season = $kind === 'letters' ? 'sint' : (isset($order['season']) ? $order['season'] : 'sint');
+    if ($season === 'sint-kerst') return strik_holiday_open('sint', $year, $kind) || strik_holiday_open('kerst', $year, $kind);
+    return strik_holiday_open($season, $year, $kind);
+}
+function strik_holiday_guard($request, $kind) {
+    $input = $request->get_json_params(); if (!is_array($input)) $input = array();
+    if ($kind === 'mailing') {
+        $campaign = isset($input['campaign']) ? $input['campaign'] : $input;
+        $year = strik_sinterklaas_year(isset($campaign['year']) ? $campaign['year'] : $request->get_param('year'));
+        $selection = isset($campaign['selection']) ? $campaign['selection'] : ($request->get_param('season') ?: 'sint');
+        $open = true;
+        foreach ($selection === 'sint-kerst' ? array('sint','kerst') : array($selection) as $season) $open = $open && strik_holiday_open($season, $year, 'mailing');
+    } else {
+        if (isset($input['order'])) $input = $input['order'];
+        $id = isset($input['id']) ? $input['id'] : $request->get_param('id');
+        $orders = strik_sinterklaas_get_orders($kind === 'letters' ? STRIK_SINTERKLAAS_LETTERS_OPTION_NAME : STRIK_SINTERKLAAS_B2B_OPTION_NAME);
+        $existing = array();
+        foreach ($orders as $order) if ($id && isset($order['id']) && strtolower($order['id']) === strtolower($id)) { $existing = $order; break; }
+        $open = (!$existing || strik_holiday_order_open($existing,$kind)) && strik_holiday_order_open(array_merge($existing,$input),$kind);
+    }
+    return $open ? true : new WP_Error('holiday_closed','Dit seizoen of onderdeel staat uit. Open het eerst via Feestdagen.',array('status'=>409));
+}
+function strik_holiday_season($request) {
+    $input=$request->get_json_params();
+    $season=isset($input['season'])?$input['season']:''; $year=isset($input['year'])?(int)$input['year']:0; $action=isset($input['action'])?$input['action']:'';
+    if (!in_array($season,array('sint','kerst'),true) || $year<2020 || $year>2100 || !in_array($action,array('read','open','close'),true)) return new WP_Error('invalid_season','Controleer seizoen en jaar.',array('status'=>400));
+    return strik_sinterklaas_letters_locked(function() use ($input,$season,$year,$action) {
+      return strik_business_b2b_locked(function() use ($input,$season,$year,$action) {
+        $states=get_option('strik_holiday_seasons',array()); $key=$season.':'.$year;
+        if ($action==='open' && isset($states[$key]) && $states[$key]['state']==='closed') return new WP_Error('closed_archive','Een afgesloten editie kan niet opnieuw worden geopend.',array('status'=>409));
+        if ($action==='open' || $action==='close') {
+            $config=$action==='open' && isset($input['config']) && is_array($input['config']) ? array_intersect_key($input['config'],array_flip(array('letters','business','mailing'))) : (isset($states[$key]['config'])?$states[$key]['config']:array());
+            $states[$key]=array('state'=>$action==='open'?'active':'closed','config'=>$config);
+            update_option('strik_holiday_seasons',$states,false);
+            if(get_option('strik_holiday_seasons')!==$states) return new WP_Error('season_storage','Seizoensstatus kon niet worden bewaard.',array('status'=>503));
+        }
+        $letters=array();$b2b=array();$mailing=array();
+        if($season==='sint') foreach(strik_sinterklaas_get_orders(STRIK_SINTERKLAAS_LETTERS_OPTION_NAME) as $o) if((int)strik_sinterklaas_letter_order_year($o)===$year) $letters[]=$o;
+        foreach(strik_sinterklaas_get_orders(STRIK_SINTERKLAAS_B2B_OPTION_NAME) as $o) if((int)(isset($o['year'])?$o['year']:substr($o['deliveryDate'],0,4))===$year && in_array(isset($o['season'])?$o['season']:'sint',array($season,'sint-kerst'),true)) $b2b[]=$o;
+        foreach(get_option(STRIK_SINTERKLAAS_MAILING_OPTION_NAME,array()) as $c) if(is_array($c) && (int)$c['year']===$year && in_array(isset($c['selection'])?$c['selection']:'sint',array($season,'sint-kerst'),true)) $mailing[]=$c;
+        return rest_ensure_response(array('complete'=>true,'capturedAt'=>wp_date(DATE_ATOM),'letters'=>$letters,'b2b'=>$b2b,'mailing'=>$mailing));
+      });
+    });
+}
+add_action('rest_api_init',function(){ register_rest_route('strik/v1','/holiday-season',array('methods'=>WP_REST_Server::CREATABLE,'callback'=>'strik_holiday_season','permission_callback'=>'strik_sinterklaas_permission')); });

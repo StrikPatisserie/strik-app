@@ -1,3 +1,4 @@
+import { getActiveSeason } from "@/app/feestdagen/server";
 import { StrikShell } from "@/app/StrikUI";
 import ProductionPlanningHeader from "./ProductionPlanningHeader";
 import styles from "./ProductionPlanning.module.css";
@@ -123,7 +124,7 @@ export default async function SinterklaasLettersProductiePage({
 }>) {
   const query = await searchParams;
   const demoMode = query.demo === "1";
-  const season = String(new Date().getFullYear());
+  const season = String((await getActiveSeason("sint"))?.year || new Date().getFullYear());
 
   if (demoMode) {
     return (

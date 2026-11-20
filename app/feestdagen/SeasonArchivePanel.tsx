@@ -1,0 +1,13 @@
+import Link from "next/link";
+import { holiday, seasonSummary, type SeasonArchive } from "./model";
+import styles from "./Feestdagen.module.css";
+export default function SeasonArchivePanel({archive}:{archive:SeasonArchive}){
+ const s=seasonSummary(archive.sources,archive.central), money=(n:number)=>new Intl.NumberFormat("nl-NL",{style:"currency",currency:"EUR"}).format(n);
+ return <section className={styles.panel}><p className={styles.eyebrow}>Bewaarde seizoensafsluiting · {archive.year}</p><h2>{holiday(archive.season)?.name} {archive.year}</h2><p className={styles.muted}>Vastgelegd op {new Date(archive.captured_at).toLocaleString("nl-NL",{timeZone:"Europe/Amsterdam"})}. Dit overzicht blijft bewaard als de actuele bestellingen later veranderen.</p>
+ <div className={styles.metrics}>{[["Winkelbestellingen",s.storeOrders],["Online bestellingen",s.onlineOrders],["B2B akkoord",s.agreedOrders],["Bezorgen uit winkel",s.deliveries]].map(([label,value])=><div key={label} className={styles.metric}>{label}<strong>{value}</strong></div>)}</div>
+ <dl className={styles.definition}><dt>Winkelletters</dt><dd>{s.storeLetters} · bestelwaarde {money(s.storeValue)} incl. btw en bezorging</dd><dt>Online letters</dt><dd>{s.onlineLetters} · bestelwaarde {money(s.onlineValue)} incl. btw</dd><dt>B2B bestelwaarde</dt><dd>{money(s.b2bValueExVat)} excl. btw · {s.combinedOrders} gedeelde Sint & Kerst-bestellingen apart bewaard</dd><dt>Productie</dt><dd>{s.rounds} rondes · {s.registered} stuks via productieregistraties</dd><dt>Open bij afsluiten</dt><dd>{s.openCount}</dd></dl>
+ <p className={styles.muted}>Bestelwaarde is geen kassaverkoop of ontvangen omzet. Annuleringen tellen niet mee. Gedeelde Sint & Kerst-orders zijn in beide archieven herkenbaar en tellen niet dubbel mee als eigen seizoensomzet. Afvinklijsten en productieregistraties zijn afzonderlijk bewaard.</p>
+ {archive.sources.mailing.length>0&&<p className={styles.muted}>{archive.sources.mailing.length} nieuwsbriefversie(s), inclusief contacten en verzendregistraties, bewaard.</p>}
+ {([["Wat ging goed?",archive.notes.good],["Wat kan beter?",archive.notes.improve],["Meenemen naar volgend jaar",archive.notes.next],["Open punten en uitzonderingen",archive.notes.exceptions]] as const).map(([title,text])=>text&&<div key={title} className={styles.panel}><h3 className="font-black">{title}</h3><p className={styles.pre}>{text}</p></div>)}
+ <div className={styles.tools}><Link className={styles.secondary} href={`/api/feestdagen/archief?season=${archive.season}&year=${archive.year}`}>Volledig jaararchief downloaden</Link></div></section>;
+}

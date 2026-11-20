@@ -1,9 +1,2 @@
-import { StrikShell } from "../../StrikUI";
-import SinterklaasB2BClient from "../../sinterklaas/b2b/SinterklaasB2BClient";
-import { getCurrentProfile } from "../../lib/auth/session";
-import { canAccessLogistiek } from "../../lib/auth/access";
-
-export default async function B2BOrdersPage() {
-  const canViewProduction = canAccessLogistiek(await getCurrentProfile());
-  return <StrikShell extraWide tone="default"><SinterklaasB2BClient season="kerst" canViewProduction={canViewProduction} /></StrikShell>;
-}
+import {redirect} from "next/navigation";
+export default async function Page({searchParams}:{searchParams:Promise<{q?:string;jaar?:string}>}){const q=await searchParams;const query=new URLSearchParams({seizoen:"kerst",...(q.q?{q:q.q}:{}),...(q.jaar?{jaar:q.jaar}:{})});redirect(`/feestdagen/bedrijven?${query}`);}

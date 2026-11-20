@@ -1,3 +1,4 @@
+import {getActiveSeason} from "@/app/feestdagen/server";
 import { StrikShell } from "../../../StrikUI";
 import { requireCurrentProfile } from "@/app/lib/auth/session";
 import { hasFullAccess } from "@/app/lib/auth/access";
@@ -16,6 +17,7 @@ const SHOP_FROM_PROFILE: Record<string, string> = {
 
 export default async function SinterklaasLettersWinkelPage() {
   const profile = await requireCurrentProfile();
+  const edition = await getActiveSeason("sint");
   const storeScope = getLetterStoreScope(profile);
   const profileStore = storeScope?.[0] || normalizeLetterShop(profile.store);
   const defaultShop = SHOP_FROM_PROFILE[profileStore] || letterShopName(profileStore);
@@ -28,6 +30,7 @@ export default async function SinterklaasLettersWinkelPage() {
     <StrikShell wide>
       <SinterklaasLettersClient
         mode="winkel"
+        initialYear={edition ? String(edition.year) : undefined}
         showOnline={storeScope === null && hasFullAccess(profile)}
         storeScope={storeScope}
         defaultShop={defaultShop}

@@ -12,18 +12,17 @@ import { filterAllowedItems } from "./lib/auth/access";
 import type { UserProfile } from "./lib/supabase/types";
 
 const mainNavItems = [
+  { href: "/feestdagen", label: "Feestdagen", icon: strikIcons.strikAgenda },
   { href: "/winkel", label: "Winkel", icon: strikIcons.winkel },
   { href: "/ijs", label: "IJssalons", icon: strikIcons.ijs },
   { href: "/bakkerij/logistiek", label: "Logistiek", icon: strikIcons.logistiek },
   { href: "/bakkerij/productie", label: "Productie", icon: strikIcons.productie },
   { href: "/management", label: "Management", icon: strikIcons.management },
   { href: "/persoonlijk", label: "Mijn to-do’s", icon: strikIcons.personalTodo },
-  { href: "/vierdaagse", label: "Vierdaagse", icon: strikIcons.strikAgenda },
-  { href: "/sinterklaas", label: "Sinterklaas", icon: strikIcons.sinterklaas },
-  { href: "/kerst", label: "Kerst", icon: strikIcons.kerst },
 ];
 
 function isActivePath(pathname: string, href: string) {
+  if (href === "/feestdagen") return ["/feestdagen", "/sinterklaas", "/kerst", "/vierdaagse"].some(path => pathname === path || pathname.startsWith(`${path}/`));
   if (href === "/") return pathname === "/";
   if (href === "/winkel") return pathname === "/winkel";
   if (href === "/bakkerij/logistiek") return pathname === "/bakkerij/logistiek";

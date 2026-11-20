@@ -94,7 +94,7 @@ test('invalid payloads cannot create orders, including malformed dates, nonfinit
 test('public API validates origin and actual body size, and confirms success only after storage and mail', async () => {
   const calls = [];
   let backend = { ok: true, saved: true, mailSent: true, reference: build(fixture()).reference };
-  const api = load('app/api/business-folder-quote/route.ts', { 'next/server': { NextResponse: Response }, '@/app/lib/businessFolderQuote': { buildBusinessFolderQuote: build } }, {
+  const api = load('app/api/business-folder-quote/route.ts', { '@/app/feestdagen/server': {getActiveSeason:async()=>({year:2026,config:{business:true,startDate:'2026-01-01',endDate:'2026-12-31'}})}, 'next/server': { NextResponse: Response }, '@/app/lib/businessFolderQuote': { buildBusinessFolderQuote: build } }, {
     fetch: async (url, options) => { calls.push(JSON.parse(options.body)); return Response.json(backend); },
   });
   const request = (input = fixture(), origin = 'https://app.example.invalid') => new Request('https://app.example.invalid/api/business-folder-quote', { method: 'POST', headers: { origin, 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
@@ -155,4 +155,9 @@ test('all four shops and Malden are canonical pickup options in quote, snapshot 
  input.delivery.pickupLocation='lent';assert.equal(build(input).order.totalExVat,total);
  for(const value of ['', 'forged', '<script>']){input.delivery.pickupLocation=value;assert.throws(()=>build(input),/afhaalvestiging/);}
  input.delivery={method:'pickup',momentType:'date',date:'2026-12-18'};assert.equal(build(input).order.deliveryMethod,'Afhalen bij Strik','old requests remain compatible');
+});
+
+test('new edition quotes use their own year and retry identity',()=>{
+ const input=fixture();input.delivery.date='2027-12-17';const next=build(input,2027);
+ assert.equal(next.order.year,'2027');assert.match(next.reference,/KERST27-/);assert.notEqual(next.payloadHash,build(fixture(),2026).payloadHash);
 });

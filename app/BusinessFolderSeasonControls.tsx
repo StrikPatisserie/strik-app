@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 
 type BusinessFolderSeason = "sint" | "kerst";
 
-const SEASON_INTRO_SESSION_KEY = "strik-business-folder-season-2026-seen";
+
 
 function GiftIcon({ className = "h-12 w-12" }: Readonly<{ className?: string }>) {
   return (
@@ -134,7 +134,8 @@ export function BusinessGiftFinderButton({
   );
 }
 
-export function BusinessFolderSeasonIntro() {
+export function BusinessFolderSeasonIntro({seasonYear = new Date().getFullYear()}:{seasonYear?:number}) {
+  const SEASON_INTRO_SESSION_KEY = `strik-business-folder-season-${seasonYear}-seen`;
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -142,7 +143,7 @@ export function BusinessFolderSeasonIntro() {
 
     const frame = window.requestAnimationFrame(() => setOpen(true));
     return () => window.cancelAnimationFrame(frame);
-  }, []);
+  }, [SEASON_INTRO_SESSION_KEY]);
 
   function close() {
     window.sessionStorage.setItem(SEASON_INTRO_SESSION_KEY, "1");
@@ -176,7 +177,7 @@ export function BusinessFolderSeasonIntro() {
         </button>
         <div className="relative mx-auto max-w-2xl">
           <p className="text-[.65rem] font-black uppercase tracking-[.24em] text-[#d8b56d] sm:text-xs">
-            Zakelijke feestdagenfolders 2026
+            Zakelijke feestdagenfolders {seasonYear}
           </p>
           <h2
             id="season-intro-title"

@@ -990,12 +990,14 @@ export function B2BOrderForm({
   onSaved,
   onCancel,
   saveOrder = saveB2BOrder,
+  seasonYear = currentYear(),
 }: Readonly<{
   initialOrder?: SinterklaasB2BOrder | null;
   season: BusinessSeason;
   onSaved: (order: SinterklaasB2BOrder) => void;
   onCancel: () => void;
   saveOrder?: typeof saveB2BOrder;
+  seasonYear?: string;
 }>) {
   const [form, setForm] = useState<B2BFormState>(() =>
     formStateFromOrder(initialOrder, season)
@@ -1014,7 +1016,7 @@ export function B2BOrderForm({
   const [productTab, setProductTab] = useState("choose");
   const formRef = useRef<HTMLFormElement>(null);
 
-  const draftKey = `strik-b2b-order-draft-v1-${initialOrder?.id || `new-${season}`}`;
+  const draftKey = `strik-b2b-order-draft-v1-${initialOrder?.id || `new-${season}-${seasonYear}`}`;
   const [draftReady, setDraftReady] = useState(false);
   const [draftNotice, setDraftNotice] = useState("");
   const messageRef = useRef<HTMLParagraphElement>(null);
@@ -1422,7 +1424,7 @@ export function B2BOrderForm({
             ? form.deliveryWeek.slice(0, 4)
             : form.deliveryDate
               ? yearFromDate(form.deliveryDate)
-              : initialOrder?.year || currentYear(),
+              : initialOrder?.year || seasonYear,
         season: initialOrder?.season || season,
         source: initialOrder?.source || "handmatig",
         sourceSheet: initialOrder?.sourceSheet || "",
@@ -1747,9 +1749,10 @@ export function B2BOrderForm({
   );
 }
 
-function B2BOrderEditor({ order, season, onClose, onSaved }: Readonly<{
+function B2BOrderEditor({ order, season, seasonYear, onClose, onSaved }: Readonly<{
   order: SinterklaasB2BOrder | null;
   season: BusinessSeason;
+  seasonYear: string;
   onClose: () => void;
   onSaved: (order: SinterklaasB2BOrder) => void;
 }>) {
@@ -1758,7 +1761,7 @@ function B2BOrderEditor({ order, season, onClose, onSaved }: Readonly<{
       <div><p className={styles.eyebrow}>{seasonLabel(order?.season || season)} · B2B</p><h1>{order ? "Bestelling wijzigen" : "Nieuwe bestelling"}</h1><p className={styles.subtitle}>Klant en levering, de producten en daarna de laatste controle.</p></div>
       <button type="button" className={styles.quiet} onClick={onClose}>← Besteloverzicht</button>
     </header>
-    <B2BOrderForm key={order?.id || "new-order"} initialOrder={order} season={season} onSaved={onSaved} onCancel={onClose} />
+    <B2BOrderForm key={order?.id || "new-order"} initialOrder={order} season={season} seasonYear={seasonYear} onSaved={onSaved} onCancel={onClose} />
   </>;
 }
 
@@ -1902,9 +1905,9 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
   </article>;
 }
 
-export default function SinterklaasB2BClient({ season = "sint", canViewProduction = false, initialSearch = "" }: Readonly<{ season?: BusinessSeason; canViewProduction?: boolean; initialSearch?: string }>) {
+export default function SinterklaasB2BClient({ season = "sint", canViewProduction = false, initialSearch = "", initialYear }: Readonly<{ season?: BusinessSeason; canViewProduction?: boolean; initialSearch?: string; initialYear?: string }>) {
   const excelInput=useRef<HTMLInputElement>(null);
-  const [year, setYear] = useState(() => currentYear());
+  const [year, setYear] = useState(() => initialYear || currentYear());
   const [search, setSearch] = useState(initialSearch);
   const [statusFilter, setStatusFilter] = useState("");
   const [orders, setOrders] = useState<SinterklaasB2BOrder[]>([]);
@@ -2166,7 +2169,7 @@ export default function SinterklaasB2BClient({ season = "sint", canViewProductio
           ...order,
           customerName: order.customerName.trim(),
           orderText: order.orderText.trim(),
-          year: yearFromDate(order.deliveryDate),
+          year: order.deliveryDate ? yearFromDate(order.deliveryDate) : year,
           season,
           source: "excel",
           sourceSheet: "Excel import",
@@ -2210,7 +2213,7 @@ export default function SinterklaasB2BClient({ season = "sint", canViewProductio
       </nav>
       {saveNotice && <p role="status" className={styles.notice}>{saveNotice}<button type="button" aria-label="Melding sluiten" onClick={() => setSaveNotice("")} style={{ marginLeft: "auto" }}>×</button></p>}
       {(error || syncError) && <p role="alert" className={styles.error}>{error || syncError}</p>}
-      {formOpen ? <B2BOrderEditor order={editingOrder} season={season} onClose={closeOrderDialog} onSaved={handleSavedOrder} /> : <>
+      {formOpen ? <B2BOrderEditor order={editingOrder} season={season} seasonYear={year} onClose={closeOrderDialog} onSaved={handleSavedOrder} /> : <>
         <div className={styles.overviewToolbar}>
           <div className={styles.overviewControls}>
             <input aria-label="Zoek klant of product" placeholder="Zoek klant, datum of product" value={search} onChange={event => setSearch(event.target.value)} className={styles.search} />

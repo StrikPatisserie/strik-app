@@ -29,7 +29,7 @@ type ProductSuggestion = {
 type ProductInfoSection = "shelfLife" | "allergens";
 const roundCents = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 const NIJMEGEN_DELIVERY_FEE_LABEL = "€ 10–15";
-const CUSTOM_PACKAGE_MAIL_HREF = `mailto:info@strik-patisserie.nl?subject=${encodeURIComponent("Pakket op maat voor Sinterklaas 2026")}&body=${encodeURIComponent("Beste Strik Patisserie,\n\nIk ontvang graag informatie over een Sinterklaaspakket op maat.\n\nBedrijfsnaam:\nAantal cadeaus:\nBudget per persoon:\nGewenste inhoud of verpakking:\nGewenst levermoment:\nOverige wensen:\n\nMet vriendelijke groet,")}`;
+const CUSTOM_PACKAGE_MAIL_HREF = `mailto:info@strik-patisserie.nl?subject=${encodeURIComponent("Pakket op maat voor Sinterklaas")}&body=${encodeURIComponent("Beste Strik Patisserie,\n\nIk ontvang graag informatie over een Sinterklaaspakket op maat.\n\nBedrijfsnaam:\nAantal cadeaus:\nBudget per persoon:\nGewenste inhoud of verpakking:\nGewenst levermoment:\nOverige wensen:\n\nMet vriendelijke groet,")}`;
 const ALLERGEN_LABELS: Record<Allergen, string> = {
   gluten: "Gluten",
   lactose: "Lactose",
@@ -54,8 +54,9 @@ function formatDeliveryDate(value: string) {
   return DUTCH_DELIVERY_DATE_FORMATTER.format(new Date(Date.UTC(year, month - 1, day)));
 }
 
-const DELIVERY_WEEK_OPTIONS = Array.from({ length: 14 }, (_, index) => {
-  const monday = new Date(Date.UTC(2026, 8, 21 + index * 7));
+function deliveryWeeks(seasonYear:number) { return Array.from({ length: 14 }, (_, index) => {
+  const jan4 = new Date(Date.UTC(seasonYear,0,4));
+  const monday = new Date(Date.UTC(seasonYear,0,4 - ((jan4.getUTCDay()+6)%7) + (38+index)*7));
   const value = monday.toISOString().slice(0, 10);
   return {
     value,
@@ -63,6 +64,8 @@ const DELIVERY_WEEK_OPTIONS = Array.from({ length: 14 }, (_, index) => {
     label: `Week ${39 + index} · maandag ${formatDeliveryDate(value).replace(/^maandag /, "")}`,
   };
 });
+
+}
 
 function money(value: number) {
   return new Intl.NumberFormat("nl-NL", {
@@ -130,7 +133,7 @@ function AllergenSymbol({ allergen }: Readonly<{ allergen: Allergen }>) {
   return <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M5 18c5-1 8-4 9-9-5 1-8 4-9 9ZM12 18c4-.5 6.5-2.7 7-6.5-3.8.5-6 2.8-7 6.5Z"/><path d="M5 18h14"/></svg>;
 }
 
-export default function SintB2BConcept() {
+export default function SintB2BConcept({seasonYear = new Date().getFullYear()}: {seasonYear?:number}) {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [draftQuantities, setDraftQuantities] = useState<Record<string, number>>({});
   const [letterLines, setLetterLines] = useState<B2BLetterLine[]>([]);
@@ -243,6 +246,7 @@ export default function SintB2BConcept() {
     .map((product) => bestProductSuggestion(product, Math.max(1, recipientCount), includeVat, wantsLogo))
     .filter((suggestion): suggestion is ProductSuggestion => Boolean(suggestion && suggestion.unitPrice <= budget))
     .sort((first, second) => first.unitPrice - second.unitPrice), [budget, recipientCount, wantsLogo, includeVat]);
+  const DELIVERY_WEEK_OPTIONS = deliveryWeeks(seasonYear);
   const selectedDeliveryWeek = DELIVERY_WEEK_OPTIONS.find((option) => option.value === requestedDeliveryWeek);
   const requestedDeliveryMoment = deliveryMomentType === "date"
     ? requestedDeliveryDate
@@ -483,7 +487,7 @@ export default function SintB2BConcept() {
 
       <div className="sticky bottom-0 z-30 border-t border-[#e6d7bf] bg-white/95 px-4 py-3 shadow-[0_-12px_35px_rgba(64,20,10,.14)] backdrop-blur sm:px-8"><div className="mx-auto flex max-w-7xl items-center justify-between gap-3"><div><p className="text-xs font-bold text-[#7e493c]">{selected.reduce((sum,line)=>sum+line.quantity,0)} producten · {includeVat ? "incl." : "excl."} btw{delivery === "nijmegen" ? ` · ${NIJMEGEN_DELIVERY_FEE_LABEL} bezorging` : delivery === "custom" ? " · bezorging op aanvraag" : ""}</p><p className="text-xl font-black text-[#60190f]">{money(total)}{delivery !== "pickup" ? " + bezorging" : ""}</p></div><button type="button" disabled={!selected.length} onClick={()=>setQuoteOpen(true)} className="rounded-full bg-[#d62d1d] px-5 py-3 text-sm font-black text-white shadow-lg disabled:opacity-40 sm:px-8">Bekijk offerteaanvraag</button></div></div>
 
-      <BusinessFolderSeasonIntro />
+      <BusinessFolderSeasonIntro seasonYear={seasonYear} />
 
       {quoteOpen && <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#391008]/55 p-0 sm:items-center sm:p-5"><section role="dialog" aria-modal="true" aria-labelledby="quote-title" className="max-h-[92dvh] w-full max-w-2xl overflow-auto rounded-t-[2rem] bg-[#fffaf0] p-5 shadow-2xl sm:rounded-[2rem] sm:p-8"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#d62d1d]">Live prijsindicatie</p><h2 id="quote-title" className="mt-1 text-3xl font-black text-[#60190f]">Jouw offerteaanvraag</h2></div><button type="button" aria-label="Sluiten" onClick={() => setQuoteOpen(false)} className="h-10 w-10 rounded-full bg-white text-lg font-black">×</button></div>
         <div className="mt-6 divide-y divide-[#eadbc3]">{selected.map(({key,product,quantity,tier,choiceLabel,withLogo,logoPriceEx,logoPriceIncl,withGiftWrap,wrapPriceEx,wrapPriceIncl,totalEx:lineTotalEx,totalIncl:lineTotalIncl})=><div key={key} className="grid grid-cols-[1fr_auto] gap-3 py-3 text-sm"><div><strong>{quantity}× {product.name}</strong><p className="text-[#7e493c]">{choiceLabel} · {money(productUnitPrice(product,tier,includeVat))} p.s. · {productPricingDescription(product,tier)}</p>{withLogo && <p className="mt-1 font-bold text-[#d62d1d]">Eigen logo: +{money(includeVat ? logoPriceIncl : logoPriceEx)} p.s. ({money(quantity * (includeVat ? logoPriceIncl : logoPriceEx))} totaal)</p>}{withGiftWrap && <p className="mt-1 font-bold text-[#547762]">Cadeaupapier: +{money(includeVat ? wrapPriceIncl : wrapPriceEx)} per letter ({money(roundCents(quantity * (includeVat ? wrapPriceIncl : wrapPriceEx)))} totaal)</p>}</div><strong>{money(includeVat ? lineTotalIncl : lineTotalEx)}</strong></div>)}</div>

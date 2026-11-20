@@ -1,3 +1,4 @@
+import { getActiveSeason, getSeason } from "@/app/feestdagen/server";
 import "server-only";
 
 import { createAdminClient } from "@/app/lib/supabase/admin";
@@ -16,8 +17,11 @@ export type LettershopPickupDateOption = {
 
 /** The public and in-store shops must offer exactly the same pickup dates. */
 export async function getLettershopPickupDateOptions(
-  season = 2026
+  season?: number
 ): Promise<LettershopPickupDateOption[]> {
+  const edition = season === undefined ? await getActiveSeason("sint") : await getSeason("sint", season);
+  if (!edition || edition.state !== "active" || !edition.config.letters) return [];
+  season = edition.year;
   const db = createAdminClient();
   const extendedResult = await db
     .from("letter_production_batches")
@@ -69,6 +73,8 @@ export async function getLettershopPickupDateOptions(
     date.setUTCDate(date.getUTCDate() + 1)
   ) {
     if (date.getUTCDay() === 0) continue;
+    const calendarDate = date.toISOString().slice(0,10);
+    if (calendarDate < edition.config.startDate || calendarDate > edition.config.endDate) continue;
 
     const pickup = date.toISOString().slice(0, 10);
     const matchingBatches = batches
@@ -109,7 +115,7 @@ export async function getLettershopPickupDateOptions(
 }
 
 export async function getLettershopPickupDates(
-  season = 2026
+  season?: number
 ): Promise<string[]> {
   return (await getLettershopPickupDateOptions(season)).map(
     (option) => option.date

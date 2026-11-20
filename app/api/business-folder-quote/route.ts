@@ -1,3 +1,4 @@
+import {getActiveSeason} from "@/app/feestdagen/server";
 import { NextResponse } from "next/server";
 import { buildBusinessFolderQuote } from "@/app/lib/businessFolderQuote";
 
@@ -14,7 +15,11 @@ export async function POST(request: Request) {
     if (Buffer.byteLength(body) > 64_000) return NextResponse.json({ message: "De aanvraag is te groot." }, { status: 413 });
     const input = JSON.parse(body);
     if (input?.website) return NextResponse.json({ message: "Je aanvraag is nog niet verstuurd. Vernieuw de pagina en vul de aanvraag opnieuw in zonder automatisch ingevulde velden." }, { status: 400 });
-    quote = buildBusinessFolderQuote(input);
+    if(input.season!=="sint"&&input.season!=="kerst")throw Error("Kies een geldige folder.");
+    const edition=await getActiveSeason(input.season);
+    if(!edition?.config.business)throw Error("Dit seizoen is momenteel gesloten voor aanvragen.");
+    quote = buildBusinessFolderQuote(input,edition.year);
+    if(quote.order.deliveryDate&&(quote.order.deliveryDate<edition.config.startDate||quote.order.deliveryDate>edition.config.endDate))throw Error("Kies een levermoment binnen het geopende seizoen.");
   } catch (error) {
     return NextResponse.json({ message: error instanceof SyntaxError ? "De aanvraag kon niet worden gelezen." : error instanceof Error ? error.message : "Controleer de aanvraaggegevens." }, { status: 400 });
   }

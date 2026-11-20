@@ -1,0 +1,21 @@
+<?php
+require __DIR__.'/business-mailing.php';
+$options=array();reset_mails();
+$order=fixture();$options[STRIK_SINTERKLAAS_LETTERS_OPTION_NAME]=array(strik_sinterklaas_order_key($order['id'])=>$order);
+$closed=strik_holiday_season(new TestLetterRequest(array('season'=>'sint','year'=>2026,'action'=>'close')));
+check($closed['complete']===true&&count($closed['letters'])===1,'Closing captures the original order.');
+check(!strik_holiday_open('sint',2026,'letters'),'Closing disables letter writes.');
+check(strik_holiday_open('kerst',2026,'business'),'Christmas remains active.');
+$change=strik_sinterklaas_letter_save(new TestLetterRequest(array('id'=>$order['id'],'notes'=>'stale tab')),false);
+check(is_wp_error($change),'A stale tab cannot change a closed letter order.');
+check($options[STRIK_SINTERKLAAS_LETTERS_OPTION_NAME][strik_sinterklaas_order_key($order['id'])]['notes']===$order['notes'],'Closed order data stays unchanged.');
+$again=strik_holiday_season(new TestLetterRequest(array('season'=>'sint','year'=>2026,'action'=>'close')));
+check($again['letters']===$closed['letters'],'Retrying a close preserves the source snapshot.');
+check(is_wp_error(strik_holiday_season(new TestLetterRequest(array('season'=>'sint','year'=>2026,'action'=>'open','config'=>array('letters'=>true))))),'Closed edition cannot be reopened over its archive.');
+check(!strik_holiday_open('sint',2027,'letters'),'A future edition is not silently opened.');
+strik_holiday_season(new TestLetterRequest(array('season'=>'sint','year'=>2027,'action'=>'open','config'=>array('letters'=>true,'business'=>true,'mailing'=>false))));
+check(strik_holiday_open('sint',2027,'letters')&&!strik_holiday_open('sint',2027,'mailing'),'New edition uses selected modules.');
+check(count($mail_calls)===0,'Opening and closing never sends a newsletter or order email.');
+$many=array();for($i=0;$i<2503;$i++)$many['id'.$i]=array('id'=>'id'.$i,'customerName'=>'Test','pickupDate'=>'2025-12-01');
+strik_sinterklaas_save_orders('archive-retention-test',$many);check(count($options['archive-retention-test'])===2503,'Multi-year orders are no longer silently truncated.');
+echo "PASS holiday closure, source snapshot, retries, old-tab guards, next-year setup and multi-year retention; no real email sent.\n";

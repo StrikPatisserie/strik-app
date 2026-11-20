@@ -494,6 +494,9 @@ export function canAccessPath(
 
   const role = normalizeRole(profile.role);
 
+  if (pathname === "/feestdagen") return true;
+  if (pathname === "/feestdagen/bedrijven" || pathname === "/feestdagen/nieuwsbrief") return canAccessSinterklaasPath(profile, "/sinterklaas/b2b") || hasFullAccess(profile) || hasPermission(profile, "kerst.view");
+  if (pathname.startsWith("/feestdagen/")) return pathname.endsWith("/start") || pathname.endsWith("/afsluiten") ? hasFullAccess(profile) : true;
   if (isVierdaagsePath(pathname)) {
     return canAccessVierdaagsePath(profile, pathname);
   }

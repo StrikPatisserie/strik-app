@@ -46,9 +46,9 @@ function StatCard({ label, value, detail }: { label: string; value: number | str
   return <div className="rounded-2xl border border-[#e5ded5] bg-white p-4 shadow-sm"><p className="text-xs font-black uppercase tracking-wide text-[#81776c]">{label}</p><p className="mt-2 text-3xl font-black text-[#1a1815]">{value}</p><p className="mt-1 text-xs font-semibold text-[#71675d]">{detail}</p></div>;
 }
 
-export default function LetterManagementPreview() {
+export default function LetterManagementPreview({initialYear}:{initialYear?:string}) {
   const [section, setSection] = useState<Section>("overzicht");
-  const [year, setYear] = useState(String(new Date().getFullYear()));
+  const [year, setYear] = useState(initialYear || String(new Date().getFullYear()));
   const [orders, setOrders] = useState<ChocolateLetterOrder[]>([]);
   const [b2bOrders, setB2BOrders] = useState<SinterklaasB2BOrder[]>([]);
   const [search, setSearch] = useState("");
@@ -96,7 +96,7 @@ export default function LetterManagementPreview() {
       <div className="flex max-w-full gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Chocoladeletteroverzicht">
         {sections.map((item) => <button key={item.id} type="button" role="tab" aria-selected={section === item.id} onClick={() => setSection(item.id)} className={`shrink-0 rounded-xl px-4 py-3 text-sm font-black ${section === item.id ? "bg-[#1f1d1a] text-white" : "border border-[#e5ded5] bg-white text-[#1f1d1a]"}`}>{item.label}</button>)}
       </div>
-      <label className="flex items-center gap-2 text-sm font-bold">Jaar <select value={year} onChange={(event) => { setLoading(true); setYear(event.target.value); }} className="rounded-xl border border-[#ded6cb] bg-white px-3 py-2">{[2026, 2025, 2024].map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+      <label className="flex items-center gap-2 text-sm font-bold">Jaar <select value={year} onChange={(event) => { setLoading(true); setYear(event.target.value); }} className="rounded-xl border border-[#ded6cb] bg-white px-3 py-2">{Array.from({length: Math.max(3, new Date().getFullYear() - 2023)}, (_, i) => new Date().getFullYear() + 1 - i).map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
     </div>
 
     {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-800">{error}</p>}

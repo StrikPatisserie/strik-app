@@ -1,3 +1,4 @@
+import {checkSeasonMutation} from "@/app/feestdagen/server";
 import "server-only";
 
 import { NextResponse } from "next/server";
@@ -214,6 +215,19 @@ export async function proxySinterklaasMutation(
       delete params.createdBy; delete params.updatedBy; delete params.audit;
       params._actor = { id: profile.id, name: profile.full_name?.trim() || profile.email };
       body = JSON.stringify(params);
+    }
+    // Also gate old tabs and bookmarked routes during opening/closing.
+    let lifecycleParams: Record<string, unknown>;
+    try { lifecycleParams=body?JSON.parse(body):{}; } catch { return jsonError("Controleer de invoer."); }
+    if(!lifecycleParams || typeof lifecycleParams!=="object" || Array.isArray(lifecycleParams))return jsonError("Controleer de invoer.");
+    if(endpoint==="sinterklaas-mailing"){
+      const q=new URL(request.url).searchParams;
+      const campaign=lifecycleParams.campaign && typeof lifecycleParams.campaign==="object" ? lifecycleParams.campaign as Record<string,unknown>:lifecycleParams;
+      try{await checkSeasonMutation(endpoint,{year:q.get("year"),selection:q.get("season"),...campaign});}catch(e){return jsonError((e as Error).message,409);}
+    }else{
+      const id=lifecycleParams.id||new URL(request.url).searchParams.get("id");let existing:Record<string,unknown>|undefined;
+      if(id){const u=new URL(request.url);u.search="";const r=await fetch(getWordPressUrl(endpoint,u.toString()),{cache:"no-store",signal:AbortSignal.timeout(15000)});const d=await readWordPressResponse(r);if(!r.ok||!d||typeof d!=="object"||!("orders" in d)||!Array.isArray(d.orders))return jsonError("Het seizoen van de bestelling kon niet worden gecontroleerd.",503);existing=d.orders.find(o=>o&&String(o.id).toLowerCase()===String(id).toLowerCase());}
+      try{await checkSeasonMutation(endpoint,lifecycleParams,existing);}catch(e){return jsonError((e as Error).message,409);}
     }
     const response = await fetch(getWordPressUrl(endpoint, mutationRequestUrl), {
       method,
