@@ -1421,7 +1421,7 @@ function strik_business_b2b_mail_content($order, $internal = false) {
     $entry = strik_business_b2b_entry_rows($order);
     $data['prices'] = implode("\n", array_map(function($row) { return $row['quantity'] . ' × ' . $row['description'] . ' · ' . strik_business_b2b_money($row['unit']) . ' p.s. · ' . strik_business_b2b_money($row['total']); }, $entry['rows']));
     if ($internal) {
-        $data['importantNotes'] = $order['importantNotes'];
+        // Internal notes remain in the full backup, but do not trigger a revised-order mail.
         $data['invoiceInfo'] = $order['invoiceInfo'];
     }
     foreach ($data as $field => $value) {
@@ -1436,7 +1436,7 @@ function strik_business_b2b_letter_change_label($line) {
     return $line['quantity'] . '× ' . ($line['style'] === 'vorm' ? 'Vormletter ' : 'Spuitletter ') . $line['letter'] . ' · ' . $line['chocolate'] . ' · ' . $line['size'] . (!empty($line['withLogo']) ? ' · eigen logo' : ' · zonder logo') . (!empty($line['exceptions']) ? ' · ' . implode(', ', $line['exceptions']) : '') . (!empty($line['decoration']) ? ' · Decoratie: ' . $line['decoration'] : '');
 }
 function strik_business_b2b_order_changes($before, $after) {
-    $labels = array('season' => 'Seizoen', 'company' => 'Klant', 'contact' => 'Contactpersoon', 'email' => 'E-mailadres', 'phone' => 'Telefoon', 'products' => 'Bestelling / overige producten', 'prices' => 'Artikelen en stuksprijzen', 'letters' => 'Chocoladeletters', 'legacyLetters' => 'Letterbestelling', 'moment' => 'Levermoment', 'method' => 'Levering / afhalen', 'address' => 'Bezorgadres', 'total' => 'Totaal excl. btw', 'agreement' => 'Prijsafspraak', 'logo' => 'Logo-afspraak', 'packaging' => 'Verpakking', 'text' => 'Tekst / personalisatie', 'importantNotes' => 'Interne orderafspraken', 'invoiceInfo' => 'Factuurgegevens');
+    $labels = array('season' => 'Seizoen', 'company' => 'Klant', 'contact' => 'Contactpersoon', 'email' => 'E-mailadres', 'phone' => 'Telefoon', 'products' => 'Bestelling / overige producten', 'prices' => 'Artikelen en stuksprijzen', 'letters' => 'Chocoladeletters', 'legacyLetters' => 'Letterbestelling', 'moment' => 'Levermoment', 'method' => 'Levering / afhalen', 'address' => 'Bezorgadres', 'total' => 'Totaal excl. btw', 'agreement' => 'Prijsafspraak', 'logo' => 'Logo-afspraak', 'packaging' => 'Verpakking', 'text' => 'Tekst / personalisatie', 'invoiceInfo' => 'Factuurgegevens');
     $changes = array();
     foreach ($labels as $field => $label) {
         $old = isset($before[$field]) ? $before[$field] : ($field === 'letters' ? array() : '');
@@ -1456,7 +1456,7 @@ function strik_business_b2b_prepare_confirmation($order) {
     $meta = isset($order['confirmationMail']) && is_array($order['confirmationMail']) ? $order['confirmationMail'] : array();
     $hash = hash('sha256', wp_json_encode(strik_business_b2b_mail_content($order)));
     $backup_hash = hash('sha256', wp_json_encode(strik_business_b2b_mail_content($order, true)));
-    $upgrade = !isset($meta['contentSchema']) || $meta['contentSchema'] !== 3;
+    $upgrade = !isset($meta['contentSchema']) || $meta['contentSchema'] !== 4;
     // Seed existing persisted orders without changing their sent versions merely
     // because the comparison format was upgraded. Saves seed BEFORE applying edits.
     if (empty($meta['version']) || (!$upgrade && (!isset($meta['contentHash']) || $meta['contentHash'] !== $hash))) {
@@ -1467,7 +1467,7 @@ function strik_business_b2b_prepare_confirmation($order) {
     }
     $meta['contentHash'] = $hash;
     $meta['backupContentHash'] = $backup_hash;
-    $meta['contentSchema'] = 3;
+    $meta['contentSchema'] = 4;
     $order['confirmationMail'] = $meta;
     return strik_business_b2b_prepare_quotation($order);
 }

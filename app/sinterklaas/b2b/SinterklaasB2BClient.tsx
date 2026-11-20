@@ -1730,7 +1730,7 @@ export function B2BOrderForm({
           {form.productLines.length > 0 && <div className={styles.cartBulk}><span>Logo’s in één keer instellen:</span><button type="button" onClick={() => applyLogoToAll(true)}>Logo bij alle artikelen</button><button type="button" onClick={() => applyLogoToAll(false)}>Alle logo’s uit</button></div>}
             <div className={styles.fieldGrid}>
               <label className={`${styles.field} ${styles.fullWidth}`}>Afspraken voor de klant<textarea rows={2} value={form.orderText} onChange={event => setField("orderText", event.target.value)} /><small>Worden opgenomen in de bestelling en klantbevestiging.</small></label>
-              <label className={`${styles.field} ${styles.fullWidth}`}>Interne notitie<textarea rows={2} value={form.importantNotes} onChange={event => setField("importantNotes", event.target.value)} /><small>Alleen voor het team.</small></label>
+              <label className={`${styles.field} ${styles.fullWidth}`}>Interne notitie<textarea rows={2} value={form.importantNotes} onChange={event => setField("importantNotes", event.target.value)} /><small>Alleen voor het team. Alleen deze notitie wijzigen verstuurt geen nieuwe bestelmail.</small></label>
               <label className={`${styles.field} ${styles.fullWidth}`}>Notities verpakking/logo<textarea rows={2} value={packagingLogoNotes(form)} onChange={event => updatePackagingLogoNotes(event.target.value)} /></label>
               {textField("textInstructions", "Tekst op product / kaartje")}
               <label className={`${styles.field} ${styles.fullWidth}`}>Factuuradres, referentie of inkoopnummer<textarea rows={2} value={form.invoiceInfo} onChange={event => setField("invoiceInfo", event.target.value)} /></label>

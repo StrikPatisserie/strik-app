@@ -40,7 +40,7 @@ export function canMailQuotation(order: SinterklaasB2BOrder) {
 
 export function shouldOfferCustomerConfirmation(order: SinterklaasB2BOrder, previous?: SinterklaasB2BOrder | null) {
   return order.status === "akkoord" && !order.cancelled && !order.id.startsWith("historie-") && !customerConfirmationSent(order) &&
-    (previous?.status !== "akkoord" || Boolean(order.confirmationMail?.version && previous.confirmationMail?.version !== order.confirmationMail.version) || customerConfirmationNeedsUpdate(order));
+    (previous?.status !== "akkoord" || Boolean(order.confirmationMail?.version && previous.confirmationMail?.version !== order.confirmationMail.version));
 }
 
 export default function B2BConfirmationDialog({ order, mode = "confirmation", updatedOrder = false, onClose, onEdit, onUpdated }: Readonly<{

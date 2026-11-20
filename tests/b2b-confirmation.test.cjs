@@ -181,10 +181,11 @@ test('declining approval, a missing delivery date and a failed refresh never app
   }
 });
 
-test('changed final orders offer a new confirmation for legacy metadata and previously skipped revisions', () => {
+test('unchanged saves do not reopen a skipped confirmation; new versions and legacy metadata still offer it', () => {
   const changed = order({ confirmationMail: { version: 'v2', customer: { version: 'v1', state: 'sent', sentAt: '2026-10-20T10:00:00Z' } } });
   assert.equal(pure.customerConfirmationNeedsUpdate(changed), true);
-  assert.equal(pure.shouldOfferCustomerConfirmation(changed, changed), true);
+  assert.equal(pure.shouldOfferCustomerConfirmation(changed, order()), true);
+  assert.equal(pure.shouldOfferCustomerConfirmation(changed, changed), false);
   assert.equal(pure.shouldOfferCustomerConfirmation(order(), order({ confirmationMail: undefined })), true);
   const sent = order({ confirmationMail: { version: 'v2', customer: { version: 'v2', state: 'sent', sentAt: '2026-10-29T10:00:00Z' } } });
   assert.equal(pure.customerConfirmationNeedsUpdate(sent), false);

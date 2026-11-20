@@ -29,15 +29,15 @@ check(count($mail_calls) === 2, 'Duplicate clicks, ordinary saves and production
 echo "PASS finalization, explicit customer choice, exact preview, current details and duplicate protection\n";
 
 $private = b2b_save(array('id' => $sent['id'], 'importantNotes' => 'Nieuwe interne afspraak'));
-check(count($mail_calls) === 3 && $private['confirmationMail']['version'] === $sent['confirmationMail']['version'], 'Internal notes update only the backup, not the customer version.');
+check(count($mail_calls) === 2 && $private['confirmationMail']['version'] === $sent['confirmationMail']['version'] && $private['confirmationMail']['backupVersion'] === $sent['confirmationMail']['backupVersion'], 'Internal notes preserve both versions and send no mail.');
 mail_final($private);
-check(count($mail_calls) === 3, 'An internal update cannot resend the customer mail.');
+check(count($mail_calls) === 2, 'An internal update cannot resend the customer mail.');
 $changed = b2b_save(array('id' => $sent['id'], 'totalExVat' => '300.00', 'deliveryDateEnd' => '2026-12-21'));
-check(count($mail_calls) === 4 && $changed['confirmationMail']['version'] !== $sent['confirmationMail']['version'], 'A changed amount/delivery creates a new version and an internal backup.');
-check(is_wp_error(mail_final($sent)) && count($mail_calls) === 4, 'An open stale popup cannot send old details after another edit.');
+check(count($mail_calls) === 3 && $changed['confirmationMail']['version'] !== $sent['confirmationMail']['version'], 'A changed amount/delivery creates a new version and an internal backup.');
+check(is_wp_error(mail_final($sent)) && count($mail_calls) === 3, 'An open stale popup cannot send old details after another edit.');
 $changed_preview = preview_final($sent['id']);
 $changed_sent = mail_final($changed);
-check(count($mail_calls) === 5 && has($mail_calls[4]['body'], '€ 300,00') && has($mail_calls[4]['body'], '21 december 2026') && $mail_calls[4]['body'] === $changed_preview['html'] && has($mail_calls[4]['body'], 'Uw bestelling is aangepast'), 'Changed confirmation is deliberate, current and matches its preview.');
+check(count($mail_calls) === 4 && has($mail_calls[3]['body'], '€ 300,00') && has($mail_calls[3]['body'], '21 december 2026') && $mail_calls[3]['body'] === $changed_preview['html'] && has($mail_calls[3]['body'], 'Uw bestelling is aangepast'), 'Changed confirmation is deliberate, current and matches its preview.');
 $reverted = b2b_save(array('id' => $sent['id'], 'totalExVat' => '347.50', 'deliveryDateEnd' => '2026-12-20'));
 check($reverted['confirmationMail']['version'] !== $sent['confirmationMail']['version'], 'Reverting to an earlier value is a new version, not an old already-sent receipt.');
 $forged = b2b_save(array('id' => $sent['id'], 'confirmationMail' => array('version' => 'forged'), 'confirmationEmailedAt' => 'forged'));
