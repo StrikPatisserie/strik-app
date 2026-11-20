@@ -334,6 +334,7 @@ export function ingredientCostForQuantity(
   quantity: number,
   unit: RecipeUnit
 ) {
+  if (ingredient.decoration && unit === "stuk") return roundMoney(quantity * ingredient.pricePerBaseUnit);
   let baseQuantity = convertQuantityToUnit(quantity, unit, ingredient.recipeUnit);
   const density = ingredient.specification?.densityGramsPerMl;
   if (density && Number.isFinite(density) && density > 0) {
@@ -347,6 +348,35 @@ export function ingredientCostForQuantity(
   }
 
   return roundMoney(baseQuantity * ingredient.pricePerBaseUnit);
+}
+
+/** Decorations have a price per piece. Missing measurements retain an existing
+ * estimate, but must never be presented as a confirmed cost. No stock is kept. */
+export function resolveDecorationCosts(ingredients: Ingredient[]): Ingredient[] {
+  const byId = new Map(ingredients.map(item => [item.id, item]));
+  return ingredients.map(item => {
+    const d = item.decoration;
+    if (!d) return item;
+    let known = false, price = item.pricePerBaseUnit || 0;
+    let allergens = item.allergens;
+    if (d.method === "purchased") {
+      known = Number.isFinite(d.purchasePricePerPiece) && d.purchasePricePerPiece! >= 0;
+      if (known) price = d.purchasePricePerPiece!;
+    } else {
+      known = !!d.weightGrams && d.weightGrams > 0 && d.materials.length > 0;
+      let total = d.extraCostPerPiece || 0;
+      const materialAllergens = new Set<string>();
+      for (const line of d.materials) {
+        const raw = byId.get(line.ingredientId);
+        if (!raw || raw.decoration || !["gram", "kg"].includes(raw.recipeUnit) || !(line.grams > 0) || !(raw.pricePerBaseUnit > 0)) { known = false; continue; }
+        total += line.grams * raw.pricePerBaseUnit / (raw.recipeUnit === "kg" ? 1000 : 1);
+        raw.allergens.forEach(value => materialAllergens.add(value));
+      }
+      if (known) { price = Math.round(total * 1e6) / 1e6; allergens = [...materialAllergens]; }
+    }
+    return { ...item, recipeUnit: "stuk", packageSize: "1 stuk", pricePerBaseUnit: price, lastPrice: price, allergens,
+      specification: { ...item.specification, pieceWeightGrams: d.weightGrams }, decoration: { ...d, costKnown: known } };
+  });
 }
 
 export function semiFinishedCostForQuantity(
@@ -1021,6 +1051,7 @@ export function recipeCostBreakdown(
   recipes: Recipe[],
   packagingItems: PackagingItem[] = []
 ) {
+  ingredients = resolveDecorationCosts(ingredients);
   const recalculatedIngredients = recipe.ingredients.map((item) => {
     const ingredient = findIngredient(ingredients, item.ingredientId);
 

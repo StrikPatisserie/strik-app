@@ -42,6 +42,7 @@ export async function PUT(request:Request) {
       assertWorkUnchanged(current,incoming.state);
       if(JSON.stringify(incoming.state.staffing)!==JSON.stringify(current.staffing))throw new ProductionStoreError("Roosterinstellingen worden apart beheerd. Ververs de planning om met de actuele versie te werken.",409);
       if(JSON.stringify(incoming.state.cleaning)!==JSON.stringify(current.cleaning))throw new ProductionStoreError("De schoonmaaklijst is intussen gewijzigd. Ververs de planning om met de actuele versie te werken.",409);
+      if(JSON.stringify(incoming.state.decorationChecks)!==JSON.stringify(current.decorationChecks))throw new ProductionStoreError("Decoratiecontroles worden apart opgeslagen. Ververs de planning.",409);
       if(JSON.stringify(incoming.state.productionRequests || [])!==JSON.stringify(current.productionRequests || []))throw new ProductionStoreError("Productieverzoeken worden apart beheerd. Ververs de planning.",409);
       let next:PreviewState;
       try { next=mergeWorkspaceForEmployee(current,incoming.state,allowed); }

@@ -71,6 +71,7 @@ export function updateWorkRecipe(state: PreviewState, data: RecepturenData, inpu
     seen.add(key);
   };
   const ingredients = input.ingredients.map((line, index) => {
+    if(data.ingredients.find(i=>i.id===line.ingredientId)?.decoration && line.unit!=="stuk")throw Error("Vul decoraties in stuks in.");
     valid({ kind: "ingredient", linkedId: line.ingredientId, quantity: line.quantity, unit: line.unit }, data.ingredients.map(ingredient => ingredient.id), index);
     const original = current.ingredients.find(original => original.ingredientId === line.ingredientId);
     return { ...original, ingredientId: line.ingredientId, quantity: line.quantity, unit: line.unit as RecipeUnit, costContribution: original?.costContribution || 0, sortOrder: index };

@@ -13,6 +13,7 @@ export function recipeDataForProduction(data: RecepturenData): RecepturenData {
     ingredients: data.ingredients.map(item => ({
       ...pick(item, ["id", "name", "supplier", "supplierArticleNumber", "packageSize", "recipeUnit", "allergens", "lastUpdated", "status", "aliases"]),
       specification: item.specification ? pick(item.specification, ["specsPlazaId", "specificationVersion", "ingredientsText", "allergensConfirmed", "nutritionPer100g", "densityGramsPerMl", "pieceWeightGrams", "source", "updatedAt"]) : undefined,
+      decoration: item.decoration ? pick(item.decoration, ["code","shape","size","color","pattern","method","weightGrams","materials","photo"]) : undefined,
       lastPrice: 0, previousPrice: 0, pricePerBaseUnit: 0, lastInvoice: "",
     })) as RecepturenData["ingredients"],
     recipes: data.recipes.map(item => ({

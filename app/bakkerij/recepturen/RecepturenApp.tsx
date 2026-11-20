@@ -25,6 +25,8 @@ import {
 } from "./mockData";
 import PackagingList from "./PackagingList";
 import RecipeDetail from "./RecipeDetail";
+import DecorationsList from "./DecorationsList";
+import { resolveDecorationCosts } from "./utils";
 import RecipeDataImport, { type ImportKind } from "./RecipeDataImport";
 import RecipesList from "./RecipesList";
 import RecepturenDashboard from "./RecepturenDashboard";
@@ -98,7 +100,7 @@ import {
   syncRecipeProductionMetadata,
 } from "./utils";
 
-type TabId = "dashboard" | "voorpagina" | "recepten" | "halffabricaten" | "ingredienten" | "verpakkingen" | "import" | "factuurimport" | "marge";
+type TabId = "dashboard" | "voorpagina" | "recepten" | "halffabricaten" | "decoraties" | "ingredienten" | "verpakkingen" | "import" | "factuurimport" | "marge";
 type MainTabId = "start" | "recepten" | "planning" | "beheer";
 type BeheerView = TabId | "menu";
 type RecepturenScope = "all" | "bakery" | "iceChocolate";
@@ -752,6 +754,7 @@ export default function RecepturenApp({
     nextInvoices: InvoiceImport[] = invoiceItems,
     successMessage = "Alle kostprijzen opnieuw berekend en opgeslagen."
   ) {
+    nextIngredients = resolveDecorationCosts(nextIngredients);
     const nextRecipes = recalculateAllRecipeCosts(
       recipeItems,
       nextIngredients,
@@ -1305,6 +1308,15 @@ export default function RecepturenApp({
     setInvoiceIngredientEditor((current) =>
       current?.id === updatedIngredient.id ? updatedIngredient : current
     );
+  }
+
+  async function saveDecoration(item: Ingredient) {
+    const ingredients = resolveDecorationCosts([...ingredientItems.filter(i=>i.id!==item.id),item]);
+    const recipes = recalculateAllRecipeCosts(recipeItems,ingredients,{markAsUpdated:true},packagingItems);
+    setSyncStatus("Decoratie opslaan…");
+    const result = await saveRecepturenData({ingredients,recipes,packagingItems,invoiceImports:invoiceItems,hefeOrderHistory,bakeryHome,manualProductionPlanningItems:manualPlanningItems});
+    if (!result.ok) { setSyncStatus(`Niet opgeslagen: ${result.message}`); throw Error(result.message); }
+    setSyncStatus("Decoratie opgeslagen; gekoppelde kostprijzen bijgewerkt.");
   }
 
   async function saveIngredientSpecification(updated: Ingredient, expected: Ingredient, mode?: IngredientSpecificationSaveMode) {
@@ -2196,6 +2208,7 @@ export default function RecepturenApp({
             onCreateRecipe={() => createRecipe("semiFinished")}
           />
         )}
+        {beheerView === "decoraties" && <DecorationsList ingredients={ingredientItems} recipes={recipeItems} onSave={saveDecoration}/>}
         {beheerView === "ingredienten" && (
           <IngredientsList
             ingredients={ingredientItems}
@@ -3246,6 +3259,7 @@ function BeheerHome({
     { title: "Marge overzicht", icon: strikIcons.data, view: "marge", tone: "coral" },
     { title: "Grondstoffen", icon: "/UI-apps_data.svg", view: "ingredienten", tone: "green" },
     { title: "Halffabricaten", icon: "/UI-apps_productie.svg", view: "halffabricaten", tone: "yellow" },
+    { title: "Chocoladedecoraties", icon: "/UI-apps_productie.svg", view: "decoraties", tone: "yellow" },
     { title: "Verpakkingen", icon: "/UI-apps_data.svg", view: "verpakkingen", tone: "plum" },
   ] as const;
 

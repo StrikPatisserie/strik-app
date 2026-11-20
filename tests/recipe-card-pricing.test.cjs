@@ -19,10 +19,12 @@ function load(file, imports = {}, expose = '') {
 }
 
 const utils = load('app/bakkerij/recepturen/utils.ts');
+const planning = load('app/productie/planning.ts');
 const { Card, print } = load('app/bakkerij/recepturen/RecipeDetail.tsx', {
   react: React,
   'react/jsx-runtime': require('react/jsx-runtime'),
   './utils': utils,
+  '../../productie/planning': planning,
   './RecipeScreens.module.css': { default: {} },
 }, 'exports.Card = BakkerRecipeCard; exports.print = createRecipePrintHtml;');
 
@@ -130,6 +132,7 @@ function interactiveCard(changes = {}) {
     react: hooks,
     'react/jsx-runtime': require('react/jsx-runtime'),
     './utils': utils,
+    '../../productie/planning': planning,
     './RecipeScreens.module.css': { default: {} },
   }, 'exports.Card = BakkerRecipeCard;');
   return {

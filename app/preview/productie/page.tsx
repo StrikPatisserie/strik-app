@@ -11,6 +11,7 @@ import {productionBoard} from "../../productie/navigation";
 import ProductionResourceFrame from "../../productie/ProductionResourceFrame";
 import HolidayMenu from "../../productie/HolidayMenu";
 import { DEPARTMENTS } from "../../productie/planning";
+import DecorationsPreview from "./DecorationsPreview";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -21,6 +22,7 @@ export const metadata: Metadata = {
 export default async function ProductionPreviewPage({searchParams}:{searchParams:Promise<{scherm?:string;view?:string;board?:string}>}) {
   if (process.env.NODE_ENV !== "development") notFound();
   const params=await searchParams;
+  if(params.view==="decoraties")return <ProductionResourceFrame title="Chocoladedecoraties" active="ingredients" departments={DEPARTMENTS.map(d=>d.id)} canManage demo><DecorationsPreview/></ProductionResourceFrame>;
   if(params.view==="welkom-wendy"){
     // Read-only copy of the scheduled notice; this development view never changes it.
     return <WelcomeMessagePreview message={{id:"welkom-terug-wendy-2026-11-20",version:1,title:"Welkom terug,\nWendy!",body:"Wat fijn dat je er weer bent.\nWe hebben je gemist!",startDate:"2026-11-20",endDate:"2026-11-20",startTime:"05:00",endTime:"10:00",variant:"welcome-baby",repeatAfterIdleMinutes:5}}/>;

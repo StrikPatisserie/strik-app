@@ -24,6 +24,10 @@ export function itemUnit(value: string | undefined): ItemUnit {
 export function recipeViews(data: RecepturenData): DemoRecipe[] {
   return data.recipes.map(recipe => ({
     id: recipe.id, name: recipe.name, type: recipe.type,
+    decorations: (recipe.ingredients || []).flatMap(line=>{
+      const ingredient=data.ingredients.find(i=>i.id===line.ingredientId),d=ingredient?.decoration;
+      return d && line.unit === "stuk" ? [{ingredientId:ingredient!.id,code:d.code,name:ingredient!.name,quantity:line.quantity,method:d.method,signature:JSON.stringify([d.code,d.shape,d.size,d.color,d.pattern])}] : [];
+    }),
     yield: Number.isFinite(recipe.standardBatchQuantity) && (recipe.standardBatchQuantity || 0) > 0 && ["stuk","stuks","gram","kg","ml","liter","platen"].includes(recipe.standardBatchUnit || "") ? recipe.standardBatchQuantity! : 0,
     unit: itemUnit(recipe.standardBatchUnit),
     ingredients: [
@@ -99,6 +103,7 @@ export function validWorkspace(value: unknown, recipes: DemoRecipe[]): value is 
   if(state.productionRequests!==undefined && !validProductionRequests(state.productionRequests))return false;
   if(state.staffing!==undefined && !validStaffingSettings(state.staffing))return false;
   if(state.cleaning!==undefined && !validCleaningDays(state.cleaning))return false;
+  if(state.decorationChecks!==undefined && (!state.decorationChecks || typeof state.decorationChecks!=="object" || Array.isArray(state.decorationChecks) || Object.keys(state.decorationChecks).length>30000 || Object.values(state.decorationChecks).some(d=>!d || typeof d.fingerprint!=="string" || d.fingerprint.length>4000 || !["enough","planned"].includes(d.status) || typeof d.actorId!=="string" || !d.actorId || !Number.isFinite(Date.parse(d.at)) || (d.status==="planned" && typeof d.productionTaskId!=="string"))))return false;
   const completions = state.productionWork?.completions;
   if (completions !== undefined && (!completions || typeof completions !== "object" || Array.isArray(completions))) return false;
   if (completions && Object.values(completions).some(c => c?.batchOutputs !== undefined && !validBatchOutputs(c.batchOutputs))) return false;

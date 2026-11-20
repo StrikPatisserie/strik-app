@@ -15,6 +15,7 @@ export function productionBoard(value?: string): BoardId | undefined {
 export const DATA_SECTIONS = [
   { id: "recepten", label: "Eindproducten" },
   { id: "halffabricaten", label: "Halffabricaten" },
+  { id: "decoraties", label: "Chocoladedecoraties" },
   { id: "ingredienten", label: "Grondstoffen & SpecsPlaza" },
   { id: "verpakkingen", label: "Verpakkingen" },
   { id: "import", label: "Data importeren" },

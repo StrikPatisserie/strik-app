@@ -44,6 +44,7 @@ export type RecipePlanSettings = {
   preparation?: { daysBefore: number; choices: Record<string, PreparationChoice>; combine?: boolean };
 };
 export type DemoRecipe = {
+  decorations?: { ingredientId:string; code:string; name:string; quantity:number; method:"homemade"|"purchased"; signature:string }[];
   id: string; name: string; yield: number; unit: ItemUnit;
   ingredients: { name: string; quantity: number; unit: string }[];
   steps: string[]; allergens: string[];
@@ -58,7 +59,7 @@ export type ProductionStaffingSettings = { departmentIds:string[]; people:Produc
 export type CleaningCheck = { id:string; label:string; done:boolean; completedAt?:string; completedBy?:string };
 export type CleaningDay = { id:string; date:string; main:CleaningCheck|null; daily:CleaningCheck[] };
 export type CleaningCommand = { kind:"plan"; date:string; main:string; daily:string[]; repeatDates:string[] } | {kind:"check";date:string;checkId:string;done:boolean} | {kind:"remove";date:string} | {kind:"move";date:string;to:string};
-export type PreviewState = { version: 1; items: Item[]; tasks: Task[]; productionRequests?:ProductionRequest[]; removedTasks?: RemovedTask[]; staffing?:ProductionStaffingSettings; cleaning?:CleaningDay[]; productionWork?:import("./productionWork").ProductionWorkState };
+export type PreviewState = { version: 1; items: Item[]; tasks: Task[]; decorationChecks?:Record<string,import("./decorationPlanning").DecorationDecision>; productionRequests?:ProductionRequest[]; removedTasks?: RemovedTask[]; staffing?:ProductionStaffingSettings; cleaning?:CleaningDay[]; productionWork?:import("./productionWork").ProductionWorkState };
 export function cleaningProgress(day:CleaningDay) {
   const checks=[...(day.main?[day.main]:[]),...day.daily],done=checks.filter(c=>c.done).length;
   return {done,total:checks.length,complete:checks.length>0 && done===checks.length};

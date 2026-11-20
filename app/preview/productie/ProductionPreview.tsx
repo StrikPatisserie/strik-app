@@ -35,6 +35,8 @@ import ProductionItemPicker from "../../productie/ProductionItemPicker";
 import SearchableChoice from "../../productie/SearchableChoice";
 import { recipeGroups, recipeLinks, recipeDayClusters, recipeTaskClusters, reorderDayTasks, type RecipeTaskCluster } from "../../productie/recipeGroups";
 import CleaningWeekLane from "../../productie/CleaningWeekLane";
+import DecorationChecks from "../../productie/DecorationChecks";
+import { applyDecorationCommand, type DecorationCommand } from "../../productie/decorationPlanning";
 import { scheduleWedding, type WeddingProductionOrder } from "../../productie/weddingPlanning";
 const OfferManager=dynamic(()=>import("../../bakkerij/recepturen/RecepturenApp"),{loading:()=> <p role="status">Aanbiedingbeheer laden…</p>});
 const ProductionWeekArchive=dynamic(()=>import("../../productie/ProductionWeekArchive"),{loading:()=> <p role="status">Weekarchief laden…</p>});
@@ -336,6 +338,12 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
       if(error&&moving)setDay(current=>current===command.to?previousDay:current);
       return error;
     } catch(e) { const error=(e as Error).message;notify(error,true);return error; }
+  }
+  async function checkDecoration(command:DecorationCommand):Promise<string|undefined> {
+    try {
+      const next=demo?applyDecorationCommand(state,recipeList,command,"preview",new Date().toISOString(),()=>newId("decoration")):state;
+      return await persist(next,"Decoratiecontrole opgeslagen.",undefined,undefined,{request:{url:"/api/productie/decoraties",body:{command}}});
+    }catch(cause){return cause instanceof Error?cause.message:"Opslaan mislukt.";}
   }
   async function restore(id:string) {
     try {
@@ -698,6 +706,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
           {newLayout&&previewNotice}
         </header>
         {!newLayout&&<>{previewNotice}{planningFilters}</>}
+        {board==="chocolade"&&<DecorationChecks state={state} recipes={recipeList} week={week} end={end} canCheck={!live?.readOnlyPreview&&(!live||live.departments.includes("chocolade"))} busy={saving} onCommand={checkDecoration}/>}
         <div className={s.mobileDays} role="group" aria-label="Kies dag">{days.map(d => <button key={d} data-task-date={d} data-today={d===today || undefined} aria-pressed={day === d} onClick={() => setDay(d)}>{dateLabel(d)}</button>)}</div>
         <div className={s.mobileRhythm}><DayRhythm board={board} date={day}/></div>
         <div className={s.plannerWithRequests}><div className={s.plannerBoardColumn}>
@@ -732,6 +741,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
           return !item.id.startsWith("wedding:") && (department==="all" || item.departmentId===department) && (kindFilter==="all" || (kindFilter==="unlinked"?!recipe&&item.kind!=="activity":kindFilter==="incomplete"?!!recipe&&(!recipe.yield||!recipe.ingredients.length||!recipe.steps.length):item.kind===kindFilter)) && matchesProductionSearch(query,[item.name,item.articleNumber,item.note,...(recipe?.ingredients.map(i=>i.name) || []),...(recipe?.steps || [])]);
         }).sort((a,b)=>a.name.localeCompare(b.name,"nl-NL")).map(item=>{const recipe=recipeList.find(r=>r.id===item.recipeId);return <button key={item.id} className={s.workRecipeRow} onClick={()=>setModal({type:"item-detail",id:item.id})}><span><strong>{item.name}</strong><small><span className={`${s.typeBadge} ${item.kind==="component"?s.halfBadge:s.finalBadge}`}>{KIND_LABELS[item.kind]}</span>{item.articleNumber && ` · ${item.articleNumber}`}{item.productionBlocked && " · Recept controleren"}{!recipe && item.kind!=="activity" && <span className={s.recipeMissingBadge}>Zonder recept</span>}{recipe && !recipe.ingredients.length && <span className={s.recipeMissingBadge}>Leeg recept</span>}</small></span><span className={s.workRecipeDepartment}>{departmentName(item.departmentId)}</span><span>{recipe?.yield?`${quantity(recipe.yield)} ${productionUnit(item)}`:recipe?"Nog invullen":"—"}</span><span className={s.workRecipeContents}>{recipe?`${recipe.ingredients.length} ingrediënten · ${recipe.steps.length} stappen`:item.kind==="activity"?"Werkinstructie":"Koppelen of nieuw recept"}<Icon name="chevron" size={14}/></span></button>;})}</div>
       </RecipeReferences> : view === "ingredients" ? <>
+        {!demo&&<div className={s.infoNote}><Icon name="box"/><Link href="/bakkerij/productie/decoraties">Chocoladedecoraties · codelijst en foto’s ↗</Link></div>}
         <div className={s.sectionIntro}><p>Gedeelde grondstoffen en leveranciersspecificaties voor alle afdelingen.</p><span>SpecsPlaza</span></div>
         <div className={s.infoNote}><Icon name="link" /><p>{demo ? "Voorbeeld van de bestaande SpecsPlaza-koppeling." : "Specificaties worden gedeeld met het grondstoffenbeheer."} {canManageData && <Link href="/bakkerij/productie/beheer/ingredienten">Open grondstoffenbeheer</Link>}</p></div>
         <div className={s.ingredientList}>{ingredientList.map(i => <article key={i.id}><div className={s.itemGlyph}><Icon name="leaf" /></div><div><h2>{i.name}</h2><p>{i.supplier} · {i.unit}</p></div><div className={s.ingredientSpec}><span className={i.linked ? s.recipeLinked : s.recipeMissing}>{i.linked && <Icon name="link" size={13} />}{i.specification}</span><small>{demo ? "Voorbeeld allergenen" : "Allergenen"}: {i.allergens}</small></div></article>)}</div>

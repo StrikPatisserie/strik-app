@@ -1603,7 +1603,7 @@ export default function RecipeDetail({
                                 unit: value as RecipeUnit,
                               })
                             }
-                            options={recipeUnits.map((unit) => ({
+                            options={(findIngredient(availableIngredients,line.ingredientId)?.decoration ? ["stuk" as const] : recipeUnits).map((unit) => ({
                               value: unit,
                               label: unitLabelText(unit),
                             }))}
@@ -4263,6 +4263,7 @@ function BakkerRecipeCard({
         </dl>
 
         <section className={styles.ingredients} aria-label="Ingrediënten">
+          {financialAccess && recipe.ingredients.some(line=>{const item=ingredients.find(i=>i.id===line.ingredientId);return item?.decoration && !item.decoration.costKnown;}) && <p className={styles.notice}>Kostprijs en marge zijn voorlopig: het gewicht of de kostprijs van een decoratie moet nog worden aangevuld.</p>}
           <div className={styles.sectionHeading}><h3>Ingrediënten</h3><span>{rows.length} regels</span></div>
           {rows.length ? <ul>{rows.map((row) => <li key={row.id} className={styles.ingredientRow}>
             <span title={row.name}>{row.name}</span>

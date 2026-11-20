@@ -1,4 +1,6 @@
 import "server-only";
+import { validateDecorations } from "./decorations";
+import { resolveDecorationCosts, recalculateRecipeCosts } from "../bakkerij/recepturen/utils";
 import { readEditBase, retryConcurrentSave } from "./concurrentEditing.server";
 import { ConcurrentChangeError, mergeConcurrentChanges } from "./concurrentChanges";
 import {canManageWeeklyOffers,weeklyOffersChanged} from "../lib/auth/weeklyOffers";
@@ -52,7 +54,15 @@ export async function saveSharedRecipes(current:ProductionDocument<RecepturenDat
       if (error instanceof ConcurrentChangeError) throw new ProductionStoreError(error.message, 409);
       throw error;
     }
-    data = {...data, updatedAt:new Date().toISOString()};
+    validateDecorations(data.ingredients);
+    const decorationIds = new Set(data.ingredients.filter(i=>i.decoration).map(i=>i.id));
+    for (const recipe of data.recipes) if (recipe.ingredients.some(line=>decorationIds.has(line.ingredientId) && line.unit !== "stuk")) throw new ProductionStoreError("Vul decoraties in stuks in bij het recept.",400);
+    const ingredients = resolveDecorationCosts(data.ingredients);
+    const affected = new Set(data.recipes.filter(r=>r.ingredients.some(l=>decorationIds.has(l.ingredientId))).map(r=>r.id));
+    for(let i=0;i<data.recipes.length;i++) { const size=affected.size; data.recipes.forEach(r=>{if(r.semiFinishedItems.some(l=>affected.has(l.semiFinishedRecipeId)))affected.add(r.id);}); if(size===affected.size)break; }
+    let recipePool = data.recipes;
+    for(let i=0;i<Math.min(20,affected.size);i++) recipePool = recipePool.map(r=>affected.has(r.id)?recalculateRecipeCosts(r,ingredients,recipePool,{},data.packagingItems):r);
+    data = {...data, ingredients, recipes:recipePool, updatedAt:new Date().toISOString()};
     const revision=await saveDocument("recipes",latest.revision,data,profile.id,"Recepturen bijgewerkt");
     return {...(hasFullAccess(profile)?data:recipeDataForProduction(data)),financialAccess:hasFullAccess(profile),storageRevision:revision,storageProvider:"supabase"};
   });

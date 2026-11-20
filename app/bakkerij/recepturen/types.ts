@@ -43,6 +43,7 @@ export type BakeryHomeData = {
 };
 
 export type Ingredient = {
+  decoration?: ChocolateDecoration;
   specification?: IngredientSpecification;
   recipeReplacement?: { kind: "ingredient" | "semiFinished"; id: string };
   id: string;
@@ -59,6 +60,21 @@ export type Ingredient = {
   status: IngredientStatus;
   lastInvoice: string;
   aliases: string[];
+};
+
+export type ChocolateDecoration = {
+  code: string;
+  shape: string;
+  size: string;
+  color: string;
+  pattern: string;
+  method: "homemade" | "purchased";
+  weightGrams?: number;
+  materials: { ingredientId: string; grams: number }[];
+  extraCostPerPiece?: number;
+  purchasePricePerPiece?: number;
+  photo?: string;
+  costKnown?: boolean;
 };
 
 export type RecipeIngredient = {
