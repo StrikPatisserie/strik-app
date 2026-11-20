@@ -2221,7 +2221,7 @@ export default function SinterklaasB2BClient({ season = "sint", canViewProductio
               <option value="">Alle statussen</option><option value="aanvraag">Aanvraag</option><option value="offerte">Offerte</option><option value="akkoord">Definitief</option><option value="nog-invoeren">Nog invoeren</option><option value="afgewezen">Niet doorgegaan</option>
             </select>
             <select aria-label="Besteljaar" value={year} onChange={event => setYear(event.target.value)}>
-              {Array.from({ length: Number(currentYear()) - 2018 }, (_, index) => String(Number(currentYear()) - index)).map(optionYear => <option key={optionYear} value={optionYear}>{optionYear}</option>)}
+              {Array.from({ length: Math.max(Number(currentYear()), Number(initialYear) || 0) - 2018 }, (_, index) => String(Math.max(Number(currentYear()), Number(initialYear) || 0) - index)).map(optionYear => <option key={optionYear} value={optionYear}>{optionYear}</option>)}
             </select>
             <button type="button" className={styles.overviewIconButton} aria-label="Bestellingen verversen" title="Verversen" data-loading={loading||undefined} disabled={loading} onClick={() => void loadOrders(year)}><OverviewIcon kind="refresh"/></button>
             <button type="button" className={styles.overviewIconButton} aria-label="Excel importeren" title="Excel importeren" disabled={importing} onClick={()=>excelInput.current?.click()}><OverviewIcon kind="upload"/></button>
