@@ -2297,7 +2297,7 @@ function strik_holiday_season($request) {
         if($season==='sint') foreach(strik_sinterklaas_get_orders(STRIK_SINTERKLAAS_LETTERS_OPTION_NAME) as $o) if((int)strik_sinterklaas_letter_order_year($o)===$year) $letters[]=$o;
         foreach(strik_sinterklaas_get_orders(STRIK_SINTERKLAAS_B2B_OPTION_NAME) as $o) if((int)(isset($o['year'])?$o['year']:substr($o['deliveryDate'],0,4))===$year && in_array(isset($o['season'])?$o['season']:'sint',array($season,'sint-kerst'),true)) $b2b[]=$o;
         foreach(get_option(STRIK_SINTERKLAAS_MAILING_OPTION_NAME,array()) as $c) if(is_array($c) && (int)$c['year']===$year && in_array(isset($c['selection'])?$c['selection']:'sint',array($season,'sint-kerst'),true)) $mailing[]=$c;
-        return rest_ensure_response(array('complete'=>true,'capturedAt'=>wp_date(DATE_ATOM),'letters'=>$letters,'b2b'=>$b2b,'mailing'=>$mailing));
+        return rest_ensure_response(array('complete'=>true,'capturedAt'=>wp_date(DATE_ATOM),'letters'=>$letters,'b2b'=>$b2b,'mailing'=>$mailing,'addressBook'=>strik_business_mailing_contacts(get_option(STRIK_SINTERKLAAS_MAILING_OPTION_NAME,array()))));
       });
     });
 }

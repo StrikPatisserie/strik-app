@@ -1,9 +1,10 @@
 <?php
 require __DIR__.'/business-mailing.php';
-$options=array();reset_mails();
+$options=array('strik_business_mailing_contacts_v1'=>array('revision'=>5,'customers'=>array(array('id'=>'c1','company'=>'Voorbeeld','recipients'=>array(array('id'=>'r1','email'=>'test@example.invalid','doNotEmail'=>true))))));reset_mails();
 $order=fixture();$options[STRIK_SINTERKLAAS_LETTERS_OPTION_NAME]=array(strik_sinterklaas_order_key($order['id'])=>$order);
 $closed=strik_holiday_season(new TestLetterRequest(array('season'=>'sint','year'=>2026,'action'=>'close')));
 check($closed['complete']===true&&count($closed['letters'])===1,'Closing captures the original order.');
+check($closed['addressBook']['revision']===5&&$closed['addressBook']['customers'][0]['recipients'][0]['doNotEmail'],'Archive preserves the current shared address book and unsubscribe state.');
 check(!strik_holiday_open('sint',2026,'letters'),'Closing disables letter writes.');
 check(strik_holiday_open('kerst',2026,'business'),'Christmas remains active.');
 $change=strik_sinterklaas_letter_save(new TestLetterRequest(array('id'=>$order['id'],'notes'=>'stale tab')),false);
@@ -15,6 +16,9 @@ check(is_wp_error(strik_holiday_season(new TestLetterRequest(array('season'=>'si
 check(!strik_holiday_open('sint',2027,'letters'),'A future edition is not silently opened.');
 strik_holiday_season(new TestLetterRequest(array('season'=>'sint','year'=>2027,'action'=>'open','config'=>array('letters'=>true,'business'=>true,'mailing'=>false))));
 check(strik_holiday_open('sint',2027,'letters')&&!strik_holiday_open('sint',2027,'mailing'),'New edition uses selected modules.');
+$request=new class { function get_param($key){return $key==='year'?'2027':($key==='season'?'sint':null);} };
+$new_campaign=strik_sinterklaas_mailing_get($request);
+check(count($new_campaign['customers'])===1&&$new_campaign['customers'][0]['recipients'][0]['doNotEmail']&&count($new_campaign['customers'][0]['recipients'][0]['sent'])===0,'New year keeps contacts and opt-outs, with empty send history.');
 check(count($mail_calls)===0,'Opening and closing never sends a newsletter or order email.');
 $many=array();for($i=0;$i<2503;$i++)$many['id'.$i]=array('id'=>'id'.$i,'customerName'=>'Test','pickupDate'=>'2025-12-01');
 strik_sinterklaas_save_orders('archive-retention-test',$many);check(count($options['archive-retention-test'])===2503,'Multi-year orders are no longer silently truncated.');
