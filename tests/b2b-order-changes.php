@@ -44,7 +44,7 @@ $changed = b2b_save(array('id' => $legacy['id'], 'letterLines' => $new_letters, 
 check(count($mail_calls) === 1 && $mail_calls[0]['to'] === STRIK_SINTERKLAAS_RECIPIENT, 'Actual quantity/logo/special requirement, delivery and price edits send one internal mail only.');
 $body = $mail_calls[0]['body'];
 $red = substr($body, strpos($body, '>Dit is gewijzigd<'));
-$red = substr($red, 0, strpos($red, '<strong>Levering ·'));
+$red = substr($red, 0, strpos($red, '<strong>LEVERMOMENT ·'));
 foreach (array('Was', 'Wordt', 'color:#a32f29', 'Chocoladeletters', '3× Spuitletter A', '4× Spuitletter A', 'zonder logo', 'eigen logo', 'notenvrij', 'Levermoment', 'Levering / afhalen', 'Bezorgadres', 'Totaal excl. btw', '€ 61,00', '€ 74,00', 'Verwijderd / niet meer besteld') as $part) check(has($red, $part), 'The red change summary includes ' . $part);
 check(!has($red, 'Spuitletter B'), 'Unchanged letter rows do not clutter the change summary.');
 $preview = preview_final($changed['id']);

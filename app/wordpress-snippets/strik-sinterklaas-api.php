@@ -1229,7 +1229,7 @@ function strik_business_quote_html($order) {
     $season = $order['season'] === 'kerst' ? 'Kerst' : 'Sinterklaas';
     $url = 'https://app.strik-patisserie.nl/' . ($order['season'] === 'kerst' ? 'kerst' : 'sinterklaas') . '/b2b';
     return '<!doctype html><html lang="nl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>'
-        . '<body style="margin:0;background:#edf3ed;font-family:Arial,sans-serif;color:#293e30"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:24px 12px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:680px;background:#fffdf8;border-radius:24px;overflow:hidden">'
+        . '<body style="margin:0;background:#edf3ed;font-family:Arial,sans-serif;color:#293e30"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:24px 12px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:780px;background:#fffdf8;border-radius:8px;overflow:hidden">'
         . '<tr><td style="background:#244b37;padding:28px;color:white"><div style="color:#e9cc89;font-size:12px;font-weight:bold;letter-spacing:3px">STRIK PATISSERIE</div><h1 style="font-size:27px;margin:16px 0 8px">Nieuwe offerteaanvraag ' . esc_html($season) . '</h1><strong>' . esc_html($order['customerName']) . '</strong><br><span style="font-size:13px">Referentie: ' . esc_html($meta['reference']) . '</span></td></tr>'
         . '<tr><td style="padding:6px 28px 28px">'
         . strik_business_quote_details_html($meta['quoteText'], true)
@@ -1418,6 +1418,8 @@ function strik_business_b2b_mail_content($order, $internal = false) {
     $data['letters'] = array_values($letters);
     $data['total'] = strik_business_b2b_total_label($data['total']);
     if (in_array(strtolower(trim($data['logo'])), array('ja', 'eigen logo volgens orderregels'), true)) $data['logo'] = 'Eigen logo';
+    $entry = strik_business_b2b_entry_rows($order);
+    $data['prices'] = implode("\n", array_map(function($row) { return $row['quantity'] . ' × ' . $row['description'] . ' · ' . strik_business_b2b_money($row['unit']) . ' p.s. · ' . strik_business_b2b_money($row['total']); }, $entry['rows']));
     if ($internal) {
         $data['importantNotes'] = $order['importantNotes'];
         $data['invoiceInfo'] = $order['invoiceInfo'];
@@ -1434,7 +1436,7 @@ function strik_business_b2b_letter_change_label($line) {
     return $line['quantity'] . '× ' . ($line['style'] === 'vorm' ? 'Vormletter ' : 'Spuitletter ') . $line['letter'] . ' · ' . $line['chocolate'] . ' · ' . $line['size'] . (!empty($line['withLogo']) ? ' · eigen logo' : ' · zonder logo') . (!empty($line['exceptions']) ? ' · ' . implode(', ', $line['exceptions']) : '') . (!empty($line['decoration']) ? ' · Decoratie: ' . $line['decoration'] : '');
 }
 function strik_business_b2b_order_changes($before, $after) {
-    $labels = array('season' => 'Seizoen', 'company' => 'Klant', 'contact' => 'Contactpersoon', 'email' => 'E-mailadres', 'phone' => 'Telefoon', 'products' => 'Bestelling / overige producten', 'letters' => 'Chocoladeletters', 'legacyLetters' => 'Letterbestelling', 'moment' => 'Levermoment', 'method' => 'Levering / afhalen', 'address' => 'Bezorgadres', 'total' => 'Totaal excl. btw', 'agreement' => 'Prijsafspraak', 'logo' => 'Logo-afspraak', 'packaging' => 'Verpakking', 'text' => 'Tekst / personalisatie', 'importantNotes' => 'Interne orderafspraken', 'invoiceInfo' => 'Factuurgegevens');
+    $labels = array('season' => 'Seizoen', 'company' => 'Klant', 'contact' => 'Contactpersoon', 'email' => 'E-mailadres', 'phone' => 'Telefoon', 'products' => 'Bestelling / overige producten', 'prices' => 'Artikelen en stuksprijzen', 'letters' => 'Chocoladeletters', 'legacyLetters' => 'Letterbestelling', 'moment' => 'Levermoment', 'method' => 'Levering / afhalen', 'address' => 'Bezorgadres', 'total' => 'Totaal excl. btw', 'agreement' => 'Prijsafspraak', 'logo' => 'Logo-afspraak', 'packaging' => 'Verpakking', 'text' => 'Tekst / personalisatie', 'importantNotes' => 'Interne orderafspraken', 'invoiceInfo' => 'Factuurgegevens');
     $changes = array();
     foreach ($labels as $field => $label) {
         $old = isset($before[$field]) ? $before[$field] : ($field === 'letters' ? array() : '');
@@ -1454,7 +1456,7 @@ function strik_business_b2b_prepare_confirmation($order) {
     $meta = isset($order['confirmationMail']) && is_array($order['confirmationMail']) ? $order['confirmationMail'] : array();
     $hash = hash('sha256', wp_json_encode(strik_business_b2b_mail_content($order)));
     $backup_hash = hash('sha256', wp_json_encode(strik_business_b2b_mail_content($order, true)));
-    $upgrade = !isset($meta['contentSchema']) || $meta['contentSchema'] !== 2;
+    $upgrade = !isset($meta['contentSchema']) || $meta['contentSchema'] !== 3;
     // Seed existing persisted orders without changing their sent versions merely
     // because the comparison format was upgraded. Saves seed BEFORE applying edits.
     if (empty($meta['version']) || (!$upgrade && (!isset($meta['contentHash']) || $meta['contentHash'] !== $hash))) {
@@ -1465,7 +1467,7 @@ function strik_business_b2b_prepare_confirmation($order) {
     }
     $meta['contentHash'] = $hash;
     $meta['backupContentHash'] = $backup_hash;
-    $meta['contentSchema'] = 2;
+    $meta['contentSchema'] = 3;
     $order['confirmationMail'] = $meta;
     return strik_business_b2b_prepare_quotation($order);
 }
@@ -1488,11 +1490,170 @@ function strik_business_b2b_quotation_subject($order) {
     $season = $order['season'] === 'kerst' ? 'Kerst' : ($order['season'] === 'sint-kerst' ? 'Sint & Kerst' : 'Sinterklaas');
     return ($order['status'] === 'offerte' ? 'Offerte' : 'Overzicht van uw aanvraag') . ' ' . $season . ' - ' . $order['customerName'];
 }
+// Bake-it numbers: supplied article screenshots (20 November 2026) and the
+// existing Strik article list. Unknown products deliberately stay unnumbered.
+function strik_business_b2b_article($description) {
+    $name = strtolower(trim(explode(' · ', $description)[0]));
+    if (preg_match('/^(chocolade )?spuitletter(s)?\b/i', $description)) {
+        if (preg_match('/\bklein\b/i', $description)) return '70281';
+        if (preg_match('/\bgroot\b/i', $description)) return '70280';
+    }
+    if (preg_match('/^(chocolade )?vormletter\b/i', $description) && preg_match('/\bgroot\b|^Chocolade vormletter S/i', $description)) return '70282';
+    if ($name === 'amandelletter & gevulde staven') {
+        if (strpos($description, ' · Gevulde amandelstaaf') !== false) return '90218';
+        if (strpos($description, ' · Gevulde speculaasstaaf') !== false) return '90217';
+        if (strpos($description, ' · Amandelletter') !== false) return '90220';
+        return '';
+    }
+    if ($name === 'bezorgkosten') {
+        if (strpos($description, ' · handmatig') !== false) return '310199';
+        if (preg_match('/postcode (\d{4})/', $description, $m)) {
+            $ranges = array(array(6511,6514,310102),array(6516,6542,310103),array(6601,6605,310104),array(6561,6562,310105),array(6641,6642,310106),array(6573,6573,310107),array(6571,6572,310108),array(6581,6581,310109),array(6582,6582,310110),array(6663,6663,310111),array(6515,6515,310112),array(6543,6560,310113),array(6563,6564,310114),array(6574,6574,310115),array(6584,6585,310116));
+            foreach ($ranges as $range) if ((int)$m[1] >= $range[0] && (int)$m[1] <= $range[1]) return (string)$range[2];
+            return '310100';
+        }
+        return '310199';
+    }
+    $numbers = array(
+        'sint pakket stafwerk'=>'90212', 'stafwerk pakket'=>'90212',
+        'sint cadeaupakket winkel'=>'90213', 'pakket pakjesavond'=>'90214',
+        'sint proef tasje'=>'90215', 'sint giftbox los'=>'90216',
+        'roomboter speculaas staaf'=>'90217', 'gevulde speculaasstaaf'=>'90217',
+        'roomboter amandelstaaf'=>'90218', 'gevulde amandelstaaf'=>'90218',
+        'gevulde hartige staaf'=>'90219', 'roomboter amandelletter'=>'90220',
+        'hartige letter'=>'90221', 'strik duo'=>'90222', 'filmavond kado'=>'90223',
+        'strik stoomboot (2 staven)'=>'90224', 'staaf stoomboot'=>'90224',
+        'pepernoten (200gr) + borstplaat (150gr)'=>'90225',
+        'roomborstplaat voorverpakt (±13st)'=>'90226',
+        "kerstpakket santa's favorites"=>'90301', 'kerstpakket jingle bell box'=>'90302',
+        'kerst amandelstaaf'=>'90303', 'kerststaaf'=>'90303',
+        'amandel kerstkrans'=>'90304', 'kerstkrans'=>'90304', 'marsepein letter'=>'90206'
+    );
+    return isset($numbers[$name]) ? $numbers[$name] : '';
+}
+function strik_business_b2b_amount($text) {
+    $number = preg_replace('/[^0-9.,-]/', '', $text);
+    if (strpos($number, ',') !== false) $number = str_replace(',', '.', str_replace('.', '', $number));
+    return $number !== '' && is_numeric($number) ? (int)round((float)$number * 100) : null;
+}
+function strik_business_b2b_money($cents) {
+    return $cents === null ? 'Niet apart vastgelegd' : '€ ' . number_format($cents / 100, 2, ',', '.');
+}
+function strik_business_b2b_full_date($value) {
+    $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value, new DateTimeZone('Europe/Amsterdam'));
+    if (!$date || $date->format('Y-m-d') !== $value) return $value === '' ? 'Nog af te spreken' : $value;
+    $days = array('maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag','zondag');
+    $months = array('januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december');
+    return 'WEEK ' . $date->format('W') . ' · ' . $days[(int)$date->format('N')-1] . ' · ' . $date->format('j') . ' ' . $months[(int)$date->format('n')-1] . ' ' . $date->format('Y');
+}
+function strik_business_b2b_full_moment($order) {
+    $window = $order['deliveryWindowType']; $end = $order['deliveryDateEnd']; $week = $order['deliveryWeek'];
+    if (preg_match('/__STRIK_LEVERPERIODE__(range|week)\|([^|]*)\|([^|]*)$/', $order['sourceSheet'], $m)) { $window=$m[1]; $end=$m[2]; $week=$m[3]; }
+    // A week is a period, not a confirmed delivery on its first day.
+    if ($window === 'week' && preg_match('/^(\d{4})-W(\d{2})$/', $week, $m)) return 'WEEK ' . $m[2] . ' · ' . $m[1] . ' · dag nog af te spreken';
+    $moment = strik_business_b2b_full_date($order['deliveryDate']);
+    return $window === 'range' && $end !== '' ? $moment . ' t/m ' . strik_business_b2b_full_date($end) : $moment;
+}
+function strik_business_b2b_entry_rows($order) {
+    // Read saved prices, never today's catalogue prices. Keep current letter
+    // specifications authoritative even when an old inquiry still has prices.
+    $copy = $order; $copy['letterLines'] = array();
+    $sections = explode("\nOVERIGE ORDERAFSPRAKEN\n", str_replace(array("\r\n", "\r"), "\n", $copy['orderText']), 2);
+    $copy['orderText'] = $sections[0];
+    $data = strik_business_b2b_confirmation_data($copy);
+    $lines = explode("\n", $data['products']); $rows = array(); $notes = isset($sections[1]) ? array($sections[1]) : array();
+    for ($i=0; $i<count($lines); $i++) {
+        $line = trim($lines[$i]);
+        if ($line === '' || in_array($line, array('GEKOZEN SINTERKLAASPRODUCTEN','LOSSE KERSTCADEAUS','KERSTPAKKET OP MAAT'), true)) continue;
+        $matched = preg_match('/^(\d+)\s*×\s*(.+) · €\s*([\d.,]+) p\.s\. ex btw · €\s*([\d.,]+)(.*)$/u', $line, $m);
+        if (!$matched && preg_match('/^(\d+)\s*×\s*(.+)$/u', $line, $item) && isset($lines[$i+1]) && preg_match('/^\s*€\s*([\d.,]+) p\.s\. excl\. btw · €\s*([\d.,]+) totaal excl\. btw(.*)$/u', $lines[$i+1], $price)) {
+            $m = array('', $item[1], $item[2], $price[1], $price[2], $price[3]); $matched = true; $i++;
+        }
+        if (!$matched) {
+            // Old letter descriptions/prices must not contradict edited letters.
+            if (!empty($order['letterLines']) && preg_match('/^\d+\s*×\s*Chocolade (spuitletters|vormletter S)/u', $line)) { if (isset($lines[$i+1]) && preg_match('/^\s*€/', $lines[$i+1])) $i++; continue; }
+            $notes[] = $line; continue;
+        }
+        $unit = strik_business_b2b_amount($m[3]); $total = strik_business_b2b_amount($m[4]);
+        $rows[] = array('quantity'=>(int)$m[1], 'description'=>$m[2], 'unit'=>$unit, 'total'=>$total, 'extras'=>$m[5], 'article'=>strik_business_b2b_article($m[2]));
+    }
+    $current = array(); $priced = array();
+    foreach ($order['letterLines'] as $letter) {
+        if (strpos($letter['id'], 'package:') === 0) continue; // Already priced in its package.
+        $article = $letter['style'] === 'vorm' ? '70282' : ($letter['size'] === 'klein' ? '70281' : '70280');
+        $logo = isset($letter['withLogo']) ? $letter['withLogo'] : !empty($order['logo']);
+        $key = $article . ($logo ? '-logo' : '-plain');
+        if (!isset($current[$key])) $current[$key] = array('quantity'=>0, 'description'=>($letter['style']==='vorm'?'Vormletter groot':'Spuitletter '.$letter['size']) . ($logo?' · eigen logo':''), 'unit'=>null, 'total'=>null, 'extras'=>'', 'article'=>$article);
+        $current[$key]['quantity'] += (int)$letter['quantity'];
+    }
+    foreach ($rows as $row) if (in_array($row['article'], array('70280','70281','70282'), true)) {
+        $key = $row['article'] . (preg_match('/eigen logo|logo .* inbegrepen/u', $row['description'].' '.$row['extras']) ? '-logo' : '-plain');
+        $priced[$key] = (isset($priced[$key]) ? $priced[$key] : 0) + $row['quantity'];
+    }
+    if (!empty($order['letterLines'])) {
+        $rows = array_values(array_filter($rows, function($row) use ($current, $priced) {
+            if (!in_array($row['article'], array('70280','70281','70282'), true)) return true;
+            $key = $row['article'] . (preg_match('/eigen logo|logo .* inbegrepen/u', $row['description'].' '.$row['extras']) ? '-logo' : '-plain');
+            return isset($current[$key]) && $current[$key]['quantity'] === $priced[$key];
+        }));
+        foreach ($current as $key=>$row) if (!isset($priced[$key]) || $priced[$key] !== $row['quantity']) $rows[]=$row;
+    }
+    $result = array();
+    foreach ($rows as $row) {
+        $extras = array(); $suffix = $row['extras']; unset($row['extras']);
+        // App-edited folder requests retain their included wrapping in an exact
+        // per-product note. Only use a unique matching row; never guess a rate.
+        $wrap_prefix = 'Bij ' . $row['quantity'] . ' × ' . $row['description'] . ': ';
+        $same_rows = array_filter($rows, function($other) use ($row) { return $other['quantity'] === $row['quantity'] && $other['description'] === $row['description']; });
+        if (count($same_rows) === 1 && strpos($suffix, 'inclusief cadeaupapier') === false) {
+            foreach (explode("\n", implode("\n", $notes)) as $note) if (strpos($note, $wrap_prefix) === 0 && preg_match('/inclusief cadeaupapier \(€\s*[\d.,]+ incl\. btw per letter\)/u', $note, $wrap)) $suffix .= ' · ' . $wrap[0];
+        }
+
+        if (!empty($order['letterLines']) && in_array($row['article'], array('70280','70281','70282'), true)) {
+            $with_logo = preg_match('/eigen logo|logo .* inbegrepen/u', $row['description'].' '.$suffix);
+            $row['description'] = ($row['article'] === '70282' ? 'Vormletter groot' : ($row['article'] === '70281' ? 'Spuitletter klein' : 'Spuitletter groot')) . ($with_logo ? ' · eigen logo' : '');
+        }
+        if (preg_match('/ · logo €\s*([\d.,]+) p\.s\. ex btw inbegrepen/u', $suffix) || strpos($row['description'], ' · eigen logo') !== false || strpos($suffix, 'inclusief eigen logo') !== false) {
+            // The saved unit price already includes the logo. Bake-it receives
+            // that one price; the logo is a specification, never an extra row.
+            $row['description'] = str_replace(' · eigen logo', '', $row['description']) . ' · inclusief logo';
+        }
+        $suffix = preg_replace('/ · logo €\s*[\d.,]+ p\.s\. ex btw inbegrepen| · inclusief eigen logo/u', '', $suffix);
+        if (preg_match('/inclusief cadeaupapier \(€\s*([\d.,]+) incl\. btw per letter\)/u', $suffix, $m)) $extras[] = array('label'=>'Inpakpapier', 'unit'=>(int)round(strik_business_b2b_amount($m[1])/1.09));
+        $extra_unit = array_sum(array_column($extras, 'unit'));
+        if ($row['unit'] !== null && $extra_unit <= $row['unit'] && $row['total'] === $row['unit']*$row['quantity']) {
+            $row['unit'] -= $extra_unit; $row['total'] = $row['unit']*$row['quantity'];
+            if ($extras) $row['description'] = str_replace(' · eigen logo', '', $row['description']);
+            $result[] = $row;
+            foreach ($extras as $extra) $result[] = array('quantity'=>$row['quantity'], 'description'=>$extra['label'].' · '.$row['description'], 'unit'=>$extra['unit'], 'total'=>$extra['unit']*$row['quantity'], 'article'=>'', 'subtext'=>true);
+        } else { $row['description'] .= $suffix; $result[]=$row; }
+    }
+    foreach ($result as &$item) if (preg_match('/^(inpakpapier|cadeaupapier|logo|logokosten)(?: ·|$)/iu', $item['description'])) $item['subtext'] = true;
+    unset($item);
+    return array('rows'=>$result, 'notes'=>implode("\n", $notes));
+}
+function strik_business_b2b_entry_table($entry, $internal) {
+    if (empty($entry['rows'])) return '';
+    $html = '<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;font-size:13px"><thead><tr style="background:#244b37;color:#fff">';
+    foreach (array_merge($internal?array('Art.nr.'):array(), array('Aantal','Omschrijving','Stuksprijs','Bedrag')) as $label) $html.='<th scope="col" align="left" style="padding:10px 7px">'.esc_html($label).'</th>';
+    $html.='</tr></thead><tbody>';
+    foreach ($entry['rows'] as $row) {
+        $subtext = !empty($row['subtext']);
+        $description = preg_replace('/(Bezorgkosten · postcode [^·]+) · (automatisch|handmatig) · €[^·]+ incl\. btw/u', '$1', $row['description']);
+        $html.='<tr style="vertical-align:top;border-bottom:1px solid #dce3dc' . ($subtext ? ';background:#f4f6f1' : '') . '">';
+        if ($internal) $html.='<td style="padding:12px 7px;font-weight:bold">'.esc_html($subtext ? '' : ($row['article']!==''?$row['article']:'—')).'</td>';
+        $html.='<td style="padding:12px 7px">'.$row['quantity'].'×</td><td style="padding:12px 7px">'.($subtext ? '<span style="font-size:11px;color:#59675d">' . ($internal ? 'Subtekst' : 'Toeslag') . '</span><br>' : '') . esc_html($description).'</td><td style="padding:12px 7px;min-width:72px">'.esc_html(strik_business_b2b_money($row['unit'])).'</td><td style="padding:12px 7px;min-width:76px">'.esc_html(strik_business_b2b_money($row['total'])).'</td></tr>';
+    }
+    return $html.'</tbody></table><p style="font-size:12px;color:#59675d">Stuksprijzen en bedragen zijn exclusief btw.'.($internal?' De stuksprijs is inclusief logo waar vermeld. Inpakpapier staat als subtekst, zonder artikelnummer. Een streepje bij een product betekent: artikelnummer nog te koppelen.':'').'</p>';
+}
+
 function strik_business_b2b_confirmation_html($order, $internal = false, $updated = false, $quotation = false) {
     $data = strik_business_b2b_confirmation_data($order);
     $season = $order['season'] === 'kerst' ? 'Kerst' : ($order['season'] === 'sint-kerst' ? 'Sinterklaas & Kerst' : 'Sinterklaas');
     $reference = !empty($order['folderQuote']['reference']) ? $order['folderQuote']['reference'] : 'B2B-' . strtoupper(substr(hash('sha256', $order['id']), 0, 10));
     $paragraph = function ($text) { return nl2br(esc_html($text)); };
+    $entry = $quotation ? null : strik_business_b2b_entry_rows($order);
+    if (!$quotation) $data['moment'] = strik_business_b2b_full_moment($order);
     $heading = $updated ? 'Uw bestelling is aangepast' : 'Uw bestelling is bevestigd!';
     if ($internal) $heading = $updated ? 'Gewijzigde definitieve bestelling' : 'Definitieve bestelling';
     $kind = $order['status'] === 'offerte' ? 'Offerte' : 'Aanvraagoverzicht';
@@ -1502,9 +1663,12 @@ function strik_business_b2b_confirmation_html($order, $internal = false, $update
         $end = isset($order['deliveryDateEnd']) ? $order['deliveryDateEnd'] : '';
         $data['moment'] = $start !== '' ? strik_business_quote_delivery_label($start . ($end !== '' && $end !== $start ? ' t/m ' . $end : '')) : 'Nog af te spreken';
     }
-    $html = '<!doctype html><html lang="nl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#edf3ed;font-family:Arial,sans-serif;color:#293e30"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:24px 12px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:680px;background:#fffdf8;border-radius:24px;overflow:hidden">'
-        . '<tr><td style="background:#244b37;padding:32px 28px;color:#ffffff"><div style="color:#e9cc89;font-size:12px;font-weight:bold;letter-spacing:3px">STRIK PATISSERIE</div><p style="font-size:12px;letter-spacing:1px;color:#e9cc89">' . esc_html($season) . ($quotation ? ' · ' . esc_html(strtoupper($kind)) : ($internal ? ' · INTERNE BACK-UP' : ' · BESTELBEVESTIGING')) . '</p><h1 style="font-size:28px;line-height:1.2;margin:16px 0">' . esc_html($heading) . '</h1><span style="font-size:13px">Referentie: ' . esc_html($reference) . '</span></td></tr><tr><td style="padding:28px;font-size:15px;line-height:1.55;word-break:break-word">';
-    $html .= $internal ? '<p><strong>' . esc_html($data['company']) . '</strong><br>Deze bestelling staat op definitief in de Strik Team app. Controleer Bake-it en de productieplanning.</p>' : '<p>Beste ' . esc_html($data['contact'] !== '' ? $data['contact'] : $data['company']) . ',</p>' . ($quotation ? '<p>' . ($order['status'] === 'offerte' ? 'Hierbij ontvangt u onze offerte op basis van uw wensen.' : 'Hieronder vindt u het overzicht van uw aanvraag, zoals met ons besproken.') . '</p>' : '<p>Bedankt voor uw bestelling bij Strik Patisserie. Hieronder vindt u de definitieve afspraken. Wij maken er met zorg iets feestelijks van.</p>');
+    $html = '<!doctype html><html lang="nl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#edf3ed;font-family:Arial,sans-serif;color:#293e30"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:24px 12px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:780px;background:#fffdf8;border-radius:8px;overflow:hidden">'
+        . '<tr><td style="background:#244b37;padding:32px 28px;color:#ffffff"><div style="color:#e9cc89;font-size:12px;font-weight:bold;letter-spacing:3px">STRIK PATISSERIE</div><p style="font-size:12px;letter-spacing:1px;color:#e9cc89">' . esc_html($season) . ($quotation ? ' · ' . esc_html(strtoupper($kind)) : ($internal ? ' · BAKE-IT · INTERNE BACK-UP' : ' · DEFINITIEVE BESTELBEVESTIGING')) . '</p><h1 style="font-size:28px;line-height:1.2;margin:16px 0">' . esc_html($heading) . '</h1><span style="font-size:13px">Referentie: ' . esc_html($reference) . '</span></td></tr><tr><td style="padding:28px;font-size:15px;line-height:1.55;word-break:break-word">';
+    $html .= $internal ? '<p><strong>' . esc_html($data['company']) . '</strong><br>Deze bestelling staat op definitief in de Strik Team app. Hieronder staan de gegevens voor invoer in Bake-it.</p>' : '<p>Beste ' . esc_html($data['contact'] !== '' ? $data['contact'] : $data['company']) . ',</p>' . ($quotation ? '<p>' . ($order['status'] === 'offerte' ? 'Hierbij ontvangt u onze offerte op basis van uw wensen.' : 'Hieronder vindt u het overzicht van uw aanvraag, zoals met ons besproken.') . '</p>' : '<p>Bedankt voor uw bestelling bij Strik Patisserie. Hieronder vindt u de definitieve afspraken. Wij maken er met zorg iets feestelijks van.</p>');
+    if ($internal) {
+        $html .= '<h2 style="font-size:18px;margin:24px 0 10px">Klant en factuurgegevens</h2><p><strong>' . esc_html($data['company']) . '</strong>' . ($data['contact'] !== '' ? '<br>Contactpersoon: ' . esc_html($data['contact']) : '') . '<br>E-mailadres: ' . esc_html($data['email'] !== '' ? $data['email'] : 'Niet ingevuld') . ($data['phone'] !== '' ? '<br>Telefoon: ' . esc_html($data['phone']) : '') . '</p><div style="padding:14px;border-left:3px solid #244b37;background:#f0f5ee"><strong>Factuuradres / factuurmail / inkoopnummer</strong><br>' . $paragraph($order['invoiceInfo'] !== '' ? $order['invoiceInfo'] : 'Factuurgegevens nog niet ingevuld.') . '</div>';
+    }
     if ($internal && $updated && !empty($order['confirmationMail']['backupChanges']) && isset($order['confirmationMail']['backupChangesVersion']) && $order['confirmationMail']['backupChangesVersion'] === $order['confirmationMail']['backupVersion']) {
         $html .= '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:24px 0;border:1px solid #e6bcb7;border-radius:14px;background:#fff3f0"><tr><td colspan="2" style="padding:18px 18px 12px;color:#a32f29"><strong style="font-size:18px">Dit is gewijzigd</strong><br><span style="font-size:12px">Ten opzichte van de vorige bestelling. De volledige actuele bestelling staat hieronder.</span></td></tr>';
         foreach ($order['confirmationMail']['backupChanges'] as $change) {
@@ -1512,23 +1676,42 @@ function strik_business_b2b_confirmation_html($order, $internal = false, $update
         }
         $html .= '</table>';
     }
-    $html .= '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f0f5ee;border-radius:14px"><tr><td style="padding:18px"><strong>' . ($quotation ? 'Gewenste levering' : 'Levering') . ' · ' . esc_html($data['moment']) . '</strong><br>' . esc_html($data['method'] !== '' ? $data['method'] : ($quotation ? 'Afhalen of bezorgen nog af te spreken' : 'Afhalen of bezorgen volgens afspraak')) . ($data['address'] !== '' ? '<br>' . $paragraph($data['address']) : '') . '</td></tr></table>';
+    $html .= '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f0f5ee;border-radius:14px"><tr><td style="padding:18px"><strong>' . ($quotation ? 'Gewenste levering' : 'LEVERMOMENT') . ' · ' . esc_html($data['moment']) . '</strong><br>' . esc_html($data['method'] !== '' ? $data['method'] : ($quotation ? 'Afhalen of bezorgen nog af te spreken' : 'Afhalen of bezorgen volgens afspraak')) . ($data['address'] !== '' ? '<br><strong>' . (preg_match('/afhal|afhaal|ophal/i', $data['method']) ? 'Afhaallocatie' : 'Bezorgadres') . ':</strong><br>' . $paragraph($data['address']) : '') . '</td></tr></table>';
     $html .= '<h2 style="font-size:19px;margin:28px 0 12px">' . ($quotation ? 'Gekozen producten' : ($internal ? 'Bestelling' : 'Uw bestelling')) . '</h2>';
-    if ($data['products'] !== '') $html .= strik_business_quote_details_html($data['products']);
+    if ($quotation) {
+        if ($data['products'] !== '') $html .= strik_business_quote_details_html($data['products']);
+    } else {
+        $html .= strik_business_b2b_entry_table($entry, $internal);
+        if ($entry['notes'] !== '') $html .= '<p><strong>Aanvullende orderafspraken</strong><br>' . $paragraph($entry['notes']) . '</p>';
+        $known = count($entry['rows']) > 0 && !preg_match('/^\d+\s*×/mu', $entry['notes']);
+        $subtotal = 0;
+        foreach ($entry['rows'] as $row) { if ($row['total'] === null) $known = false; else $subtotal += $row['total']; }
+        $agreed = strik_business_b2b_amount($data['total']);
+        if ($known && $agreed !== null && $agreed !== $subtotal) {
+            $html .= '<p style="padding:14px;background:#fff3dc"><strong>Prijsafspraak / verschil met bovenstaande regels: ' . esc_html(strik_business_b2b_money($agreed-$subtotal)) . '</strong>' . ($internal ? '<br>Controleer de prijsafspraak voordat je dit verschil in Bake-it verwerkt.' : '') . '</p>';
+        }
+        if ($internal && preg_match('/bezorg|lever/i', $data['method']) && !preg_match('/afhal|afhaal|ophal|nog af/i', $data['method']) && !preg_match('/^1 × Bezorgkosten ·/mu', $data['products'])) $html .= '<p style="padding:14px;background:#fff3dc"><strong>Bezorgkosten: losse prijs niet vastgelegd.</strong><br>Controleer of deze inbegrepen zijn in de prijsafspraak.</p>';
+    }
     if ($data['legacyLetters'] !== '') $html .= '<p>' . $paragraph($data['legacyLetters']) . '</p>';
     if (count($data['letters'])) {
+        if (!$quotation) $html .= '<h3 style="font-size:15px;margin:24px 0 8px">Specificatie chocoladeletters</h3><p style="font-size:12px">' . ($internal ? 'Onderdeel van de bestelling; niet nogmaals als extra artikelen invoeren.' : 'De letters uit uw bestelling, uitgesplitst naar letter en smaak.') . '</p>';
         $html .= '<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse">';
         foreach ($data['letters'] as $line) {
             $html .= '<tr><td style="padding:11px 10px 11px 0;border-bottom:1px solid #e2e8df;font-weight:bold;vertical-align:top;white-space:nowrap">' . absint($line['quantity']) . '×</td><td style="padding:11px 0;border-bottom:1px solid #e2e8df"><strong>' . esc_html(($line['style'] === 'vorm' ? 'Vormletter ' : 'Spuitletter ') . $line['letter']) . '</strong> · ' . esc_html($line['chocolate'] . ' · ' . $line['size']) . (!empty($line['withLogo']) ? ' · <strong>Eigen logo</strong>' : '') . (!empty($line['exceptions']) ? '<br><span style="font-size:13px">' . esc_html(implode(', ', $line['exceptions'])) . '</span>' : '') . (!empty($line['decoration']) ? '<br><strong>Decoratie: ' . esc_html($line['decoration']) . '</strong>' : '') . '</td></tr>';
         }
         $html .= '</table>';
     }
+    $html .= '<div style="margin-top:24px;padding:4px 18px;background:#fff3dc;border-left:4px solid #c48b37"><h2 style="font-size:17px">Belangrijke afspraken</h2>';
     foreach (array('Logo' => $data['logo'], 'Verpakking' => $data['packaging'], 'Tekst of personalisatie' => $data['text']) as $label => $value) if ($value !== '') $html .= '<p><strong>' . esc_html($label) . '</strong><br>' . $paragraph($value) . '</p>';
+    if ($internal && $order['importantNotes'] !== '') $html .= '<p><strong>Interne opmerkingen</strong><br>' . $paragraph($order['importantNotes']) . '</p>';
+    if ($internal && preg_match('/cadeaupapier|inpakpapier/i', $data['packaging']) && !preg_match('/inpakpapier|cadeaupapier/i', implode(' ', array_column($entry['rows'], 'description')))) $html .= '<p><strong>Inpakpapier: losse stuksprijs niet vastgelegd.</strong><br>Zie de prijsafspraak; niet automatisch opnieuw berekenen.</p>';
+    if ($data['logo'] === '' && $data['packaging'] === '' && $data['text'] === '' && (!$internal || $order['importantNotes'] === '')) $html .= '<p>Geen aanvullende afspraken vastgelegd.</p>';
+    $html .= '</div>';
     $html .= '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:24px 0;background:#f0f5ee"><tr><td style="padding:18px"><span style="font-size:12px;letter-spacing:1px">' . ($quotation ? ($order['status'] === 'offerte' ? 'OFFERTETOTAAL EXCL. BTW' : 'PRIJSINDICATIE EXCL. BTW') : 'AFGESPROKEN TOTAAL EXCL. BTW') . '</span><p style="font-size:25px;font-weight:bold;margin:6px 0">' . esc_html($quotation && $data['total'] === '' ? 'Nog af te spreken' : strik_business_b2b_total_label($data['total'])) . '</p>' . ($data['agreement'] !== '' ? '<span style="font-size:13px">' . $paragraph($data['agreement']) . '</span>' : '') . '</td></tr></table>';
     if ($quotation) $html .= '<p style="padding:16px;background:#f0f5ee;border-left:3px solid #244b37">Dit is nog geen definitieve bestelling. ' . ($order['status'] === 'offerte' ? 'Wilt u akkoord geven of iets wijzigen? Antwoord op deze e-mail. Na onze bevestiging is uw bestelling definitief.' : 'Klopt dit overzicht of wilt u iets aanpassen? Antwoord op deze e-mail; we stemmen de prijs en levering samen af.') . '</p>';
-    $html .= '<h2 style="font-size:18px;margin:24px 0 10px">Contactgegevens</h2><p><strong>' . esc_html($data['company']) . '</strong><br>' . esc_html($data['contact']) . '<br>' . esc_html($data['email'] !== '' ? $data['email'] : 'Geen e-mailadres opgegeven') . ($data['phone'] !== '' ? '<br>' . esc_html($data['phone']) : '') . '</p>';
+    if (!$internal) $html .= '<h2 style="font-size:18px;margin:24px 0 10px">Contactgegevens</h2><p><strong>' . esc_html($data['company']) . '</strong><br>' . esc_html($data['contact']) . '<br>' . esc_html($data['email'] !== '' ? $data['email'] : 'Geen e-mailadres opgegeven') . ($data['phone'] !== '' ? '<br>' . esc_html($data['phone']) : '') . '</p>';
     if ($internal) {
-        foreach (array('Interne opmerkingen' => $order['importantNotes'], 'Factuurgegevens' => $order['invoiceInfo'], 'Productiedatum' => $order['productionDate'], 'Oude letteromschrijving' => $order['letterOrderText']) as $label => $value) if ($value !== '') $html .= '<p style="padding-top:12px;border-top:1px solid #e2e8df"><strong>' . esc_html($label) . '</strong><br>' . $paragraph($value) . '</p>';
+        foreach (array('Productiedatum' => $order['productionDate']) as $label => $value) if ($value !== '') $html .= '<p style="padding-top:12px;border-top:1px solid #e2e8df"><strong>' . esc_html($label) . '</strong><br>' . $paragraph($value) . '</p>';
         $url = 'https://app.strik-patisserie.nl/' . ($order['season'] === 'kerst' ? 'kerst' : 'sinterklaas') . '/b2b';
         $html .= '<p><a style="display:inline-block;background:#244b37;color:#fff;padding:13px 20px;border-radius:24px;text-decoration:none;font-weight:bold" href="' . esc_url($url) . '">Open B2B-bestellingen &rarr;</a></p>';
     } elseif ($quotation) $html .= '<p style="margin-top:24px"><strong>Met vriendelijke groet,<br>Team Strik Patisserie</strong></p>';

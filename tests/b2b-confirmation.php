@@ -17,7 +17,7 @@ check(has($mail_calls[0]['body'], 'INTERNE BACK-UP') && has($mail_calls[0]['body
 check(in_array('Content-Type: text/html; charset=UTF-8', $mail_calls[0]['headers']), 'Backup is HTML.');
 $preview = preview_final($final['id']);
 check(!is_wp_error($preview) && count($mail_calls) === 1, 'Opening the popup/preview never sends a customer mail.');
-check(has($preview['html'], 'Uw bestelling is bevestigd!') && has($preview['html'], '€ 347,50') && has($preview['html'], '18-12-2026 t/m 20-12-2026'), 'Customer preview shows the agreed amount and complete delivery window.');
+check(has($preview['html'], 'Uw bestelling is bevestigd!') && has($preview['html'], '€ 347,50') && has($preview['html'], 'WEEK 51 · vrijdag · 18 december 2026 t/m WEEK 51 · zondag · 20 december 2026'), 'Customer preview shows the agreed amount and complete delivery window.');
 check(!has($preview['html'], 'ALLEEN INTERN') && !has($preview['html'], 'ALLEEN FACTURATIE') && !has($preview['html'], '2026-12-17') && !has($preview['html'], '<test>'), 'Customer mail excludes internal notes, invoicing, planning, and escapes names.');
 check(is_wp_error(mail_final($final, array('confirmationVersion' => 'stale'))) && count($mail_calls) === 1, 'A stale or missing version cannot send.');
 $sent = mail_final($final, array('customerEmail' => 'forged@example.invalid', 'orderText' => 'Forged content'));
@@ -37,7 +37,7 @@ check(count($mail_calls) === 4 && $changed['confirmationMail']['version'] !== $s
 check(is_wp_error(mail_final($sent)) && count($mail_calls) === 4, 'An open stale popup cannot send old details after another edit.');
 $changed_preview = preview_final($sent['id']);
 $changed_sent = mail_final($changed);
-check(count($mail_calls) === 5 && has($mail_calls[4]['body'], '€ 300,00') && has($mail_calls[4]['body'], '21-12-2026') && $mail_calls[4]['body'] === $changed_preview['html'] && has($mail_calls[4]['body'], 'Uw bestelling is aangepast'), 'Changed confirmation is deliberate, current and matches its preview.');
+check(count($mail_calls) === 5 && has($mail_calls[4]['body'], '€ 300,00') && has($mail_calls[4]['body'], '21 december 2026') && $mail_calls[4]['body'] === $changed_preview['html'] && has($mail_calls[4]['body'], 'Uw bestelling is aangepast'), 'Changed confirmation is deliberate, current and matches its preview.');
 $reverted = b2b_save(array('id' => $sent['id'], 'totalExVat' => '347.50', 'deliveryDateEnd' => '2026-12-20'));
 check($reverted['confirmationMail']['version'] !== $sent['confirmationMail']['version'], 'Reverting to an earlier value is a new version, not an old already-sent receipt.');
 $forged = b2b_save(array('id' => $sent['id'], 'confirmationMail' => array('version' => 'forged'), 'confirmationEmailedAt' => 'forged'));
@@ -90,7 +90,7 @@ $legacy_html = strik_business_b2b_confirmation_html($legacy);
 foreach (array('OUD CONTACT', 'OUD PRODUCTBEDRAG', 'OUD TOTAAL', 'OUDE DATUM', 'OUD BEDRAG', '3×', 'Spuitletter S') as $old) check(!has($legacy_html, $old), 'Final mail excludes stale inquiry value: ' . $old);
 check(has($legacy_html, '30×') && has($legacy_html, 'Spuitletter M') && has($legacy_html, 'vegan') && has($legacy_html, '€ 250,00'), 'Edited letter rows and agreed total are authoritative.');
 $legacy['sourceSheet'] = '__STRIK_LEVERPERIODE__range|2026-12-22|';
-check(has(strik_business_b2b_confirmation_html($legacy), '18-12-2026 t/m 22-12-2026'), 'The existing delivery-window marker is rendered losslessly.');
+check(has(strik_business_b2b_confirmation_html($legacy), 'WEEK 51 · vrijdag · 18 december 2026 t/m WEEK 52 · dinsdag · 22 december 2026'), 'The existing delivery-window marker is rendered losslessly.');
 $historic = b2b_save(array_merge(final_fixture('historical-import'), array('status' => 'akkoord', 'source' => 'excel')));
 check(!is_wp_error($historic), 'Historical imports still save without customer mail.');
 echo "PASS final folder conversions, edited letters and complete delivery windows\n";
