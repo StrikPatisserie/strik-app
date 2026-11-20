@@ -1,6 +1,7 @@
 "use client";
 
 import { createPortal } from "react-dom";
+import { useProductionPrint, type PrepareProductionPrint } from "./useProductionPrint";
 import type { ProductionBatchSeed } from "./ProductionPlanningClient";
 import { productionSections, productionVariant } from "./productionPresentation";
 import { productionRecipientsFor, productionSourceBreakdown } from "./productionSources";
@@ -63,6 +64,7 @@ export function ProductionDistributionSheet({batch}:Readonly<{batch:ProductionBa
   </article>;
 }
 
-export default function ProductionDistributionPrint({batch,onClose}:Readonly<{batch:ProductionBatchSeed;onClose:()=>void}>) {
-  return createPortal(<div className={styles.overlay} role="dialog" aria-modal="true" aria-labelledby="distribution-print-title"><div className={styles.toolbar}><div><h2 id="distribution-print-title">Verdelen / printvoorbeeld</h2><p>A4 portret · compact · uitknippen per klantbestelling</p></div><div className={styles.actions}><button type="button" onClick={onClose}>Sluiten</button><button type="button" className={styles.printButton} onClick={()=>window.print()}>Print verdeellijst</button></div></div><div className={styles.paperViewport}><ProductionDistributionSheet batch={batch}/></div></div>,document.body);
+export default function ProductionDistributionPrint({batch,onClose,onPreparePrint}:Readonly<{batch:ProductionBatchSeed;onClose:()=>void;onPreparePrint?:PrepareProductionPrint}>) {
+  const printing = useProductionPrint(batch,onPreparePrint);
+  return createPortal(<div className={`${styles.overlay} ${printing.unconfirmed ? styles.unconfirmedPrint : ""}`} role="dialog" aria-modal="true" aria-labelledby="distribution-print-title"><div className={styles.toolbar}><div><h2 id="distribution-print-title">Verdelen / printvoorbeeld</h2><p>A4 portret · compact · uitknippen per klantbestelling</p></div><div className={styles.actions}><button type="button" disabled={printing.busy} onClick={onClose}>Sluiten</button><button type="button" className={styles.printButton} disabled={printing.busy} onClick={printing.print}>{printing.busy ? "Vastzetten…" : printing.unconfirmed ? "Vastzetten en printen" : "Print verdeellijst"}</button></div></div>{printing.error&&<p className={styles.toolbar} role="alert">{printing.error}</p>}{printing.unconfirmed&&<p className={styles.toolbar}>Bij ‘Vastzetten en printen’ staat deze lijst vast, ook als je het printvenster annuleert. Nieuwe letters plan je daarna op een andere productiedag.</p>}<p className={styles.printGuard}>Deze extra productiedag staat nog niet vast. Gebruik ‘Vastzetten en printen’ in de app.</p><div className={styles.paperViewport}><ProductionDistributionSheet batch={printing.batch}/></div></div>,document.body);
 }

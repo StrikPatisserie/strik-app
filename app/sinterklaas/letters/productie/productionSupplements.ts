@@ -10,6 +10,8 @@ type ProductionSupplementRecord = {
   createdBy: string | null;
   createdByName: string;
   planRevision: number;
+  lockedAt?: string;
+  lockedBy?: string | null;
 };
 
 export type ProductionSupplement = ProductionSupplementRecord & {
@@ -46,7 +48,7 @@ export function combinedProductionRows(rows: ProductionSeedRow[], supplements: P
   });
 }
 
-// One extra run per date within the original production round. Keep the first
+// Merge only unprinted runs on the same date. Printed snapshots stay separate. Keep the first
 // identifier so its checklist/print links remain stable, and sum actual production.
 export function mergeProductionSupplementsByDate(supplements: ProductionSupplement[]) {
   const byDate = new Map<string, ProductionSupplement>();
@@ -55,8 +57,9 @@ export function mergeProductionSupplementsByDate(supplements: ProductionSuppleme
     return [{ id: item.id, name: item.name, date: item.date, rows: item.rows, createdAt: item.createdAt, createdBy: item.createdBy, createdByName: item.createdByName, planRevision: item.planRevision }];
   };
   for (const item of supplements) {
-    const existing = byDate.get(item.date);
-    byDate.set(item.date, existing ? {
+    const identity = item.lockedAt ? `printed:${item.id}` : `open:${item.date}`;
+    const existing = byDate.get(identity);
+    byDate.set(identity, existing ? {
       ...existing,
       rows: combinedProductionRows([...existing.rows, ...item.rows]),
       planRevision: Math.max(existing.planRevision, item.planRevision) + 1,
@@ -123,6 +126,9 @@ export function createProductionSupplement(rows: ProductionSeedRow[], supplement
   const today = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Amsterdam" }).format(new Date(details.createdAt));
   if (!/^\d{4}-\d{2}-\d{2}$/.test(details.date) || !Number.isFinite(Date.parse(details.date)) || new Date(`${details.date}T12:00:00Z`).toISOString().slice(0, 10) !== details.date || details.date < today) {
     throw new Error("Kies een geldige productiedag vanaf vandaag.");
+  }
+  if (supplements.some(item => item.date === details.date && item.lockedAt)) {
+    throw new Error("Deze extra productiedag is al geprint en staat vast. Kies een nieuwe productiedag voor de extra letters.");
   }
   const extraRows: ProductionSeedRow[] = [];
   for (const group of changes.filter(item => selected.has(item.id))) {

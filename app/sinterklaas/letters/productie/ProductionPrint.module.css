@@ -34,9 +34,15 @@
 .table { width: 100%; border-collapse: collapse; table-layout: fixed; color: #111; font: inherit; }
 .table caption { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
 .letterCol { width: 14mm; }
-.quantityCol { width: 22mm; }
+.quantityCol { width: 19mm; }
 .totalCol { width: 30mm; }
-.doneCol { width: 22mm; }
+.doneCol { width: 17mm; }
+.deliveryCol { width: 33mm; }
+.delivery { font-size: 8pt; }
+.delivery > div { display: flex; justify-content: space-between; gap: 1mm; padding: .5mm; }
+.delivery span { white-space: nowrap; }
+.printGuard { display: none; }
+.actions button:disabled { opacity: .55; cursor: wait; }
 .groupHeading th { padding: 1.5mm 0 1.2mm; border-top: 2pt solid #111; border-bottom: 1pt solid #111; text-align: left; }
 .groupHeading th > div { display: flex; align-items: baseline; justify-content: space-between; gap: 4mm; }
 .sheet h3 { color: #111; font: 700 11pt/1.25 Arial, Helvetica, sans-serif; }
@@ -168,3 +174,8 @@
 .cutoutNotes { margin-top:1mm !important; font-size:7.5pt; white-space:pre-wrap; }
 @media print { .distributionSheet { width:100%; min-width:0; padding:0; } }
 .combinationMark { font-size:8pt; border:1px solid #555; padding:1mm 1.5mm; }
+
+@media print {
+  .unconfirmedPrint .paperViewport { display: none !important; }
+  .unconfirmedPrint .printGuard { display: block; color: #000; background: #fff; padding: 10mm; }
+}

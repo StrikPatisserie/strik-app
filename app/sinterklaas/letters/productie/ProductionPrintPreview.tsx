@@ -4,8 +4,9 @@ import { createPortal } from "react-dom";
 import type { ProductionBatchSeed } from "./ProductionPlanningClient";
 import { productionRemaining, productionSurplus, productionTotals } from "./productionChecklist";
 import { productionRowIsComplete, productionSections, productionVariant } from "./productionPresentation";
-import { productionRecipientsFor, productionSourceBreakdown } from "./productionSources";
+import { productionRecipientsFor, productionSourceBreakdown, productionDeliveryDates } from "./productionSources";
 import styles from "./ProductionPrint.module.css";
+import { useProductionPrint, type PrepareProductionPrint } from "./useProductionPrint";
 
 const PRINT_CRATES = [
   { id: "winkel", number: 1, label: "Winkelbestelling", lines: ["Winkel-", "bestelling"] },
@@ -49,7 +50,7 @@ export function ProductionPrintSheet({ batch }: Readonly<{ batch: ProductionBatc
           <div><dt>Gemaakt</dt><dd>{totals.produced}</dd></div>
           <div className={styles.openTotal}><dt>Nog te maken</dt><dd>{productionRemaining(batch.rows)}</dd></div>
         </dl>
-        <p>{batch.checklist?.lockedAt ? `Vastgezet: ${printDeadline(batch.checklist.lockedAt)}` : `Voorlopig: aantallen kunnen wijzigen tot ${printDeadline(batch.deadlineAt)}.`}</p>
+        <p>{batch.checklist?.lockedAt ? `Vastgezet: ${printDeadline(batch.checklist.lockedAt)}` : batch.supplementId ? "Voorlopig: vastzetten bij printen. Extra letters kunnen tot die tijd worden toegevoegd." : `Voorlopig: aantallen kunnen wijzigen tot ${printDeadline(batch.deadlineAt)}.`}</p>
       </div>
       {!!batch.checklist?.changes.length && <p className={styles.warning}><strong>LET OP</strong> {batch.checklist.changes.length} wijziging(en) nog niet overgenomen. Controleer deze eerst in de app.</p>}
       {unknownQuantity > 0 && <p className={styles.warning}><strong>HERKOMST CONTROLEREN:</strong> {printQuantity(unknownQuantity)} nog niet aan een krat toegewezen. Deze staan wel in het totaal en zijn hieronder gemarkeerd.</p>}
@@ -62,13 +63,13 @@ export function ProductionPrintSheet({ batch }: Readonly<{ batch: ProductionBatc
     <div className={styles.groups}>
       {productionSections(batch.rows).flatMap(section => section.groups.map(group => <table key={`${section.key}-${group.key}`} className={styles.table}>
         <caption>{section.label} / {group.label}</caption>
-        <colgroup><col className={styles.letterCol} />{PRINT_CRATES.map(crate => <col key={crate.id} className={styles.quantityCol} />)}<col className={styles.totalCol} /><col className={styles.doneCol} /><col /></colgroup>
+        <colgroup><col className={styles.letterCol} />{PRINT_CRATES.map(crate => <col key={crate.id} className={styles.quantityCol} />)}<col className={styles.totalCol} /><col className={styles.doneCol} /><col className={styles.deliveryCol} /><col /></colgroup>
         <thead>
-          <tr className={styles.groupHeading}><th scope="colgroup" colSpan={8}><div><h3><span>{section.label}</span> {group.label}</h3><span>{printQuantity(group.rows.reduce((sum, row) => sum + row.orders + row.stock, 0))}</span></div></th></tr>
+          <tr className={styles.groupHeading}><th scope="colgroup" colSpan={9}><div><h3><span>{section.label}</span> {group.label}</h3><span>{printQuantity(group.rows.reduce((sum, row) => sum + row.orders + row.stock, 0))}</span></div></th></tr>
           <tr className={styles.columns}>
             <th scope="col">Letter</th>
             {PRINT_CRATES.map(crate => <th key={crate.id} scope="col" className={styles.crateColumn} aria-label={`Krat ${crate.number}: ${crate.label}`}><span className={styles.crateNumber}>{crate.number}</span><span className={styles.crateLabel}>{crate.lines[0]}<br />{crate.lines[1]}</span></th>)}
-            <th scope="col">Nog te maken</th><th scope="col">Gereed</th><th scope="col">Bijzonderheden / notities</th>
+            <th scope="col">Nog te maken</th><th scope="col">Gereed</th><th scope="col">Leverdatum</th><th scope="col">Bijzonderheden / notities</th>
           </tr>
         </thead>
         <tbody>{group.rows.map(row => {
@@ -92,6 +93,11 @@ export function ProductionPrintSheet({ batch }: Readonly<{ batch: ProductionBatc
             </td>
             <td className={styles.done}>
               {total > 0 ? <span className={styles.checkBox} aria-label={complete ? "Gereed" : "Nog af te vinken"}>{complete ? "✓" : ""}</span> : <span>-</span>}
+            </td>
+            <td className={styles.delivery} aria-label="Leverdatums en aantallen">
+              {productionDeliveryDates(row).map(({date, quantity}) => <div key={date}>
+                <strong>{date === "onbekend" ? "Nog onbekend" : date === "voorraad" ? "Vrije voorraad" : new Intl.DateTimeFormat("nl-NL", {day:"numeric",month:"short",timeZone:"UTC"}).format(new Date(`${date}T12:00:00Z`))}</strong><span>{quantity} st.</span>
+              </div>)}
             </td>
             <td className={styles.notes}>
               {variant.extras.length > 0 && <div className={styles.extras}>
@@ -119,12 +125,16 @@ export function ProductionPrintSheet({ batch }: Readonly<{ batch: ProductionBatc
   </article>;
 }
 
-export default function ProductionPrintPreviewDialog({ batch, onClose }: Readonly<{ batch: ProductionBatchSeed; onClose: () => void }>) {
-  return createPortal(<div className={styles.overlay} role="dialog" aria-modal="true" aria-labelledby="production-print-title">
+export default function ProductionPrintPreviewDialog({ batch, onClose, onPreparePrint }: Readonly<{ batch: ProductionBatchSeed; onClose: () => void; onPreparePrint?: PrepareProductionPrint }>) {
+  const printing = useProductionPrint(batch, onPreparePrint);
+  return createPortal(<div className={`${styles.overlay} ${printing.unconfirmed ? styles.unconfirmedPrint : ""}`} role="dialog" aria-modal="true" aria-labelledby="production-print-title">
     <div className={styles.toolbar}>
       <div><h2 id="production-print-title">Productielijst / printvoorbeeld</h2><p>A4 liggend · zwart-wit · verdeling over 4 kratten</p></div>
-      <div className={styles.actions}><button type="button" onClick={onClose}>Sluiten</button><button type="button" onClick={() => window.print()} className={styles.printButton}>Print productielijst</button></div>
+      <div className={styles.actions}><button type="button" disabled={printing.busy} onClick={onClose}>Sluiten</button><button type="button" disabled={printing.busy} onClick={printing.print} className={styles.printButton}>{printing.busy ? "Vastzetten…" : printing.unconfirmed ? "Vastzetten en printen" : "Print productielijst"}</button></div>
     </div>
-    <div className={styles.paperViewport}><ProductionPrintSheet batch={batch} /></div>
+    {printing.error && <p className={styles.toolbar} role="alert">{printing.error}</p>}
+    {printing.unconfirmed && <p className={styles.toolbar}>Bij ‘Vastzetten en printen’ staat deze lijst vast, ook als je het printvenster annuleert. Nieuwe letters plan je daarna op een andere productiedag.</p>}
+    <p className={styles.printGuard}>Deze extra productiedag staat nog niet vast. Gebruik ‘Vastzetten en printen’ in de app.</p>
+    <div className={styles.paperViewport}><ProductionPrintSheet batch={printing.batch} /></div>
   </div>, document.body);
 }

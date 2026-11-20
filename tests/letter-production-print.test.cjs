@@ -195,3 +195,24 @@ test('decorated letters remain a separate clearly marked production print row', 
   assert(values.some(row=>row.text.includes('decoratie: Blauwe balletjes')&&row.total===2));
   assert(values.some(row=>!row.text.includes('Blauwe balletjes')&&row.total===3));
 });
+
+test('delivery column splits a shared letter by exact dates and quantities without guessing missing dates', () => {
+ const source = {...batch, rows:[row({orders:15,stock:4,orderSources:{b2b:12,online:3},recipients:[
+  {id:'a',source:'b2b',customerName:'A',quantity:5,date:'2026-11-23'},
+  {id:'b',source:'b2b',customerName:'B',quantity:7,date:'2026-11-26'},
+  {id:'c',source:'online',customerName:'C',quantity:2,date:'2026-11-23'},
+  {id:'d',source:'online',customerName:'D',quantity:1,date:'2026-02-30'},
+ ]})]};
+ const before=JSON.stringify(source),sheet=ProductionPrintSheet({batch:source});
+ const cells=elements(sheet,n=>n.props['aria-label']==='Leverdatums en aantallen');
+ assert.equal(cells.length,1);
+ assert.deepEqual(elements(cells[0],n=>n.type==='div').map(text),['23 nov7 st.','26 nov7 st.','Nog onbekend1 st.','Vrije voorraad4 st.']);
+ assert.equal(JSON.stringify(source),before);
+ assert.equal(elements(sheet,n=>n.type==='th'&&text(n)==='Leverdatum').length,1);
+});
+
+test('unresolved recipient allocations print unknown rather than inventing a delivery date',()=>{
+ const sheet=ProductionPrintSheet({batch:{...batch,rows:[row({orders:5,orderSources:{b2b:5},recipients:[{id:'a',source:'b2b',customerName:'A',quantity:7,date:'2026-11-23'}]})]}});
+ const cell=elements(sheet,n=>n.props['aria-label']==='Leverdatums en aantallen')[0];
+ assert.equal(text(cell),'Nog onbekend5 st.');
+});

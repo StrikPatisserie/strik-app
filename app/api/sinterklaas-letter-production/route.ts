@@ -81,7 +81,7 @@ export async function POST(request: Request) {
   try { data = await request.json(); } catch { return jsonError("Ongeldig verzoek."); }
   if (!data || typeof data !== "object") return jsonError("Ongeldig verzoek.");
   const { batchId, revision, action, key, quantity } = data;
-  if (typeof batchId !== "string" || !/^[0-9a-f-]{36}$/i.test(batchId) || (!Number.isSafeInteger(revision) || Number(revision) < 0) || !["quantity", "revise", "supplement"].includes(String(action))) return jsonError("Ongeldige productielijst.");
+  if (typeof batchId !== "string" || !/^[0-9a-f-]{36}$/i.test(batchId) || (!Number.isSafeInteger(revision) || Number(revision) < 0) || !["quantity", "revise", "supplement", "print"].includes(String(action))) return jsonError("Ongeldige productielijst.");
   if (action === "revise") return jsonError("Een vastgezette productielijst blijft behouden. Plan extra letters in op een extra productiedag.", 409);
   try {
     const db = createAdminClient() as unknown as SupabaseClient;
@@ -93,7 +93,11 @@ export async function POST(request: Request) {
     const list = stored.data as SavedChecklist | null;
     if ((list?.revision || 0) !== revision) return jsonError("De lijst is intussen gewijzigd. De nieuwste versie wordt geladen. Controleer je wijziging opnieuw.", 409);
     let currentRows: ProductionSeedRow[] | undefined;
-    if (!list?.locked_at || action !== "quantity") {
+    if (action === "print") {
+      const supplement = list?.supplements?.find(item => item.id === data.supplementId);
+      if (!list?.locked_at || !supplement) return jsonError("Aanvullende productielijst niet gevonden.", 404);
+    }
+    if (action !== "print" && (!list?.locked_at || action !== "quantity")) {
       const current = await loadCurrent(String(batchResult.data.season));
       const batch = current.batches.find(item => item.id === batchId);
       if (!batch) return jsonError("Productieronde niet gevonden.", 404);
@@ -101,7 +105,11 @@ export async function POST(request: Request) {
     }
     let rows = list?.locked_at ? list.rows : reviseProductionRows(list?.rows || [], currentRows!);
     let supplements = mergeProductionSupplementsByDate(list?.supplements || []);
-    if (action === "quantity") {
+    if (action === "print") {
+      const supplement = supplements.find(item => item.id === data.supplementId)!;
+      if (supplement.lockedAt) return Response.json({ list });
+      supplements = supplements.map(item => item.id === supplement.id ? { ...item, lockedAt: new Date().toISOString(), lockedBy: profile?.id || null } : item);
+    } else if (action === "quantity") {
       if (typeof key !== "string" || typeof quantity !== "number") return jsonError("Controleer het geproduceerde aantal.");
       if (data.supplementId !== undefined) {
         if (typeof data.supplementId !== "string" || !supplements.some(item => item.id === data.supplementId)) return jsonError("Aanvullende productielijst niet gevonden.", 404);

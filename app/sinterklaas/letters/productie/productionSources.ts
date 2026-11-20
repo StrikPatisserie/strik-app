@@ -95,3 +95,17 @@ export function productionRecipientsFor(row: ProductionSeedRow, source: Producti
   if (total>expected) return [unknown(expected,`Klantregels tellen op tot ${total}; op de productielijst staan ${expected}. Controleer dit eerst in de app.`)];
   return [...recipients.map(item=>({...item,unresolved:false})),...(total<expected?[unknown(expected-total,"Voor dit aantal is nog geen volledige ontvanger vastgelegd. Eerst controleren, daarna verdelen.")]:[])];
 }
+
+
+export function productionDeliveryDates(row: ProductionSeedRow) {
+  const dates = new Map<string, number>();
+  for (const source of productionSourceBreakdown(row)) {
+    for (const recipient of productionRecipientsFor(row, source.id)) {
+      const value = recipient.date || "";
+      const validDate = /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value;
+      const date = source.id === "voorraad" ? "voorraad" : !recipient.unresolved && validDate ? value : "onbekend";
+      dates.set(date, (dates.get(date) || 0) + recipient.quantity);
+    }
+  }
+  return [...dates].sort(([a], [b]) => a.localeCompare(b)).map(([date, quantity]) => ({ date, quantity }));
+}

@@ -225,7 +225,7 @@ function distributionTotal(distribution: StartDistribution) {
 }
 
 function batchIsLocked(batch: ProductionBatchSeed) {
-  return Boolean(batch.checklist?.lockedAt) || productionDeadlinePassed(batch);
+  return batch.supplementId ? Boolean(batch.checklist?.lockedAt) : Boolean(batch.checklist?.lockedAt) || productionDeadlinePassed(batch);
 }
 
 function addDays(date: string, days: number) {
@@ -1563,7 +1563,7 @@ export default function ProductionPlanningClient({
       supplementName: supplement.name, startDate: supplement.date, date: supplement.date,
       createdAt: supplement.createdAt, createdByName: supplement.createdByName,
       storeOrders: [], rows: [...supplement.rows].sort(compareProductionRows),
-      checklist: { ...batch.checklist!, changes: [], orderChanges: [], pendingOrderChanges: [], supplements: [], planRevision: supplement.planRevision },
+      checklist: { ...batch.checklist!, changes: [], orderChanges: [], pendingOrderChanges: [], supplements: [], lockedAt: supplement.lockedAt || null, planRevision: supplement.planRevision },
     }))]);
     const grandRows = aggregateProductionRows(batchViews.flatMap((batch) => batch.rows));
 
@@ -1620,6 +1620,29 @@ export default function ProductionPlanningClient({
   const pendingB2B = [...pendingCustomers.values()].filter(group => group.source === "b2b").length;
   const pendingOther = pendingCustomers.size - pendingB2B;
 
+  async function prepareProductionPrint(batch: ProductionBatchSeed): Promise<ProductionBatchSeed> {
+    if (!batch.supplementId) return batch;
+    if (savingProduction) throw new Error("Er wordt nog opgeslagen. Probeer daarna opnieuw.");
+    setSavingProduction(true);
+    productionMutationVersion.current += 1;
+    try {
+      const response = await fetch("/api/sinterklaas-letter-production", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({batchId:batch.parentBatchId, supplementId:batch.supplementId, revision:batch.checklist?.revision, action:"print"}), signal:AbortSignal.timeout(15000)});
+      const result = await response.json();
+      if (!response.ok) {
+        if (response.status === 409) setRefreshVersion(value => value + 1);
+        throw new Error(`${result.message || "Vastzetten is mislukt."} Sluit het printvoorbeeld en open de nieuwste lijst.`);
+      }
+      const list = result.list;
+      const supplement = list.supplements?.find((item: {id:string}) => item.id === batch.supplementId);
+      if (!supplement?.lockedAt) throw new Error("Vastzetten is niet bevestigd. Ververs de planning.");
+      setLiveBatches(current => current?.map(item => item.id === batch.parentBatchId && item.checklist ? {...item, rows:list.rows, checklist:{...item.checklist, revision:list.revision, updatedAt:list.updated_at, supplements:list.supplements}} : item) || null);
+      return {...batch, rows:supplement.rows, startDate:supplement.date, date:supplement.date, checklist:{...batch.checklist!, revision:list.revision, planRevision:supplement.planRevision, lockedAt:supplement.lockedAt, updatedAt:list.updated_at}};
+    } finally {
+      productionMutationVersion.current += 1;
+      setSavingProduction(false);
+    }
+  }
+
   async function saveProduction(batch: ProductionBatchSeed, action: "quantity" | "supplement", row?: WorkingRow, quantity?: number, extra?: { date: string; customerIds: string[] }) {
     if (savingProduction) return false;
     setProductionNoticeBatch(batch.id);
@@ -1640,7 +1663,7 @@ export default function ProductionPlanningClient({
       }
       const list = result.list;
       setLiveBatches(current => current?.map(item => item.id === (batch.parentBatchId || batch.id) ? {...item, rows: list.rows, checklist: result.checklist || {revision: list.revision, planRevision: list.plan_revision, lockedAt: list.locked_at, planVersion: item.checklist?.lockedAt ? item.checklist.planVersion : productionPlanVersion(list.rows), updatedAt: list.updated_at, supplements: list.supplements || [], changes: item.checklist?.changes || [], orderChanges: [], pendingOrderChanges: item.checklist?.pendingOrderChanges || []}} : item) || null);
-      setProductionNotice(action === "supplement" ? "Extra productiedag opgeslagen. Letters op dezelfde datum staan samen op één lijst. Print de bijgewerkte lijst opnieuw." : "Productievoortgang opgeslagen.");
+      setProductionNotice(action === "supplement" ? "Extra productiedag opgeslagen. De lijst blijft open tot je deze vastzet en print." : "Productievoortgang opgeslagen.");
       return true;
     } catch (error) {
       setProductionNotice(error instanceof Error ? error.message : "Opslaan is mislukt.");
@@ -1742,7 +1765,7 @@ export default function ProductionPlanningClient({
               <p className={styles.tableLegend}>Besteld = klantbestellingen · Winkel = vrije winkelvoorraad</p>
             </div>
             <div className={styles.checklistNote}>
-              {batch.supplementId ? <>Aangemaakt {batch.createdAt ? formatDeadline(batch.createdAt) : ""}{batch.createdByName ? ` door ${batch.createdByName}` : ""} · versie {batch.checklist?.planRevision}</> : batch.checklist?.lockedAt ? <>Vastgezet op {formatDeadline(batch.checklist.lockedAt)} · versie {batch.checklist.planRevision}. Tik op het aantal om gemaakte aantallen te registreren.</> : <>Bestellen tot {formatDeadline(batch.deadlineAt)}. Gemaakte aantallen kun je nu al registreren.</>}
+              {batch.supplementId ? <>Aangemaakt {batch.createdAt ? formatDeadline(batch.createdAt) : ""}{batch.createdByName ? ` door ${batch.createdByName}` : ""} · versie {batch.checklist?.planRevision} · {batch.checklist?.lockedAt ? `Vastgezet bij printen op ${formatDeadline(batch.checklist.lockedAt)}` : "Open tot printen"}</> : batch.checklist?.lockedAt ? <>Vastgezet op {formatDeadline(batch.checklist.lockedAt)} · versie {batch.checklist.planRevision}. Tik op het aantal om gemaakte aantallen te registreren.</> : <>Bestellen tot {formatDeadline(batch.deadlineAt)}. Gemaakte aantallen kun je nu al registreren.</>}
             </div>
             {productionNotice && productionNoticeBatch === batch.id && <p role="status" className={styles.checklistNote}>{productionNotice}</p>}
             <ProductionTable rows={batch.rows} saving={savingProduction}
@@ -1794,10 +1817,10 @@ export default function ProductionPlanningClient({
         />
       )}
       {distributionBatch && (
-        demoMode ? <DistributionPreviewDialog batch={distributionBatch} onClose={() => setDistributionBatch(null)} /> : <ProductionDistributionPrint batch={distributionBatch} onClose={() => setDistributionBatch(null)} />
+        demoMode ? <DistributionPreviewDialog batch={distributionBatch} onClose={() => setDistributionBatch(null)} /> : <ProductionDistributionPrint batch={distributionBatch} onPreparePrint={prepareProductionPrint} onClose={() => setDistributionBatch(null)} />
       )}
       {productionPrintBatch && (
-        <ProductionPrintPreviewDialog batch={productionPrintBatch} onClose={() => setProductionPrintBatch(null)} />
+        <ProductionPrintPreviewDialog batch={productionPrintBatch} onPreparePrint={prepareProductionPrint} onClose={() => setProductionPrintBatch(null)} />
       )}
       {quantityDialog && <div className={`${styles.progressOverlay} ${styles.dialog}`} role="dialog" aria-modal="true" aria-labelledby="quantity-title"><form className={styles.progressDialog} onSubmit={async event => {event.preventDefault(); if (!/^\d+$/.test(quantityDraft)) return; const saved = await saveProduction(quantityDialog.batch, "quantity", quantityDialog.row, Number(quantityDraft)); if (saved) setQuantityDialog(null);}}>
         <h2 id="quantity-title">Hoeveel zijn er gemaakt?</h2><p>{quantityDialog.row.label}</p><p>Nu nodig <strong>{quantityDialog.row.orders + quantityDialog.row.stock} stuks</strong></p>

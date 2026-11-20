@@ -20,7 +20,8 @@ export default function ProductionChangesDialog({ batch, saving, notice, onClose
   const dialog = useRef<HTMLDialogElement>(null);
   const groups = batch.checklist?.pendingOrderChanges || [];
   const extra = groups.filter(item => selected.includes(item.id)).reduce((sum, item) => sum + item.extra, 0);
-  const existingExtra = batch.checklist?.supplements?.some(item => item.date === date);
+  const existingExtra = batch.checklist?.supplements?.some(item => item.date === date && !item.lockedAt);
+  const printedDate = batch.checklist?.supplements?.some(item => item.date === date && item.lockedAt);
   const today = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Amsterdam" }).format(new Date());
   useEffect(() => {
     const element = dialog.current;
@@ -31,7 +32,7 @@ export default function ProductionChangesDialog({ batch, saving, notice, onClose
 
   return <dialog ref={dialog} className={styles.changesDialog} aria-labelledby="letter-changes-title" onCancel={event => { event.preventDefault(); if (!saving) onClose(); }}>
     <header className={styles.changesHead}><div><h2 id="letter-changes-title">Extra letters inplannen</h2><p>Productieronde {dateLabel(batch.startDate)}</p></div><button type="button" aria-label="Sluiten" className={styles.button} disabled={saving} onClick={onClose}>×</button></header>
-    <form onSubmit={async event => { event.preventDefault(); await onSchedule(date, selected); }}>
+    <form onSubmit={async event => { event.preventDefault(); if (!printedDate) await onSchedule(date, selected); }}>
       <div className={styles.customerChanges}>
         {groups.map(group => <section key={group.id} className={styles.customerChange}>
           <div className={styles.customerChangeHead}>
@@ -43,7 +44,7 @@ export default function ProductionChangesDialog({ batch, saving, notice, onClose
         </section>)}
         {!groups.length && <p>Geen extra letters om in te plannen.</p>}
       </div>
-      {groups.some(group => group.extra > 0) && <section className={styles.scheduleSupplement}><h3>Aanvullende productie inplannen</h3><p>{existingExtra ? `Deze letters komen bij de extra productiedag van ${dateLabel(date)}.` : "Kies klanten hierboven en een productiedag."}</p><div><label>Productiedag<input type="date" required min={today} max={`${batch.startDate.slice(0, 4)}-12-31`} value={date} disabled={saving} onChange={event => setDate(event.target.value)} /></label><button type="submit" className={styles.primary} disabled={saving || !extra || !date}>{saving ? "Opslaan…" : existingExtra ? `${extra} letters toevoegen` : `${extra} extra letters inplannen`}</button></div></section>}
+      {groups.some(group => group.extra > 0) && <section className={styles.scheduleSupplement}><h3>Aanvullende productie inplannen</h3><p>{printedDate ? "Deze productiedag is al geprint en staat vast. Kies een andere productiedag." : existingExtra ? `Deze letters komen bij de extra productiedag van ${dateLabel(date)}.` : "Kies klanten hierboven en een productiedag."}</p><div><label>Productiedag<input type="date" required min={today} max={`${batch.startDate.slice(0, 4)}-12-31`} value={date} disabled={saving} onChange={event => setDate(event.target.value)} /></label><button type="submit" className={styles.primary} disabled={saving || !extra || !date || printedDate}>{saving ? "Opslaan…" : existingExtra ? `${extra} letters toevoegen` : `${extra} extra letters inplannen`}</button></div></section>}
       {notice && <p role="alert" className={styles.error}>{notice}</p>}
     </form>
   </dialog>;

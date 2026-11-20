@@ -679,3 +679,63 @@ test('the extra-demand queue excludes fulfilment, reductions and metadata-only c
  assert.equal(supplements.pendingProductionOrders(supplements.combinedProductionRows(saved,[extra]),current).length,0);
  assert.equal(supplements.pendingProductionOrders(saved,[customerRow([recipient('A',10,{customerName:'Updated name'}),recipient('B',4)])]).length,0);
 });
+
+test('extra production stays open on read; print freezes only its snapshot and repeated prints are read-only',async()=>{
+ const f=endpointFixture({wpFailure:true});
+ const extra={...extraDetails({date:'2026-11-21'}),name:'Aanvulling 1',planRevision:5,rows:[customerRow([recipient('A',7)],{produced:2})],mergedLists:[]};
+ f.setSaved({...f.saved,supplements:[extra]});
+ const before=plain(f.saved);
+ const payload={batchId:id,supplementId:extra.id,revision:1,action:'print'};
+ const printed=await f.api.POST(f.request(payload));
+ assert.equal(printed.status,200,await printed.clone().text());
+ assert(f.saved.supplements[0].lockedAt);assert.equal(f.saved.revision,2);
+ assert.deepEqual(plain(f.saved.rows),before.rows);
+ assert.deepEqual(plain(f.saved.supplements[0].rows),before.supplements[0].rows);
+ assert.equal(f.saved.plan_revision,before.plan_revision);assert.equal(f.saved.supplements[0].planRevision,5);
+ const locked=plain(f.saved);
+ assert.equal((await f.api.POST(f.request({...payload,revision:2}))).status,200);
+ assert.deepEqual(plain(f.saved),locked);assert.equal(f.writes.length,1);
+ assert.equal((await f.api.POST(f.request(payload))).status,409);
+ assert.equal((await f.api.POST(f.request({...payload,revision:2,supplementId:'missing'}))).status,404);
+ assert.equal((await f.api.POST(f.request({...payload,revision:2,supplementId:undefined}))).status,404);
+ const made=await f.api.POST(f.request({batchId:id,supplementId:extra.id,revision:2,action:'quantity',key:row().key,quantity:7}));
+ assert.equal(made.status,200);assert.equal(f.saved.supplements[0].rows[0].produced,7);
+ assert.equal(f.saved.supplements[0].lockedAt,locked.supplements[0].lockedAt);
+ assert.deepEqual(plain(f.saved.rows),before.rows);
+});
+
+test('print cannot bypass permissions, origin checks or a simultaneous saved revision',async()=>{
+ const extra={...extraDetails(),name:'Extra',planRevision:1,rows:[row()]};
+ const payload={batchId:id,supplementId:extra.id,revision:1,action:'print'};
+ for(const options of [{allowed:false},{race:true}]){
+  const f=endpointFixture(options);f.setSaved({...f.saved,supplements:[extra]});
+  assert.equal((await f.api.POST(f.request(payload))).status,options.race?409:403);
+  assert.equal(f.writes.length,0);assert.equal(f.saved.supplements[0].lockedAt,undefined);
+ }
+ const f=endpointFixture();f.setSaved({...f.saved,supplements:[extra]});
+ const request=f.request(payload);request.headers.set('origin','https://other.example');
+ assert.equal((await f.api.POST(request)).status,403);assert.equal(f.writes.length,0);
+});
+
+test('printed extra days never merge with new letters; a new date receives only the increment',()=>{
+ const original=[customerRow([recipient('A',10)])];
+ const current=[customerRow([recipient('A',15)])];
+ const extra=supplements.createProductionSupplement(original,[],current,['b2b:A'],extraDetails());
+ assert.equal(extra.lockedAt,undefined);
+ const locked={...extra,lockedAt:'2099-11-18T10:00:00Z',lockedBy:'baker'};
+ const more=[customerRow([recipient('A',18)])];
+ assert.throws(()=>supplements.createProductionSupplement(original,[locked],more,['b2b:A'],extraDetails({id:'next'})),/al geprint/);
+ const next=supplements.createProductionSupplement(original,[locked],more,['b2b:A'],extraDetails({id:'next',date:'2099-11-21'}));
+ assert.equal(next.rows[0].orders,3);assert.equal(next.lockedAt,undefined);
+ const normalized=supplements.mergeProductionSupplementsByDate([locked,{...next,date:locked.date}]);
+ assert.equal(normalized.length,2);assert.deepEqual(plain(normalized[0]),plain(locked));
+ assert.equal(supplements.pendingProductionOrders(supplements.combinedProductionRows(original,[locked,next]),more).length,0);
+});
+
+test('reading an existing extra day never freezes it from its parent deadline',async()=>{
+ const f=endpointFixture();const extra={...extraDetails(),name:'Extra',planRevision:1,rows:[row()]};
+ f.setSaved({...f.saved,supplements:[extra]});
+ const response=await f.api.GET(new Request('https://app.strik-patisserie.nl/api/sinterklaas-letter-production'));
+ const view=(await response.json()).batches[0];
+ assert(view.checklist.lockedAt);assert.equal(view.checklist.supplements[0].lockedAt,undefined);assert.equal(f.writes.length,0);
+});
