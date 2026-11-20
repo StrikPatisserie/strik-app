@@ -21,7 +21,8 @@ export default function DecorationChecks({state,recipes,week,end,canCheck,busy,o
     {selected&&<form className={s.form} key={selected.fingerprint} onSubmit={e=>{e.preventDefault();const form=new FormData(e.currentTarget);void change({kind:"plan",checkId:selected.id,fingerprint:selected.fingerprint,date:String(form.get("date")),quantity:Number(form.get("quantity")),...(form.get("minutes")?{minutes:Number(form.get("minutes"))}:{})});}}>
       <strong>{selected.code} · {selected.product}</strong>
       <label>Productiedatum<input name="date" type="date" max={selected.date} defaultValue={selected.date} required disabled={busy}/></label>
-      <label>Aantal decoraties<input name="quantity" type="number" min={Math.ceil(selected.quantity)} max="1000000" step="1" defaultValue={Math.ceil(selected.quantity)} required disabled={busy}/></label>
+      <label>Aantal te maken<input name="quantity" type="number" min="1" max="1000000" step="1" defaultValue={Math.ceil(selected.quantity)} required disabled={busy}/></label>
+      <small>Er zijn {selected.quantity.toLocaleString("nl")} nodig. Pas het te maken aantal zelf aan als er nog decoraties liggen.</small>
       <label>Tijd (minuten)<input name="minutes" type="number" min="0" max="1440" placeholder="Optioneel" disabled={busy}/></label>
       <button type="submit" disabled={busy}>Inplannen bij Chocolade</button><button type="button" disabled={busy} onClick={()=>setSelected(null)}>Annuleren</button>
     </form>}

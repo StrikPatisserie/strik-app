@@ -1,6 +1,6 @@
 import { addDays, convertRecipeQuantity, productionRoute, type PreviewState, type DemoRecipe, type Task } from "./planning";
 
-export type DecorationDecision = { fingerprint:string; status:"enough"|"planned"; actorId:string; at:string; productionTaskId?:string };
+export type DecorationDecision = { fingerprint:string; status:"enough"|"planned"; actorId:string; at:string; productionTaskId?:string; productionQuantity?:number };
 export type DecorationCheck = { id:string; fingerprint:string; taskId:string; ingredientId:string; code:string; name:string; product:string; date:string; quantity:number; method:"homemade"|"purchased"; status:"open"|"enough"|"planned"|"made"; productionTask?:Task };
 export type DecorationCommand = { checkId:string; fingerprint:string; kind:"enough"|"reopen"|"plan"; date?:string; quantity?:number; minutes?:number };
 
@@ -27,7 +27,7 @@ export function decorationChecks(state:PreviewState, recipes:DemoRecipe[]):Decor
       const decision=state.decorationChecks?.[id];
       const valid=decision?.fingerprint===fingerprint;
       const producer=valid && decision.productionTaskId?state.tasks.find(t=>t.id===decision.productionTaskId):undefined;
-      const status=valid && decision.status==="enough"?"enough":producer && producer.itemId===`decoration-work:${line.ingredientId}` && producer.status!=="blocked" && producer.date<=task.date && (producer.completedQuantity??producer.quantity)>=quantity?(producer.status==="done"?"made":"planned"):"open";
+      const status=valid && decision.status==="enough"?"enough":producer && producer.itemId===`decoration-work:${line.ingredientId}` && producer.status!=="blocked" && producer.date<=task.date && (producer.completedQuantity??producer.quantity)>=(decision?.productionQuantity??quantity)?(producer.status==="done"?"made":"planned"):"open";
       return {id,fingerprint,taskId:task.id,ingredientId:line.ingredientId,code:line.code,name:line.name,product:item.name,date:task.date,quantity,method:line.method,status,productionTask:producer} as DecorationCheck;
     });
   }).sort((a,b)=>a.date.localeCompare(b.date)||a.code.localeCompare(b.code,"nl",{numeric:true})||a.product.localeCompare(b.product));
@@ -48,12 +48,14 @@ export function applyDecorationCommand(state:PreviewState,recipes:DemoRecipe[],c
   const date=command.date || check.date;addDays(date,0);
   if(date>check.date)throw Error("Plan de decoratie op of vóór de afwerkdatum.");
   const quantity=command.quantity;
-  if(!Number.isSafeInteger(quantity) || quantity!<Math.ceil(check.quantity) || quantity!>1000000)throw Error(`Plan minstens ${Math.ceil(check.quantity)} hele decoraties.`);
+  // The chocolatier may choose only the missing amount. This decision is not
+  // a count of existing stock and does not create a balance or reservation.
+  if(!Number.isSafeInteger(quantity) || quantity!<1 || quantity!>1000000)throw Error("Vul een positief, heel aantal te maken decoraties in.");
   if(command.minutes!==undefined && (!Number.isFinite(command.minutes)||command.minutes<0||command.minutes>1440))throw Error("Vul een tijd tussen 0 en 1440 minuten in.");
   const id=createId(),itemId=`decoration-work:${check.ingredientId}`;
   const item={id:itemId,name:check.name,kind:"activity" as const,departmentId:"chocolade" as const,unit:"stuks" as const,note:"Chocoladedecoratie",stock:0,stockKnown:false};
   const task:Task={id,itemId,departmentId:"chocolade",date,quantity:quantity!,operation:check.method==="purchased"?"Klaarzetten / bestellen":"Decoraties maken",status:"planned",note:`Voor ${check.product} · afwerken ${check.date} · ${check.quantity.toLocaleString("nl")} stuks nodig.`,source:"manual",dueDate:check.date,batchId:`batch:${id}`,recordsOutput:false,...(command.minutes!==undefined?{minutes:command.minutes}:{})};
-  decisions[check.id]={fingerprint:check.fingerprint,status:"planned",productionTaskId:id,actorId,at};
+  decisions[check.id]={fingerprint:check.fingerprint,status:"planned",productionTaskId:id,productionQuantity:quantity,actorId,at};
   return {...state,items:state.items.some(i=>i.id===itemId)?state.items:[...state.items,item],tasks:[...state.tasks,task],decorationChecks:decisions};
 }
 
