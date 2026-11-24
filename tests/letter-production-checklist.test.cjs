@@ -173,14 +173,21 @@ test('actual cancellations and quantity changes still require review after fulfi
  }
 });
 
-function endpointFixture({allowed=true,locked=true,existing=true,wpFailure=false,race=false,cron=false,freezeRace=false,insertRace=false}={}) {
+function endpointFixture({allowed=true,locked=true,existing=true,wpFailure=false,race=false,cron=false,freezeRace=false,insertRace=false,extraBatches=[],rpcFails=false,season=2026}={}) {
  let current=batch({status:locked?'IN_PRODUCTION':'OPEN',deadlineAt:locked?'2020-01-01T19:00:00Z':'2099-01-01T19:00:00Z'});
  let wordpress={letters:[],b2b:[]};
  let saved=existing?{batch_id:id,rows:[row()],revision:1,plan_revision:1,locked_at:locked?'2020-01-01T19:00:00Z':null,updated_at:'2020-01-01T19:00:00Z'}:null;
  const writes=[];
  let raceOccurred=false;
- const db={from(table){let action='read',values,filters={};const q={select(){return q},eq(k,v){filters[k]=v;return q},in(){return q},maybeSingle(){return q},single(){return q},insert(v){action='insert';values=v;return q},update(v){action='update';values=v;return q},then(resolve){let data,error=null;
- if(table==='letter_production_batches')data={status:current.status,order_deadline_at:current.deadlineAt,season:2026};
+ const db={async rpc(name,params){
+  assert.equal(name,'letter_attach_production_supplement');
+  if(rpcFails)return {data:null,error:{code:'P0001',message:'De hoofdproductiedag staat intussen vast.'}};
+  assert.equal(params.p_revision,saved.revision);
+  writes.push({action:'attach',values:params});
+  saved={...saved,revision:saved.revision+1,supplements:[...(saved.supplements||[]),params.p_supplement]};
+  return {data:saved,error:null};
+ },from(table){let action='read',values,filters={};const q={select(){return q},eq(k,v){filters[k]=v;return q},in(){return q},maybeSingle(){return q},single(){return q},insert(v){action='insert';values=v;return q},update(v){action='update';values=v;return q},then(resolve){let data,error=null;
+ if(table==='letter_production_batches')data={status:current.status,order_deadline_at:current.deadlineAt,season};
  else if(table==='letter_production_checklists'){
   if(action==='insert'){
    if(insertRace&&!saved)saved={batch_id:id,rows:[row({produced:12})],revision:1,plan_revision:1,locked_at:null,updated_at:'now'};
@@ -199,7 +206,7 @@ function endpointFixture({allowed=true,locked=true,existing=true,wpFailure=false
   '@/app/lib/auth/session':{getCurrentProfile:async()=>({id:null})},
   '@/app/lib/supabase/admin':{createAdminClient:()=>db},
   '@/app/sinterklaas/sinterklaasServerApi':{loadProductionWordPressOrders:async()=>{if(wpFailure)throw Error('Source unavailable');return wordpress}},
-  '@/app/sinterklaas/letters/productie/productionData.server':{loadCentralProduction:async()=>({batches:[current],centralUnplannedCount:0})},
+  '@/app/sinterklaas/letters/productie/productionData.server':{loadCentralProduction:async()=>({batches:[current,...extraBatches],centralUnplannedCount:0})},
   '@/app/sinterklaas/letters/productie/productionChecklist':helper,
   '@/app/sinterklaas/letters/productie/productionSupplements':supplements,
  });
@@ -738,4 +745,83 @@ test('reading an existing extra day never freezes it from its parent deadline',a
  const response=await f.api.GET(new Request('https://app.strik-patisserie.nl/api/sinterklaas-letter-production'));
  const view=(await response.json()).batches[0];
  assert(view.checklist.lockedAt);assert.equal(view.checklist.supplements[0].lockedAt,undefined);assert.equal(f.writes.length,0);
+});
+
+test('extra demand on an existing main day is counted once with its recipients, while the original printed run stays unchanged',()=>{
+ const target=batch({id:'main-30',startDate:'2026-11-30',date:'2026-12-01',deadlineAt:'2099-11-29T19:00:00Z',rows:[]});
+ const source=batch({rows:[]});
+ const order=b2bLetterOrder({deliveryDate:'2026-12-02',letterLines:[{letter:'S',chocolate:'melk',size:'groot',style:'spuit',quantity:30,exceptions:[],withLogo:false}]});
+ const people=q=>recipient(`b2b:${order.id}`,q,{customerName:order.customerName,date:order.deliveryDate,code:order.id,notes:''});
+ const main=customerRow([people(20)],{produced:20});
+ const extra={...extraDetails({date:'2026-11-30'}),name:'Extra',planRevision:1,rows:[customerRow([people(10)])],targetBatchId:target.id};
+ const history=[{batch_id:source.id,locked_at:'2026-11-15',rows:[main],supplements:[extra]}];
+ const before=plain(history);
+ const combined=helper.combineProductionOrders([source,target],[],[order],[],history);
+ assert.equal(helper.productionTotals(combined.batches[0].rows).orders,20);
+ assert.equal(helper.productionTotals(combined.batches[1].rows).orders,10);
+ assert.equal(combined.batches[1].rows[0].recipients[0].date,'2026-12-02');
+ assert.equal(combined.batches[1].rows[0].orderSources.b2b,10);
+ const view=supplements.productionChecklistView({...history[0],revision:1,plan_revision:1,updated_at:''},combined.batches[0].rows);
+ assert.equal(view.supplements.length,0);assert.equal(view.pendingOrderChanges.length,0);
+ assert.deepEqual(plain(history),before);
+ // Freezing the target must not shift the original 20 letters into that day.
+ const frozen=[...history,{batch_id:target.id,locked_at:'2026-11-29',rows:combined.batches[1].rows}];
+ const again=helper.combineProductionOrders([source,target],[],[{...order,delivered:true}],[],frozen);
+ assert.deepEqual(plain(again.batches.map(b=>b.rows)),plain(combined.batches.map(b=>b.rows)));
+ const ready=load('app/sinterklaas/letters/productie/productionReadiness.ts');
+ assert.equal(ready.readyProductionRecipients(combined.batches,[history[0],{...frozen[1],locked_at:null,rows:combined.batches[1].rows.map(r=>({...r,produced:9}))}],{[`b2b:${order.id}`]:30}).size,0);
+ assert(ready.readyProductionRecipients(combined.batches,[history[0],{...frozen[1],locked_at:null,rows:combined.batches[1].rows.map(r=>({...r,produced:10}))}],{[`b2b:${order.id}`]:30}).has(`b2b:${order.id}`));
+ // Later increments remain pending, while reductions consume printed demand first.
+ for(const [total,moved,pending] of [[35,10,5],[25,5,0],[15,0,0]]){
+  const next=helper.combineProductionOrders([source,target],[],[{...order,letterLines:[{...order.letterLines[0],quantity:total}]}],[],history);
+  assert.equal(helper.productionTotals(next.batches[1].rows).orders,moved);
+  const queue=supplements.productionChecklistView({...history[0],revision:1,plan_revision:1,updated_at:''},next.batches[0].rows).pendingOrderChanges;
+  assert.equal(queue.reduce((s,g)=>s+g.extra,0),pending);
+ }
+ const cancelled=helper.combineProductionOrders([source,target],[],[{...order,cancelled:true}],[],history);
+ assert.equal(helper.productionTotals(cancelled.batches[1].rows).orders,0);
+});
+
+test('multiple transferred increments keep earlier extras, variants, other customers and target stock separate',()=>{
+ const routing=load('app/sinterklaas/letters/productie/productionTransfers.ts');
+ const first=customerRow([recipient('A',4)],{produced:4});
+ const retained={...extraDetails(),name:'Printed',planRevision:1,lockedAt:'2026-11-20',rows:[customerRow([recipient('A',2)],{produced:2})]};
+ const transfer=q=>({...extraDetails(),name:'Attached',planRevision:1,targetBatchId:'target',rows:[customerRow([recipient('A',q)])]});
+ const history=[{batch_id:'source',locked_at:'2026-11-15',rows:[first],supplements:[retained,transfer(3),transfer(2)]}];
+ const routed=routing.routeProductionSupplements([{id:'source',rows:[customerRow([recipient('A',11),recipient('B',7)])]},{id:'target',rows:[customerRow([recipient('C',5)],{stock:8,produced:2})]}],history);
+ assert.equal(routed[0].rows[0].orders,13);
+ assert.equal(routed[1].rows[0].orders,10);assert.equal(routed[1].rows[0].stock,8);assert.equal(routed[1].rows[0].produced,2);
+ const view=supplements.productionChecklistView({...history[0],revision:2,plan_revision:1,updated_at:''},routed[0].rows);
+ assert.equal(view.supplements.length,1);assert.equal(view.supplements[0].rows[0].produced,2);
+ assert.equal(view.pendingOrderChanges[0].customerName,'B');assert.equal(view.pendingOrderChanges[0].extra,7);
+ // A new increment is derived from the routed source, not deducted a second time.
+ const extra=supplements.createProductionSupplement(history[0].rows,history[0].supplements,routed[0].rows,['b2b:B'],extraDetails({date:'2099-11-21'}));
+ assert.equal(extra.rows[0].orders,7);
+});
+
+test('transferred allocations cannot be printed or marked as a separate extra run',async()=>{
+ const f=endpointFixture();
+ const transfer={...extraDetails(),name:'Attached',planRevision:1,targetBatchId:'main-30',rows:[row()]};
+ f.setSaved({...f.saved,supplements:[transfer]});
+ for(const action of ['print','quantity']){
+  const response=await f.api.POST(f.request({batchId:id,revision:1,action,supplementId:transfer.id,key:row().key,quantity:10}));
+  assert.equal(response.status,404);assert.equal(f.writes.length,0);
+ }
+});
+
+
+test('scheduling on an existing open main day uses the atomic attach action and rejects concurrent or frozen targets',async()=>{
+ const target=batch({id:'bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb',startDate:'2099-11-30',date:'2099-12-01',deadlineAt:'2099-11-29T19:00:00Z',rows:[]});
+ for(const variant of ['open','race','closed']){
+  const f=endpointFixture({extraBatches:[{...target,...(variant==='closed'?{status:'CLOSED'}:{})}],rpcFails:variant==='race',season:2099});
+  const original=customerRow([recipient('A',10)]), live=customerRow([recipient('A',15)]);
+  f.setSaved({...f.saved,rows:[original]});f.setCurrent(batch({rows:[live]}));
+  const response=await f.api.POST(f.request({batchId:id,revision:1,action:'supplement',date:'2099-11-30',customerIds:['b2b:A'],planVersion:helper.productionPlanVersion([live])}));
+  if(variant==='open'){
+   assert.equal(response.status,200);assert.equal((await response.json()).mergedIntoMain,true);
+   assert.equal(f.writes.length,1);assert.equal(f.writes[0].action,'attach');
+   assert.equal(f.saved.supplements[0].targetBatchId,target.id);assert.equal(f.saved.supplements[0].rows[0].orders,5);
+   assert.deepEqual(plain(f.saved.rows),[original]);
+  }else{assert.equal(response.status,409);assert.equal(f.writes.length,0);}
+ }
 });

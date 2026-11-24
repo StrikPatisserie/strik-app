@@ -1,3 +1,4 @@
+import { localProductionSupplements } from "./productionTransfers";
 import { productionChanges, reviseProductionRows } from "./productionChecklist";
 import { combinedProductionRows, type ProductionSupplement } from "./productionSupplements";
 import type { ProductionSeedRow } from "./productionSources";
@@ -9,8 +10,9 @@ export function readyProductionRecipients(batches: { id: string; rows: Productio
   for (const batch of batches) {
     const saved = lists.find(list => list.batch_id === batch.id);
     const mainRows = saved?.locked_at === null ? reviseProductionRows(saved.rows, batch.rows) : saved?.rows || [];
-    const runs = [mainRows, ...(saved?.supplements || []).map(item => item.rows)];
-    const combined = combinedProductionRows(mainRows, saved?.supplements);
+    const supplements = localProductionSupplements(saved?.supplements);
+    const runs = [mainRows, ...supplements.map(item => item.rows)];
+    const combined = combinedProductionRows(mainRows, supplements);
     for (const row of combinedProductionRows(batch.rows)) {
       const frozen = combined.find(item => item.key === row.key);
       const matches = Boolean(frozen?.recipients && productionChanges([frozen], [row]).length === 0);

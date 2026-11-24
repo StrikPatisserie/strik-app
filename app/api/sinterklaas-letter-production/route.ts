@@ -38,6 +38,12 @@ async function readLists(season: string, actorId: string | null) {
     // Freeze with a revision check so a simultaneous quantity save survives.
     for (let attempt = 0; productionDeadlinePassed(batch) && !list?.locked_at; attempt++) {
       if (attempt === 3) throw new Error("De voortgang is intussen gewijzigd. Ververs de productielijst.");
+      if (attempt > 0) {
+        const fresh = await loadCurrent(season);
+        const latestBatch = fresh.batches.find(item => item.id === batch.id);
+        if (!latestBatch) throw new Error("De productiedag is intussen gewijzigd. Ververs de lijst.");
+        batch.rows = latestBatch.rows;
+      }
       if (list) {
         const frozen = await db.from("letter_production_checklists")
           .update({ rows: reviseProductionRows(list.rows, batch.rows), locked_at: new Date().toISOString(), revision: list.revision + 1, updated_at: new Date().toISOString(), updated_by: actorId })
@@ -93,12 +99,14 @@ export async function POST(request: Request) {
     const list = stored.data as SavedChecklist | null;
     if ((list?.revision || 0) !== revision) return jsonError("De lijst is intussen gewijzigd. De nieuwste versie wordt geladen. Controleer je wijziging opnieuw.", 409);
     let currentRows: ProductionSeedRow[] | undefined;
+    let currentState: Awaited<ReturnType<typeof loadCurrent>> | undefined;
     if (action === "print") {
       const supplement = list?.supplements?.find(item => item.id === data.supplementId);
-      if (!list?.locked_at || !supplement) return jsonError("Aanvullende productielijst niet gevonden.", 404);
+      if (!list?.locked_at || !supplement || supplement.targetBatchId) return jsonError("Aanvullende productielijst niet gevonden.", 404);
     }
     if (action !== "print" && (!list?.locked_at || action !== "quantity")) {
       const current = await loadCurrent(String(batchResult.data.season));
+      currentState = current;
       const batch = current.batches.find(item => item.id === batchId);
       if (!batch) return jsonError("Productieronde niet gevonden.", 404);
       currentRows = batch.rows;
@@ -112,7 +120,7 @@ export async function POST(request: Request) {
     } else if (action === "quantity") {
       if (typeof key !== "string" || typeof quantity !== "number") return jsonError("Controleer het geproduceerde aantal.");
       if (data.supplementId !== undefined) {
-        if (typeof data.supplementId !== "string" || !supplements.some(item => item.id === data.supplementId)) return jsonError("Aanvullende productielijst niet gevonden.", 404);
+        if (typeof data.supplementId !== "string" || !supplements.some(item => item.id === data.supplementId && !item.targetBatchId)) return jsonError("Aanvullende productielijst niet gevonden.", 404);
         supplements = supplements.map(item => item.id === data.supplementId ? { ...item, rows: setProductionQuantity(item.rows, key, quantity) } : item);
       } else rows = setProductionQuantity(rows, key, quantity);
     } else {
@@ -125,6 +133,17 @@ export async function POST(request: Request) {
           id: randomUUID(), date: data.date, createdAt: new Date().toISOString(),
           createdBy: profile?.id || null, createdByName: profile?.full_name || "",
         });
+        const target = currentState?.batches.find(batch => batch.startDate === data.date || batch.date === data.date);
+        if (target) {
+          if (target.id === batchId || productionDeadlinePassed(target) || currentState?.storedLists.some(saved => saved.batch_id === target.id && saved.locked_at)) return jsonError("Deze hoofdproductiedag staat al vast. Kies een nieuwe productiedag voor de extra letters.", 409);
+          supplement.targetBatchId = target.id;
+          const saved = await db.rpc("letter_attach_production_supplement", {
+            p_source_id: batchId, p_target_id: target.id, p_revision: revision,
+            p_supplement: supplement, p_actor_id: profile?.id || null,
+          });
+          if (saved.error) return jsonError(saved.error.code === "P0001" ? saved.error.message : "Samenvoegen met de hoofdproductiedag is mislukt.", 409);
+          return Response.json({ list: saved.data, mergedIntoMain: true });
+        }
         supplements = mergeProductionSupplementsByDate([...supplements, supplement]);
       }
     }

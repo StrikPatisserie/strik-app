@@ -1,3 +1,4 @@
+import { localProductionSupplements } from "./productionTransfers";
 import { productionPlanVersion, reviseProductionRows } from "./productionChecklist";
 import { aggregateProductionRows, productionRecipientVersion, type ProductionRecipient, type ProductionSeedRow } from "./productionSources";
 
@@ -10,6 +11,8 @@ type ProductionSupplementRecord = {
   createdBy: string | null;
   createdByName: string;
   planRevision: number;
+  // Allocation included in this existing main day; kept here only for history.
+  targetBatchId?: string;
   lockedAt?: string;
   lockedBy?: string | null;
 };
@@ -57,7 +60,7 @@ export function mergeProductionSupplementsByDate(supplements: ProductionSuppleme
     return [{ id: item.id, name: item.name, date: item.date, rows: item.rows, createdAt: item.createdAt, createdBy: item.createdBy, createdByName: item.createdByName, planRevision: item.planRevision }];
   };
   for (const item of supplements) {
-    const identity = item.lockedAt ? `printed:${item.id}` : `open:${item.date}`;
+    const identity = item.lockedAt ? `printed:${item.id}` : `open:${item.date}:${item.targetBatchId || ""}`;
     const existing = byDate.get(identity);
     byDate.set(identity, existing ? {
       ...existing,
@@ -105,7 +108,7 @@ export function pendingProductionOrders(saved: ProductionSeedRow[], current: Pro
 }
 
 export function productionChecklistView(list: { rows: ProductionSeedRow[]; supplements?: ProductionSupplement[]; revision: number; plan_revision: number; locked_at: string | null; updated_at: string }, current: ProductionSeedRow[]) {
-  const supplements = mergeProductionSupplementsByDate(list.supplements || []);
+  const supplements = mergeProductionSupplementsByDate(localProductionSupplements(list.supplements));
   const combined = combinedProductionRows(list.rows, supplements);
   return {
     revision: list.revision, planRevision: list.plan_revision,
@@ -118,7 +121,7 @@ export function productionChecklistView(list: { rows: ProductionSeedRow[]; suppl
 }
 
 export function createProductionSupplement(rows: ProductionSeedRow[], supplements: ProductionSupplement[], current: ProductionSeedRow[], selectedCustomers: string[], details: Omit<ProductionSupplement, "rows" | "name" | "planRevision">) {
-  const changes = pendingProductionOrders(combinedProductionRows(rows, supplements), combinedProductionRows(current));
+  const changes = pendingProductionOrders(combinedProductionRows(rows, localProductionSupplements(supplements)), combinedProductionRows(current));
   const selected = new Set(selectedCustomers);
   if (!selected.size || selected.size !== selectedCustomers.length || [...selected].some(id => !changes.some(item => item.id === id && item.extra > 0))) {
     throw new Error("Kies klanten met extra letters. Controleer de nieuwste wijzigingen.");

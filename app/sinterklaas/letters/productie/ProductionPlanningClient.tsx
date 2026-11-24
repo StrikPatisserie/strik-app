@@ -1,4 +1,5 @@
 "use client";
+import type { ProductionSupplement } from "./productionSupplements";
 
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { productionDeadlinePassed, productionPlanVersion, productionRemaining, productionSurplus, productionTotals as totalsFor, type ProductionChecklist } from "./productionChecklist";
@@ -1663,7 +1664,12 @@ export default function ProductionPlanningClient({
         throw new Error(result.message || "Productie opslaan is mislukt.");
       }
       const list = result.list;
-      setLiveBatches(current => current?.map(item => item.id === (batch.parentBatchId || batch.id) ? {...item, rows: list.rows, checklist: result.checklist || {revision: list.revision, planRevision: list.plan_revision, lockedAt: list.locked_at, planVersion: item.checklist?.lockedAt ? item.checklist.planVersion : productionPlanVersion(list.rows), updatedAt: list.updated_at, supplements: list.supplements || [], changes: item.checklist?.changes || [], orderChanges: [], pendingOrderChanges: item.checklist?.pendingOrderChanges || []}} : item) || null);
+      if (result.mergedIntoMain) {
+        setRefreshVersion(current => current + 1);
+        setProductionNotice("De extra letters zijn toegevoegd aan de bestaande hoofdproductiedag.");
+        return true;
+      }
+      setLiveBatches(current => current?.map(item => item.id === (batch.parentBatchId || batch.id) ? {...item, rows: list.rows, checklist: result.checklist || {revision: list.revision, planRevision: list.plan_revision, lockedAt: list.locked_at, planVersion: item.checklist?.lockedAt ? item.checklist.planVersion : productionPlanVersion(list.rows), updatedAt: list.updated_at, supplements: (list.supplements || []).filter((part: ProductionSupplement) => !part.targetBatchId), changes: item.checklist?.changes || [], orderChanges: [], pendingOrderChanges: item.checklist?.pendingOrderChanges || []}} : item) || null);
       setProductionNotice(action === "supplement" ? "Extra productiedag opgeslagen. De lijst blijft open tot je deze vastzet en print." : "Productievoortgang opgeslagen.");
       return true;
     } catch (error) {

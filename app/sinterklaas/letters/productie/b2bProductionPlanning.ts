@@ -4,7 +4,7 @@ import type { ProductionBatchSeed } from "./ProductionPlanningClient";
 import { b2bProductionLetters } from "../../b2bCombinationLetters";
 
 export type B2BProductionAssignment = {order_id:string;season:number;batch_id:string|null;revision:number};
-export type B2BProductionPlan = {id:string;customerName:string;deliveryDate:string;letters:string;quantity:number;batchId:string|null;manual:boolean;revision:number;version:string;combinationQuantity?:number;issues?:string[]};
+export type B2BProductionPlan = {id:string;customerName:string;deliveryDate:string;letters:string;quantity:number;batchId:string|null;manual:boolean;revision:number;version:string;combinationQuantity?:number;issues?:string[];productionDates?:string[]};
 export function eligibleB2BLetterOrder(order:SinterklaasB2BOrder) {
   const done=order.department==="beide"||order.department==="bakkerij"?order.letterProductionDone:order.productionDone;
   return order.status==="akkoord"&&!order.cancelled&&!order.packed&&!order.delivered&&!done&&b2bProductionLetters(order).requiredQuantity>0;

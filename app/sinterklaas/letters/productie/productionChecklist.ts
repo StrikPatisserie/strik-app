@@ -1,3 +1,4 @@
+import { routeProductionSupplements, transferredProductionOrigins } from "./productionTransfers";
 import { storeLetterDeliveryAddress } from "../storeLetterDelivery";
 import type { ProductionCustomerChange, ProductionSupplement } from "./productionSupplements";
 import { b2bLetterHasLogo, b2bLetterDecoration } from "../../b2bLetterLines";
@@ -78,6 +79,7 @@ function historicalProductionBatches(history: ProductionHistory[]) {
       }
     }
   }
+  for (const [id, source] of transferredProductionOrigins(history)) bindings.set(id, source);
   return bindings;
 }
 
@@ -142,7 +144,12 @@ export function combineProductionOrders(batches: ProductionBatchSeed[], legacyOr
     rows: [...(rowsByDate.get(batch.date)?.values() || [])],
   }));
 
-  return { batches: batchViews, unplanned, b2bPlanning };
+  const routed = routeProductionSupplements(batchViews, history);
+  for (const plan of b2bPlanning) {
+    if (!history.some(list => list.supplements?.some(part => part.targetBatchId && part.rows.some(row => row.recipients?.some(person => person.id === `b2b:${plan.id}`))))) continue;
+    plan.productionDates = routed.filter(batch => batch.rows.some(row => row.recipients?.some(person => person.id === `b2b:${plan.id}` && person.quantity > 0))).map(batch => batch.startDate);
+  }
+  return { batches: routed, unplanned, b2bPlanning };
 }
 
 export type ProductionChange = { key: string; label: string; before: number; after: number; detail: string };
