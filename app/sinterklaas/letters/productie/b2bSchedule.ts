@@ -1,7 +1,6 @@
 import type { SinterklaasB2BOrder } from "../../types";
 import type { ProductionBatchSeed } from "./ProductionPlanningClient";
 import type { B2BProductionAssignment, B2BProductionPlan } from "./b2bProductionPlanning";
-import { batchReadyDate } from "./b2bProductionPlanning";
 import { combineProductionOrders, productionDeadlinePassed, reviseProductionRows } from "./productionChecklist";
 import { combinedProductionRows, mergeProductionSupplementsByDate, type ProductionSupplement } from "./productionSupplements";
 import { localProductionSupplements } from "./productionTransfers";
@@ -66,7 +65,6 @@ export function prepareB2BSchedule(input: {
   if (date && order.deliveryDate && date > order.deliveryDate) throw Error("Kies een productiedag uiterlijk op de leverdatum.");
   const target = date ? batches.find(batch => batch.startDate === date || batch.date === date) : undefined;
   if (target && (productionDeadlinePassed(target, Date.parse(now)) || input.lists.some(list => list.batch_id === target.id && list.locked_at))) throw Error("Deze hoofdproductiedag staat vast. Kies een open of extra productiedag.");
-  if (target && order.deliveryDate && batchReadyDate(target) > order.deliveryDate) throw Error("Deze ronde is te laat voor de gewenste leverdatum.");
   if (date && !target && input.lists.some(list => localProductionSupplements(list.supplements).some(part => part.date === date && part.lockedAt))) throw Error("Deze extra productiedag is al geprint. Kies een nieuwe datum.");
   const recipientId = `b2b:${order.id}`;
   const lists = input.lists.map(list => ({...list, rows: removeOrder(list.rows, recipientId), supplements: (list.supplements || []).map(part => {

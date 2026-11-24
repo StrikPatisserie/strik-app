@@ -65,7 +65,7 @@ test('new demand after a printed allocation stays pending and does not mislabel 
 });
 test('invalid dates, late dates, closed main and printed extra destinations are rejected; revisions change the read token',()=>{
  const o=order();for(const date of ['2099-02-30','2098-11-25','2099-11-23','2099-12-05'])assert.throws(()=>prepare(o,[list()],date),/datum|productiedag/);
- assert.throws(()=>prepare(order({deliveryDate:'2099-12-01'}),[list()],'2099-11-30'),/te laat/);
+ assert.equal(prepare(order({deliveryDate:'2099-12-01'}),[list()],'2099-11-30').batchId,'main','manual production uses the chosen day; the shop pickup window only guides automatic suggestions');
  assert.throws(()=>prepare(o,[list({supplements:[extra(order({id:'other'}),{date:'2099-11-25',lockedAt:'2099-11-24T09:00:00Z'})]})],'2099-11-25'),/geprint/);
  assert.notEqual(b2bScheduleVersion(batches(),[list()]),b2bScheduleVersion(batches(),[list({revision:6})]));
 });

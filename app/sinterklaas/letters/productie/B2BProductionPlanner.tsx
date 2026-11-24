@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { productionDeadlinePassed } from "./productionChecklist";
-import { batchReadyDate, type B2BProductionPlan } from "./b2bProductionPlanning";
+import { type B2BProductionPlan } from "./b2bProductionPlanning";
 import type { ProductionBatchSeed } from "./ProductionPlanningClient";
 import styles from "./ProductionPlanning.module.css";
 const date = (value: string) => new Intl.DateTimeFormat("nl-NL", {day:"numeric", month:"short", timeZone:"UTC"}).format(new Date(`${value}T12:00:00Z`));
@@ -11,7 +11,7 @@ function PlanningRow({plan,batches,season,onSaved,onExtra}: Omit<Props,"plans"> 
     const runs = batches.filter(batch => batch.startDate === day);
     const main = runs.find(batch => !batch.supplementId);
     const closed = main ? Boolean(main.checklist?.lockedAt) || productionDeadlinePassed(main) : runs.some(batch => batch.checklist?.lockedAt);
-    const tooLate = Boolean(plan.deliveryDate && (main ? batchReadyDate(main) : day) > plan.deliveryDate);
+    const tooLate = Boolean(plan.deliveryDate && day > plan.deliveryDate);
     return {day, label: `${date(day)}${main ? "" : " · extra"}${closed ? " · vast" : ""}`, disabled: closed || tooLate};
   });
   const initial = plan.scheduledDate || "";
@@ -55,6 +55,6 @@ export default function B2BProductionPlanning(props: Props) {
   const rows = (plans:B2BProductionPlan[]) => plans.map(plan => <PlanningRow key={`${plan.id}:${plan.revision}:${plan.version}:${plan.productionDates?.join()}:${plan.pendingQuantity}`} plan={plan} batches={props.batches} season={props.season} onSaved={props.onSaved} onExtra={props.onExtra}/>);
   return <>
     <details className={styles.b2bPlanning}><summary>B2B-productieplanning <span>{planned.length} ingepland</span></summary>{rows(planned)}{!planned.length && <p>Nog geen B2B-bestellingen ingepland.</p>}</details>
-    {pending.length > 0 && <details className={`${styles.b2bPlanning} ${styles.b2bUnplanned}`} open><summary>B2B nog niet ingepland <span>{pending.length} bestellingen</span></summary>{rows(pending)}</details>}
+    {pending.length > 0 && <details className={`${styles.b2bPlanning} ${styles.b2bUnplanned}`} open><summary>B2B nog niet ingepland <span>{pending.length} bestelling{pending.length === 1 ? "" : "en"}</span></summary>{rows(pending)}</details>}
   </>;
 }
