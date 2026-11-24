@@ -262,19 +262,23 @@ button.sourceBadge:focus-visible { outline: 2px solid currentColor; outline-offs
 .page :global(.start-distribution-print-page) h2,
 .page :global(.letter-distribution-print) h2 { font-size: 30px; font-weight: 900; line-height: 1.2; }
 
-.b2bPlanning { border:1px solid #d7dfd2; border-radius:12px; padding:18px 20px; margin:20px 0; background:#fffefa; font-size:12px; color:#4e5d50; }
-.b2bPlanning summary { cursor:pointer; font-weight:800; color:#294b3d; }
-.b2bPlanning summary span { margin-left:12px; font-weight:400; }
-.b2bPlanning > p { margin:14px 0; line-height:1.8; }
-.b2bPlanningRow { display:grid; grid-template-columns:minmax(0,1fr) minmax(260px,360px); gap:24px; padding:18px 0; border-top:1px solid #e0e5da; }
-.b2bPlanningRow strong { color:#293e32; font-size:14px; }
-.b2bPlanningRow p { margin:8px 0; line-height:1.7; }
-.b2bPlanningRow small { display:block; font-size:11px; line-height:1.7; }
-.b2bPlanningRow label { display:grid; gap:7px; font-size:11px; }
-.b2bPlanningRow select { width:100%; min-height:42px; border:1px solid #d4ddcc; border-radius:7px; padding:9px; background:#fff; color:#294b3d; font:inherit; }
-.b2bPlanningRow button { margin:10px 0; }
-.b2bPlanningRow button:disabled { opacity:.45; }
-@media(max-width:700px){.b2bPlanningRow{grid-template-columns:1fr;gap:12px;}.b2bPlanningRow select{font-size:16px;}.b2bPlanning summary span{display:block;margin:6px 0 0;}}
+.b2bPlanning { border:1px solid #d7dfd2; border-radius:10px; padding:12px 16px; margin:14px 0; background:#fffefa; font-size:12px; color:#4e5d50; }
+.b2bPlanning > summary { cursor:pointer; font-weight:750; color:#294b3d; }
+.b2bPlanning > summary span { margin-left:10px; font-weight:400; }
+.b2bPlanning > p { margin:10px 0; }
+.b2bPlanningRow { display:grid; grid-template-columns:minmax(0,1fr) minmax(240px,330px); align-items:start; gap:16px; padding:11px 0; border-top:1px solid #e0e5da; }
+.b2bPlanning > summary + .b2bPlanningRow { margin-top:10px; }
+.b2bPlanningRow strong { color:#293e32; font-size:13px; }
+.b2bPlanningRow p { margin:6px 0; line-height:1.6; }
+.b2bPlanningRow small { display:block; font-size:11px; line-height:1.6; }
+.b2bPlanningControls { display:flex; align-items:center; flex-wrap:wrap; gap:6px; }
+.b2bPlanningControls select, .b2bPlanningControls input { flex:1; min-width:140px; min-height:34px; border:1px solid #d4ddcc; border-radius:6px; padding:6px 8px; background:#fff; color:#294b3d; font:inherit; }
+.b2bPlanningControls .button { margin:0; padding:6px 10px; min-height:34px; font-size:11px; }
+.b2bPlanningRow button:disabled, .b2bPlanningRow select:disabled { opacity:.55; }
+.b2bLetterDetails { margin-top:4px; font-size:11px; }
+.b2bLetterDetails summary { cursor:pointer; font-weight:400; color:#66715f; }
+.b2bUnplanned { border-color:#dbc8a4; background:#fffaf0; }
+@media(max-width:700px){.b2bPlanningRow{grid-template-columns:1fr;gap:8px;}.b2bPlanningControls select,.b2bPlanningControls input{font-size:16px;}.b2bPlanning > summary span{display:block;margin:4px 0 0;}}
 .combinationBadge { display:inline-flex; align-items:center; gap:6px; margin:3px 6px 3px 0; border:1px solid #d4b077; background:#fff3db; color:#805b22; border-radius:4px; padding:3px 6px; font-size:11px; font-weight:600; }
 
 .changesDialog { width: min(720px, calc(100vw - 24px)); max-height: calc(100dvh - 40px); margin: auto; padding: 20px; color: #293e32; background: #fafaf6; border: 1px solid #c7d3c1; border-radius: 14px; overflow-y: auto; overscroll-behavior: contain; }

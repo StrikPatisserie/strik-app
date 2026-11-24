@@ -208,6 +208,7 @@ function endpointFixture({allowed=true,locked=true,existing=true,wpFailure=false
   '@/app/sinterklaas/sinterklaasServerApi':{loadProductionWordPressOrders:async()=>{if(wpFailure)throw Error('Source unavailable');return wordpress}},
   '@/app/sinterklaas/letters/productie/productionData.server':{loadCentralProduction:async()=>({batches:[current,...extraBatches],centralUnplannedCount:0})},
   '@/app/sinterklaas/letters/productie/productionChecklist':helper,
+  '@/app/sinterklaas/letters/productie/b2bSchedule':load('app/sinterklaas/letters/productie/b2bSchedule.ts'),
   '@/app/sinterklaas/letters/productie/productionSupplements':supplements,
  });
  const request=body=>new Request('https://app.strik-patisserie.nl/api/sinterklaas-letter-production',{method:'POST',headers:{'content-type':'application/json',origin:'https://app.strik-patisserie.nl'},body:JSON.stringify(body)});

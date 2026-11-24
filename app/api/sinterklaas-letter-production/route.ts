@@ -1,3 +1,4 @@
+import { projectB2BSchedules } from "@/app/sinterklaas/letters/productie/b2bSchedule";
 import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { hasCronAuthorization } from "@/app/lib/auth/cron";
@@ -58,10 +59,11 @@ async function readLists(season: string, actorId: string | null) {
       list = latest.data as SavedChecklist;
     }
     if (!list) return { ...batch, checklist: undefined };
+    saved.set(batch.id, list);
     const rows = list.locked_at ? hydrateProductionRecipients(list.rows, batch.rows) : reviseProductionRows(list.rows, batch.rows);
     return { ...batch, rows, checklist: productionChecklistView({ ...list, rows }, batch.rows) };
   }));
-  return { ...current, batches: views };
+  return { ...current, batches: views, b2bPlanning: projectB2BSchedules(current.b2bPlanning, current.batches, [...saved.values()]) };
 }
 
 export async function GET(request: Request) {

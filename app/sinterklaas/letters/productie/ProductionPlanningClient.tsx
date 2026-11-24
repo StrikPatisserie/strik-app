@@ -1620,8 +1620,8 @@ export default function ProductionPlanningClient({
 
   const pendingRounds = overview.batches.filter(batch => !batch.supplementId && batch.checklist?.pendingOrderChanges?.length);
   const pendingCustomers = new Map(pendingRounds.flatMap(batch => (batch.checklist?.pendingOrderChanges || []).map(group => [group.id, group] as const)));
-  const pendingB2B = [...pendingCustomers.values()].filter(group => group.source === "b2b").length;
-  const pendingOther = pendingCustomers.size - pendingB2B;
+  const pendingOther = [...pendingCustomers.values()].filter(group => group.source !== "b2b").length;
+  const otherUnplanned = overview.unplanned.filter(item => !item.startsWith("B2B ·"));
 
   async function prepareProductionPrint(batch: ProductionBatchSeed): Promise<ProductionBatchSeed> {
     if (!batch.supplementId) return batch;
@@ -1744,17 +1744,17 @@ export default function ProductionPlanningClient({
         )}
       </section>
 
-      {!demoMode && liveBatches && !warning && <B2BProductionPlanning plans={b2bPlans} batches={overview.batches.filter(batch => !batch.supplementId)} season={season} onSaved={()=>setRefreshVersion(value=>value+1)}/>}
+      {!demoMode && liveBatches && !warning && <B2BProductionPlanning plans={b2bPlans} batches={overview.batches} season={season} onSaved={()=>setRefreshVersion(value=>value+1)} onExtra={batchId=>{const batch=overview.batches.find(item=>item.id===batchId);if(batch)setReviseBatch(batch);}}/>}
 
-      {pendingRounds.length > 0 && <section className={`${styles.attention} ${styles.pendingProduction}`} aria-label="Nog inplannen">
-        <div><h2>Nog inplannen</h2><p>{pendingB2B > 0 && <span>{pendingB2B} B2B-bestelling{pendingB2B === 1 ? "" : "en"}</span>}{pendingOther > 0 && <span>{pendingOther} andere bestelling{pendingOther === 1 ? "" : "en"}</span>}</p></div>
+      {pendingOther > 0 && <section className={`${styles.attention} ${styles.pendingProduction}`} aria-label="Nog inplannen">
+        <div><h2>Nog inplannen</h2><p>{pendingOther > 0 && <span>{pendingOther} andere bestelling{pendingOther === 1 ? "" : "en"}</span>}</p></div>
         <div className={styles.pendingActions}>{pendingRounds.map(batch => <button type="button" key={batch.id} className={styles.button} disabled={savingProduction || Boolean(warning)} onClick={() => { setProductionNotice(""); setReviseBatch(batch); }}>Extra letters · {new Intl.DateTimeFormat("nl-NL", { day: "numeric", month: "short" }).format(new Date(`${batch.date}T12:00:00`))}</button>)}</div>
       </section>}
 
-      {(liveUnplannedCount > 0 || overview.unplanned.length > 0) && <section className={styles.attention}>
+      {(liveUnplannedCount > 0 || otherUnplanned.length > 0) && <section className={styles.attention}>
         <h2>Geen passende vaste productiedag</h2>
         {liveUnplannedCount > 0 && <p>{liveUnplannedCount} centrale orderregel(s) zijn nog niet volledig ingepland.</p>}
-        {overview.unplanned.length > 0 && <p>{overview.unplanned.length} bestelling(en) nog inplannen: {overview.unplanned.slice(0, 6).join(" · ")}{overview.unplanned.length > 6 ? ` · +${overview.unplanned.length - 6}` : ""}</p>}
+        {otherUnplanned.length > 0 && <p>{otherUnplanned.length} bestelling(en) nog inplannen: {otherUnplanned.slice(0, 6).join(" · ")}{otherUnplanned.length > 6 ? ` · +${otherUnplanned.length - 6}` : ""}</p>}
       </section>}
 
       <div className={styles.rounds}>

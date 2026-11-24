@@ -22,6 +22,7 @@ const base='app/sinterklaas/letters/productie/';
 const helper=load(base+'productionChecklist.ts');
 const sources=load(base+'productionSources.ts');
 const planning=load(base+'b2bProductionPlanning.ts');
+const scheduling=load(base+'b2bSchedule.ts');
 const {ProductionDistributionSheet}=load(base+'ProductionDistributionPrint.tsx');
 const batchId='d8c0af2e-a725-4ef0-a435-6b5f2838784a';
 const laterId='c2c52413-9d60-4bf2-b6e8-dd4cba8fc8f9';
@@ -88,18 +89,19 @@ test('frozen distributions detect a changed customer even at identical totals, w
  assert.equal(helper.hydrateProductionRecipients([original],[changed])[0].recipients[0].customerName,'A');
 });
 
-function endpoint({allowed=true,order=b2b(),saveError=null,sourceFailure=false}={}){
+function endpoint({allowed=true,order=b2b({year:'2099',deliveryDate:'2099-11-16'}),saveError=null,sourceFailure=false}={}){
  const writes=[];
- const batches=[batch()];
+ const batches=[batch({startDate:'2099-11-02',date:'2099-11-03',pickupFrom:'2099-11-05',deadlineAt:'2099-11-01T19:00:00Z'})];
  const api=load('app/api/sinterklaas-letter-production/b2b-planning/route.ts',{
   '@/app/lib/auth/session':{getCurrentProfile:async()=>({id:'actor'})},
   '@/app/lib/auth/access':{canAccessSinterklaasPath:()=>allowed},
-  '@/app/lib/supabase/admin':{createAdminClient:()=>({rpc:async(name,args)=>{writes.push({name,args});return{error:saveError};}})},
+  '@/app/lib/supabase/admin':{createAdminClient:()=>({from:()=>({select:()=>({in:async()=>({data:[],error:null})})}),rpc:async(name,args)=>{writes.push({name,args});return{error:saveError};}})},
   '@/app/sinterklaas/letters/productie/productionData.server':{loadCentralProduction:async()=>{if(sourceFailure)throw Error('offline');return{batches,assignments:[]};}},
   '@/app/sinterklaas/sinterklaasServerApi':{loadProductionWordPressOrders:async()=>({b2b:[order]})},
   '@/app/sinterklaas/letters/productie/b2bProductionPlanning':planning,
+  '@/app/sinterklaas/letters/productie/b2bSchedule':scheduling,
  });
- const payload={season:'2026',orderId:order.id,batchId,revision:0,version:planning.b2bProductionPlan(order,batches).version};
+ const payload={season:'2099',orderId:order.id,date:'2099-11-02',revision:0,version:planning.b2bProductionPlan(order,batches).version,scheduleVersion:scheduling.b2bScheduleVersion(batches,[])};
  const request=(body=payload,origin='https://app.strik-patisserie.nl')=>new Request('https://app.strik-patisserie.nl/api/sinterklaas-letter-production/b2b-planning',{method:'POST',headers:{'content-type':'application/json',origin},body:JSON.stringify(body)});
  return{api,writes,payload,request};
 }
@@ -107,8 +109,8 @@ function endpoint({allowed=true,order=b2b(),saveError=null,sourceFailure=false}=
 test('only authorized same-origin staff can plan, and malformed requests never reach a write',async()=>{
  const denied=endpoint({allowed:false});assert.equal((await denied.api.POST(denied.request())).status,403);assert.equal(denied.writes.length,0);
  const f=endpoint();assert.equal((await f.api.POST(f.request(f.payload,'https://elsewhere.test'))).status,403);
- assert.equal((await f.api.POST(f.request({...f.payload,batchId:'invalid'}))).status,400);
- assert.equal((await f.api.POST(f.request({...f.payload,version:'x'.repeat(17000)}))).status,413);assert.equal(f.writes.length,0);
+ assert.equal((await f.api.POST(f.request({...f.payload,date:'invalid'}))).status,400);
+ assert.equal((await f.api.POST(f.request({...f.payload,version:'x'.repeat(33000)}))).status,413);assert.equal(f.writes.length,0);
 });
 
 test('planning rejects changed orders, combination items, pending requests and rounds too late for delivery',async()=>{
@@ -119,9 +121,9 @@ test('planning rejects changed orders, combination items, pending requests and r
  const unavailable=endpoint({sourceFailure:true});assert.equal((await unavailable.api.POST(unavailable.request())).status,503);assert.equal(unavailable.writes.length,0);
 });
 
-test('successful planning changes only the central assignment with compare-and-swap; deadline rejection never reports success',async()=>{
+test('successful planning saves a checked schedule atomically; deadline rejection never reports success',async()=>{
  const f=endpoint();assert.equal((await f.api.POST(f.request())).status,200);
- assert.deepEqual(plain(f.writes),[{name:'letter_plan_b2b_order',args:{p_order_id:'wouwse',p_season:2026,p_batch_id:batchId,p_previous_batch_id:batchId,p_revision:0,p_actor_id:'actor'}}]);
+ assert.deepEqual(plain(f.writes),[{name:'letter_save_b2b_schedule',args:{p_order_id:'wouwse',p_season:2099,p_batch_id:batchId,p_date:'2099-11-02',p_revision:0,p_checks:[{batch_id:batchId,revision:0}],p_lists:[],p_actor_id:'actor'}}]);
  const locked=endpoint({saveError:{code:'P0001',message:'De deadline is voorbij.'}});const response=await locked.api.POST(locked.request());assert.equal(response.status,409);assert.match((await response.json()).message,/deadline/);
 });
 
@@ -194,12 +196,14 @@ test('provisional checklist keeps B2B planning editable and the database guards 
  const future=batch({deadlineAt:'2099-11-01T19:00:00Z',checklist:{lockedAt:null}});
  const plan={id:'test',customerName:'Test',batchId:batchId,manual:false,quantity:5,letters:'5 S',revision:0};
  function controls(nextBatch){
-  const tree=component({plans:[plan],batches:[nextBatch],season:'2099',onSaved:()=>{}});
+  const rows=[row({orders:5,recipients:[{id:'b2b:test',source:'b2b',quantity:5,customerName:'Test'}]})];
+  const projected=scheduling.projectB2BSchedules([plan],[{...nextBatch,rows}],[{batch_id:batchId,rows,locked_at:nextBatch.checklist.lockedAt,revision:1}]);
+  const tree=component({plans:projected,batches:[nextBatch],season:'2099',onSaved:()=>{},onExtra:()=>{}});
   const child=elements(tree,node=>typeof node.type==='function')[0];
   return elements(child.type(child.props),node=>node.type==='select')[0];
  }
  assert.equal(controls(future).props.disabled,false);
- assert.equal(elements(controls(future),node=>node.type==='option'&&node.props.value===batchId)[0].props.disabled,false);
+ assert.equal(elements(controls(future),node=>node.type==='option'&&node.props.value===future.startDate)[0].props.disabled,false);
  assert.equal(controls({...future,checklist:{lockedAt:'2026-11-11T12:00:00Z'}}).props.disabled,true);
  const sql=fs.readFileSync('app/supabase/migrations/20261111134854_letter_production_provisional_order_changes.sql','utf8');
  assert.match(sql,/batch_id=batch\.id and locked_at is not null/);
