@@ -68,3 +68,35 @@ test('the brok counter still bundles the physical brokken across letter flavors 
  const a=order(),b=order({id:'b',orderText:order().orderText.replace('chocolade wit','chocolade melk').replace('kleine','grote')});
  const data=opteller.buildProductionTotals([a,b],'sint','2026');assert.equal(data.products.length,1);assert.equal(data.products[0].quantity,60);assert.equal(data.products[0].product,'Speculaasbrok · zonder amandel');
 });
+
+
+test('package-only and mixed orders enter the extra-letter queue and leave it once their extra day is scheduled',()=>{
+ const supplements=load('app/sinterklaas/letters/productie/productionSupplements.ts');
+ const mixed=order({deliveryDate:'2026-11-27',letterLines:[{id:'loose',letter:'M',chocolate:'wit',style:'spuit',size:'klein',quantity:5,withLogo:false,exceptions:[]}]});
+ const small=order({id:'package-small',customerName:'Tweede bedrijf',deliveryDate:'2026-11-27',orderText:'PRODUCTEN EN PRIJS\n12 × Klein Sintpakket · Met amandel · letter A · chocolade melk · € 14,00 p.s. ex btw · € 168,00'});
+ const original={batch_id:batch().id,rows:[],supplements:[],revision:1,plan_revision:1,locked_at:'2026-11-15T19:00:00Z',updated_at:'2026-11-15T19:00:00Z'};
+ const current=helper.combineProductionOrders([batch()],[],[mixed,small],[],[original]);
+ const view=supplements.productionChecklistView(original,current.batches[0].rows);
+ assert.equal(view.pendingOrderChanges.length,2);
+ assert.equal(view.pendingOrderChanges.find(g=>g.customerName===mixed.customerName).extra,35);
+ assert.equal(view.pendingOrderChanges.find(g=>g.customerName===small.customerName).extra,12);
+ assert.equal(view.pendingOrderChanges.flatMap(g=>g.items).filter(i=>i.recipient.combinationProduct).reduce((n,i)=>n+i.after,0),42);
+ const extra=supplements.createProductionSupplement(original.rows,[],current.batches[0].rows,view.pendingOrderChanges.map(g=>g.id),{id:'new-extra',date:'2026-11-25',createdAt:'2026-11-24T08:00:00Z',createdBy:null,createdByName:'Test'});
+ assert.equal(helper.productionTotals(extra.rows).orders,47);
+ assert.equal(extra.rows.flatMap(r=>r.recipients).filter(p=>p.combinationProduct).reduce((n,p)=>n+p.quantity,0),42);
+ assert.equal(supplements.productionChecklistView({...original,supplements:[extra]},current.batches[0].rows).pendingOrderChanges.length,0);
+ const printed={...extra,lockedAt:'2026-11-24T09:00:00Z'};
+ const increased={...mixed,orderText:mixed.orderText.replace('30 ×','32 ×')};
+ const changed=helper.combineProductionOrders([batch()],[],[increased,small],[],[{...original,supplements:[printed]}]);
+ const pending=supplements.productionChecklistView({...original,supplements:[printed]},changed.batches[0].rows).pendingOrderChanges;
+ assert.equal(pending.length,1);assert.equal(pending[0].extra,2);
+ assert.equal(pending[0].items.length,1);assert.match(pending[0].items[0].recipient.combinationProduct,/Speculaasbrok/);
+ const target={...batch(),id:'open-main',startDate:'2026-11-25',date:'2026-11-26',pickupFrom:'2026-11-28'};
+ const transfer={...extra,targetBatchId:target.id};
+ const assigned=helper.combineProductionOrders([batch(),target],[],[mixed,small],[],[{...original,supplements:[transfer]}]);
+ assert.equal(helper.productionTotals(assigned.batches[0].rows).orders,0);
+ assert.equal(helper.productionTotals(assigned.batches[1].rows).orders,47);
+ assert.equal(supplements.productionChecklistView({...original,supplements:[transfer]},assigned.batches[0].rows).pendingOrderChanges.length,0);
+ const sheet=text(ProductionDistributionSheet({batch:assigned.batches[1]}));
+ assert.match(sheet,/COMBINATIE: Speculaasbrok/);assert.match(sheet,/COMBINATIE: Klein Sintpakket/);
+});

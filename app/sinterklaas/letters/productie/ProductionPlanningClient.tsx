@@ -1446,6 +1446,7 @@ export default function ProductionPlanningClient({
   const [distributionBatch, setDistributionBatch] = useState<ProductionBatchSeed | null>(null);
   const [productionPrintBatch, setProductionPrintBatch] = useState<ProductionBatchSeed | null>(null);
   const [showGrandOverview, setShowGrandOverview] = useState(false);
+  const [showStartStock, setShowStartStock] = useState(false);
   const [startDistributions, setStartDistributions] = useState<StartDistribution[]>([]);
   const [startDistributionsLoading, setStartDistributionsLoading] = useState(!demoMode);
   const [startDistributionError, setStartDistributionError] = useState("");
@@ -1702,14 +1703,20 @@ export default function ProductionPlanningClient({
             <button type="button" onClick={() => setShowGrandOverview((current) => !current)} aria-expanded={showGrandOverview} aria-controls="production-grand-overview" className={styles.quiet}>
               {showGrandOverview ? "Totaallijst sluiten ↑" : "Bekijk totaallijst ↓"}
             </button>
-            {!demoMode && <button type="button" onClick={() => { setEditingStartDistribution(null); setStartDistributionOpen(true); }} className={styles.button}>+ Startverdeling winkels</button>}
+            {!demoMode && <button type="button" onClick={() => setShowStartStock(current => !current)} aria-expanded={showStartStock} aria-controls="production-start-stock" className={styles.quiet}>
+              Startvoorraad {showStartStock ? "↑" : "↓"}
+            </button>}
           </div>
         </div>
         {showGrandOverview && <div id="production-grand-overview"><ProductionTable rows={overview.grandRows} /></div>}
-        {!demoMode && (startDistributionsLoading || startDistributionError || startDistributions.length > 0) && (
-          <div className={styles.startStock}>
+        {!showStartStock && startDistributionError && <p role="alert" className={styles.error}>{startDistributionError}</p>}
+        {!demoMode && (
+          <div id="production-start-stock" className={styles.startStock} hidden={!showStartStock}>
             <div className={styles.stockHeading}>
               <span>Startvoorraad</span>
+              <button type="button" disabled={startDistributionsLoading || Boolean(startDistributionError)} onClick={() => { setEditingStartDistribution(null); setStartDistributionOpen(true); }} className={styles.quiet}>
+                {startDistributions.length ? "+ Toevoegen" : "+ Startvoorraad invoeren"}
+              </button>
               {startDistributionsLoading && <span>Laden…</span>}
               {!startDistributionsLoading && startDistributions.map((distribution) => (
                 <span key={distribution.id} className={styles.stockDate}>
