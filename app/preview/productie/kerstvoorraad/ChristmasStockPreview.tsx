@@ -11,6 +11,7 @@ import { ADJUSTMENTS_STORAGE_KEY, parseForecastSettings, type ForecastMapping } 
 import { choicesFromSettings, forecastProductSettings, type ForecastCommand, type SharedForecastSettings } from "./sharedSettings";
 import { exampleChoices, exampleRecipes } from "./examples";
 import { normalizePetitProducts } from "./petitProducts";
+import { christmasCakeVariant, hiddenStockProduct } from "./christmasCakes";
 import { combineKruidcakes, combinePetitFours, includeInStockOverview, normalizeStockCategories, salesVolume, stockCategories } from "./assortment";
 import { CAMPAIGN_START, campaignWindow, exampleCampaignReceipts, remainingNeed, todayInAmsterdam, validCampaignDays, type CampaignReceipts, type CampaignWindow, type RemainingNeed } from "./campaignNeed";
 import { exampleProduction, productInventory, stockDisplay, productionRequirement, type ProductionRequirement, type ProductionReading, type StockRow, type StockOverview } from "./productionOverview";
@@ -398,19 +399,23 @@ export default function ChristmasStockPreview({
       need: remainingNeed(currentProduct, projection.period, receipts, viewDate, receiptWindow), recipeIssue: recipeIssue(currentProduct, recipeId, recipes), week52: projection.week52 };
     });
     const stockUses = new Map<string, number>();
-    for (const row of result) if (row.stock && !row.choice.adjustment?.hidden && includeInStockOverview(row.product, growth)) stockUses.set(row.stock.itemId, (stockUses.get(row.stock.itemId) || 0) + 1);
+    for (const row of result) if (row.stock && !hiddenStockProduct(row.product, row.choice) && includeInStockOverview(row.product, growth)) stockUses.set(row.stock.itemId, (stockUses.get(row.stock.itemId) || 0) + 1);
     return result.map(row => row.stock && (stockUses.get(row.stock.itemId) || 0) > 1
       ? { ...row, toMake: { ...row.toMake, quantity: null, note: "Voorraad over varianten verdelen" } } : row);
   }, [products, choices, source, recipes, growth, receipts, viewDate]);
   const filtered = rows.filter(row => {
     const balance = stockDisplay(row.stock);
     const band = salesVolume(row.product);
-    return (status === "hidden" ? !!row.choice.adjustment?.hidden : !row.choice.adjustment?.hidden && includeInStockOverview(row.product, growth))
+    return (status === "hidden" ? hiddenStockProduct(row.product, row.choice) : !hiddenStockProduct(row.product, row.choice) && includeInStockOverview(row.product, growth))
       && (group === "all" || row.product.group === group) && (department === "all" || row.product.department === department)
-      && (volume === "all" || band === volume)
+      && (volume === "all" || band === volume || group === "kerst" && !!christmasCakeVariant(row.product))
       && (status === "all" || status === "hidden" || status === "recipe" && (!!row.recipeIssue || !row.choice.checked) || status === "stock" && balance.quantity === null || status === "week52" && row.week52 === null)
       && matchesProductionSearch(query, [row.currentProduct.name, row.currentProduct.cashCode, row.product.name, row.product.cashCode, row.product.bakeCode, ...(row.product.searchNames || [])]);
   }).sort((a, b) => {
+    if (group === "kerst") {
+      const cakeOrder = (christmasCakeVariant(a.product)?.rank ?? 6) - (christmasCakeVariant(b.product)?.rank ?? 6);
+      if (cakeOrder) return cakeOrder;
+    }
     const base = (row: OverviewRow) => (row.product.cash ?? 0) + (row.product.bake ?? 0);
     return Number(a.projection === null) - Number(b.projection === null) || base(b) - base(a) || a.product.name.localeCompare(b.product.name, "nl");
   });
@@ -418,7 +423,7 @@ export default function ChristmasStockPreview({
   const selected = rows.find(row => row.product.id === productId);
   const counting = rows.find(row => row.product.id === countId);
   const removing = rows.find(row => row.product.id === removeId);
-  const hiddenCount = rows.filter(row => row.choice.adjustment?.hidden).length;
+  const hiddenCount = rows.filter(row => hiddenStockProduct(row.product, row.choice)).length;
   const changeFilter = (action: () => void) => { action(); setPage(0); };
   async function hideProduct(id: string, hidden: boolean) {
     const previous = choices[id] || emptyChoice();
@@ -479,7 +484,7 @@ export default function ChristmasStockPreview({
       <div className={s.sourceBar}><span>Basis 2025 zonder Wijchen · {source.mode === "example" ? "bonnen, productie en voorraad zijn voorbeelden" : `voorraad uit productie t/m ${dateLabel(source.overview.asOf)}`}</span>{source.mode === "example" && <label className={s.demoDate}>Proefdatum<input aria-label="Proefdatum voor bonnenteller" type="date" min="2026-11-01" max="2027-01-01" value={viewDate} onInput={event => { setDemoDate(event.currentTarget.value || null); setPage(0); }} onChange={event => { setDemoDate(event.target.value || null); setPage(0); }} /></label>}<span>{week52Error || "Week 52 · Excel ingelezen"}</span></div>
       <section className={s.board} aria-label="Kerstvoorraad overzicht">
         <div className={s.toolbar}>
-          <div className={s.segment} aria-label="Productcategorie">{[{ id: "all", name: "Alles" }, ...stockCategories].map(filter => <button type="button" key={filter.id} aria-pressed={group === filter.id} onClick={() => changeFilter(() => { setGroup(filter.id); setVolume("all"); })}>{filter.name}</button>)}</div>
+          <div className={s.segment} aria-label="Productcategorie">{[{ id: "all", name: "Alles" }, ...stockCategories].map(filter => <button type="button" key={filter.id} aria-pressed={group === filter.id} onClick={() => changeFilter(() => { setGroup(filter.id); setVolume("all"); if (filter.id === "kerst") { setDepartment("all"); setStatus("all"); setQuery(""); } })}>{filter.name}</button>)}</div>
           <label className={s.search}><Icon name="search" size={18} /><input aria-label="Zoek product of artikelnummer" placeholder="Zoek product of nummer…" value={query} onChange={event => changeFilter(() => { setQuery(event.target.value); setVolume("all"); })} /></label>
           <select aria-label="Afdeling" value={department} onChange={event => changeFilter(() => setDepartment(event.target.value))}><option value="all">Alle afdelingen</option><option value="patisserie">Patisserie</option><option value="bak">Bak</option><option value="chocolade">Chocolade</option></select>
           <select aria-label="Controlefilter" value={status} onChange={event => changeFilter(() => { setStatus(event.target.value); if (event.target.value === "hidden") { setGroup("all"); setDepartment("all"); setVolume("all"); setQuery(""); } })}><option value="all">Alle statussen</option><option value="recipe">Recept controleren</option><option value="stock">Voorraad onbekend</option><option value="week52">Week 52 controleren</option><option value="hidden">Weggelaten ({hiddenCount})</option></select>
@@ -494,7 +499,7 @@ export default function ChristmasStockPreview({
             const quantityUnit = row.currentProduct.quantityLabel || (row.currentProduct.group === "petit-dv" ? "stuks" : null);
             const band = { high: "Hardloper", medium: "Gemiddeld", low: "Klein volume", unknown: row.product.unitUnconfirmed ? "Eenheid controleren" : "Verkoop nog koppelen" }[salesVolume(row.product)];
             return <tr key={row.product.id}>
-              <td><div className={s.productCell}><button type="button" className={s.productButton} onClick={() => setProductId(row.product.id)}><b>{row.currentProduct.name}</b><span>{row.choice.adjustment?.name2026 ? `Basis 2025 · ${row.product.name}` : row.product.overviewSubtitle || `${stockCategories.find(category => category.id === row.product.group)?.name} · ${band}`}{row.product.assortedSales ? " · incl. gesorteerd" : ""}{source.mode === "example" && row.stock ? " · voorbeeldproductie" : ""}</span></button><button type="button" className={s.removeButton} aria-label={`${row.choice.adjustment?.hidden ? "Terugzetten" : "Weglaten"} ${row.currentProduct.name}`} title={row.choice.adjustment?.hidden ? "Terugzetten" : "Product weglaten"} disabled={saving} onClick={() => row.choice.adjustment?.hidden ? void hideProduct(row.product.id, false) : setRemoveId(row.product.id)}><Icon name={row.choice.adjustment?.hidden ? "refresh" : "trash"} size={16} /></button></div></td>
+              <td><div className={s.productCell}><button type="button" className={s.productButton} onClick={() => setProductId(row.product.id)}><b>{row.currentProduct.name}</b><span>{row.choice.adjustment?.name2026 ? `Basis 2025 · ${row.product.name}` : row.currentProduct.overviewSubtitle || `${stockCategories.find(category => category.id === row.product.group)?.name} · ${band}`}{row.product.assortedSales ? " · incl. gesorteerd" : ""}{source.mode === "example" && row.stock ? " · voorbeeldproductie" : ""}</span></button>{!christmasCakeVariant(row.product) && <button type="button" className={s.removeButton} aria-label={`${row.choice.adjustment?.hidden ? "Terugzetten" : "Weglaten"} ${row.currentProduct.name}`} title={row.choice.adjustment?.hidden ? "Terugzetten" : "Product weglaten"} disabled={saving} onClick={() => row.choice.adjustment?.hidden ? void hideProduct(row.product.id, false) : setRemoveId(row.product.id)}><Icon name={row.choice.adjustment?.hidden ? "refresh" : "trash"} size={16} /></button>}</div></td>
               <td className={s.projectionNumber}><button type="button" className={s.numberButton} onClick={() => setProductId(row.product.id)} aria-label={`Prognose week 47–53 ${row.currentProduct.name}`}><strong className={s.forecastValue}>{number(row.projection)}</strong>{quantityUnit && <small>{quantityUnit}</small>}{row.choice.adjustment && Object.entries(row.choice.adjustment).some(([field, value]) => field !== "hidden" && value !== undefined && value !== "") && <small className={s.adjusted}>Bijgesteld</small>}{row.product.unitUnconfirmed && row.choice.adjustment?.periodTotal == null && <small className={s.warningText}>Eenheid?</small>}</button></td>
               <td className={s.christmasNumber}><button type="button" className={row.week52 === null ? s.missingButton : s.numberButton} onClick={() => setProductId(row.product.id)} aria-label={`Prognose kerstweek 52 ${row.currentProduct.name}`}>{row.week52 === null ? "Controleren" : <strong className={s.forecastValue}>{number(row.week52)}</strong>}{quantityUnit && row.week52 !== null && <small>{quantityUnit}</small>}{(row.projectionIssue || row.choice.adjustment?.week52Total != null || row.product.week52?.issue || row.week52 === null) && <small>{row.projectionIssue || (row.choice.adjustment?.week52Total != null ? "Handmatig" : row.product.week52?.issue || "Weekbasis/eenheid controleren")}</small>}</button></td>
               <td className={s.weeklyNumber}><strong>{number(row.weeklyTarget)}</strong>{quantityUnit && <small>{quantityUnit}</small>}</td>

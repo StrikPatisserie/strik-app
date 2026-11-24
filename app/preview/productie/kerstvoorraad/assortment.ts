@@ -1,5 +1,6 @@
 import { projectedSales, type SalesProduct } from "./forecast";
 import { salesVariant } from "./variants";
+import { christmasCakeVariant } from "./christmasCakes";
 import { isPetitDV } from "./petitProducts";
 
 export const stockCategories = [
@@ -38,7 +39,7 @@ function categoryOverride(name: string, articleNumber = ""): StockCategory | nul
 }
 
 export function normalizeStockCategories(products: SalesProduct[]): SalesProduct[] {
-  return products.map(product => ({ ...product, group: categoryOverride(product.name, product.cashCode) || product.group }));
+  return products.map(product => ({ ...product, group: christmasCakeVariant(product) ? "kerst" : categoryOverride(product.name, product.cashCode) || product.group }));
 }
 
 export function stockCategory(name: string, article?: CatalogArticle): StockCategory | null {
@@ -252,6 +253,7 @@ export function combineKruidcakes(products: SalesProduct[]): SalesProduct[] {
 }
 
 export function includeInStockOverview(product: SalesProduct, growth: number): boolean {
+  if (christmasCakeVariant(product)) return true;
   const articleNumber = /^\d+$/.test(product.cashCode.trim()) ? Number(product.cashCode) : null;
   if (articleNumber !== null && articleNumber >= 145100 && articleNumber <= 150802) return false;
   const names = normalize([product.name, ...(product.searchNames || [])].join(" "));

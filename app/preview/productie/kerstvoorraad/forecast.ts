@@ -2,6 +2,7 @@ import { preparationProposal } from "../../../productie/recipePlanning";
 import type { DemoRecipe, DepartmentId, ItemUnit, PreviewState } from "../../../productie/planning";
 import type { StockCategory } from "./assortment";
 import { salesArticleCodes, usableSalesArticle } from "./salesArticles";
+import { christmasCakeVariant, hiddenStockProduct } from "./christmasCakes";
 
 export type SalesProduct = {
   id: string; name: string; group: StockCategory; department: "patisserie" | "bak" | "chocolade";
@@ -73,7 +74,12 @@ export function productProjection(product: SalesProduct, choice: ProductChoice, 
  * production links. Never continue subtracting the retired article's sales. */
 export function productFor2026(product: SalesProduct, choice: ProductChoice): SalesProduct {
   const adjustment = choice.adjustment;
-  if (!adjustment?.name2026) return product;
+  if (!adjustment?.name2026) {
+    if (christmasCakeVariant(product)?.size === "4–6p") return {
+      ...product, name: "Xmas Slagroomtaart · 4–6p", overviewSubtitle: "2025: 6–8p · dit jaar 4–6p",
+    };
+    return product;
+  }
   return { ...product, name: adjustment.name2026, cashCode: adjustment.cashCode2026 || "", members: undefined, combinedFlan: undefined, unitsPerSale: undefined, quantityLabel: undefined, overviewSubtitle: undefined,
     articleAmbiguous: !adjustment.cashCode2026, searchNames: [...(product.searchNames || []), product.name] };
 }
@@ -87,12 +93,12 @@ export function mappedProductsFor2026(products: SalesProduct[], choices: Record<
     ...product,
     articleAmbiguous: articles[index].some(code => !usableSalesArticle(code))
       || current.some((other, otherIndex) => otherIndex !== index
-        && !choices[other.id]?.adjustment?.hidden
+        && !hiddenStockProduct(other, choices[other.id])
         && articles[otherIndex].some(code => articles[index].includes(code))),
   } : product);
   const counts = new Map<string, number>();
   for (const [index, product] of mapped.entries()) {
-    if (choices[product.id]?.adjustment?.hidden) continue;
+    if (hiddenStockProduct(product, choices[product.id])) continue;
     const period = productProjection(products[index], choices[product.id] || emptyChoice(), growth).period;
     if (period === null || period <= 0) continue;
     for (const code of salesArticleCodes(product).filter(usableSalesArticle)) counts.set(code, (counts.get(code) || 0) + 1);

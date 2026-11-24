@@ -18,12 +18,13 @@ const planning = load('app/productie/planning.ts');
 const materials = load('app/productie/materialPlanning.ts', { './planning': planning });
 const expansion = load('app/productie/recipePlanning.ts', { './planning': planning, './materialPlanning': materials });
 const salesArticles = load('app/preview/productie/kerstvoorraad/salesArticles.ts');
-const forecast = load('app/preview/productie/kerstvoorraad/forecast.ts', { '../../../productie/recipePlanning': expansion, './salesArticles': salesArticles });
+const christmasCakes = load('app/preview/productie/kerstvoorraad/christmasCakes.ts');
+const forecast = load('app/preview/productie/kerstvoorraad/forecast.ts', { '../../../productie/recipePlanning': expansion, './salesArticles': salesArticles, './christmasCakes': christmasCakes });
 const examples = load('app/preview/productie/kerstvoorraad/examples.ts', { './forecast': forecast });
 const inventory = load('app/productie/inventory.ts', { './planning': planning });
 const variants = load('app/preview/productie/kerstvoorraad/variants.ts');
 const petitProducts = load('app/preview/productie/kerstvoorraad/petitProducts.ts');
-const assortment = load('app/preview/productie/kerstvoorraad/assortment.ts', { './forecast': forecast, './variants': variants, './petitProducts': petitProducts });
+const assortment = load('app/preview/productie/kerstvoorraad/assortment.ts', { './forecast': forecast, './variants': variants, './petitProducts': petitProducts, './christmasCakes': christmasCakes });
 const assorted = load('app/preview/productie/kerstvoorraad/assortedPastries.ts');
 const flans = load('app/preview/productie/kerstvoorraad/flanVariants.ts');
 const campaign = load('app/preview/productie/kerstvoorraad/campaignNeed.ts', { '../../../productie/planning': planning, '../../../productie/inventory': inventory, './assortedPastries': assorted, './salesArticles': salesArticles });
@@ -1453,4 +1454,42 @@ test('weekly correction preserves unknown cash coverage and rejects mismatched w
   const ignored = debtorImport.replaceDebtorSales([item], [line, debtorLine('310100', 'Bezorgkosten Standaard', 6)]);
   assert.equal(ignored.ignored.length, 1);
   assert.equal(ignored.products[0].bake, 100);
+});
+
+
+test('all six Christmas cake formats stay visible with unknown or zero sales and sort together', () => {
+  const rows = ['25830','25831','25832'].flatMap(cashCode => ['6–8p','10–12p'].map(salesVariant => ({
+    ...product(`${cashCode}:${salesVariant}`), cashCode, salesVariant, group:'taart', cash:0, bake:0,
+  })));
+  const ordered = assortment.normalizeStockCategories(rows).sort((a,b) => christmasCakes.christmasCakeVariant(a).rank - christmasCakes.christmasCakeVariant(b).rank);
+  assert.equal(ordered.length, 6);
+  assert.deepEqual(Array.from(ordered, p => christmasCakes.christmasCakeVariant(p).size), ['4–6p','6–8p','6–8p','10–12p','10–12p','10–12p']);
+  for (const p of ordered) {
+    assert.equal(p.group, 'kerst');
+    assert.equal(assortment.includeInStockOverview(p, 10), true);
+    assert.equal(assortment.includeInStockOverview({...p,cash:null,bake:null}, 10), true);
+    assert.equal(christmasCakes.hiddenStockProduct(p, {...forecast.emptyChoice(),adjustment:{hidden:true}}), false);
+  }
+  assert.equal(christmasCakes.christmasCakeVariant({...rows[0],salesVariant:'14–16p'}), null);
+  assert.equal(christmasCakes.christmasCakeVariant({...rows[0],cashCode:'25000'}), null);
+  assert.equal(christmasCakes.hiddenStockProduct(product('ordinary'), {...forecast.emptyChoice(),adjustment:{hidden:true}}), true);
+});
+
+test('small Christmas cream cake changes display size only and all six preserve the capsule forecast', () => {
+  const inputs = [
+    ['25830','6–8p',35,0,34,0], ['25831','6–8p',47,0,43,0], ['25832','6–8p',103,41,89,0],
+    ['25830','10–12p',18.75,0,18.75,0], ['25831','10–12p',27.5,0,26.25,0], ['25832','10–12p',25,0,25,0],
+  ];
+  const rows = inputs.map(([cashCode,salesVariant,cash,bake,weekCash,weekBake]) => ({...product(cashCode+salesVariant), name:`Xmas Slagroomtaart · ${salesVariant}`, cashCode,salesVariant,cash,bake,week52:{cash:weekCash,bake:weekBake},articleAmbiguous:true}));
+  const before = JSON.stringify(rows);
+  const mapped = forecast.mappedProductsFor2026(rows,{},10);
+  assert.equal(mapped[0].name,'Xmas Slagroomtaart · 4–6p');
+  assert.equal(mapped[0].cashCode,'25830');
+  assert.equal(mapped[0].id,rows[0].id);
+  assert.equal(mapped[0].articleAmbiguous,true);
+  const projections=rows.map(p=>forecast.productProjection(p,forecast.emptyChoice(),10));
+  assert.deepEqual(Array.from(projections,p=>p.period),[39,52,159,21,31,28]);
+  assert.equal(projections.reduce((sum,p)=>sum+p.period,0),330);
+  assert.equal(projections.reduce((sum,p)=>sum+p.week52,0),262);
+  assert.equal(JSON.stringify(rows),before);
 });

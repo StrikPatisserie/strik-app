@@ -149,3 +149,10 @@ De bestaande 10–12p-productcode blijft de sleutel voor receptkoppeling en bijs
 De handmatig gekozen categorieën gelden ook voor eerder opgeslagen bronregels: roomboter speculaasstaaf en amandelletter bij Bakkant; gewone kruidcake bij Taart; puddingbroodje bij Gebak; macarons, mergpijpjes, losse brownies/blondies en bokkepootjes bij Overig. Browniegebak en brownietaarten houden hun eigen categorie. Kerstkruidcake (Cash-it 40842, Bake-it 2519) telt mee in Kruidcake bij Taart, met behoud van alle vier de bronartikelen voor dagelijks verloop en week 52. De bestaande artikelcodes en samenvoegingen blijven behouden.
 
 Petit-DV-prognoses vermelden expliciet stuks (of zakjes bij petit chou). De bekende doosjes van 6 en 15 worden vóór de opslag naar losse stuks omgerekend. De productdetails tonen de controleberekening: oorspronkelijke doosjes × inhoud = verkochte losse stuks vóór groei.
+
+
+### Vaste kersttaartvarianten (24 november 2026)
+
+De zes formaten van slagroom, chipolata en kers/bitterkoek staan samen bovenaan onder Kerst. Deze varianten blijven zichtbaar bij nul of onbekende verkoop, bij volumefilters en bij een oude instelling ‘weglaten’. Ze kunnen niet via het prullenbakje worden verborgen. Kerst openen wist eerdere zoek-, afdelings- en controlefilters, zodat alle zes direct op de eerste pagina passen. Bewust daarna zoeken of een controlefilter kiezen blijft mogelijk.
+
+Slagroom 6–8p uit 2025 wordt voor 2026 weergegeven als 4–6p. De historische regel, hoeveelheden, gedeelde artikelcode en onzekerheid over voorraad per maat blijven intact; slagroom 10–12p blijft apart. Bij +10% zijn de zes doelen 39, 52, 159, 21, 31 en 28 (totaal 330); kerstweek 262 is onderdeel van dat totaal.
