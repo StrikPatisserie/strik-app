@@ -31,9 +31,9 @@ export function recipeViews(data: RecepturenData): DemoRecipe[] {
     yield: Number.isFinite(recipe.standardBatchQuantity) && (recipe.standardBatchQuantity || 0) > 0 && ["stuk","stuks","gram","kg","ml","liter","platen"].includes(recipe.standardBatchUnit || "") ? recipe.standardBatchQuantity! : 0,
     unit: itemUnit(recipe.standardBatchUnit),
     ingredients: [
-      ...(recipe.ingredients || []).map(line => ({ name: data.ingredients.find(i => i.id === line.ingredientId)?.name || "Grondstofverwijzing controleren", quantity: line.quantity, unit: line.unit })),
-      ...(recipe.semiFinishedItems || []).map(line => ({ name: data.recipes.find(r => r.id === line.semiFinishedRecipeId)?.name || "Halffabricaatverwijzing controleren", quantity: line.quantity, unit: line.unit })),
-    ],
+      ...(recipe.ingredients || []).map((line, index) => ({ name: line.label || data.ingredients.find(i => i.id === line.ingredientId)?.name || "Grondstofverwijzing controleren", quantity: line.quantity, unit: line.unit, sortOrder: line.sortOrder ?? index })),
+      ...(recipe.semiFinishedItems || []).map((line, index) => ({ name: line.label || data.recipes.find(r => r.id === line.semiFinishedRecipeId)?.name || "Halffabricaatverwijzing controleren", quantity: line.quantity, unit: line.unit, sortOrder: line.sortOrder ?? recipe.ingredients.length + index })),
+    ].sort((a, b) => a.sortOrder - b.sortOrder).map(({ name, quantity, unit }) => ({ name, quantity, unit })),
     ...(recipe.productionSteps ? { productionSteps: recipe.productionSteps } : {}),
     steps: [...(recipe.workInstructions || []), ...(recipe.preparationSteps || []), ...(recipe.finishingSteps || [])],
     allergens: recipe.allergens || [],

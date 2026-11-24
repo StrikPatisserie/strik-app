@@ -8,6 +8,7 @@ import { WORK_RECIPE_UNITS, workRecipeComponentError, type WorkRecipeComponent, 
 import SearchableChoice from "./SearchableChoice";
 import s from "./requests.module.css";
 import recipeStyle from "./QuickRecipeForm.module.css";
+import RecipeLineOrder, { moveRecipeLine } from "./RecipeLineOrder";
 
 type ComponentRow = Omit<WorkRecipeComponent, "quantity"> & { key: number; quantity: string };
 type LoadedRecipe = {
@@ -52,9 +53,9 @@ export default function QuickRecipeForm({ item, ingredients, getRevision, recipe
         if (!response.ok) throw Error(data.message || "Werkrecept laden mislukt.");
         if (cancelled) return;
         const components: ComponentRow[] = [
-          ...data.draft.ingredients.map(line => ({ kind: "ingredient" as const, linkedId: line.ingredientId || "", quantity: Number.isFinite(line.quantity) ? String(line.quantity) : "", unit: line.unit || "" })),
-          ...data.draft.semiFinishedItems.map(line => ({ kind: "semiFinished" as const, linkedId: line.recipeId || "", quantity: Number.isFinite(line.quantity) ? String(line.quantity) : "", unit: line.unit || "" })),
-        ].map((line, key) => ({ ...line, key }));
+          ...data.draft.ingredients.map(line => ({ kind: "ingredient" as const, linkedId: line.ingredientId || "", quantity: Number.isFinite(line.quantity) ? String(line.quantity) : "", unit: line.unit || "", label: line.label, sortOrder: line.sortOrder, sourceIndex: line.sourceIndex })),
+          ...data.draft.semiFinishedItems.map(line => ({ kind: "semiFinished" as const, linkedId: line.recipeId || "", quantity: Number.isFinite(line.quantity) ? String(line.quantity) : "", unit: line.unit || "", label: line.label, sortOrder: line.sortOrder, sourceIndex: line.sourceIndex })),
+        ].map((line, key) => ({ ...line, key })).sort((a, b) => (a.sortOrder ?? a.key) - (b.sortOrder ?? b.key));
         nextRow.current = components.length;
         setRows(components);
         setLoaded(data);
@@ -85,7 +86,6 @@ export default function QuickRecipeForm({ item, ingredients, getRevision, recipe
   const rowErrors = rows.map(row => workRecipeComponentError(
     { ...row, quantity: Number(row.quantity) },
     row.kind === "ingredient" ? ingredientIds : semiFinishedIds,
-    rows.some(other => other.key !== row.key && other.kind === row.kind && other.linkedId === row.linkedId),
   ));
 
   function updateRow(key: number, patch: Partial<ComponentRow>) {
@@ -114,12 +114,12 @@ export default function QuickRecipeForm({ item, ingredients, getRevision, recipe
         ...(scope === "permanent" ? { productionSteps } : {}),
         yield: Number(form.get("yield")),
         instructions: String(form.get("instructions")),
-        ingredients: rows.filter(row => row.kind === "ingredient").map(row => ({ ingredientId: row.linkedId, quantity: Number(row.quantity), unit: row.unit })),
+        ingredients: rows.flatMap((row, sortOrder) => row.kind === "ingredient" ? [{ ingredientId: row.linkedId, quantity: Number(row.quantity), unit: row.unit, label: row.label, sortOrder, sourceIndex: row.sourceIndex }] : []),
         ...(editing ? {
           recipeId: loaded!.draft.recipeId,
           workInstructions: String(form.get("workInstructions")),
           finishingInstructions: String(form.get("finishingInstructions")),
-          semiFinishedItems: rows.filter(row => row.kind === "semiFinished").map(row => ({ recipeId: row.linkedId, quantity: Number(row.quantity), unit: row.unit })),
+          semiFinishedItems: rows.flatMap((row, sortOrder) => row.kind === "semiFinished" ? [{ recipeId: row.linkedId, quantity: Number(row.quantity), unit: row.unit, label: row.label, sortOrder, sourceIndex: row.sourceIndex }] : []),
         } : {}),
       };
       const response = await fetch("/api/productie/snel-recept", {
@@ -155,16 +155,19 @@ export default function QuickRecipeForm({ item, ingredients, getRevision, recipe
       </select>
     </label>}
     <label>Batchgrootte ({item.unit})<input name="yield" type="number" min="0.000001" max="1000000" step="any" required disabled={busy} defaultValue={draft?.yield} /></label>
+    <p>Een grondstof mag op meerdere regels staan. Sleep de greep of gebruik de pijltjes.</p>
+    <div data-recipe-lines>
     {rows.map((row, index) => {
       const choices = row.kind === "ingredient" ? ingredients : semiFinished;
       const missing = Boolean(row.linkedId) && !choices.some(choice => choice.id === row.linkedId);
       const rowError = missing || showValidation ? rowErrors[index] : undefined;
       const errorId = `recipe-line-${row.key}-error`;
       const label = row.kind === "ingredient" ? "Grondstof" : "Halffabricaat";
-      return <fieldset key={row.key} className={`${recipeStyle.line} ${editing ? "" : recipeStyle.newLine}`}>
+      return <fieldset key={row.key} className={`${recipeStyle.line} ${editing ? "" : recipeStyle.newLine}`} data-recipe-line-key={row.key}>
         <legend>Receptregel {index + 1}</legend>
+        <RecipeLineOrder rowKey={row.key} index={index} keys={rows.map(line => line.key)} disabled={busy} onMove={target => setRows(current => moveRecipeLine(current, row.key, target))}/>
         {editing && <label>Soort onderdeel
-          <select value={row.kind} disabled={busy} onChange={event => updateRow(row.key, { kind: event.target.value as ComponentRow["kind"], linkedId: "" })}>
+          <select value={row.kind} disabled={busy} onChange={event => updateRow(row.key, { kind: event.target.value as ComponentRow["kind"], linkedId: "", sourceIndex: undefined })}>
             <option value="ingredient">Grondstof</option>
             <option value="semiFinished">Halffabricaat</option>
           </select>
@@ -181,10 +184,12 @@ export default function QuickRecipeForm({ item, ingredients, getRevision, recipe
             {WORK_RECIPE_UNITS.map(unit => <option key={unit}>{unit}</option>)}
           </select>
         </label>
+        <label className={recipeStyle.rowLabel}>Naam in recept (optioneel)<input name={`label-${row.key}`} maxLength={160} disabled={busy} placeholder="Bijv. Water 1 (koud)" value={row.label || ""} onChange={event => updateRow(row.key, { label: event.target.value })}/></label>
         {rowError && <p id={errorId} role="alert" className={`${s.error} ${recipeStyle.error}`}>{missing ? "Deze koppeling bestaat niet meer. " : ""}{rowError}</p>}
         {(editing || rows.length > 1) && <button type="button" className={recipeStyle.remove} aria-label={`Receptregel ${index + 1} verwijderen`} disabled={busy} onClick={() => setRows(current => current.filter(line => line.key !== row.key))}>×</button>}
       </fieldset>;
     })}
+    </div>
     <div className={recipeStyle.actions}><button type="button" disabled={busy || rows.length >= (editing ? 100 : 50)} onClick={() => addRow("ingredient")}>+ Grondstof</button>
     {editing && <button type="button" disabled={busy || rows.length >= 100} onClick={() => addRow("semiFinished")}>+ Halffabricaat</button>}</div>
     {scope === "permanent" && <ProductionStepsField value={productionSteps} onChange={setProductionSteps} disabled={busy}/>}

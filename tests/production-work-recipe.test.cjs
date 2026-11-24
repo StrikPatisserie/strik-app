@@ -21,7 +21,7 @@ test('work-recipe edits preserve canonical identities, prices, history and tasks
 });
 test('invalid references, circular preparations, wrong recipe identities and empty recipes are rejected',()=>{
  const {data,state}=fixture(),input=work.editableWorkRecipe(state,data,'recipe:r');
- for(const patch of [{recipeId:'wrong'},{yield:0},{instructions:'',workInstructions:'',finishingInstructions:''},{ingredients:[],semiFinishedItems:[]},{ingredients:[{ingredientId:'missing',quantity:1,unit:'gram'}]},{ingredients:[input.ingredients[0],input.ingredients[0]]}])assert.throws(()=>work.updateWorkRecipe(state,data,{...input,...patch},'now'));
+ for(const patch of [{recipeId:'wrong'},{yield:0},{instructions:'',workInstructions:'',finishingInstructions:''},{ingredients:[],semiFinishedItems:[]},{ingredients:[{ingredientId:'missing',quantity:1,unit:'gram'}]}])assert.throws(()=>work.updateWorkRecipe(state,data,{...input,...patch},'now'));
  const withSemi={...input,semiFinishedItems:[{recipeId:'semi',quantity:2,unit:'kg'}]};
  assert.equal(work.updateWorkRecipe(state,data,withSemi,'now').recipes.recipes[0].semiFinishedItems[0].semiFinishedRecipeId,'semi');
  data.recipes[1].semiFinishedItems=[{semiFinishedRecipeId:'r',quantity:1,unit:'stuk'}];assert.throws(()=>work.updateWorkRecipe(state,data,withSemi,'now'),/kring/);
@@ -41,12 +41,13 @@ test('broken component links remain editable and replacing them releases the rep
  const plan=recipePlanning.buildRecipePlan(result.planner,workspace.recipeViews(result.recipes),command);
  assert.equal(plan.tasks.length,2);assert.equal(plan.tasks.find(task=>task.generatedFor==='repair-plan').itemId,'recipe:semi');assert.equal(state.items[0].productionBlocked,true);
 });
-test('component validation distinguishes missing IDs, duplicate links, quantities and unsupported units',()=>{
+test('component validation distinguishes missing IDs, quantities and unsupported units',()=>{
  const ingredient={kind:'ingredient',linkedId:'flour',quantity:100,unit:'gram'};
  assert.equal(work.workRecipeComponentError(ingredient,['flour']),undefined);
  assert.match(work.workRecipeComponentError({...ingredient,linkedId:'deleted'},['flour']),/bestaande grondstof/);
  assert.match(work.workRecipeComponentError({...ingredient,kind:'semiFinished'},['semi']),/bestaande halffabricaat/);
- assert.match(work.workRecipeComponentError(ingredient,['flour'],true),/staat al/);
+ assert.match(work.workRecipeComponentError({...ingredient,label:'x'.repeat(161)},['flour']),/160/);
+ assert.match(work.workRecipeComponentError({...ingredient,sortOrder:-1},['flour']),/volgorde/);
  assert.match(work.workRecipeComponentError({...ingredient,quantity:0},['flour']),/groter dan nul/);
  assert.match(work.workRecipeComponentError({...ingredient,unit:'zak'},['flour']),/eenheid/);
 });
@@ -153,4 +154,44 @@ test('recipe stage choices persist through the shared recipe editor with valid o
  const synced=workspace.syncRecipeCatalog(state,saved);
  assert.equal(synced.items.find(i=>i.recipeId==='r').productionSteps.join('|'),'Deeg zetten|Product maken & afbakken');
  for(const productionSteps of [[],['Produceren','Produceren'],['Onbekend']])assert.throws(()=>work.updateWorkRecipe(state,data,{...input,productionSteps},'now'),/productiestap/);
+});
+
+
+test('repeated ingredients keep separate amounts, labels and metadata when reordered between preparations',()=>{
+ const {data,state}=fixture();
+ data.ingredients[0].name='Water';
+ data.recipes[0].ingredients=[
+  {ingredientId:'flour',quantity:1000,unit:'gram',label:'Water 1 (koud)',sortOrder:0,costContribution:2,wastePercentage:1},
+  {ingredientId:'flour',quantity:3000,unit:'gram',label:'Water 2 (koud)',sortOrder:2,costContribution:6,wastePercentage:3},
+ ];
+ data.recipes[0].semiFinishedItems=[{semiFinishedRecipeId:'semi',quantity:1200,unit:'gram',label:'Koude room',sortOrder:1,costContribution:4}];
+ const input=work.editableWorkRecipe(state,data,'recipe:r');
+ input.ingredients.reverse(); input.ingredients[0].sortOrder=0; input.ingredients[1].sortOrder=2;
+ const saved=work.updateWorkRecipe(state,data,input,'2026-11-24T10:00:00Z').recipes;
+ assert.equal(saved.recipes[0].ingredients.length,2);
+ assert.deepEqual(plain(saved.recipes[0].ingredients.map(l=>[l.quantity,l.label,l.wastePercentage])),[[3000,'Water 2 (koud)',3],[1000,'Water 1 (koud)',1]]);
+ const view=workspace.recipeViews(saved)[0];
+ assert.deepEqual(plain(view.ingredients.map(l=>[l.name,l.quantity])),[['Water 2 (koud)',3000],['Koude room',1200],['Water 1 (koud)',1000]]);
+ const reread=work.editableWorkRecipe(state,saved,'recipe:r');
+ const resaved=work.updateWorkRecipe(state,saved,reread,'2026-11-24T10:01:00Z').recipes;
+ assert.deepEqual(plain(workspace.recipeViews(resaved)[0].ingredients),plain(view.ingredients));
+ assert.deepEqual(plain(data.recipes[0].ingredients.map(l=>l.quantity)),[1000,3000]);
+});
+test('new quick recipes accept two separate Water lines and preserve their order',()=>{
+ const {data,state}=fixture();state.items.push({id:'new',name:'Mousse',kind:'component',unit:'kg',departmentId:'dessert',stock:0,note:''});
+ const saved=quick.quickRecipe(state,data,{itemId:'new',yield:4,instructions:'Water afzonderlijk afwegen.',ingredients:[
+  {ingredientId:'flour',quantity:1000,unit:'gram',label:'Water 1 (koud)',sortOrder:0},
+  {ingredientId:'flour',quantity:3000,unit:'gram',label:'Water 2 (koud)',sortOrder:1},
+ ]},'water-mousse','2026-11-24T10:00:00Z');
+ const recipe=saved.recipes.recipes.find(r=>r.id==='water-mousse');
+ assert.deepEqual(plain(recipe.ingredients.map(l=>[l.ingredientId,l.quantity,l.label,l.sortOrder])),[['flour',1000,'Water 1 (koud)',0],['flour',3000,'Water 2 (koud)',1]]);
+ assert.equal(recipe.standardBatchQuantity,4);
+});
+test('ordinary baker can save repeated ingredient occurrences via the real work-recipe route',async()=>{
+ const e=endpoint(baker),response=await e.route.GET(read()),view=await response.json();
+ view.draft.ingredients=[{ingredientId:'flour',quantity:1000,unit:'gram',label:'Water 1 (koud)',sortOrder:0},{ingredientId:'flour',quantity:3000,unit:'gram',label:'Water 2 (koud)',sortOrder:1}];
+ const result=await e.route.POST(post(view.draft));assert.equal(result.status,200,JSON.stringify(await result.json()));
+ assert.equal(e.writes[0][3].recipes[0].ingredients.length,2);
+ assert.deepEqual(plain(e.writes[0][3].recipes[0].ingredients.map(l=>l.quantity)),[1000,3000]);
+ assert.equal(e.writes[0][3].recipes[0].salesPrice,99);
 });

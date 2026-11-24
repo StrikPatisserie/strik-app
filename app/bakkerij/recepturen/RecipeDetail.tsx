@@ -1622,6 +1622,7 @@ export default function RecipeDetail({
                               ×
                             </button>
                           </div>
+                          <label className="text-xs md:col-span-6">Naam in recept (optioneel)<input className="ml-2 rounded border px-2 py-1" maxLength={160} value={line.label || ""} placeholder="Bijv. Water 1 (koud)" onChange={event => updateIngredientLine(line.id, { label: event.target.value })}/></label>
                           {ingredient?.lastInvoice ===
                             "Gemiddelde prijs - later controleren" && (
                             <p className="text-[0.7rem] font-black text-[#a83e31] md:col-span-6">
@@ -2823,6 +2824,7 @@ type RecipeIngredientDraft = {
   quantity: string;
   unit: RecipeUnit;
   costContribution: number;
+  label?: string;
   sortOrder: number;
 };
 
@@ -2832,6 +2834,7 @@ type SemiFinishedDraft = {
   quantity: string;
   unit: RecipeUnit;
   costContribution: number;
+  label?: string;
   sortOrder: number;
 };
 
@@ -3020,6 +3023,7 @@ function createRecipeDraft(recipe: Recipe): RecipeDraft {
     ingredients: recipe.ingredients.map((item, index) => ({
       id: createLocalId("ingredient-line"),
       ingredientId: item.ingredientId,
+      label: item.label,
       quantity: formatInputNumber(item.quantity),
       unit: item.unit,
       costContribution: item.costContribution,
@@ -3028,6 +3032,7 @@ function createRecipeDraft(recipe: Recipe): RecipeDraft {
     semiFinishedItems: recipe.semiFinishedItems.map((item, index) => ({
       id: createLocalId("semi-line"),
       semiFinishedRecipeId: item.semiFinishedRecipeId,
+      label: item.label,
       quantity: formatInputNumber(item.quantity),
       unit: item.unit,
       costContribution: item.costContribution,
@@ -3098,6 +3103,7 @@ function recipeDraftFromImportedRecipe(
       ? importedRecipe.ingredients.map((item, index) => ({
           id: createLocalId("ingredient-line"),
           ingredientId: item.ingredientId,
+          label: item.label,
           quantity: formatInputNumber(item.quantity),
           unit: item.unit,
           costContribution: item.costContribution,
@@ -3108,6 +3114,7 @@ function recipeDraftFromImportedRecipe(
       ? importedRecipe.semiFinishedItems.map((item, index) => ({
           id: createLocalId("semi-line"),
           semiFinishedRecipeId: item.semiFinishedRecipeId,
+          label: item.label,
           quantity: formatInputNumber(item.quantity),
           unit: item.unit,
           costContribution: item.costContribution,
@@ -3291,6 +3298,7 @@ function normalizeIngredientDraft(
 
   return {
     ingredientId: line.ingredientId,
+    label: line.label?.trim() || undefined,
     quantity,
     unit: line.unit,
     costContribution: ingredient
@@ -3318,6 +3326,7 @@ function normalizeSemiFinishedDraft(
 
   return {
     semiFinishedRecipeId: line.semiFinishedRecipeId,
+    label: line.label?.trim() || undefined,
     quantity,
     unit: line.unit,
     costContribution: linkedRecipe
@@ -4658,7 +4667,7 @@ function recipeCardIngredientRows(
 
     return {
       id: `ingredient-${index}-${item.ingredientId}`,
-      name: ingredient?.name || item.ingredientId,
+      name: item.label || ingredient?.name || item.ingredientId,
       quantity: Math.round(item.quantity * multiplier * 10000) / 10000,
       unit: item.unit,
       isSemiFinished: false,
@@ -4671,7 +4680,7 @@ function recipeCardIngredientRows(
 
     return {
       id: `semi-${index}-${item.semiFinishedRecipeId}`,
-      name: linkedRecipe?.name || item.semiFinishedRecipeId,
+      name: item.label || linkedRecipe?.name || item.semiFinishedRecipeId,
       quantity: Math.round(item.quantity * multiplier * 10000) / 10000,
       unit: item.unit,
       isSemiFinished: true,
@@ -4706,7 +4715,7 @@ function recipeCalculationPrintRows(
 
     return {
       id: `ingredient-${index}-${item.ingredientId}`,
-      name: ingredient?.name || item.ingredientId,
+      name: item.label || ingredient?.name || item.ingredientId,
       quantity: Math.round(item.quantity * multiplier * 10000) / 10000,
       unit: item.unit,
       isSemiFinished: false,
@@ -4720,7 +4729,7 @@ function recipeCalculationPrintRows(
 
     return {
       id: `semi-${index}-${item.semiFinishedRecipeId}`,
-      name: linkedRecipe?.name || item.semiFinishedRecipeId,
+      name: item.label || linkedRecipe?.name || item.semiFinishedRecipeId,
       quantity: Math.round(item.quantity * multiplier * 10000) / 10000,
       unit: item.unit,
       isSemiFinished: true,

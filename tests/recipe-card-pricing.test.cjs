@@ -199,3 +199,27 @@ test('incomplete concepts cannot scale or reset unknown batch quantities', () =>
   const html = render({ ingredients: [{ ingredientId: 'flour', quantity: 0, unit: 'gram' }] });
   assert.doesNotMatch(html, /Standaard 47|aria-label="Hoeveelheid"/);
 });
+
+
+test('repeated ingredients retain separate names, quantities and mixed order on cards and prints', () => {
+  const changes = {
+    standardBatchQuantity: 1, batchSize: '1 stuk',
+    ingredients: [
+      { ingredientId: 'water', label: 'Water 2 (koud)', quantity: 3000, unit: 'gram', sortOrder: 2 },
+      { ingredientId: 'water', label: 'Water 1 (koud)', quantity: 1000, unit: 'gram', sortOrder: 0 },
+    ],
+    semiFinishedItems: [{ semiFinishedRecipeId: 'cream', label: 'Slagroom (lobbig)', quantity: 10000, unit: 'gram', sortOrder: 1 }],
+  };
+  const catalog = [{ id: 'water', name: 'Water' }];
+  const recipes = [{ ...recipe, id: 'cream', name: 'Gezoete slagroom', type: 'semiFinished' }];
+  const outputs = [
+    render(changes, { ingredients: catalog, recipes, quantity: 2, batchQuantity: 1 }),
+    ...['work', 'calculation'].map(mode => print({ ...recipe, ...changes }, catalog, recipes, 2, 1, mode)),
+  ];
+  for (const html of outputs) {
+    assert.ok(html.indexOf('Water 1 (koud)') < html.indexOf('Slagroom (lobbig)'));
+    assert.ok(html.indexOf('Slagroom (lobbig)') < html.indexOf('Water 2 (koud)'));
+    assert.match(html, /Water 1 \(koud\)[\s\S]*?2\.000/);
+    assert.match(html, /Water 2 \(koud\)[\s\S]*?6\.000/);
+  }
+});

@@ -10,10 +10,11 @@ import type { NewRecipeInput } from "./newRecipe";
 import SearchableChoice from "./SearchableChoice";
 import ProductionStepsField from "./ProductionStepsField";
 import s from "./NewRecipeForm.module.css";
+import RecipeLineOrder, { moveRecipeLine } from "./RecipeLineOrder";
 
 type CatalogRow = { id: string; name: string; unit?: string; supplier?: string; articleNumber?: string; allergens: string[] };
 type Catalog = { departments: DepartmentId[]; ingredients: CatalogRow[]; semiFinished: CatalogRow[]; productGroups: string[] };
-type Line = { key: number; kind: "ingredient" | "semiFinished"; linkedId: string; quantity: string; unit: string };
+type Line = { key: number; kind: "ingredient" | "semiFinished"; linkedId: string; quantity: string; unit: string; label?: string };
 const units = WORK_RECIPE_UNITS as RecipeUnit[];
 const number = (value: string) => Number(value.replace(",", "."));
 const initial = (): NewRecipeInput => ({ name: "", type: "finalProduct", departmentId: "dessert", unit: "stuk", articleNumber: "", productGroup: "", equipment: "", notes: "", allergens: [], yield: 1, instructions: "", workInstructions: "", finishingInstructions: "", productionSteps: ["Produceren"], ingredients: [], semiFinishedItems: [] });
@@ -74,9 +75,9 @@ export default function NewRecipeForm() {
     const selected = (line.kind === "ingredient" ? catalog?.ingredients : catalog?.semiFinished)?.find(row => row.id === id);
     changeLine(line.key, { linkedId: id, ...(selected?.unit && units.includes(selected.unit as RecipeUnit) ? { unit: selected.unit } : {}) });
   }
-  function lineError(line: Line, index: number) {
+  function lineError(line: Line) {
     const available = line.kind === "ingredient" ? catalog?.ingredients : catalog?.semiFinished;
-    return workRecipeComponentError({ kind: line.kind, linkedId: line.linkedId, quantity: number(line.quantity), unit: line.unit }, (available || []).map(row => row.id), lines.slice(0, index).some(other => other.kind === line.kind && other.linkedId === line.linkedId));
+    return workRecipeComponentError({ ...line, quantity: number(line.quantity) }, (available || []).map(row => row.id));
   }
   async function selectPhoto(file?: File) {
     const version = ++photoVersion.current;
@@ -103,8 +104,8 @@ export default function NewRecipeForm() {
     commandId.current ||= crypto.randomUUID();
     try {
       const command: NewRecipeInput = { ...draft, yield: number(yieldText), allergens: allergensText.split(/[,;\n]/).map(value => value.trim()).filter(Boolean), photo,
-        ingredients: lines.filter(line => line.kind === "ingredient").map(line => ({ ingredientId: line.linkedId, quantity: number(line.quantity), unit: line.unit })),
-        semiFinishedItems: lines.filter(line => line.kind === "semiFinished").map(line => ({ recipeId: line.linkedId, quantity: number(line.quantity), unit: line.unit })),
+        ingredients: lines.flatMap((line, sortOrder) => line.kind === "ingredient" ? [{ ingredientId: line.linkedId, quantity: number(line.quantity), unit: line.unit, label: line.label, sortOrder }] : []),
+        semiFinishedItems: lines.flatMap((line, sortOrder) => line.kind === "semiFinished" ? [{ recipeId: line.linkedId, quantity: number(line.quantity), unit: line.unit, label: line.label, sortOrder }] : []),
       };
       const response = await fetch("/api/productie/recepten", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ command, who, commandId: commandId.current }) });
       const result = await response.json();
@@ -130,12 +131,15 @@ export default function NewRecipeForm() {
         </div>
       </fieldset>
       <fieldset disabled={busy} className={s.section}><legend>Grondstoffen & halffabricaten</legend>
-        <div className={s.lines}>{lines.map((line, index) => <div key={line.key} className={s.line}>
-          <div className={s.choice}><SearchableChoice choices={line.kind === "ingredient" ? ingredientChoices : semiChoices} label={`${line.kind === "ingredient" ? "Grondstof" : "Halffabricaat"} ${index + 1}`} value={line.linkedId} onChange={id => { choose(line, id); setDirty(true); }} required disabled={busy} invalid={attempted && !!lineError(line, index)} describedBy={attempted && lineError(line, index) ? `recipe-line-${line.key}` : undefined}/></div>
+        <p className={s.hint}>Een grondstof mag op meerdere regels staan. Sleep de greep of gebruik de pijltjes om regels te verplaatsen.</p>
+        <div className={s.lines} data-recipe-lines>{lines.map((line, index) => <div key={line.key} className={s.line} data-recipe-line-key={line.key}>
+          <RecipeLineOrder rowKey={line.key} index={index} keys={lines.map(row => row.key)} disabled={busy} onMove={target => { setLines(current => moveRecipeLine(current, line.key, target)); setDirty(true); }}/>
+          <div className={s.choice}><SearchableChoice choices={line.kind === "ingredient" ? ingredientChoices : semiChoices} label={`${line.kind === "ingredient" ? "Grondstof" : "Halffabricaat"} ${index + 1}`} value={line.linkedId} onChange={id => { choose(line, id); setDirty(true); }} required disabled={busy} invalid={attempted && !!lineError(line)} describedBy={attempted && lineError(line) ? `recipe-line-${line.key}` : undefined}/></div>
           <label>Hoeveelheid<input inputMode="decimal" required value={line.quantity} onChange={event => changeLine(line.key, { quantity: event.target.value })}/></label>
           <label>Eenheid<select value={line.unit} onChange={event => changeLine(line.key, { unit: event.target.value })}>{units.map(unit => <option key={unit}>{unit}</option>)}</select></label>
           <button className={s.remove} type="button" aria-label={`Regel ${index + 1} verwijderen`} onClick={() => { setLines(current => current.filter(row => row.key !== line.key)); setDirty(true); }}>×</button>
-          {attempted && lineError(line, index) && <p className={s.lineError} id={`recipe-line-${line.key}`}>{lineError(line, index)}</p>}
+          <label className={s.rowLabel}>Naam in recept (optioneel)<input maxLength={160} placeholder="Bijv. Water 1 (koud)" value={line.label || ""} onChange={event => changeLine(line.key, { label: event.target.value })}/></label>
+          {attempted && lineError(line) && <p className={s.lineError} id={`recipe-line-${line.key}`}>{lineError(line)}</p>}
         </div>)}</div>
         <div className={s.actions}><button type="button" disabled={lines.length >= 100} onClick={() => { setLines(current => [...current, { key: nextKey.current++, kind: "ingredient", linkedId: "", quantity: "", unit: "gram" }]); setDirty(true); }}>+ Grondstof</button><button type="button" disabled={lines.length >= 100} onClick={() => { setLines(current => [...current, { key: nextKey.current++, kind: "semiFinished", linkedId: "", quantity: "", unit: "kg" }]); setDirty(true); }}>+ Halffabricaat</button></div>
       </fieldset>

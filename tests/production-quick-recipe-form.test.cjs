@@ -71,8 +71,11 @@ function harness(overrides = {}) {
     },
   };
   const choice = function SearchableChoice() {};
+  const lineOrder = load('app/productie/RecipeLineOrder.tsx', {react, 'react/jsx-runtime':jsx,'./RecipeLineOrder.module.css':{}});
   const component = load('app/productie/QuickRecipeForm.tsx', {
     react, 'react/jsx-runtime': jsx, './workRecipe': workRecipe, './planning': planning,
+    './RecipeLineOrder':{...lineOrder,__esModule:true},
+    './QuickRecipeForm.module.css':{__esModule:true,default:{}},
     './ProductionStepsField': { __esModule: true, default: function ProductionStepsField() {} },
     './SearchableChoice': { __esModule: true, default: choice },
     './requests.module.css': { __esModule: true, default: new Proxy({}, { get: (_, key) => key }) },
@@ -176,4 +179,22 @@ test('editing keeps missing ingredient and half-finished IDs visible until expli
   assert.equal(payload.command.workInstructions, 'Afwegen');
   await h.respond(1, {}); await saving;
   assert.equal(h.saved, 1); assert.equal(h.closed, 1);
+});
+
+test('baker form reorders separate duplicate lines and submits distinct labels and mixed sort positions',async()=>{
+ const h=harness({item:{...item,recipeId:'fixed-recipe'}});h.render();
+ await h.respond(0,{recipeRevision:31,semiFinished:[{id:'cream',name:'Room'}],draft:{recipeId:'fixed-recipe',yield:4,instructions:'Afwegen',workInstructions:'',finishingInstructions:'',ingredients:[
+  {ingredientId:'flour-a',quantity:1000,unit:'gram',label:'Water 1',sortOrder:0,sourceIndex:0},
+  {ingredientId:'flour-a',quantity:3000,unit:'gram',label:'Water 2',sortOrder:2,sourceIndex:1},
+ ],semiFinishedItems:[{recipeId:'cream',quantity:1200,unit:'gram',sortOrder:1,sourceIndex:0}]}});
+ let tree=h.render();
+ assert.deepEqual(nodes(tree).filter(n=>n.type===h.choice).map(n=>n.props.value),['flour-a','cream','flour-a']);
+ find(tree,n=>typeof n.type==='function'&&n.props.rowKey===1&&n.props.onMove).props.onMove(0);
+ tree=h.render();
+ assert.deepEqual(nodes(tree).filter(n=>n.props?.name?.startsWith('label-')).map(n=>n.props.value),['Water 2','Water 1','']);
+ const saving=submit(tree);assert.equal(h.calls.length,2);
+ const payload=JSON.parse(h.calls[1].options.body).command;
+ assert.deepEqual(payload.ingredients.map(l=>[l.quantity,l.label,l.sortOrder,l.sourceIndex]),[[3000,'Water 2',0,1],[1000,'Water 1',1,0]]);
+ assert.equal(payload.semiFinishedItems[0].sortOrder,2);
+ await h.respond(1,{});await saving;assert.equal(h.saved,1);
 });

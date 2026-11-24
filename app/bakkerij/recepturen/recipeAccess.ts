@@ -19,8 +19,8 @@ export function recipeDataForProduction(data: RecepturenData): RecepturenData {
     recipes: data.recipes.map(item => ({
       ...pick(item, ["id", "name", "strikArticleNumber", "type", "productGroup", "createdAt", "standardBatchQuantity", "standardBatchUnit", "status", "productionSteps", "workInstructions", "preparationSteps", "finishingSteps", "equipment", "allergens", "isWorkModeVisible", "workCategories", "version", "lastUpdated", "portionLabel", "batchSize", "photoHint", "photoPreviewDataUrl", "photoFileName", "photoUpdatedAt", "notes", "linkedFinalProductIds", "canProduceAhead", "desiredProductionFrequencyDays", "desiredProductionBatchQuantity", "lastProducedAt", "lastProducedQuantity", "productionLog", "productionRequests"]),
       labeling: item.labeling ? pick(item.labeling, ["productName", "ingredientsText", "finalBatchWeightGrams", "netQuantity", "storageInstructions", "shelfLifeText", "operatorDetails", "notes"]) : undefined,
-      ingredients: item.ingredients.map(line => ({ ...pick(line, ["ingredientId", "quantity", "unit", "wastePercentage", "sortOrder"]), costContribution: 0 })),
-      semiFinishedItems: item.semiFinishedItems.map(line => ({ ...pick(line, ["semiFinishedRecipeId", "quantity", "unit", "sortOrder"]), costContribution: 0 })),
+      ingredients: item.ingredients.map(line => ({ ...pick(line, ["ingredientId", "quantity", "unit", "wastePercentage", "sortOrder", "label"]), costContribution: 0 })),
+      semiFinishedItems: item.semiFinishedItems.map(line => ({ ...pick(line, ["semiFinishedRecipeId", "quantity", "unit", "sortOrder", "label"]), costContribution: 0 })),
       packagingItems: item.packagingItems?.map(line => ({ ...pick(line, ["id", "packagingId", "quantity", "nameSnapshot"]), unitPrice: 0, costContribution: 0 })),
       salesPrice: 0, costPrice: 0, previousCostPrice: 0, targetMargin: 0, currentMargin: 0,
     })) as Recipe[],

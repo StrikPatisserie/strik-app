@@ -2,13 +2,16 @@ import type { RecepturenData } from "../bakkerij/recepturen/recepturenApi";
 import type { RecipeUnit } from "../bakkerij/recepturen/types";
 import { validProductionSteps, type PreviewState } from "./planning";
 
-export type WorkRecipeLine = { ingredientId: string; quantity: number; unit: string };
-export type WorkRecipeComponent = { kind: "ingredient" | "semiFinished"; linkedId: string; quantity: number; unit: string };
+export type WorkRecipeLineDetails = { label?: string; sortOrder?: number; sourceIndex?: number };
+export type WorkRecipeLine = WorkRecipeLineDetails & { ingredientId: string; quantity: number; unit: string };
+export type WorkRecipeComponent = WorkRecipeLineDetails & { kind: "ingredient" | "semiFinished"; linkedId: string; quantity: number; unit: string };
 export const WORK_RECIPE_UNITS = ["gram", "kg", "ml", "liter", "stuk"];
-export function workRecipeComponentError(line: WorkRecipeComponent, availableIds: string[], duplicate = false): string | undefined {
+export function workRecipeComponentError(line: WorkRecipeComponent, availableIds: string[]): string | undefined {
   const label = line.kind === "ingredient" ? "grondstof" : "halffabricaat";
   if (!line.linkedId || !availableIds.includes(line.linkedId)) return `Kies een bestaande ${label} of verwijder deze regel.`;
-  if (duplicate) return `Deze ${label} staat al in het recept. Voeg de hoeveelheden samen of kies een andere koppeling.`;
+  if (line.label !== undefined && (typeof line.label !== "string" || line.label.length > 160)) return "Gebruik een regelnaam van maximaal 160 tekens.";
+  if (line.sortOrder !== undefined && (!Number.isSafeInteger(line.sortOrder) || line.sortOrder < 0 || line.sortOrder > 1000000)) return "Controleer de volgorde van de receptregels.";
+  if (line.sourceIndex !== undefined && (!Number.isSafeInteger(line.sourceIndex) || line.sourceIndex < 0)) return "Ververs het recept om deze regel te bewerken.";
   if (!Number.isFinite(line.quantity) || line.quantity <= 0 || line.quantity > 1000000) return "Vul een hoeveelheid groter dan nul en maximaal 1000000 in.";
   if (!WORK_RECIPE_UNITS.includes(line.unit)) return "Kies een geldige eenheid voor deze regel.";
 }
@@ -17,7 +20,7 @@ export type WorkRecipeInput = {
   workInstructions: string; finishingInstructions: string;
   productionSteps?: string[];
   ingredients: WorkRecipeLine[];
-  semiFinishedItems: { recipeId: string; quantity: number; unit: string }[];
+  semiFinishedItems: (WorkRecipeLineDetails & { recipeId: string; quantity: number; unit: string })[];
 };
 export function workRecipeSource(state: PreviewState, data: RecepturenData, itemId: string) {
   const item = state.items.find(item => item.id === itemId);
@@ -49,8 +52,8 @@ export function editableWorkRecipe(state: PreviewState, data: RecepturenData, it
     instructions: (recipe.preparationSteps || []).join("\n"),
     workInstructions: (recipe.workInstructions || []).join("\n"),
     finishingInstructions: (recipe.finishingSteps || []).join("\n"),
-    ingredients: (recipe.ingredients || []).map(line => ({ ingredientId: line.ingredientId, quantity: line.quantity, unit: line.unit })),
-    semiFinishedItems: (recipe.semiFinishedItems || []).map(line => ({ recipeId: line.semiFinishedRecipeId, quantity: line.quantity, unit: line.unit })),
+    ingredients: (recipe.ingredients || []).map((line, sourceIndex) => ({ ingredientId: line.ingredientId, quantity: line.quantity, unit: line.unit, label: line.label, sortOrder: line.sortOrder ?? sourceIndex, sourceIndex })),
+    semiFinishedItems: (recipe.semiFinishedItems || []).map((line, sourceIndex) => ({ recipeId: line.semiFinishedRecipeId, quantity: line.quantity, unit: line.unit, label: line.label, sortOrder: line.sortOrder ?? recipe.ingredients.length + sourceIndex, sourceIndex })),
   };
 }
 
@@ -63,29 +66,30 @@ export function updateWorkRecipe(state: PreviewState, data: RecepturenData, inpu
   const texts = [input.instructions, input.workInstructions, input.finishingInstructions];
   if (texts.some(text => typeof text !== "string" || text.length > 10000) || !texts.some(text => text.trim())) throw Error("Vul de werkwijze in.");
   if (!Array.isArray(input.ingredients) || !Array.isArray(input.semiFinishedItems) || !input.ingredients.length && !input.semiFinishedItems.length || input.ingredients.length + input.semiFinishedItems.length > 100) throw Error("Voeg één tot honderd grondstoffen of halffabricaten toe.");
-  const seen = new Set<string>();
   const valid = (line: WorkRecipeComponent, availableIds: string[], index: number) => {
-    const key = `${line.kind}:${line.linkedId}`;
-    const error = workRecipeComponentError(line, availableIds, seen.has(key));
+    const error = workRecipeComponentError(line, availableIds);
     if (error) throw Error(`${line.kind === "ingredient" ? "Grondstof" : "Halffabricaat"} ${index + 1}. ${error}`);
-    seen.add(key);
   };
   const ingredients = input.ingredients.map((line, index) => {
     if(data.ingredients.find(i=>i.id===line.ingredientId)?.decoration && line.unit!=="stuk")throw Error("Vul decoraties in stuks in.");
-    valid({ kind: "ingredient", linkedId: line.ingredientId, quantity: line.quantity, unit: line.unit }, data.ingredients.map(ingredient => ingredient.id), index);
-    const original = current.ingredients.find(original => original.ingredientId === line.ingredientId);
-    return { ...original, ingredientId: line.ingredientId, quantity: line.quantity, unit: line.unit as RecipeUnit, costContribution: original?.costContribution || 0, sortOrder: index };
+    valid({ ...line, kind: "ingredient", linkedId: line.ingredientId, quantity: line.quantity, unit: line.unit }, data.ingredients.map(ingredient => ingredient.id), index);
+    const original = line.sourceIndex === undefined
+      ? current.ingredients.filter(original => original.ingredientId === line.ingredientId)[input.ingredients.slice(0, index).filter(other => other.ingredientId === line.ingredientId).length]
+      : current.ingredients[line.sourceIndex]?.ingredientId === line.ingredientId ? current.ingredients[line.sourceIndex] : undefined;
+    return { ...original, ingredientId: line.ingredientId, quantity: line.quantity, unit: line.unit as RecipeUnit, costContribution: original?.costContribution || 0, sortOrder: line.sortOrder ?? index, label: line.label === undefined ? original?.label : line.label.trim() || undefined };
   });
   const semiFinishedItems = input.semiFinishedItems.map((line, index) => {
-    valid({ kind: "semiFinished", linkedId: line.recipeId, quantity: line.quantity, unit: line.unit }, data.recipes.filter(recipe => recipe.type === "semiFinished").map(recipe => recipe.id), index);
+    valid({ ...line, kind: "semiFinished", linkedId: line.recipeId, quantity: line.quantity, unit: line.unit }, data.recipes.filter(recipe => recipe.type === "semiFinished").map(recipe => recipe.id), index);
     const visit = (id: string, path: Set<string>): void => {
       if (id === current.id || path.has(id)) throw Error("Deze koppeling maakt een kring in het recept. Kies een ander halffabricaat.");
       const next = new Set(path).add(id);
       for (const child of data.recipes.find(recipe => recipe.id === id)?.semiFinishedItems || []) visit(child.semiFinishedRecipeId, next);
     };
     visit(line.recipeId, new Set());
-    const original = current.semiFinishedItems.find(original => original.semiFinishedRecipeId === line.recipeId);
-    return { ...original, semiFinishedRecipeId: line.recipeId, quantity: line.quantity, unit: line.unit as RecipeUnit, costContribution: original?.costContribution || 0 };
+    const original = line.sourceIndex === undefined
+      ? current.semiFinishedItems.filter(original => original.semiFinishedRecipeId === line.recipeId)[input.semiFinishedItems.slice(0, index).filter(other => other.recipeId === line.recipeId).length]
+      : current.semiFinishedItems[line.sourceIndex]?.semiFinishedRecipeId === line.recipeId ? current.semiFinishedItems[line.sourceIndex] : undefined;
+    return { ...original, semiFinishedRecipeId: line.recipeId, quantity: line.quantity, unit: line.unit as RecipeUnit, costContribution: original?.costContribution || 0, sortOrder: line.sortOrder ?? input.ingredients.length + index, label: line.label === undefined ? original?.label : line.label.trim() || undefined };
   });
   const steps = (text: string) => text.split("\n").map(line => line.trim()).filter(Boolean);
   // Only operational fields change. Prices, specifications, photos, logs and

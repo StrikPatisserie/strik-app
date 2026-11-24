@@ -84,6 +84,7 @@ export type RecipeIngredient = {
   wastePercentage?: number;
   costContribution: number;
   sortOrder?: number;
+  label?: string;
 };
 
 export type SemiFinishedUsage = {
@@ -92,6 +93,7 @@ export type SemiFinishedUsage = {
   unit: RecipeUnit;
   costContribution: number;
   sortOrder?: number;
+  label?: string;
 };
 
 export type RecipeImportCandidateKind = "ingredient" | "semiFinished";
