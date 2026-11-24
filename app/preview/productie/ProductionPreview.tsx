@@ -35,6 +35,7 @@ import ProductionItemPicker from "../../productie/ProductionItemPicker";
 import SearchableChoice from "../../productie/SearchableChoice";
 import { recipeGroups, recipeLinks, recipeDayClusters, recipeTaskClusters, reorderDayTasks, type RecipeTaskCluster } from "../../productie/recipeGroups";
 import CleaningWeekLane from "../../productie/CleaningWeekLane";
+import LetterProductionWeekLane from "../../productie/LetterProductionWeekLane";
 import DecorationChecks from "../../productie/DecorationChecks";
 import { applyDecorationCommand, type DecorationCommand } from "../../productie/decorationPlanning";
 import { scheduleWedding, type WeddingProductionOrder } from "../../productie/weddingPlanning";
@@ -712,6 +713,7 @@ export default function ProductionPreview({live,onRefresh,initialView="planning"
         <div className={s.plannerWithRequests}><div className={s.plannerBoardColumn}>
         <section className={s.board} aria-label={period==="day"?"Dagbord":"Weekbord"}>
           <div className={s.boardHeader}><div className={s.departmentColumn}/>{days.map(d => <div key={d} className={`${s.dayHeading} ${d === today ? s.today : ""}`} aria-current={d === today ? "date" : undefined} title={d === today ? "Vandaag" : undefined}><div className={s.dayHeaderContent}><strong>{dateLabel(d)}</strong>{dayHeaderWork(d)}</div>{newLayout && canManage && <button type="button" className={s.dayAdd} disabled={saving} aria-label={`Productie toevoegen · ${dateLabel(d, true)}`} title={`Productie toevoegen · ${dateLabel(d, true)}`} onClick={() => setModal({type:"task",date:d,departmentId:department!=="all"?department:undefined,fromCell:true})}><Icon name="plus" size={14}/></button>}<DayRhythm board={board} date={d}/></div>)}</div>
+          {!demo && !live?.readOnlyPreview && department === "all" && (board === "patisserie" || board === "chocolade") && <LetterProductionWeekLane days={days} day={day} today={today}/>}
           {visibleDepartments.map(dep => {
             if(dep.id==="bruidstaarten"&&!live?.readOnlyPreview)return <WeddingWeekLane heading={newLayout ? departmentBadge("bruidstaarten") : undefined} renderTaskWork={completionBadge} renderDayWork={date=>dayWork("bruidstaarten",date)} dragFrameRef={frameRef} onDragChange={setDragged} key={dep.id} week={week} days={days} day={day} today={today} state={state} canManage={canManage} saving={saving} demo={demo} statusFilter={effectiveStatusFilter} Dialog={ModalFrame} onUpdate={updateWedding}/>;
             const tasks = filtered.filter(t => t.departmentId === dep.id);

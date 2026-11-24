@@ -12,6 +12,7 @@ import { choicesFromSettings, forecastProductSettings, type ForecastCommand, typ
 import { exampleChoices, exampleRecipes } from "./examples";
 import { normalizePetitProducts } from "./petitProducts";
 import { christmasCakeVariant, hiddenStockProduct } from "./christmasCakes";
+import { compareStockProducts } from "./productOrder";
 import { combineKruidcakes, combinePetitFours, includeInStockOverview, normalizeStockCategories, salesVolume, stockCategories } from "./assortment";
 import { CAMPAIGN_START, campaignWindow, exampleCampaignReceipts, remainingNeed, todayInAmsterdam, validCampaignDays, type CampaignReceipts, type CampaignWindow, type RemainingNeed } from "./campaignNeed";
 import { exampleProduction, productInventory, stockDisplay, productionRequirement, type ProductionRequirement, type ProductionReading, type StockRow, type StockOverview } from "./productionOverview";
@@ -249,7 +250,7 @@ export default function ChristmasStockPreview({
   const [actualDate, setActualDate] = useState(today), [demoDate, setDemoDate] = useState<string | null>(null);
   const viewDate = source.mode === "example" ? demoDate || actualDate : actualDate;
   const [group, setGroup] = useState("all"), [department, setDepartment] = useState("all");
-  const [query, setQuery] = useState(""), [status, setStatus] = useState("all"), [volume, setVolume] = useState("high");
+  const [query, setQuery] = useState(""), [status, setStatus] = useState("all"), [volume, setVolume] = useState("all");
   const [growth, setGrowth] = useState(sharedSettings?.growth ?? 10), [page, setPage] = useState(0), [pageSize, setPageSize] = useState(9);
   const [xl, setXl] = useState(true), [productId, setProductId] = useState<string | null>(null);
   const [countId, setCountId] = useState<string | null>(null);
@@ -411,14 +412,7 @@ export default function ChristmasStockPreview({
       && (volume === "all" || band === volume || group === "kerst" && !!christmasCakeVariant(row.product))
       && (status === "all" || status === "hidden" || status === "recipe" && (!!row.recipeIssue || !row.choice.checked) || status === "stock" && balance.quantity === null || status === "week52" && row.week52 === null)
       && matchesProductionSearch(query, [row.currentProduct.name, row.currentProduct.cashCode, row.product.name, row.product.cashCode, row.product.bakeCode, ...(row.product.searchNames || [])]);
-  }).sort((a, b) => {
-    if (group === "kerst") {
-      const cakeOrder = (christmasCakeVariant(a.product)?.rank ?? 6) - (christmasCakeVariant(b.product)?.rank ?? 6);
-      if (cakeOrder) return cakeOrder;
-    }
-    const base = (row: OverviewRow) => (row.product.cash ?? 0) + (row.product.bake ?? 0);
-    return Number(a.projection === null) - Number(b.projection === null) || base(b) - base(a) || a.product.name.localeCompare(b.product.name, "nl");
-  });
+  }).sort((a, b) => compareStockProducts(a.currentProduct, b.currentProduct));
   const lastPage = Math.max(0, Math.ceil(filtered.length / pageSize) - 1), currentPage = Math.min(page, lastPage);
   const selected = rows.find(row => row.product.id === productId);
   const counting = rows.find(row => row.product.id === countId);
