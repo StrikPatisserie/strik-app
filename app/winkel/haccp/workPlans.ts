@@ -10,6 +10,7 @@ export type WinkelWorkPlanId =
 export type WinkelWorkPlanItem = {
   id: string;
   label: string;
+  labelByWeekday?: Partial<Record<number, string>>;
   detail?: string;
   steps?: string[];
   warning?: string;
@@ -707,7 +708,11 @@ export const winkelWorkPlanDefinitions: WinkelWorkPlanDefinition[] = [
           { id: "rond15-brood-snijden", label: "Brood snijden" },
           { id: "rond15-snijmachine", label: "Snijmachine uitvegen" },
           { id: "rond15-gebak-volgende-dag", label: "Gebak uit de vriezer halen voor de volgende dag" },
-          { id: "rond15-mueslikoeken-croissants", label: "Mueslikoeken en croissants uithalen voor de volgende dag" },
+          {
+            id: "rond15-mueslikoeken-croissants",
+            label: "Mueslikoeken en croissants uithalen voor de volgende dag",
+            labelByWeekday: { 6: "Mueslikoeken uithalen voor de volgende dag" },
+          },
           { id: "rond15-vegen", label: "Winkel voor en achter vegen" },
           { id: "rond15-winkel-aanvullen", label: "Winkel aanvullen: houdbare producten, vriezer en gebak" },
           { id: "rond15-verpakkingen", label: "Verpakkingen aanvullen" },

@@ -111,9 +111,12 @@ function getVisibleSections(definition: WinkelWorkPlanDefinition, date: string) 
     .filter((section) => isItemVisible(weekDay, section.visibleOnWeekdays))
     .map((section) => ({
       ...section,
-      items: section.items.filter((item) =>
-        isItemVisible(weekDay, item.visibleOnWeekdays)
-      ),
+      items: section.items
+        .filter((item) => isItemVisible(weekDay, item.visibleOnWeekdays))
+        .map((item) => ({
+          ...item,
+          label: item.labelByWeekday?.[weekDay] ?? item.label,
+        })),
     }))
     .filter((section) => section.items.length);
 }
