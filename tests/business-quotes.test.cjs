@@ -120,7 +120,7 @@ test('real folder requests convert both Christmas singles and complete packages 
   const quote = build(fixture());
   const editable = editableFolderOrderText(quote.quoteText);
   assert.ok(editable.startsWith('PRODUCTEN EN PRIJS\n'));
-  assert.match(editable, /25 × Bonbondoosje Fijne Feestdagen · 16 stuks · in een luxe doosje/);
+  assert.match(editable, /25 × Bonbondoosje Fijne Feestdagen · 9 stuks · in een luxe doosje/);
   assert.match(editable, /25 × Kerstpakket op maat · per pakket: 1 × Kleine kerststol .*3 × Kerstchocolade/);
   assert.match(editable, /Wensen uit aanvraag: Een kaartje per pakket/);
   assert.match(editable, /Passende tas of doos/);

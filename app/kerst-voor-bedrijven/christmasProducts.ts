@@ -43,7 +43,7 @@ export const christmasProducts: ChristmasProduct[] = [
   { id: "kerststaaf", name: "Kerststaaf", detail: "Gevuld met amandelspijs", retailPriceIncl: 8.95, image: christmasImages.amandel },
   { id: "kerstkrans", name: "Kerstkrans", detail: "Gevuld met amandelspijs", retailPriceIncl: 14.95, image: christmasImages.amandel },
   { id: "kruidcake", name: "Kerstkruidcake", detail: "Feestelijk versierd", retailPriceIncl: 7.95, image: christmasImages.cake },
-  { id: "bonbons", name: "Bonbondoosje Fijne Feestdagen", detail: "16 stuks · in een luxe doosje", retailPriceIncl: 9.95, image: christmasImages.bonbons },
+  { id: "bonbons", name: "Bonbondoosje Fijne Feestdagen", detail: "9 stuks · in een luxe doosje", retailPriceIncl: 9.95, image: christmasImages.bonbons },
   { id: "krans-puur", name: "Chocoladekrans puur", detail: "Circa 200 gram · ook vegan mogelijk", retailPriceIncl: 13.95, image: christmasImages.chocolate, veganOption: true },
   { id: "kerstkoekjes", name: "Kerstkoekjes", detail: "Voor in jouw kerstpakket", retailPriceIncl: 6.95, image: christmasImages.cookies },
   { id: "schuimkransjes", name: "Schuimkransjes", detail: "Voor in jouw kerstpakket", retailPriceIncl: 4.95, image: christmasImages.meringues },
@@ -53,7 +53,7 @@ export const christmasProducts: ChristmasProduct[] = [
 export const christmasHighlights: ChristmasHighlight[] = [
   { id: "stol", title: "Een echte kerstklassieker", description: "Onze kerststol met amandelspijs. Om samen van te genieten, in groot of klein formaat.", productIds: ["stol-groot", "stol-klein"], story: { src: "/Kerst/kerststol-zo-maken-we-hem.mp4", poster: "/Kerst/kerststol-maakvideo.jpg", description: "Zo maken we onze kerststollen in de bakkerij van Strik." } },
   { id: "tulband", title: "Feestelijk tot de laatste kruimel", description: "Een rijkgevulde tulband voor op de kersttafel. Een cadeau waar je graag voor aanschuift.", productIds: ["tulband"], story: { src: "/Kerst/tulband-zo-maken-we-hem.mp4", poster: "/Kerst/tulband-maakvideo.jpg", description: "Zo maken we onze tulbanden in de bakkerij van Strik." } },
-  { id: "bonbons", title: "Fijne feestdagen in een doosje", description: "Zestien bonbons in een luxe doosje. Een feestelijk bedankje voor een collega of zakelijke relatie.", productIds: ["bonbons"], story: { src: "/Kerst/bonbons-zo-maken-we-ze.mp4", poster: "/Kerst/bonbons-maakvideo-portret.jpg", description: "Een kijkje bij het maken van onze bonbons in de chocolaterie van Strik." } },
+  { id: "bonbons", title: "Fijne feestdagen in een doosje", description: "Negen bonbons in een luxe doosje. Een feestelijk bedankje voor een collega of zakelijke relatie.", productIds: ["bonbons"], story: { src: "/Kerst/bonbons-zo-maken-we-ze.mp4", poster: "/Kerst/bonbons-maakvideo-portret.jpg", description: "Een kijkje bij het maken van onze bonbons in de chocolaterie van Strik." } },
 ];
 
 export const roundMoney = (amount: number) => Math.round((amount + Number.EPSILON) * 100) / 100;
