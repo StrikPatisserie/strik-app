@@ -781,3 +781,10 @@ test('an unnamed custom product cannot be added by only enabling a logo', () => 
   ui.field('Product','anders'); ui.field('Prijs p.s. excl. btw','10'); ui.check('Eigen logo op dit product',true);
   ui.button('+ Product toevoegen'); assert.match(label(ui.render()),/Vul eerst een omschrijving in/);
 });
+
+test('a new Stafwerk order uses the existing package storage contract and still plans its chocolate staffs',async()=>{
+ const ui=entry();ui.field('Bedrijfsnaam / klantnaam *','Stafwerk definitief');ui.field('Vaste leverdatum','2026-11-30');ui.button('Verder naar producten →');ui.field('Product','stafwerk');ui.field('Aantal producten','10');ui.button('+ Product toevoegen');ui.button('Bestelling controleren →');await ui.submit();
+ assert.equal(ui.calls.length,1);const saved=ui.calls[0];
+ assert.equal(saved.department,'bakkerij');assert.equal(saved.letterLines.length,0);
+ assert.equal(combinations.b2bProductionLetters(saved).requiredQuantity,10);assert.equal(combinations.b2bProductionLetters(saved).lines[0].style,'staf');
+});
