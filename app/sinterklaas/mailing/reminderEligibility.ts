@@ -1,3 +1,4 @@
+import { orderedPreviousYear, type OrderHistoryEntry } from "./orderHistory";
 import type { FolderSelection } from "../../lib/businessSeasons";
 
 export type ReminderExclusion = { status: "ordered" | "quote"; matchedBy: "email" | "company" };
@@ -5,6 +6,7 @@ export type MailingContact = {
   company: string;
   recipients: { email: string }[];
   ordered?: boolean;
+  orderHistory?: OrderHistoryEntry[];
   reminderExclusion?: ReminderExclusion | null;
 };
 type OrderContact = {
@@ -46,7 +48,8 @@ export function reminderExcluded(customer: MailingContact) {
   return Boolean(customer.ordered || customer.reminderExclusion);
 }
 
-export type ContactFilter = "open" | "all" | "responded";
-export function contactMatchesFilter(customer: MailingContact, filter: ContactFilter) {
+export type ContactFilter = "open" | "all" | "responded" | "previous-year";
+export function contactMatchesFilter(customer: MailingContact, filter: ContactFilter, campaignYear = String(new Date().getFullYear())) {
+  if (filter === "previous-year") return orderedPreviousYear(customer.orderHistory, campaignYear);
   return filter === "all" || (filter === "responded" ? reminderExcluded(customer) : !reminderExcluded(customer));
 }

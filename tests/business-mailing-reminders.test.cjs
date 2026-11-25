@@ -8,7 +8,8 @@ function load(file,imports={},globals={}){
  vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText,{exports,Request,Response,URL,Date,...globals,require:name=>{assert.ok(name in imports,name);return imports[name];}});
  return exports;
 }
-const eligibility=load('app/sinterklaas/mailing/reminderEligibility.ts');
+const history=load('app/sinterklaas/mailing/orderHistory.ts');
+const eligibility=load('app/sinterklaas/mailing/reminderEligibility.ts',{'./orderHistory':history});
 const customer=(changes={})=>({id:'c1',company:'Voorbeeld BV',ordered:false,recipients:[{id:'r1',email:'team@example.test',doNotEmail:false,sent:[{kind:'folder',sentAt:'2026-10-01'}]}],...changes});
 const order=(changes={})=>({id:'o1',year:'2026',season:'sint',customerName:'Ander bedrijf',customerEmail:'team@example.test',status:'aanvraag',cancelled:false,...changes});
 const status=(orders,contact=customer(),season='sint')=>eligibility.createReminderMatcher(orders,'2026',season)(contact);
@@ -64,7 +65,10 @@ function app(options={}){
   '@/app/sinterklaas/sinterklaasServerApi':server,
   'next/server':{NextResponse:{json:(data,init={})=>json(data,init.status||200)}},
   './seed2024':{b2bCustomers2024:[]},
-  '@/app/lib/businessFolderContacts':{addPersistentFolderContacts:async rows=>rows,syncFolderContactPreferences:async()=>{}},
+  './orderHistory':{b2bOrderHistory:[]},
+  './orderHistoryExtra':{b2bOrderHistoryExtra:[]},
+  '@/app/sinterklaas/mailing/orderHistory':history,
+  '@/app/lib/businessFolderContacts':{addPersistentFolderContacts:async rows=>rows,syncFolderContactPreferences:async()=>{},rememberB2BContacts:async()=>{}},
   '@/app/sinterklaas/mailing/reminderEligibility':eligibility,
  });
  const request=(method='GET',body)=>new Request('https://app.example.test/api/sinterklaas-mailing?year=2026&season=sint&status=akkoord&search=not-this-order',{method,headers:{'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
@@ -75,7 +79,7 @@ test('GET decorates readonly status and removes all optional filters from canoni
  const a=app({orders:[order()]});const response=await a.route.GET(a.request());
  assert.equal(response.status,200);assert.equal((await response.json()).customers[0].reminderExclusion.status,'quote');
  const url=new URL(a.calls.find(call=>call.endpoint==='sinterklaas-b2b-orders').url);
- assert.equal(url.search,'?year=2026');assert.equal(a.calls.filter(call=>call.method!=='GET').length,0);
+ assert.equal(url.search,'');assert.equal(a.calls.filter(call=>call.method!=='GET').length,0);
 });
 test('each reminder is rechecked, newly received quotes skip without transport or sent stamps, batch can continue',async()=>{
  const a=app();await a.route.GET(a.request());a.setOrders([order()]);
@@ -97,10 +101,12 @@ test('omitting exclusion, editing draft identity or unknown source cannot bypass
  }
 });
 test('eligible reminders and initial newsletters keep normal transport and ignore forged derived fields',async()=>{
- const a=app();const input=a.mail();input.campaign.customers[0].reminderExclusion={status:'ordered',matchedBy:'email'};
+ const a=app();const input=a.mail();input.campaign.customers[0].reminderExclusion={status:'ordered',matchedBy:'email'};input.campaign.customers[0].orderHistory=[{year:'2025',season:'kerst'}];
  const response=await a.route.PATCH(a.request('PATCH',input));const data=await response.json();
  assert.equal(response.status,200);assert.equal(data.skipped,undefined);assert.equal(data.customers[0].reminderExclusion,null);
  assert.equal(a.calls.find(call=>call.method==='PATCH').body.campaign.customers[0].reminderExclusion,undefined);
+ assert.equal(a.calls.find(call=>call.method==='PATCH').body.campaign.customers[0].orderHistory,undefined);
+ assert.equal(data.customers[0].orderHistory.length,0);
  const b=app({orders:[order()]});await b.route.PATCH(b.request('PATCH',b.mail('folder')));
  assert.equal(b.calls.filter(call=>call.method==='PATCH').length,1);
 });
