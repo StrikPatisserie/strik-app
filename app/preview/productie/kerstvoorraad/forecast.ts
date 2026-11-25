@@ -8,6 +8,8 @@ export type SalesProduct = {
   id: string; name: string; group: StockCategory; department: "patisserie" | "bak" | "chocolade";
   cashCode: string; bakeCode: string; cash: number | null; bake: number | null;
   needsSalesReview: boolean; note: string; folderProduct: boolean;
+  /** Newly introduced products have a manual forecast, never a 2025 sales basis. */
+  introducedYear?: number;
   unitUnconfirmed?: boolean;
   unitsPerSale?: number;
   quantityLabel?: string;
@@ -60,9 +62,9 @@ export function projectedSales(base: number | null, growth: number): number | nu
 export function productProjection(product: SalesProduct, choice: ProductChoice, growth: number) {
   const adjustment = choice.adjustment || {};
   const uplift = adjustment.growthPercent ?? growth;
-  const historical = product.cash === null && product.bake === null ? null : ((product.cash ?? 0) + (product.bake ?? 0)) * (product.unitsPerSale ?? 1);
+  const historical = product.introducedYear === 2026 || product.cash === null && product.bake === null ? null : ((product.cash ?? 0) + (product.bake ?? 0)) * (product.unitsPerSale ?? 1);
   const period = adjustment.periodTotal ?? (product.unitUnconfirmed ? null : projectedSales(historical, uplift));
-  const weekBase = choice.week52Base ?? (product.week52 && !product.week52.issue ? (product.week52.cash + product.week52.bake) * (product.unitsPerSale ?? 1) : null);
+  const weekBase = product.introducedYear === 2026 ? null : choice.week52Base ?? (product.week52 && !product.week52.issue ? (product.week52.cash + product.week52.bake) * (product.unitsPerSale ?? 1) : null);
   const week52 = adjustment.week52Total ?? (product.unitUnconfirmed ? null : projectedSales(weekBase, uplift));
   const issue = period !== null && week52 !== null && week52 > period
     ? "Week 52 is groter dan de prognose voor de hele periode" : null;

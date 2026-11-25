@@ -6,7 +6,7 @@ const nameKey = (name: string) => name.normalize("NFD").replace(/[\u0300-\u036f]
 function family(product: SalesProduct) {
   const name = nameKey(product.name);
   if (christmasCakeVariant(product) || product.group === "taart" || /taart(?!je)/.test(name)) return 0;
-  if (product.group === "gebak" || /taartje|gebak|gateau|tompouce|tartelette/.test(name)) return 1;
+  if (product.group === "gebak" || /taartje|gebak|gateau|tompouce|tartelette|tiramisu|dessert/.test(name)) return 1;
   if (product.group === "slof" || /slof|schnitt|vlaai/.test(name)) return 2;
   if (/stol/.test(name)) return 3;
   if (/amandel|speculaas/.test(name)) return 4;

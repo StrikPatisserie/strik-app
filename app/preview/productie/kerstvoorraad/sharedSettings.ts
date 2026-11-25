@@ -5,6 +5,8 @@ export const SALES_KEY = "production-christmas-forecast-sales-2026";
 export const SETTINGS_KEY = "production-christmas-forecast-settings-2026";
 export type SharedForecastSettings = ForecastSettings & {
   version: 1; revision: number; updatedAt: string | null; updatedBy: string | null;
+  /** Kept apart from imported historical sales, including during a re-import. */
+  newProducts?: SalesProduct[];
 };
 export type ForecastProductSettings = {
   adjustment: NonNullable<ProductChoice["adjustment"]>;
@@ -19,6 +21,16 @@ export type ForecastSales = {
 export const emptySharedSettings = (): SharedForecastSettings => ({
   ...parseForecastSettings(null), version: 1, revision: 0, updatedAt: null, updatedBy: null,
 });
+/** Merge the current assortment without manufacturing historical sales. */
+export function forecastProducts(historical: SalesProduct[], settings: SharedForecastSettings): SalesProduct[] {
+  const products = [...historical], ids = new Set(historical.map(product => product.id));
+  for (const product of settings.newProducts || []) {
+    if (product.introducedYear !== 2026 || ids.has(product.id)) continue;
+    products.push({ ...product, cash: null, bake: null, week52: undefined, assortedSales: undefined });
+    ids.add(product.id);
+  }
+  return products;
+}
 export function forecastProductSettings(choice?: Partial<ProductChoice>): ForecastProductSettings {
   const settings = parseForecastSettings(JSON.stringify({ version: 1, adjustments: { product: choice?.adjustment || {} }, mappings: { product: choice || {} } }));
   return { adjustment: settings.adjustments.product, mapping: settings.mappings.product };

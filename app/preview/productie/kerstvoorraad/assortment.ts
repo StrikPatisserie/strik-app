@@ -253,7 +253,7 @@ export function combineKruidcakes(products: SalesProduct[]): SalesProduct[] {
 }
 
 export function includeInStockOverview(product: SalesProduct, growth: number): boolean {
-  if (christmasCakeVariant(product)) return true;
+  if (product.introducedYear === 2026 || christmasCakeVariant(product)) return true;
   const articleNumber = /^\d+$/.test(product.cashCode.trim()) ? Number(product.cashCode) : null;
   if (articleNumber !== null && articleNumber >= 145100 && articleNumber <= 150802) return false;
   const names = normalize([product.name, ...(product.searchNames || [])].join(" "));

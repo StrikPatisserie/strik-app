@@ -1493,3 +1493,56 @@ test('small Christmas cream cake changes display size only and all six preserve 
   assert.equal(projections.reduce((sum,p)=>sum+p.week52,0),262);
   assert.equal(JSON.stringify(rows),before);
 });
+
+test('new 2026 products stay visible without sales and retain an exact manual forecast', () => {
+  const tiramisu = {...product('new-2026-tiramisu'), name:'Tiramisu glaasje · normaal', group:'kerst', introducedYear:2026, cash:null, bake:null, cashCode:'', bakeCode:''};
+  assert.equal(assortment.includeInStockOverview(tiramisu,10),true);
+  const choice = {...forecast.emptyChoice(), adjustment:{periodTotal:160}};
+  for (const growth of [0,10,15]) {
+    const projection = forecast.productProjection(tiramisu,choice,growth);
+    assert.equal(projection.historical,null);
+    assert.equal(projection.period,160);
+    assert.equal(projection.week52,null);
+  }
+  assert.equal(forecast.productProjection(tiramisu,forecast.emptyChoice(),10).period,null);
+  // Even a stale imported basis cannot turn the new product into 2025 sales.
+  const stale = {...tiramisu,cash:100,bake:20,week52:{cash:50,bake:10}};
+  const projection = forecast.productProjection(stale,{...choice,week52Base:100},10);
+  assert.equal(projection.historical,null);
+  assert.equal(projection.week52,null);
+  assert.equal(forecast.productProjection(tiramisu,{...choice,adjustment:{periodTotal:160,week52Total:100}},10).week52,100);
+});
+
+test('new assortment is separate from imported sales and deduplicated by stable ID', () => {
+  const historical = [product('existing')], before = JSON.stringify(historical);
+  const addition = {...product('new-2026'),introducedYear:2026,cash:999,week52:{cash:100,bake:20}};
+  const settings = {...sharedForecast.emptySharedSettings(),newProducts:[addition,addition]};
+  const combined = sharedForecast.forecastProducts(historical,settings);
+  assert.equal(combined.length,2);
+  assert.equal(combined[1].cash,null);
+  assert.equal(combined[1].bake,null);
+  assert.equal(combined[1].week52,undefined);
+  assert.equal(JSON.stringify(historical),before);
+  assert.equal(sharedForecast.forecastProducts(combined,settings).length,2);
+});
+
+test('new 2026 forecasts can be saved through shared storage and survive other edits', async () => {
+  const addition = {...product('new-2026'),introducedYear:2026,cash:null,bake:null};
+  let current = {...sharedForecast.emptySharedSettings(),newProducts:[addition]};
+  const store = load('app/preview/productie/kerstvoorraad/store.server.ts',{
+    'server-only':{},
+    '@/app/productie/documents.server':{ProductionStoreError:Error},
+    '@/app/productie/operationalStore.server':{
+      readOperational:async(key)=>key===sharedForecast.SALES_KEY?{version:1,products:[product('existing')]}:current,
+      saveOperational:async(key,revision,next)=>{assert.equal(revision,current.revision);current=next;},
+    },
+    './sharedSettings':sharedForecast,
+  });
+  const command = {...forecastChange('new-2026',{adjustment:{periodTotal:160}})};
+  const saved = await store.saveForecastCommand(command,'employee');
+  assert.equal(saved.adjustments['new-2026'].periodTotal,160);
+  assert.equal(saved.newProducts[0].id,'new-2026');
+  const next = await store.saveForecastCommand({kind:'growth',previous:10,value:15},'employee');
+  assert.equal(next.newProducts[0].id,'new-2026');
+  assert.equal(next.adjustments['new-2026'].periodTotal,160);
+});
