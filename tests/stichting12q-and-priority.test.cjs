@@ -64,3 +64,45 @@ test('the editor changes a company quantity and adds or removes a row through it
  nodes(render(),n=>n.props?.['aria-label']==='Naam subbedrijf 11')[0].props.onChange({target:{value:'Nieuwe klant'}});assert.equal(groups.validateLetterGroup(group),'');
  nodes(render(),n=>n.props?.['aria-label']==='Verwijder Nieuwe klant')[0].props.onClick();assert.equal(group.rows.length,10);
 });
+
+test('12Q S nalevering survives editing, printing and storage without changing Q letters or inventing a sales price',()=>{
+ const original=normalizeB2BOrder(stichting12qImport());
+ const group=JSON.parse(JSON.stringify(stichting12qGroup));
+ group.rows.find(row=>row.company==='Ponos').melk=20;
+ const previous=groups.groupLetterLines(group);
+ group.rows.push({company:'Stichting 12Q – nageleverd',letter:'S',melk:5,wit:0,puur:0,withLogo:false});
+ const saved=groups.parseLetterGroup(groups.serializeLetterGroup(group));
+ assert.equal(groups.validateLetterGroup(saved),'');
+ const total=groups.groupLetterTotals(saved);
+ assert.equal(total.quantity,595);assert.equal(total.logos,258);
+ assert.equal(total.quantity*770+total.logos*30,465890);
+ const fields=groups.letterGroupOrderFields(saved,{...original,importantNotes:original.importantNotes+'\nNageleverd: 5 grote melk-vormletters S zonder logo.'});
+ assert.match(fields.orderText,/595 grote chocolade vormletters \(590× Q, 5× S\)/);
+ assert.match(fields.importantNotes,/4\.658,90/);assert.match(fields.importantNotes,/Nageleverd/);
+ assert.deepEqual(JSON.parse(JSON.stringify(fields.letterLines.filter(l=>l.letter==='Q'))),JSON.parse(JSON.stringify(previous)));
+ const extra=fields.letterLines.find(l=>l.letter==='S');assert.equal(extra.quantity,5);assert.equal(extra.chocolate,'melk');assert.equal(extra.withLogo,false);
+ assert.equal(groups.letterGroupMatchesOrder(saved,fields),true);
+ const wrong=JSON.parse(JSON.stringify(fields));wrong.letterLines.find(l=>l.letter==='S').letter='Q';
+ assert.equal(groups.letterGroupMatchesOrder(saved,wrong),false);
+ assert.equal(groups.groupLetterSummary(saved),'145 wit Q · 135 puur Q · 310 melk Q · 5 melk S');
+ const order=normalizeB2BOrder({...original,...fields});
+ const form=load('app/sinterklaas/b2b/SinterklaasB2BClient.tsx').formStateFromOrder(order,'sint');
+ assert.equal(form.productLines.length,0);assert.equal(order.totalExVat,'');
+ assert.equal(form.letterLines.find(l=>l.letter==='S').quantity,5);
+ const reopened=groups.letterGroupOrderFields(saved,fields);assert.equal(reopened.orderText,fields.orderText);assert.equal(reopened.importantNotes,fields.importantNotes);
+ const printed=load('app/sinterklaas/b2b/orderPrintData.ts').buildB2BOrderPrintData(order,{delivery:'',productLines:[],otherText:''});
+ const printRow=printed.lines.find(l=>l.description.includes('nageleverd'));
+ assert.equal(printRow.quantity,5);assert.match(printRow.description,/5 melk S/);assert.deepEqual(Array.from(printRow.attention),[]);
+ assert(!printed.notes.some(note=>note.includes('Controleer de verdeling')));
+});
+test('mixed-letter editor permits choosing S, and malformed letter columns are rejected',()=>{
+ const Editor=load('app/sinterklaas/b2b/GroupedLetterEditor.tsx').default;
+ let group=JSON.parse(JSON.stringify(stichting12qGroup));
+ const nodes=(node)=>Array.isArray(node)?node.flatMap(nodes):node&&typeof node==='object'?[node,...nodes(node.props?.children)]:[];
+ const field=nodes(Editor({group,disabled:false,onChange:next=>{group=next;}})).find(n=>n.props?.['aria-label']==='Letter Ponos');
+ field.props.onChange({target:{value:'S'}});assert.equal(group.rows.find(r=>r.company==='Ponos').letter,'S');
+ for(const letter of ['', 'SS', 's', '1']){
+  group.rows[0].letter=letter;assert(groups.validateLetterGroup(group));
+  assert.equal(groups.parseLetterGroup(groups.serializeLetterGroup(group)),null);
+ }
+});

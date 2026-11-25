@@ -68,7 +68,7 @@ export function buildB2BOrderPrintData(order: SinterklaasB2BOrder, parsed: Parse
       if (!quantity) continue;
       const flavours = (["melk", "wit", "puur"] as const)
         .filter(flavour => company[flavour] > 0)
-        .map(flavour => `${company[flavour]} ${flavour} Q`);
+        .map(flavour => `${company[flavour]} ${flavour} ${company.letter ?? "Q"}`);
       entries.push({ row: {
         quantity,
         description: `${company.company} · grote vormletters · ${flavours.join(" · ")}`,

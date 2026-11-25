@@ -9,7 +9,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import styles from "./B2BOrders.module.css";
 import GroupedLetterEditor from "./GroupedLetterEditor";
 import GroupedLetterBreakdown from "./GroupedLetterBreakdown";
-import { parseLetterGroup, groupLetterTotals, letterGroupMatchesOrder, letterGroupOrderFields, validateLetterGroup, type LetterOrderGroup } from "./groupedLetterOrders";
+import { parseLetterGroup, groupLetterSummary, groupLetterTotals, letterGroupMatchesOrder, letterGroupOrderFields, validateLetterGroup, type LetterOrderGroup } from "./groupedLetterOrders";
 import B2BProductText from "./B2BProductText";
 import B2BConfirmationDialog, { canMailQuotation, customerConfirmationSent, customerConfirmationNeedsUpdate, customerQuotationSent, shouldOfferCustomerConfirmation } from "./B2BConfirmationDialog";
 import B2BApprovalDialog from "./B2BApprovalDialog";
@@ -1861,7 +1861,7 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
   const confirmationNeedsAttention = order.status === "akkoord" && (!order.confirmationEmailedAt || Boolean(order.confirmationEmailError)) && Boolean(order.deliveryDate) && order.deliveryDate >= todayIso() && !archived;
   const folderProductsText = order.orderText.match(/(?:GEKOZEN SINTERKLAASPRODUCTEN|LOSSE KERSTCADEAUS|KERSTPAKKET OP MAAT)\s+([\s\S]*?)(?:PRIJSINDICATIE|GEWENSTE LEVERING|WENSEN|$)/i)?.[1]?.trim();
   const orderSummary = group && groupMatches
-    ? (["wit", "puur", "melk"] as const).map(chocolate => `${order.letterLines.filter(line => line.chocolate === chocolate).reduce((sum, line) => sum + line.quantity, 0)} ${chocolate} Q`).join(" · ")
+    ? groupLetterSummary(group)
     : parsedOrder.productLines.length > 0
     ? parsedOrder.productLines.map(line => `${line.quantity}× ${lineDescription(line)}`).join(" · ")
     : order.letterLines.length > 0 ? (["spuit", "vorm"] as const).flatMap(style => { const count = b2bLetterTotal(order.letterLines.filter(line => line.style === style)); return count ? [`${count}× ${style === "spuit" ? "Chocolade spuitletters" : "Chocolade vormletter S"}`] : []; }).join(" · ") : folderProductsText || compactOrderText(order.orderText);

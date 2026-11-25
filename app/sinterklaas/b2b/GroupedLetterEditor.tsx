@@ -9,11 +9,12 @@ export default function GroupedLetterEditor({ group, disabled, onChange }: { gro
     onChange({ ...group, rows: group.rows.map((row, i) => i === index ? { ...row, ...patch } : row) });
   }
   return <section aria-label="Subbedrijven wijzigen">
-    <p className={styles.panelIntro}>Pas de aantallen per bedrijf aan of voeg een subbedrijf toe. Alle letters zijn grote vormletters Q. Totalen en inkoop worden automatisch bijgewerkt.</p>
-    <div className={styles.groupTableScroll}><table><thead><tr><th>Bedrijf</th><th>Wit Q</th><th>Puur Q</th><th>Melk Q</th><th>Logo</th><th /></tr></thead><tbody>
+    <p className={styles.panelIntro}>Pas de aantallen per bedrijf aan of voeg een subbedrijf toe. Kies de letter per regel; alle letters zijn grote vormletters. Totalen en inkoop worden automatisch bijgewerkt.</p>
+    <div className={styles.groupTableScroll}><table><thead><tr><th>Bedrijf</th><th>Letter</th><th>Wit</th><th>Puur</th><th>Melk</th><th>Logo</th><th /></tr></thead><tbody>
       {group.rows.map((row, index) => <tr key={index}>
         <th scope="row"><input aria-label={`Naam subbedrijf ${index + 1}`} maxLength={120} value={row.company} disabled={disabled} onChange={event => update(index, { company: event.target.value })} /></th>
-        {(["wit", "puur", "melk"] as const).map(chocolate => <td key={chocolate}><input type="number" min="0" max="10000" step="1" aria-label={`${row.company || `Subbedrijf ${index + 1}`} ${chocolate} Q`} value={row[chocolate]} disabled={disabled} onChange={event => update(index, { [chocolate]: Number(event.target.value) })} /></td>)}
+        <td><select aria-label={`Letter ${row.company || `subbedrijf ${index + 1}`}`} value={row.letter ?? "Q"} disabled={disabled} onChange={event => update(index, { letter: event.target.value })}>{"ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map(letter => <option key={letter} value={letter}>{letter}</option>)}</select></td>
+        {(["wit", "puur", "melk"] as const).map(chocolate => <td key={chocolate}><input type="number" min="0" max="10000" step="1" aria-label={`${row.company || `Subbedrijf ${index + 1}`} ${chocolate} ${row.letter ?? "Q"}`} value={row[chocolate]} disabled={disabled} onChange={event => update(index, { [chocolate]: Number(event.target.value) })} /></td>)}
         <td><input type="checkbox" aria-label={`Logo ${row.company || `subbedrijf ${index + 1}`}`} checked={row.withLogo} disabled={disabled} onChange={event => update(index, { withLogo: event.target.checked })} /></td>
         <td><button type="button" className={styles.quiet} aria-label={`Verwijder ${row.company || `subbedrijf ${index + 1}`}`} disabled={disabled || group.rows.length === 1} onClick={() => onChange({ ...group, rows: group.rows.filter((_, i) => i !== index) })}>Verwijder</button></td>
       </tr>)}
