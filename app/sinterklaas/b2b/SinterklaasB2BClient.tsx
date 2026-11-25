@@ -2304,7 +2304,7 @@ export default function SinterklaasB2BClient({ season = "sint", canViewProductio
             </select>
             <button type="button" className={styles.overviewIconButton} aria-label="Bestellingen verversen" title="Verversen" data-loading={loading||undefined} disabled={loading} onClick={() => void loadOrders(year)}><OverviewIcon kind="refresh"/></button>
             <button type="button" className={styles.overviewIconButton} aria-label="Excel importeren" title="Excel importeren" disabled={importing} onClick={()=>excelInput.current?.click()}><OverviewIcon kind="upload"/></button>
-            <button type="button" className={styles.productionTotalsButton} onClick={() => setWorkOverviewOpen(true)}>Werkoverzicht printen</button>
+            <button type="button" className={styles.productionTotalsButton} onClick={() => setWorkOverviewOpen(true)}>Werkoverzicht (PDF)</button>
             {canViewProduction && <button type="button" className={styles.productionTotalsButton} disabled={loading} onClick={() => setProductionTotalsOpen(true)}>Productie opteller</button>}
             <input ref={excelInput} type="file" accept=".xlsx,.xls" hidden aria-label="Excelbestand kiezen" onChange={event => {void handleExcelFile(event.target.files?.[0]);event.target.value="";}} />
           </div>
