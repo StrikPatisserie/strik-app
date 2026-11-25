@@ -14,6 +14,8 @@ import B2BProductText from "./B2BProductText";
 import B2BConfirmationDialog, { canMailQuotation, customerConfirmationSent, customerConfirmationNeedsUpdate, customerQuotationSent, shouldOfferCustomerConfirmation } from "./B2BConfirmationDialog";
 import B2BApprovalDialog from "./B2BApprovalDialog";
 import B2BProductionTotals from "./B2BProductionTotals";
+import B2BWorkOverview from "./B2BWorkOverview";
+import type { WorkOverviewEntry } from "./workOverview";
 import { buildProductionTotals } from "./productionTotals";
 import { b2bProductionLetters, combinationProduct, readCombinationChoice, stripCombinationChocolate } from "../b2bCombinationLetters";
 import { editableFolderOrderText } from "../../lib/businessFolderOrderText";
@@ -901,6 +903,18 @@ function orderMade(order: SinterklaasB2BOrder) {
   const letters = b2bProductionLetters(order);
   const separateLetterProduction = letters.packageQuantity > 0 || order.department === "beide" || order.department === "bakkerij";
   return !separateLetterProduction || letters.requiredQuantity === 0 || order.letterProductionDone || Boolean(order.productionChecklistReady);
+}
+
+function workOverviewEntry(order: SinterklaasB2BOrder): WorkOverviewEntry {
+  const parsed = parseOrderText(order.orderText), made = orderMade(order);
+  return { order, made, hasLetters: b2bProductionLetters(order).requiredQuantity > 0,
+    lettersMade: made || order.letterProductionDone || Boolean(order.productionChecklistReady),
+    data: buildB2BOrderPrintData(order, {
+      delivery: compactDeliveryWindow(order),
+      productLines: parsed.productLines.map(line => ({ productId: line.productId, quantity: line.quantity, description: lineDescription(line) })),
+      otherText: parsed.otherText,
+    }),
+  };
 }
 
 function orderWarnings(order: SinterklaasB2BOrder) {
@@ -1981,6 +1995,7 @@ export default function SinterklaasB2BClient({ season = "sint", canViewProductio
   const [deleteReason, setDeleteReason] = useState("");
   const [deleteReasonNote, setDeleteReasonNote] = useState("");
   const [productionTotalsOpen, setProductionTotalsOpen] = useState(false);
+  const [workOverviewOpen, setWorkOverviewOpen] = useState(false);
 
   useEffect(() => {
     if (!formOpen) return;
@@ -2276,6 +2291,7 @@ export default function SinterklaasB2BClient({ season = "sint", canViewProductio
             </select>
             <button type="button" className={styles.overviewIconButton} aria-label="Bestellingen verversen" title="Verversen" data-loading={loading||undefined} disabled={loading} onClick={() => void loadOrders(year)}><OverviewIcon kind="refresh"/></button>
             <button type="button" className={styles.overviewIconButton} aria-label="Excel importeren" title="Excel importeren" disabled={importing} onClick={()=>excelInput.current?.click()}><OverviewIcon kind="upload"/></button>
+            <button type="button" className={styles.productionTotalsButton} onClick={() => setWorkOverviewOpen(true)}>Werkoverzicht printen</button>
             {canViewProduction && <button type="button" className={styles.productionTotalsButton} disabled={loading} onClick={() => setProductionTotalsOpen(true)}>Productie opteller</button>}
             <input ref={excelInput} type="file" accept=".xlsx,.xls" hidden aria-label="Excelbestand kiezen" onChange={event => {void handleExcelFile(event.target.files?.[0]);event.target.value="";}} />
           </div>
@@ -2306,6 +2322,7 @@ export default function SinterklaasB2BClient({ season = "sint", canViewProductio
         <div className={styles.listFooter}><span>{visibleOrders.length} {visibleOrders.length === 1 ? "bestelling" : "bestellingen"} · bedragen excl. btw</span><span>Open een rij voor letterregels, contact en afhandeling.</span></div>
       </>}
       </div>
+      {workOverviewOpen && <B2BWorkOverview key={year} year={year} buildEntry={workOverviewEntry} onClose={() => setWorkOverviewOpen(false)} />}
       {canViewProduction && productionTotalsOpen && <B2BProductionTotals key={`${season}:${year}`} onRefresh={() => void loadOrders(year)} totals={productionTotals} season={season} year={year} loading={loading} onClose={() => setProductionTotalsOpen(false)} />}
       {confirmationTarget && <B2BConfirmationDialog key={confirmationTarget.id} order={confirmationTarget} updatedOrder={confirmationIsUpdate} onClose={() => setConfirmationTarget(null)} onEdit={nextOrder => { setConfirmationTarget(null); openEditOrderDialog(nextOrder); }} onUpdated={nextOrder => { setOrders(current => updateOrderList(current, nextOrder)); setSaveNotice(customerConfirmationSent(nextOrder) ? `Klantbevestiging voor ${nextOrder.customerName} verstuurd.` : `Mailstatus voor ${nextOrder.customerName} bijgewerkt.`); }}/>}
       {quotationTarget && <B2BConfirmationDialog key={`quotation-${quotationTarget.id}`} mode="quotation" order={quotationTarget} onClose={() => setQuotationTarget(null)} onEdit={nextOrder => { setQuotationTarget(null); openEditOrderDialog(nextOrder); }} onUpdated={nextOrder => { setOrders(current => updateOrderList(current, nextOrder)); setSaveNotice(customerQuotationSent(nextOrder) ? `${nextOrder.status === "offerte" ? "Offerte" : "Aanvraag"} voor ${nextOrder.customerName} verstuurd.` : `Mailstatus voor ${nextOrder.customerName} bijgewerkt.`); }}/>}
