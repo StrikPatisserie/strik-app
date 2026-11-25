@@ -33,23 +33,24 @@ export async function createWorkOverviewPdf(rows:WorkOverviewRow[],options:WorkO
     if(line)result.push({text:line,bold});return result;
   }
   function layout(size:number):Page[]{
-    const leading=size*1.18,padding=3;
+    const sizes=[size-1,size,size-1],leading=sizes.map(value=>value*1.16),padding=2.5;
     const pages:Page[]=[[]];let used=0;
     const next=()=>{pages.push([]);used=0;};
-    function add(cells:Line[][]){const block={cells,height:Math.max(...cells.map(cell=>cell.length))*leading+2*padding};if(used+block.height>bodyHeight&&pages.at(-1)!.length)next();pages.at(-1)!.push(block);used+=block.height;}
+    function add(cells:Line[][]){const block={cells,height:Math.max(...cells.map((cell,i)=>cell.length*leading[i]))+2*padding};if(used+block.height>bodyHeight&&pages.at(-1)!.length)next();pages.at(-1)!.push(block);used+=block.height;}
     for(const row of data){
       const cells=[
-        [...wrap(row.customer,columns[0]-8,size,true),...wrap(row.delivery,columns[0]-8,size,true),...wrap(row.location,columns[0]-8,size)],
-        [...row.products.flatMap(product=>wrap(product,columns[1]-8,size,true)),...row.notes.flatMap(note=>wrap(`• ${note}`,columns[1]-8,size))],
-        [...row.states.flatMap(state=>wrap(`${state.done?'☑':'☐'} ${state.label}`,columns[2]-8,size)),...wrap(row.logo,columns[2]-8,size,true)],
+        [...wrap(row.customer,columns[0]-8,sizes[0],true),...wrap(row.delivery,columns[0]-8,sizes[0],true)],
+        [...row.products.flatMap(product=>wrap(product,columns[1]-8,size,true)),...wrap(row.notes.join(' • '),columns[1]-8,size),...wrap(row.location,columns[1]-8,size)],
+        [...row.states.flatMap(state=>wrap(`${state.done?'☑':'☐'} ${state.label}`,columns[2]-8,sizes[2])),...wrap(row.logo,columns[2]-8,sizes[2],true)],
       ];
-      const count=Math.max(...cells.map(cell=>cell.length)),maxLines=Math.floor((bodyHeight-2*padding)/leading);
-      if(count<=maxLines){add(cells);continue;}
+      const maxLines=leading.map(value=>Math.floor((bodyHeight-2*padding)/value));
+      const parts=Math.max(...cells.map((cell,i)=>Math.ceil(cell.length/maxLines[i])));
+      if(parts<=1){add(cells);continue;}
       // An unusually long custom order continues safely, with its customer repeated.
       if(pages.at(-1)!.length)next();
-      for(let start=0;start<count;start+=maxLines){
-        const slice=cells.map(cell=>cell.slice(start,start+maxLines));
-        if(start&&!slice[0].length)slice[0]=wrap(`${row.customer} (vervolg)`,columns[0]-8,size,true).slice(0,maxLines);
+      for(let part=0;part<parts;part++){
+        const slice=cells.map((cell,i)=>cell.slice(part*maxLines[i],(part+1)*maxLines[i]));
+        if(part&&!slice[0].length)slice[0]=wrap(`${row.customer} (vervolg)`,columns[0]-8,sizes[0],true).slice(0,maxLines[0]);
         add(slice);
       }
     }
@@ -69,7 +70,7 @@ export async function createWorkOverviewPdf(rows:WorkOverviewRow[],options:WorkO
     for(const block of blocks){
       x=margin;
       block.cells.forEach((cell,i)=>{
-        for(const [lineIndex,line] of cell.entries()){font(fontSize,line.bold);ctx!.fillStyle='#172b25';ctx!.fillText(line.text,x+4,y+3+lineIndex*fontSize*1.18);}
+        for(const [lineIndex,line] of cell.entries()){const size=i===1?fontSize:fontSize-1;font(size,line.bold);ctx!.fillStyle='#172b25';ctx!.fillText(line.text,x+4,y+2.5+lineIndex*size*1.16);}
         x+=columns[i];
       });
       y+=block.height;ctx.strokeStyle='#bac5bd';ctx.lineWidth=.4;ctx.beginPath();ctx.moveTo(margin,y);ctx.lineTo(width-margin,y);ctx.stroke();
