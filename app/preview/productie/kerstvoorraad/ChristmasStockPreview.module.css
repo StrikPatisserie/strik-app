@@ -188,3 +188,25 @@
 .countFields > label:last-child { grid-column: 1 / -1; }
 .stockButton strong { font-size: 1.2em; }
 @media (max-width: 650px) { .countFields { grid-template-columns: 1fr; } .countSummary { align-items: flex-start; flex-direction: column; } }
+
+.totalSection { padding: 16px; border-bottom: 1px solid var(--line); }
+.totalSection > header { display: flex; align-items: baseline; gap: 15px; flex-wrap: wrap; margin-bottom: 10px; }
+.totalSection h2 { font-size: 1em; margin: 0; }
+.totalSection p { margin: 0; font-size: .72em; color: #65725e; }
+.totalTable { width: 100%; border-collapse: collapse; font-size: .87em; }
+.totalTable th { padding: 9px 12px; text-align: left; background: #eaf0e5; color: #49684c; font-size: .85em; }
+.totalTable td { padding: 11px 12px; border-bottom: 1px solid #dbe2d7; }
+.totalTable th:first-child { width: 32%; }
+.totalTable th:nth-child(2) { width: 29%; }
+.totalTable td small { display: block; margin-top: 4px; font-size: .8em; color: #65725e; }
+.totalTable .productButton span { font-size: .8em; }
+.totalTarget { border: 1px solid #c3d3bc; border-radius: 6px; padding: 6px 12px; background: #f3f6ef; color: #1b3343; white-space: nowrap; }
+.totalTarget b { font-size: 1.2em; }
+.totalCheck { display: flex; gap: 10px; align-items: center; cursor: pointer; }
+.totalCheck input { width: 23px; height: 23px; flex-shrink: 0; accent-color: #49684c; }
+.totalComparison { display: flex; flex-direction: column; gap: 8px; padding: 15px; border-radius: 6px; background: #eaf0e5; }
+.totalComparison small { display: block; margin-top: 6px; }
+.totalFields { display: grid; gap: 18px; border: 0; padding: 0; margin: 0; }
+.totalFields label { display: flex; flex-direction: column; gap: 8px; }
+.totalFields input { width: 100%; border: 1px solid #bcc9bd; border-radius: 5px; padding: 10px; background: white; color: #1b3343; }
+@media (max-width: 750px) { .totalTable { min-width: 680px; } .totalSection { padding: 12px; } }

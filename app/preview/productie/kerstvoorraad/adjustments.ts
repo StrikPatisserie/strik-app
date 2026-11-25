@@ -20,7 +20,8 @@ export function parseForecastSettings(raw: string | null): ForecastSettings {
       if (!value || typeof value !== "object" || Array.isArray(value)) continue;
       const input = value as Record<string, unknown>, adjustment: ProductAdjustment = {};
       if (input.hidden === true) adjustment.hidden = true;
-      for (const field of ["growthPercent", "periodTotal", "week52Total"] as const) {
+      if (input.totalOnly === true) adjustment.totalOnly = true;
+      for (const field of ["growthPercent", "periodTotal", "week52Total", "madeTotal"] as const) {
         const number = input[field];
         if (typeof number === "number" && Number.isFinite(number) && number >= (field === "growthPercent" ? -100 : 0)
           && number <= (field === "growthPercent" ? 500 : 1e6) && (field === "growthPercent" || Number.isInteger(number))) adjustment[field] = number;

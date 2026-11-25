@@ -32,6 +32,10 @@ export type ProductAdjustment = {
   name2026?: string;
   cashCode2026?: string;
   hidden?: boolean;
+  /** Make this season total once, without weekly stock targets. */
+  totalOnly?: boolean;
+  /** The target that was marked made; a different target is open again. */
+  madeTotal?: number;
 };
 export type ProductChoice = {
   target: number | null; stock: number | null; recipeId: string;
@@ -65,11 +69,15 @@ export function productProjection(product: SalesProduct, choice: ProductChoice, 
   const historical = product.introducedYear === 2026 || product.cash === null && product.bake === null ? null : ((product.cash ?? 0) + (product.bake ?? 0)) * (product.unitsPerSale ?? 1);
   const period = adjustment.periodTotal ?? (product.unitUnconfirmed ? null : projectedSales(historical, uplift));
   const weekBase = product.introducedYear === 2026 ? null : choice.week52Base ?? (product.week52 && !product.week52.issue ? (product.week52.cash + product.week52.bake) * (product.unitsPerSale ?? 1) : null);
-  const week52 = adjustment.week52Total ?? (product.unitUnconfirmed ? null : projectedSales(weekBase, uplift));
+  const week52 = adjustment.totalOnly ? null : adjustment.week52Total ?? (product.unitUnconfirmed ? null : projectedSales(weekBase, uplift));
   const issue = period !== null && week52 !== null && week52 > period
     ? "Week 52 is groter dan de prognose voor de hele periode" : null;
-  const weeklyTarget = period === null ? null : Math.ceil(period / 4);
+  const weeklyTarget = adjustment.totalOnly || period === null ? null : Math.ceil(period / 4);
   return { historical, period, week52: issue ? null : week52, weeklyTarget, growth: uplift, issue };
+}
+
+export function totalProductionMade(choice: ProductChoice, target: number | null): boolean {
+  return choice.adjustment?.totalOnly === true && target !== null && choice.adjustment.madeTotal === target;
 }
 
 /** A replacement keeps its historical basis but needs its own receipt and

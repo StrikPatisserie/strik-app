@@ -1546,3 +1546,62 @@ test('new 2026 forecasts can be saved through shared storage and survive other e
   assert.equal(next.newProducts[0].id,'new-2026');
   assert.equal(next.adjustments['new-2026'].periodTotal,160);
 });
+
+test('season totals keep their historical comparison but never get a weekly target', () => {
+  const original = {...product('a'), name:'Lumiere de Nöel (6-8pers)', cash:87, bake:6, week52:{cash:62,bake:4}};
+  const choice = {...forecast.emptyChoice(),adjustment:{totalOnly:true,name2026:'Burgundy choco taartje',periodTotal:125,week52Total:999}};
+  const result = forecast.productProjection(original,choice,10);
+  assert.equal(result.historical,93);
+  assert.equal(result.period,125);
+  assert.equal(result.weeklyTarget,null);
+  assert.equal(result.week52,null);
+  assert.equal(result.issue,null);
+  const current = forecast.productFor2026(original,choice);
+  assert.equal(current.name,'Burgundy choco taartje');
+  assert.equal(original.name,'Lumiere de Nöel (6-8pers)');
+  assert.equal(original.cash+original.bake,93);
+  const alaska = forecast.productProjection({...product('b'),cash:80,bake:0},{...forecast.emptyChoice(),adjustment:{totalOnly:true}},10);
+  assert.equal(alaska.period,88);
+  assert.equal(alaska.weeklyTarget,null);
+  const tiramisu = forecast.productProjection({...product('new'),introducedYear:2026,cash:null,bake:null},{...choice,adjustment:{totalOnly:true,periodTotal:200}},10);
+  assert.equal(tiramisu.period,200);
+  assert.equal(tiramisu.historical,null);
+  assert.equal(tiramisu.week52,null);
+});
+
+test('made checkbox survives shared storage, can reopen and is tied to the completed target', () => {
+  const open = {...forecast.emptyChoice(),adjustment:{totalOnly:true,periodTotal:200}};
+  let state = applyShared(sharedForecast.emptySharedSettings(),forecastChange('a',open));
+  const completed = {...open,adjustment:{...open.adjustment,madeTotal:200}};
+  state = applyShared(state,forecastChange('a',completed,open));
+  const read = sharedForecast.choicesFromSettings([product('a')],state,{a:forecast.emptyChoice()}).a;
+  assert(forecast.totalProductionMade(read,200));
+  assert.equal(forecast.totalProductionMade(read,225),false);
+  assert.equal(forecast.totalProductionMade(read,null),false);
+  assert.equal(forecast.totalProductionMade({...read,adjustment:{madeTotal:200}},200),false);
+  const raised = {...completed,adjustment:{...completed.adjustment,periodTotal:225}};
+  state = applyShared(state,forecastChange('a',raised,completed));
+  assert.equal(forecast.totalProductionMade({...open,adjustment:state.adjustments.a},225),false);
+  const reopened = {...raised,adjustment:{...raised.adjustment,madeTotal:undefined}};
+  state = applyShared(state,forecastChange('a',reopened,raised));
+  assert.equal(state.adjustments.a.madeTotal,undefined);
+  assert.equal(state.adjustments.a.periodTotal,225);
+});
+
+test('a stale completion cannot overwrite a concurrently changed target', () => {
+  const open = {adjustment:{totalOnly:true,periodTotal:125}};
+  let state = applyShared(sharedForecast.emptySharedSettings(),forecastChange('a',open));
+  state = applyShared(state,forecastChange('a',{adjustment:{totalOnly:true,periodTotal:150}},open));
+  assert.throws(()=>applyShared(state,forecastChange('a',{adjustment:{...open.adjustment,madeTotal:125}},open)),sharedForecast.ForecastConflictError);
+  assert.equal(state.adjustments.a.periodTotal,150);
+  assert.equal(state.adjustments.a.madeTotal,undefined);
+});
+
+test('completion settings reject invalid values rather than silently changing a target', () => {
+  const original = sharedForecast.emptySharedSettings();
+  const command = forecastChange('a',{adjustment:{totalOnly:true,periodTotal:125}});
+  for (const madeTotal of [-1,0.5,1000001,'125']) {
+    assert.throws(()=>applyShared(original,{...command,value:{...command.value,adjustment:{...command.value.adjustment,madeTotal}}}),/Controleer/);
+  }
+  assert.throws(()=>applyShared(original,{...command,value:{...command.value,adjustment:{totalOnly:'true'}}}),/Controleer/);
+});

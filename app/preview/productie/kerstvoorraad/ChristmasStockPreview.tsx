@@ -19,6 +19,7 @@ import { exampleProduction, productInventory, stockDisplay, productionRequiremen
 import { allocateAssortedSales } from "./assortedPastries";
 import { combineLargeFlans } from "./flanVariants";
 import { registerStockCount, type StockCountInput } from "./stockCount";
+import { TotalProductionEditor, TotalProductionList } from "./TotalProduction";
 import s from "./ChristmasStockPreview.module.css";
 
 const number = (value: number | null | undefined) => value == null ? "—" : value.toLocaleString("nl-NL", { maximumFractionDigits: 2 });
@@ -411,10 +412,12 @@ export default function ChristmasStockPreview({
     return (status === "hidden" ? hiddenStockProduct(row.product, row.choice) : !hiddenStockProduct(row.product, row.choice) && includeInStockOverview(row.product, growth))
       && (group === "all" || row.product.group === group) && (department === "all" || row.product.department === department)
       && (volume === "all" || band === volume || group === "kerst" && !!christmasCakeVariant(row.product))
-      && (status === "all" || status === "hidden" || status === "recipe" && (!!row.recipeIssue || !row.choice.checked) || status === "stock" && balance.quantity === null || status === "week52" && row.week52 === null)
+      && (status === "all" || status === "hidden" || !row.choice.adjustment?.totalOnly && (status === "recipe" && (!!row.recipeIssue || !row.choice.checked) || status === "stock" && balance.quantity === null || status === "week52" && row.week52 === null))
       && matchesProductionSearch(query, [row.currentProduct.name, row.currentProduct.cashCode, row.product.name, row.product.cashCode, row.product.bakeCode, ...(row.product.searchNames || [])]);
   }).sort((a, b) => compareStockProducts(a.currentProduct, b.currentProduct));
-  const lastPage = Math.max(0, Math.ceil(filtered.length / pageSize) - 1), currentPage = Math.min(page, lastPage);
+  const totalRows = filtered.filter(row => row.choice.adjustment?.totalOnly);
+  const weeklyRows = filtered.filter(row => !row.choice.adjustment?.totalOnly);
+  const lastPage = Math.max(0, Math.ceil(weeklyRows.length / pageSize) - 1), currentPage = Math.min(page, lastPage);
   const selected = rows.find(row => row.product.id === productId);
   const counting = rows.find(row => row.product.id === countId);
   const removing = rows.find(row => row.product.id === removeId);
@@ -486,10 +489,17 @@ export default function ChristmasStockPreview({
           <select aria-label="Verkoopvolume" value={volume} onChange={event => changeFilter(() => setVolume(event.target.value))}><option value="all">Alle volumes</option><option value="high">Hardlopers</option><option value="medium">Gemiddeld</option><option value="low">Klein volume</option></select>
           <label className={s.growth}>Groei<select aria-label="Groei" value={growth} disabled={saving} onChange={event => void changeGrowth(Number(event.target.value))}><option value={0}>0%</option><option value={5}>+5%</option><option value={8}>+8%</option><option value={10}>+10%</option><option value={15}>+15%</option></select></label>
         </div>
-        <div className={s.tableWrap}><table className={s.table}>
+        <div className={s.tableWrap}>
+          {totalRows.length > 0 && <TotalProductionList rows={totalRows} growth={growth} saving={saving}
+            onEdit={setProductId} onMade={async (row, made) => {
+              if (row.projection === null) return;
+              try { await saveProduct(row.product.id, { ...row.choice, adjustment: { ...row.choice.adjustment, madeTotal: made ? row.projection : undefined } }, row.choice); }
+              catch { /* saveShared displays the error and preserves the previous state. */ }
+            }} />}
+          {weeklyRows.length > 0 && <table className={s.table}>
           <colgroup><col className={s.productCol} /><col className={s.forecastCol} /><col className={s.forecastCol} /><col className={s.weeklyCol} /><col className={s.remainingCol} /><col className={s.historyCol} /><col className={s.historyCol} /><col className={s.stockCol} /><col className={s.recipeCol} /></colgroup>
           <thead><tr><th scope="col">Product</th><th scope="col" className={s.periodHeading}><span className={s.forecastLabel}>Totaalprognose 2026</span><strong>Week 47–53</strong><small>16 nov–31 dec</small></th><th scope="col" className={s.christmasHeading}><span className={s.forecastLabel}>Kerstweek 2026</span><strong>Week 52</strong><small>21–27 dec</small></th><th scope="col" className={s.weeklyHeading} title="Totaalprognose week 47–53 verdeeld over vier productieweken, naar boven afgerond.">Weekdoel<small>Week 47–50</small><small>totaal ÷ 4</small></th><th scope="col" title="Totaalprognose min de uitgeleverde aantallen op verwerkte bonnen. De bakkerijvoorraad staat apart.">Nog uit te leveren<small>vanaf {dateLabel(viewDate < CAMPAIGN_START ? CAMPAIGN_START : viewDate)}</small></th><th scope="col">Laatst gemaakt<small>datum · hoeveelheid</small></th><th scope="col">Voorraad tellen<small>datum · geteld</small></th><th scope="col" title="Resterende uitleverprognose min de bakkerijvoorraad, op dezelfde peildatum.">Nog te maken<small>na voorraad</small></th><th scope="col">Recept</th></tr></thead>
-          <tbody>{filtered.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(row => {
+          <tbody>{weeklyRows.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(row => {
             const balance = stockDisplay(row.stock);
             const quantityUnit = row.currentProduct.quantityLabel || (row.currentProduct.group === "petit-dv" ? "stuks" : null);
             const band = { high: "Hardloper", medium: "Gemiddeld", low: "Klein volume", unknown: row.product.unitUnconfirmed ? "Eenheid controleren" : "Verkoop nog koppelen" }[salesVolume(row.product)];
@@ -505,7 +515,7 @@ export default function ChristmasStockPreview({
               <td><button type="button" className={row.recipeIssue || !row.choice.checked ? s.issueButton : s.linkButton} onClick={() => setProductId(row.product.id)} title={row.recipeIssue || "Bekijk recept en onderdelen"}><Icon name={row.recipeIssue || !row.choice.checked ? "warning" : "link"} size={17} />{!row.recipeId ? "Koppelen" : row.recipeIssue ? "Aanvullen" : !row.choice.checked ? "Controleren" : "Gekoppeld"}</button></td>
             </tr>;
           })}</tbody>
-        </table>{!filtered.length && <p className={s.empty}>Geen producten in deze selectie.</p>}</div>
+        </table>}{!filtered.length && <p className={s.empty}>Geen producten in deze selectie.</p>}</div>
         <div className={s.pager}><span>{filtered.length} producten · aantallen in stuks, tenzij anders vermeld</span><div><button type="button" className={s.iconButton} disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)} aria-label="Vorige producten"><Icon name="back" /></button><b>{currentPage + 1} / {lastPage + 1}</b><button type="button" className={s.iconButton} disabled={currentPage === lastPage} onClick={() => setPage(currentPage + 1)} aria-label="Volgende producten"><Icon name="arrow" /></button></div></div>
       </section>
       <p className={s.sourceNote}>* Historische basis: verkoop 2025, exclusief Wijchen. Nieuw in 2026: handmatige prognose zonder verkoopcijfers uit 2025.</p>
@@ -517,7 +527,11 @@ export default function ChristmasStockPreview({
         {source.mode === "example" && <button type="button" className={s.iconButton} onClick={reset} aria-label="Proef herstellen" title="Proef herstellen"><Icon name="refresh" size={17} /></button>}
       </footer>
     </section>
-    {selected && <ProductDetails key={selected.product.id} row={selected} source={source} recipes={recipes} growth={growth} shared={shared} onCount={() => { setProductId(null); if (source.mode === "live") setCountId(selected.product.id); }} onClose={() => setProductId(null)} onSave={async (choice, previous) => { await saveProduct(selected.product.id, choice, previous); setProductId(null); }} />}
+    {selected?.choice.adjustment?.totalOnly && <Dialog title={selected.currentProduct.name} onClose={() => setProductId(null)}>
+      <TotalProductionEditor key={selected.product.id} row={selected} growth={growth} onClose={() => setProductId(null)}
+        onSave={async (choice, previous) => { await saveProduct(selected.product.id, choice, previous); setProductId(null); }} />
+    </Dialog>}
+    {selected && !selected.choice.adjustment?.totalOnly && <ProductDetails key={selected.product.id} row={selected} source={source} recipes={recipes} growth={growth} shared={shared} onCount={() => { setProductId(null); if (source.mode === "live") setCountId(selected.product.id); }} onClose={() => setProductId(null)} onSave={async (choice, previous) => { await saveProduct(selected.product.id, choice, previous); setProductId(null); }} />}
     {counting?.stock && <StockCountDialog key={counting.product.id} row={counting} today={actualDate} onSave={saveCount} onClose={() => setCountId(null)} />}
     {removing && <Dialog title="Product weglaten?" onClose={() => setRemoveId(null)}><div className={s.editor}><p><b>{removing.currentProduct.name}</b></p><p className={s.small}>Dit product verdwijnt uit je kerstvoorraadoverzicht. Je kunt het via het filter ‘Weggelaten’ terugzetten.</p><footer className={s.dialogFooter}><button type="button" className={s.secondary} onClick={() => setRemoveId(null)}>Annuleren</button><button type="button" className={s.primary} disabled={saving} onClick={() => void hideProduct(removing.product.id, true)}>Product weglaten</button></footer></div></Dialog>}
   </main>;
