@@ -39,7 +39,7 @@ export async function createWorkOverviewPdf(rows:WorkOverviewRow[],options:WorkO
     function add(cells:Line[][]){const block={cells,height:Math.max(...cells.map((cell,i)=>cell.length*leading[i]))+2*padding};if(used+block.height>bodyHeight&&pages.at(-1)!.length)next();pages.at(-1)!.push(block);used+=block.height;}
     for(const row of data){
       const cells=[
-        [...wrap(row.customer,columns[0]-8,sizes[0],true),...wrap(row.delivery,columns[0]-8,sizes[0],true)],
+        [...wrap(row.customer,columns[0]-8,sizes[0],true),...wrap(row.delivery,columns[0]-8,sizes[0],true),...wrap(row.payment,columns[0]-8,sizes[0],true)],
         [...row.products.flatMap(product=>wrap(product,columns[1]-8,size,true)),...wrap(row.notes.join(' • '),columns[1]-8,size),...wrap(row.location,columns[1]-8,size)],
         [...row.states.flatMap(state=>wrap(`${state.done?'☑':'☐'} ${state.label}`,columns[2]-8,sizes[2])),...wrap(row.logo,columns[2]-8,sizes[2],true)],
       ];

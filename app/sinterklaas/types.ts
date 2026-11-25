@@ -102,6 +102,7 @@ export type SinterklaasB2BOrder = {
   sourceSheet: string;
   status: "aanvraag" | "offerte" | "akkoord" | "afgewezen";
   entered: boolean;
+  paidInStore: boolean;
   productionScheduled: boolean;
   logoChecked: boolean;
   packagingChecked: boolean;

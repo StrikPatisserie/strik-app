@@ -101,3 +101,11 @@ test('long custom orders continue across pages with no clipping or lost final in
  assert(drawn.some(line=>line.text.includes('(vervolg)')));
  for(const line of drawn.filter(line=>line.text.includes('Onderdeel-')))assert(line.y+10<297*72/25.4-35);
 });
+
+test('payment selection defaults to invoice and prints the no-invoice warning for store payments',()=>{
+ for(const paidInStore of [undefined,false,true]){
+  const current=order({paidInStore});
+  assert.equal(current.paidInStore,paidInStore===true);
+  assert.equal(work.compactWorkRow(rows([current])[0],options).payment,paidInStore?'Betaald in winkel · geen factuur':'Op factuur');
+ }
+});

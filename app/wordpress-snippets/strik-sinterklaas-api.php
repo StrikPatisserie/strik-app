@@ -875,6 +875,10 @@ function strik_sinterklaas_sanitize_b2b_order($order, $existing = array(), &$val
         $validation_error = 'Vul de chocoladeletterregels in. Bij een combinatiepakket kies je de letter en chocoladesmaak bij het product.';
         return null;
     }
+    if (array_key_exists('paidInStore', $order) && !is_bool($order['paidInStore'])) {
+        $validation_error = 'Kies Op factuur of Betaald in winkel.';
+        return null;
+    }
     $validation_error = null;
 
     return array(
@@ -906,6 +910,7 @@ function strik_sinterklaas_sanitize_b2b_order($order, $existing = array(), &$val
         'sourceSheet' => isset($order['sourceSheet']) ? strik_sinterklaas_text($order['sourceSheet'], 120) : '',
         'status' => $status,
         'entered' => !empty($order['entered']),
+        'paidInStore' => !empty($order['paidInStore']),
         'productionScheduled' => !empty($order['productionScheduled']),
         'logoChecked' => !empty($order['logoChecked']),
         'packagingChecked' => !empty($order['packagingChecked']),

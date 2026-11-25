@@ -62,7 +62,7 @@ import {
   type Product,
 } from "../../sint-voor-bedrijven/sintProducts";
 
-type B2BProgressField = "entered" | "productionDone" | "delivered";
+type B2BProgressField = "entered" | "productionDone" | "delivered" | "paidInStore";
 
 const CUSTOM_PRODUCT_ID = "anders";
 const PRODUCT_SECTION_HEADING = "PRODUCTEN EN PRIJS";
@@ -1906,7 +1906,9 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
         {customerConfirmationNeedsUpdate(order) && <button type="button" className={styles.mailLink} onClick={() => onCustomerConfirmation(order)}>Wijziging mailen…</button>}
         {canMailQuotation(order) && <button type="button" className={styles.mailLink} onClick={() => onQuotation(order)}>{customerQuotationSent(order) ? "✓ Klantmail bekijken" : `${order.status === "offerte" ? "Offerte" : "Aanvraag"} mailen…`}</button>}
       </div>
-      <div className={styles.amount}>{order.totalExVat.trim() || priceBreakdowns.length > 0 ? <>{money(orderTotal)}<small>excl. btw</small></> : "—"}</div>
+      <div className={styles.amount}>{order.totalExVat.trim() || priceBreakdowns.length > 0 ? <>{money(orderTotal)}<small>excl. btw</small></> : "—"}
+        {!archived && order.status === "akkoord" && !order.cancelled && <span className={styles.paymentStatus} data-paid={order.paidInStore || undefined}>{order.paidInStore ? "✓ Betaald in winkel" : "Op factuur"}</span>}
+      </div>
       <div className={styles.rowActions}>
         <OrderPrintMenu data={buildB2BOrderPrintData(order, {
           delivery: compactDeliveryWindow(order),
@@ -1957,6 +1959,14 @@ function B2BOrderRow({ order, updatingId, onToggle, onEdit, onDelete, onRetryCon
               ["delivered", "Geleverd"],
             ] as const).map(([key, label]) => <label key={key}><input type="checkbox" checked={key === "productionDone" ? made : order[key]} disabled={updatingId.startsWith(`${order.id}-`)} onChange={() => onToggle(order, key)} />{label}</label>)}
           </div>}
+          {!archived && order.status === "akkoord" && !order.cancelled && <fieldset className={styles.paymentChoice} disabled={updatingId.startsWith(`${order.id}-`)}>
+            <legend>Betaling</legend>
+            <div>
+              <label><input type="checkbox" checked={!order.paidInStore} onChange={() => onToggle(order, "paidInStore")} />Op factuur</label>
+              <label><input type="checkbox" checked={order.paidInStore} onChange={() => onToggle(order, "paidInStore")} />Betaald in winkel</label>
+            </div>
+            <small>{order.paidInStore ? "Geen factuur sturen · al afgerekend in de winkel." : "Deze bestelling op factuur afhandelen."}</small>
+          </fieldset>}
         </section>
       </div>
       {!archived && <div className={styles.detailTools}>
@@ -2053,7 +2063,9 @@ export default function SinterklaasB2BClient({ season = "sint", canViewProductio
   const visibleOrders = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("nl-NL");
     return orders.filter((order) =>
-      (!statusFilter || (statusFilter === "nog-invoeren" ? order.status === "akkoord" && !order.entered && !order.cancelled : order.status === statusFilter && !order.cancelled)) && (!term || [
+      (!statusFilter || (statusFilter === "op-factuur" || statusFilter === "betaald-in-winkel"
+        ? order.status === "akkoord" && !order.cancelled && !order.id.startsWith("historie-") && Boolean(order.paidInStore) === (statusFilter === "betaald-in-winkel")
+        : statusFilter === "nog-invoeren" ? order.status === "akkoord" && !order.entered && !order.cancelled : order.status === statusFilter && !order.cancelled)) && (!term || [
         order.customerName,
         order.orderText,
         order.letterOrderText,
@@ -2111,6 +2123,7 @@ export default function SinterklaasB2BClient({ season = "sint", canViewProductio
         // Reopening an older packed order must also restore its production demand.
         ...(key === "productionDone" && !value && order.packed ? { packed: false, packedAt: "" } : {}),
       });
+      if (key === "paidInStore" && saved.paidInStore !== value) throw new Error("De betaalwijze is niet opgeslagen. Ververs de lijst en probeer het opnieuw.");
       setOrders((current) => updateOrderList(current, saved));
     } catch (updateError) {
       setError(
@@ -2284,7 +2297,7 @@ export default function SinterklaasB2BClient({ season = "sint", canViewProductio
           <div className={styles.overviewControls}>
             <input aria-label="Zoek klant of product" placeholder="Zoek klant, datum of product" value={search} onChange={event => setSearch(event.target.value)} className={styles.search} />
             <select aria-label="Filter status" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>
-              <option value="">Alle statussen</option><option value="aanvraag">Aanvraag</option><option value="offerte">Offerte</option><option value="akkoord">Definitief</option><option value="nog-invoeren">Nog invoeren</option><option value="afgewezen">Niet doorgegaan</option>
+              <option value="">Alle statussen</option><option value="aanvraag">Aanvraag</option><option value="offerte">Offerte</option><option value="akkoord">Definitief</option><option value="nog-invoeren">Nog invoeren</option><option value="op-factuur">Op factuur</option><option value="betaald-in-winkel">Betaald in winkel</option><option value="afgewezen">Niet doorgegaan</option>
             </select>
             <select aria-label="Besteljaar" value={year} onChange={event => setYear(event.target.value)}>
               {Array.from({ length: Math.max(Number(currentYear()), Number(initialYear) || 0) - 2018 }, (_, index) => String(Math.max(Number(currentYear()), Number(initialYear) || 0) - index)).map(optionYear => <option key={optionYear} value={optionYear}>{optionYear}</option>)}

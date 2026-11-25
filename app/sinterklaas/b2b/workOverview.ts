@@ -8,7 +8,7 @@ import type { OrderPrintData } from "./orderPrint";
 export type WorkOverviewEntry = { order: SinterklaasB2BOrder; data: OrderPrintData; made: boolean; hasLetters: boolean; lettersMade: boolean };
 export type WorkOverviewOptions = { from: string; to?: string; year: string; season: BusinessSeason | "all"; generatedAt: string; includeUndated?: boolean; internalNotes?: boolean };
 export type WorkOverviewRow = WorkOverviewEntry & { window: ReturnType<typeof businessDeliveryWindow> };
-export type CompactWorkRow = { customer: string; delivery: string; location: string; products: string[]; notes: string[]; states: { done: boolean; label: string }[]; logo: string };
+export type CompactWorkRow = { customer: string; delivery: string; location: string; products: string[]; notes: string[]; states: { done: boolean; label: string }[]; payment: string; logo: string };
 
 export function workOverviewToday(now = new Date()) {
   return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Amsterdam", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
@@ -66,6 +66,7 @@ export function compactWorkRow(row: WorkOverviewRow, options: WorkOverviewOption
     products:products.flatMap(item=>!item?[]:typeof item==='string'?[item]:[`${item.quantity}× ${item.variant}: ${[...item.letters].map(([letter,quantity])=>`${quantity}× ${letter}`).join(", ")}${item.details.length?` · ${item.details.join(" · ")}`:""}`]),
     notes,
     states:[{done:order.entered,label:"Bake-it"},{done:made,label:"Gemaakt"},...(hasLetters&&!made?[{done:lettersMade,label:"Letters"}]:[]),{done:order.packed,label:"Ingepakt"}],
+    payment:order.paidInStore ? "Betaald in winkel · geen factuur" : "Op factuur",
     logo:logoOrderRequested(order)?`Logo: ${order.logoPrintComplete===true?"geprint":order.logoAttachmentCount?"nog printen":"bestand controleren"}`:"",
   };
 }
