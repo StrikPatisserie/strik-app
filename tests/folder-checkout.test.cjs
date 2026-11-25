@@ -4,14 +4,17 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const ts = require('typescript');
 const React = require('react');
+const FixedDate = class extends Date { constructor(...args) { super(...(args.length ? args : ['2026-11-25T09:00:00Z'])); } };
 
 function load(file, imports = {}, globals = {}) {
   const exports = {};
   const source = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: {
     module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX,
   } }).outputText;
-  vm.runInNewContext(source, { exports, Error, TypeError, AbortController, setTimeout, clearTimeout, Uint8Array, ...globals, require(name) {
+  vm.runInNewContext(source, { exports, Error, TypeError, AbortController, setTimeout, clearTimeout, Uint8Array, Date: FixedDate, ...globals, require(name) {
     if (name in imports) return imports[name];
+    if (name === '@/app/lib/useBusinessFolderDelivery') return {useBusinessFolderDelivery: () => '2026-11-30'};
+    if (name === '@/app/lib/businessFolderDelivery') return load('app/lib/businessFolderDelivery.ts');
     if (name === '../lib/businessPickupLocations') return load('app/lib/businessPickupLocations.ts', {'../lettershop/shops':load('app/lettershop/shops.ts')});
     if (name === './b2bMetaTracking') return load('app/lib/b2bMetaTracking.ts', {}, globals);
     if (name === '@/app/lib/businessFolderSubmission') return load('app/lib/businessFolderSubmission.ts', {}, globals);
@@ -200,14 +203,14 @@ test('Sint submit explains missing delivery/contact details instead of silently 
   assert.match(find(quote.render(), node => node.props?.role === 'alert').props.children, /bedrijfsnaam.*e-mailadres.*levermoment/);
   quote.field('Bedrijfsnaam', 'Voorbeeld BV'); quote.field('E-mailadres', 'test@example.invalid');
   await quote.submit();
-  assert.match(find(quote.render(), node => node.props?.role === 'alert').props.children, /gewenst levermoment/);
-  quote.field('Gewenste leverdag', '2026-11-23');
+  assert.match(find(quote.render(), node => node.props?.role === 'alert').props.children, /levermoment met minimaal 3 werkdagen/);
+  quote.field('Gewenste leverdag', '2026-11-30');
   await quote.submit();assert.equal(quote.calls.length,0);assert.match(find(quote.render(), node=>node.props?.role==='alert').props.children,/afhaalvestiging/);
   quote.field('Gewenste afhaalvestiging','malden');
   await quote.submit();
   assert.equal(quote.calls.length, 1);
   assert.equal(quote.calls[0].body.selection.lines[0].letter.letter, 'S');
-  assert.equal(quote.calls[0].body.delivery.date, '2026-11-23');assert.equal(quote.calls[0].body.delivery.pickupLocation,'malden');
+  assert.equal(quote.calls[0].body.delivery.date, '2026-11-30');assert.equal(quote.calls[0].body.delivery.pickupLocation,'malden');
   assert.match(find(quote.render(), node => node.props?.role === 'status').props.children.join(''), /SINT26-F12345671234/);
   await quote.submit();
   assert.equal(quote.calls.length, 1);
@@ -215,7 +218,7 @@ test('Sint submit explains missing delivery/contact details instead of silently 
 
 test('Sint network failures remain visible and retry keeps the same request ID', async () => {
   const quote = sintQuote({ ok: false, json: async () => ({ message: 'Aanvraag opgeslagen; mail nog niet verstuurd.' }) });
-  quote.field('Bedrijfsnaam', 'Voorbeeld BV'); quote.field('E-mailadres', 'test@example.invalid'); quote.field('Gewenste leverdag', '2026-11-23');quote.field('Gewenste afhaalvestiging','lent');
+  quote.field('Bedrijfsnaam', 'Voorbeeld BV'); quote.field('E-mailadres', 'test@example.invalid'); quote.field('Gewenste leverdag', '2026-11-30');quote.field('Gewenste afhaalvestiging','lent');
   await quote.submit(); await quote.submit();
   assert.match(find(quote.render(), node => node.props?.role === 'alert').props.children, /opgeslagen/);
   assert.equal(quote.calls[0].body.requestId, quote.calls[1].body.requestId);
@@ -229,4 +232,39 @@ test('quote submission works without randomUUID and never accepts a fake receipt
   assert.match(submission.createQuoteRequestId(), /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/);
   assert.notEqual(submission.createQuoteRequestId(), submission.createQuoteRequestId());
   await assert.rejects(submission.sendBusinessFolderQuote({}), /nog niet bevestigd/);
+});
+
+test('Christmas form sets the earliest date and stops a short-notice submission in the browser', async () => {
+  const quote = christmasQuote();
+  const dateField = find(quote.render(), node => node.type === 'input' && node.props.type === 'date');
+  assert.equal(dateField.props.min, '2026-11-30');
+  quote.field('Gewenste datum · of in overleg', '2026-11-27');
+  await quote.submit();
+  assert.equal(quote.calls.length, 0);
+  assert.match(JSON.stringify(quote.render()), /3 werkdagen/);
+  quote.field('Gewenste datum · of in overleg', '2026-11-30');
+  await quote.submit();
+  assert.equal(quote.calls.length, 1);
+});
+
+
+test('Sint rejects short-notice delivery and only offers weeks beginning after the preparation window', async () => {
+  const quote = sintQuote();
+  quote.field('Bedrijfsnaam', 'Voorbeeld BV'); quote.field('E-mailadres', 'test@example.invalid'); quote.field('Gewenste afhaalvestiging', 'lent');
+  assert.equal(find(quote.render(), node => node.props?.['aria-label'] === 'Gewenste leverdag').props.min, '2026-11-30');
+  quote.field('Gewenste leverdag', '2026-11-27');
+  await quote.submit();
+  assert.equal(quote.calls.length, 0);
+  assert.match(find(quote.render(), node => node.props?.role === 'alert').props.children, /3 werkdagen/);
+  find(quote.render(), node => node.type === 'input' && node.props.name === 'deliveryMomentType' && node.props.value === 'week').props.onChange();
+  const weeks = find(quote.render(), node => node.props?.['aria-label'] === 'Gewenste leverweek');
+  const options = weeks.props.children.flat().filter(node => node?.type === 'option' && node.props.value);
+  assert.ok(options.length);
+  assert.ok(options.every(node => node.props.value >= '2026-11-30'));
+  quote.field('Gewenste leverweek', '2026-11-23');
+  await quote.submit();
+  assert.equal(quote.calls.length, 0);
+  quote.field('Gewenste leverweek', '2026-11-30');
+  await quote.submit();
+  assert.equal(quote.calls.length, 1);
 });

@@ -4,10 +4,11 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const ts = require('typescript');
+const FixedDate = class extends Date { constructor(...args) { super(...(args.length ? args : ['2026-11-25T09:00:00Z'])); } };
 function load(file, overrides = {}, globals = {}) {
   const exports = {};
   const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-  vm.runInNewContext(code, { exports, URL, Buffer, Request, Response, AbortSignal, process: { env: {} }, ...globals, require(name) {
+  vm.runInNewContext(code, { exports, Error, SyntaxError, URL, Buffer, Request, Response, AbortSignal, Date: FixedDate, process: { env: {} }, ...globals, require(name) {
     if (name in overrides) return overrides[name];
     if (name.startsWith('@/')) return load(`${name.slice(2)}.ts`);
     if (name.startsWith('.')) return load(path.resolve(path.dirname(file), `${name}.ts`));
@@ -160,4 +161,49 @@ test('all four shops and Malden are canonical pickup options in quote, snapshot 
 test('new edition quotes use their own year and retry identity',()=>{
  const input=fixture();input.delivery.date='2027-12-17';const next=build(input,2027);
  assert.equal(next.order.year,'2027');assert.match(next.reference,/KERST27-/);assert.notEqual(next.payloadHash,build(fixture(),2026).payloadHash);
+});
+
+const deliveryPolicy = load('app/lib/businessFolderDelivery.ts');
+test('three working days exclude ordering day and weekends using the Amsterdam calendar', () => {
+  for (const [ordered, earliest] of [
+    ['2026-11-25T09:00:00Z', '2026-11-30'],
+    ['2026-11-26T09:00:00Z', '2026-12-01'],
+    ['2026-11-27T09:00:00Z', '2026-12-02'],
+    ['2026-11-28T09:00:00Z', '2026-12-02'],
+    ['2026-11-29T09:00:00Z', '2026-12-02'],
+    ['2026-11-30T09:00:00Z', '2026-12-03'],
+    ['2026-11-25T23:30:00Z', '2026-12-01'],
+    ['2026-03-27T23:30:00Z', '2026-04-01'],
+    ['2026-12-31T09:00:00Z', '2027-01-05'],
+  ]) assert.equal(deliveryPolicy.earliestBusinessFolderDelivery(new Date(ordered)), earliest, ordered);
+});
+test('folder API rejects short-notice dates and weeks before saving or mailing, for both folders and delivery methods', async () => {
+  const calls = [];
+  const api = load('app/api/business-folder-quote/route.ts', {
+    '@/app/feestdagen/server': { getActiveSeason: async () => ({ year: 2026, config: { business: true, startDate: '2026-01-01', endDate: '2026-12-31' } }) },
+    'next/server': { NextResponse: Response },
+  }, { fetch: async (url, options) => { const body = JSON.parse(options.body); calls.push(body); return Response.json({ok: true, saved: true, mailSent: true, reference: body.reference}); } });
+  const post = input => api.POST(new Request('https://app.example.invalid/api/business-folder-quote', { method: 'POST', headers: { origin: 'https://app.example.invalid', 'Content-Type': 'application/json' }, body: JSON.stringify(input) }));
+  for (const season of ['sint', 'kerst']) for (const method of ['pickup', 'delivery']) {
+    const input = fixture(season);
+    if (season === 'sint') input.selection = { lines: [{ productId: 'speculaasbrok-met-letter', quantity: 20 }] };
+    input.delivery.method = method;
+    for (const date of ['2026-11-24', '2026-11-25', '2026-11-26', '2026-11-27', '2026-11-28', '2026-11-29']) {
+      input.delivery.date = date;
+      const before = calls.length, response = await post(input);
+      assert.equal(response.status, 400);
+      assert.match((await response.json()).message, /3 werkdagen/);
+      assert.equal(calls.length, before, 'no save or email for rejected dates');
+    }
+    input.delivery.date = '2026-11-30';
+    assert.equal((await post(input)).status, 200);
+    input.delivery = { ...input.delivery, momentType: 'week', weekStart: '2026-11-23' };
+    const before = calls.length;
+    assert.equal((await post(input)).status, 400);
+    assert.equal(calls.length, before);
+    input.delivery.weekStart = '2026-11-30';
+    assert.equal((await post(input)).status, 200);
+  }
+  const consultation = fixture(); consultation.delivery.date = '';
+  assert.equal((await post(consultation)).status, 200, 'Christmas can still request consultation');
 });

@@ -1,6 +1,7 @@
 import {getActiveSeason} from "@/app/feestdagen/server";
 import { NextResponse } from "next/server";
 import { buildBusinessFolderQuote } from "@/app/lib/businessFolderQuote";
+import { assertBusinessFolderDelivery } from "@/app/lib/businessFolderDelivery";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +20,7 @@ export async function POST(request: Request) {
     const edition=await getActiveSeason(input.season);
     if(!edition?.config.business)throw Error("Dit seizoen is momenteel gesloten voor aanvragen.");
     quote = buildBusinessFolderQuote(input,edition.year);
+    assertBusinessFolderDelivery(quote.order.deliveryDate);
     if(quote.order.deliveryDate&&(quote.order.deliveryDate<edition.config.startDate||quote.order.deliveryDate>edition.config.endDate))throw Error("Kies een levermoment binnen het geopende seizoen.");
   } catch (error) {
     return NextResponse.json({ message: error instanceof SyntaxError ? "De aanvraag kon niet worden gelezen." : error instanceof Error ? error.message : "Controleer de aanvraaggegevens." }, { status: 400 });
