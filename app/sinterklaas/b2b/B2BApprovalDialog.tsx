@@ -6,6 +6,7 @@ import type { SinterklaasB2BOrder } from "../types";
 import { businessSeasonColors, seasonLabel } from "../../lib/businessSeasons";
 import B2BLetterLineBadges from "../B2BLetterLineBadges";
 import B2BProductText from "./B2BProductText";
+import { b2bProductionLetters } from "../b2bCombinationLetters";
 import styles from "./B2BOrders.module.css";
 
 function date(value: string) {
@@ -29,7 +30,8 @@ export default function B2BApprovalDialog({ order, productText, totalLabel, onCl
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const theme = businessSeasonColors[current.season === "kerst" ? "kerst" : "sint"];
-  const valid = !current.cancelled && (current.status === "aanvraag" || current.status === "offerte") && Boolean(current.deliveryDate && current.orderText.trim()) && (current.department === "bakkerij" || current.letterLines.length > 0);
+  const production = b2bProductionLetters(current);
+  const valid = !current.cancelled && (current.status === "aanvraag" || current.status === "offerte") && Boolean(current.deliveryDate && current.orderText.trim()) && (current.department === "bakkerij" || production.requiredQuantity > 0) && production.issues.length === 0;
 
   useEffect(() => {
     const element = dialog.current;

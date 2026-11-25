@@ -3,7 +3,12 @@ import { b2bLetterHasLogo } from "./b2bLetterLines";
 import type { B2BLetterLine, SinterklaasB2BOrder } from "./types";
 
 export type CombinationLetterChoice = { chocolate: B2BLetterLine["chocolate"] | ""; letter: string };
-export type ProductionB2BLetter = B2BLetterLine & { combinationProduct?: string };
+export type ProductionB2BLetter = Omit<B2BLetterLine, "chocolate" | "size" | "style"> & {
+  chocolate: B2BLetterLine["chocolate"] | "roomchocolade";
+  size: B2BLetterLine["size"] | "standaard";
+  style: B2BLetterLine["style"] | "staf";
+  combinationProduct?: string;
+};
 export type CombinationLetterIssue = { product: string; quantity: number; message: string };
 
 export function combinationProduct(productId: string) {
@@ -28,6 +33,13 @@ export function b2bProductionLetters(order: Pick<SinterklaasB2BOrder, "id" | "or
     if (!match) return;
     const quantity = Number(match[1]), description = match[2];
     if (!Number.isSafeInteger(quantity) || quantity < 1) return;
+    // One piped chocolate staff per Stafwerk package; the other two staffs
+    // are marzipan and speculaas. A package logo belongs to the marzipan.
+    if (/^Stafwerk(?: pakket)?(?: · |$)/i.test(description)) {
+      packageQuantity += quantity;
+      lines.push({ id: `combination:${order.id}:${index}`, letter: "Chocoladestaf", chocolate: "roomchocolade", style: "staf", size: "standaard", quantity, withLogo: false, exceptions: [], combinationProduct: "Stafwerk pakket" });
+      return;
+    }
     const choice = readCombinationChoice(description);
     const name = stripCombinationChocolate(description).replace(/ · eigen logo$/i, "");
     const brok = name.match(/^Speculaasbrok met letter · Speculaasbrok (zonder|met) amandel · (kleine|grote) spuitletter(?: · letter ([A-Z]))?$/i);

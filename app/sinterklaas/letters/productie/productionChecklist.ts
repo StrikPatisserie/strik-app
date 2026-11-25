@@ -129,6 +129,12 @@ export function combineProductionOrders(batches: ProductionBatchSeed[], legacyOr
         return;
       }
       b2bProductionLetters(order).lines.forEach((line) => {
+        // Do not turn already fulfilled packages into new production when staff
+        // support is introduced. Once recorded, retain their production history.
+        if (line.style === "staf" && !needsPlanning && !history.some(list =>
+          [...list.rows, ...(list.supplements || []).flatMap(part => part.rows)].some(row =>
+            row.label.split(" · ")[3] === "staf" && row.recipients?.some(person => person.id === `b2b:${order.id}`)
+          ))) return;
         const extras = [b2bLetterHasLogo(order, line) ? "logo" : "", ...line.exceptions].filter(Boolean);
         const decoration = b2bLetterDecoration(line);
         const label = [line.letter, line.chocolate, line.size, line.style, ...extras, ...(decoration ? [`decoratie: ${decoration}`] : [])].join(" · ");

@@ -100,3 +100,30 @@ test('package-only and mixed orders enter the extra-letter queue and leave it on
  const sheet=text(ProductionDistributionSheet({batch:assigned.batches[1]}));
  assert.match(sheet,/COMBINATIE: Speculaasbrok/);assert.match(sheet,/COMBINATIE: Klein Sintpakket/);
 });
+
+test('Stafwerk includes one distinct piped staff per package, never a second sale or the marzipan logo',()=>{
+ const o=order({logo:'Logo op het marsepeinen stafje',orderText:'PRODUCTEN EN PRIJS\n10 × Stafwerk pakket · logo op het marsepeinen stafje · eigen logo · € 17,41 p.s. ex btw · € 174,10'});
+ const before=JSON.stringify(o),data=combinations.b2bProductionLetters(o);
+ assert.equal(data.requiredQuantity,10);assert.equal(data.packageQuantity,10);assert.equal(data.issues.length,0);
+ assert.equal(data.lines.length,1);assert.equal(data.lines[0].style,'staf');assert.equal(data.lines[0].chocolate,'roomchocolade');assert.equal(data.lines[0].withLogo,false);
+ assert.equal(JSON.stringify(o),before);
+ const result=helper.combineProductionOrders([batch()],[],[o]);
+ assert.equal(result.b2bPlanning[0].staffQuantity,10);assert.match(result.b2bPlanning[0].letters,/10× chocoladestafje/);
+ const sections=load('app/sinterklaas/letters/productie/productionPresentation.ts').productionSections(result.batches[0].rows);
+ assert.equal(sections[0].label,'Chocoladestafjes · Stafwerk');assert.match(sections[0].groups[0].label,/spuiten/);
+ const sheet=text(ProductionDistributionSheet({batch:result.batches[0]}));assert.match(sheet,/Stafwerk pakket/);assert.match(sheet,/Chocoladestaf/);
+ for(const description of ['Stafwerk pakket','Stafwerk pakket · Standaard','Stafwerk']) {
+  assert.equal(combinations.b2bProductionLetters(order({orderText:`10x ${description}`})).requiredQuantity,10);
+ }
+ assert.equal(combinations.b2bProductionLetters(order({orderText:'10x Staaf Stoomboot'})).requiredQuantity,0);
+});
+test('fulfilled Stafwerk without a production history does not create retrospective demand; registered staffs retain their history',()=>{
+ const o=order({orderText:'10 × Stafwerk pakket'});
+ for(const flags of [{packed:true},{delivered:true},{letterProductionDone:true},{cancelled:true}]) {
+  const result=helper.combineProductionOrders([batch()],[],[order({...o,...flags})]);
+  assert.equal(result.b2bPlanning.length,0);assert.equal(result.batches[0].rows.length,0);
+ }
+ const rows=helper.combineProductionOrders([batch()],[],[o]).batches[0].rows;
+ const result=helper.combineProductionOrders([batch()],[],[{...o,delivered:true}],[],[{batch_id:batch().id,locked_at:null,rows,supplements:[]}]);
+ assert.equal(result.b2bPlanning.length,0);assert.equal(result.batches[0].rows[0].orders,10);
+});

@@ -29,9 +29,9 @@ function PlanningRow({plan,batches,season,onSaved,onExtra}: Omit<Props,"plans"> 
     } catch (reason) {setError(reason instanceof Error ? reason.message : "Opslaan is mislukt.");} finally {setBusy(false);}
   }
   return <div className={styles.b2bPlanningRow}>
-    <div><strong>{plan.customerName}</strong><small>{plan.quantity} letters · {plan.deliveryDate ? `Levering ${date(plan.deliveryDate)}` : "Leverdatum nog afspreken"}{!!plan.combinationQuantity && " · in pakket"}</small>
+    <div><strong>{plan.customerName}</strong><small>{plan.quantity} {plan.staffQuantity === plan.quantity ? "stafjes" : plan.staffQuantity ? "letters en stafjes" : "letters"} · {plan.deliveryDate ? `Levering ${date(plan.deliveryDate)}` : "Leverdatum nog afspreken"}{!!plan.combinationQuantity && " · in pakket"}</small>
       <small>{plan.productionDates?.length ? `Productie ${plan.productionDates.map(date).join(" + ")} · ${plan.planningNote}` : plan.planningNote}{!!plan.pendingQuantity && plan.productionDates?.length ? ` · ${plan.pendingQuantity} nog inplannen` : ""}</small>
-      <details className={styles.b2bLetterDetails}><summary>Letters en opmerkingen</summary><p>{plan.letters}</p></details>
+      <details className={styles.b2bLetterDetails}><summary>{plan.staffQuantity ? "Chocolade en opmerkingen" : "Letters en opmerkingen"}</summary><p>{plan.letters}</p></details>
       {plan.issues?.map(issue => <p key={issue} className={styles.error}>{issue}</p>)}
     </div>
     <div><div className={styles.b2bPlanningControls}>
@@ -44,7 +44,7 @@ function PlanningRow({plan,batches,season,onSaved,onExtra}: Omit<Props,"plans"> 
       {selected === "custom" && <input type="date" aria-label={`Extra productiedag voor ${plan.customerName}`} disabled={disabled} min={new Intl.DateTimeFormat("sv-SE",{timeZone:"Europe/Amsterdam"}).format(new Date())} max={plan.deliveryDate || `${season}-12-31`} value={customDate} onChange={event=>setCustomDate(event.target.value)}/>}
       <button type="button" className={styles.button} disabled={disabled || selected === "custom" && !customDate || chosen === initial && (Boolean(initial) || plan.manual)} onClick={()=>void save()}>{busy ? "Opslaan…" : "Opslaan"}</button>
     </div>
-    {!plan.canReplan && !!plan.pendingQuantity && plan.batchId && !plan.issues?.length && <button type="button" className={styles.button} onClick={()=>onExtra(plan.batchId!)}>Extra {plan.pendingQuantity} letters inplannen</button>}
+    {!plan.canReplan && !!plan.pendingQuantity && plan.batchId && !plan.issues?.length && <button type="button" className={styles.button} onClick={()=>onExtra(plan.batchId!)}>Extra {plan.pendingQuantity} {plan.staffQuantity === plan.quantity ? "stafjes" : plan.staffQuantity ? "stuks" : "letters"} inplannen</button>}
     {!!plan.issues?.length && <small>Vul de letterkeuze aan in de B2B-bestelling.</small>}
     {error && <p role="alert" className={styles.error}>{error}</p>}</div>
   </div>;

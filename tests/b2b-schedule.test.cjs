@@ -69,3 +69,19 @@ test('invalid dates, late dates, closed main and printed extra destinations are 
  assert.throws(()=>prepare(o,[list({supplements:[extra(order({id:'other'}),{date:'2099-11-25',lockedAt:'2099-11-24T09:00:00Z'})]})],'2099-11-25'),/geprint/);
  assert.notEqual(b2bScheduleVersion(batches(),[list()]),b2bScheduleVersion(batches(),[list({revision:6})]));
 });
+
+test('Stafwerk enters the unplanned queue and joins an existing extra day once, keeping made letters intact',()=>{
+ const staff=order({id:'health-centre',customerName:'Gezondheidscentrum',department:'beide',deliveryDate:'2099-11-30',letterLines:[],orderText:'PRODUCTEN EN PRIJS\n10 × Stafwerk pakket · € 16,95 p.s. ex btw · € 169,50'});
+ const other=order({id:'other'}),printed=extra(other,{id:'printed',date:'2099-11-21',lockedAt:'2099-11-20T09:00:00Z',rows:demand(other).map(r=>({...r,produced:r.orders}))});
+ const lists=[list({supplements:[printed,extra(other,{id:'open',date:'2099-11-26'})]})];
+ const p=projection(staff,lists);assert.equal(p.pendingQuantity,10);assert.equal(p.productionDates.length,0);
+ const result=prepare(staff,lists,'2099-11-26');
+ assert.deepEqual(clone(result.lists[0].supplements[0]),clone(printed));assert.equal(result.lists[0].supplements.length,2);
+ const target=result.lists[0].supplements[1];assert.equal(target.id,'open');assert.equal(target.rows.reduce((s,r)=>s+r.orders,0),90);
+ assert.equal(target.rows.filter(r=>r.label.includes('Chocoladestaf'))[0].orders,10);
+ const assignments=[assignment(staff.id,result.batchId)],projected=projection(staff,result.lists,assignments);
+ assert.equal(projected.scheduledDate,'2099-11-26');assert.equal(projected.pendingQuantity,0);
+ const later=prepare(staff,result.lists,null,assignments);assert.equal(projection(staff,later.lists,[assignment(staff.id,null)]).pendingQuantity,10);
+ const restored=prepare(staff,later.lists,'2099-11-26',[assignment(staff.id,null)]);
+ assert.equal(restored.lists[0].supplements[1].rows.reduce((s,r)=>s+r.orders,0),90);
+});

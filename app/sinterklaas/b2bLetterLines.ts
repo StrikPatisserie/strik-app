@@ -18,7 +18,7 @@ export const B2B_LETTER_EXCEPTIONS: { id: B2BLetterException; label: string }[] 
 
 // Older orders only have a general logo agreement. Explicit per-line choices
 // take precedence, including false on letters in an order with logo packages.
-export function b2bLetterHasLogo(order: Pick<SinterklaasB2BOrder, "logo">, line: B2BLetterLine) {
+export function b2bLetterHasLogo(order: Pick<SinterklaasB2BOrder, "logo">, line: Pick<B2BLetterLine, "withLogo">) {
   return typeof line.withLogo === "boolean" ? line.withLogo : Boolean(order.logo);
 }
 
@@ -26,7 +26,8 @@ export function b2bLetterDecoration(line: Pick<B2BLetterLine, "decoration">) {
   return (line.decoration || "").replace(/\s+/g, " ").trim().slice(0, 240);
 }
 
-export function b2bLetterLineLabel(line: B2BLetterLine) {
+export function b2bLetterLineLabel(line: Omit<B2BLetterLine, "chocolate" | "style" | "size"> & { chocolate: string; style: string; size: string }) {
+  if (line.style === "staf") return `${line.quantity}× chocoladestafje · ${line.chocolate} · spuiten`;
   const decoration = b2bLetterDecoration(line);
   return `${line.quantity}× ${line.letter} · ${line.chocolate} ${line.style} · ${line.size}${line.withLogo ? " · eigen logo" : ""}${line.exceptions.length ? ` · ${line.exceptions.join(", ")}` : ""}${decoration ? ` · decoratie: ${decoration}` : ""}`;
 }

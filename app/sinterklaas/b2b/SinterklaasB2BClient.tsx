@@ -1411,7 +1411,7 @@ export function B2BOrderForm({
     }
     const { productLines, deliveryPricing, letterGroup: _letterGroup, ...storedForm } = form;
     const hasOtherProducts = productLines.some(line => !["chocoladeletter", "chocolade-vormletter"].includes(line.productId));
-    const hasPackageLetters = productLines.some(line => combinationProduct(line.productId));
+    const hasPackageLetters = productLines.some(line => combinationProduct(line.productId) || line.productId === "stafwerk");
     const department = form.letterLines.length || hasPackageLetters ? hasOtherProducts ? "beide" : "chocolade" : hasOtherProducts ? "bakkerij" : form.department;
     void _letterGroup;
     const productText = serializeOrderText(productLines, form.orderText);
