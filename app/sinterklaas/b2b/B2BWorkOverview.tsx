@@ -48,8 +48,8 @@ export default function B2BWorkOverview({year, buildEntry, onClose}: {year:strin
   return createPortal(<OperationalDialog className={s.dialog} labelledBy="work-overview-title" busy={false} onClose={onClose} closeOnBackdrop>
     <header><div><h2 id="work-overview-title">Tussentijds werkoverzicht</h2><p>Definitieve, nog te leveren bestellingen binnen de gekozen leverperiode.</p></div><button type="button" onClick={onClose} aria-label="Werkoverzicht sluiten">×</button></header>
     <div className={s.controls}>
-      <label>Levering vanaf<input type="date" value={from} onChange={event=>setFrom(event.target.value)}/></label>
-      <label>Tot en met<input type="date" value={to} min={from} onChange={event=>setTo(event.target.value)}/></label>
+      <label>Levering vanaf<input type="date" value={from} onInput={event=>setFrom(event.currentTarget.value)} onChange={event=>setFrom(event.target.value)}/></label>
+      <label>Tot en met<input type="date" value={to} min={from} onInput={event=>setTo(event.currentTarget.value)} onChange={event=>setTo(event.target.value)}/></label>
       <label>Bestellingen<select value={season} onChange={event=>setSeason(event.target.value as WorkOverviewOptions["season"])}><option value="all">Sint & Kerst</option><option value="sint">Sint</option><option value="kerst">Kerst</option></select></label>
       <button type="button" disabled={loading} onClick={reload}>Verversen</button>
       <button type="button" className={s.print} disabled={loading||!!error||!valid||!rows.length||!current||loadedUrl!==current.url} onClick={print}>Afdrukken{current?` · ${current.pages} ${current.pages===1?'pagina':"pagina’s"}`:''}</button>
