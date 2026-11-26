@@ -114,7 +114,7 @@ test('the original download link is preferred over a resized preview for the sam
 function gmailRun(results) {
  const properties=new Map(),events=[],messages=results.map((_,i)=>({getId:()=>`mail-${i}`,getBody:()=>'<p>Foto/logo: foto.jpeg</p>',getPlainBody:()=>'',getSubject:()=>'',getFrom:()=>'',getDate:()=>new Date(),getAttachments:()=>[]}));
  let next=0;
- const thread={getMessages:()=>messages,addLabel:label=>events.push(`add:${label.name}`),removeLabel:label=>events.push(`remove:${label.name}`),moveToArchive:()=>events.push('archive')};
+ const thread={getId:()=>'thread-1',moveToInbox:()=>events.push('inbox'),getMessages:()=>messages,addLabel:label=>events.push(`add:${label.name}`),removeLabel:label=>events.push(`remove:${label.name}`),moveToArchive:()=>events.push('archive')};
  const props={getProperty:key=>properties.get(key),setProperty:(key,value)=>properties.set(key,value),deleteProperty:key=>properties.delete(key)};
  const context={Date,console:{error:()=>{}},Logger:{log:()=>{}},PropertiesService:{getScriptProperties:()=>props},GmailApp:{search:query=>query.includes('in:inbox')?[]:[thread],getUserLabelByName:name=>({name})},UrlFetchApp:{fetch:()=>{const result=results[next++];return {getResponseCode:()=>result.status||200,getContentText:()=>JSON.stringify(result.data)};}}};
  vm.runInNewContext(fs.readFileSync('app/scripts/gmail-webshop-images-import.gs','utf8'),context);context.importWebshopAfbeeldingen();return {events,properties};
@@ -134,4 +134,68 @@ test('a thread containing both a complete and a failed import stays out of the p
 
 test('missing message identifiers cannot merge separate orders merely because their photo URL or line number matches',async()=>{
  const harness=storageHarness();await harness.storage.upsertLogisticsWebshopImages([image('one',{messageId:'',orderNumber:'79000',sourceLineId:'line-1'}),image('two',{messageId:'',orderNumber:'79001',sourceLineId:'line-1',photoUrl:'https://shop.invalid/one.jpeg'})]);assert.equal(harness.stored.images.length,2);
+});
+
+test('a forwarded historic order and an unlabelled mail date require review without writing', async () => {
+ for (const input of [
+   {receivedAt:'2026-11-20T10:00:00Z',deliveryDate:'',bodyText:'Afhaaldatum: 7 juni 2025\nBestelnummer: 56419'},
+   {receivedAt:'2026-11-20T10:00:00Z',deliveryDate:'',bodyText:'Verzonden: 20 november 2026\nBestelnummer: 56419'},
+ ]) {
+  const h=routeHarness();const response=await h.route.POST(request({...two(),...input}));
+  assert.equal(response.status,422);assert.equal(h.saved.length,0);
+ }
+ const recent=routeHarness();assert.equal((await recent.route.POST(request({...two(),deliveryDate:'',receivedAt:'2026-11-20T10:00:00Z',bodyText:'Afhaaldatum: 21 november 2026'}))).status,200);
+});
+
+function retryHarness(responses, attachments=[]) {
+ const properties=new Map(),labels=new Set(),events=[],calls=[];
+ let index=0;
+ const props={getProperty:key=>properties.get(key),setProperty:(key,value)=>properties.set(key,value),deleteProperty:key=>properties.delete(key)};
+ const message={getId:()=> 'retry-mail',getBody:()=>'',getPlainBody:()=>'',getSubject:()=>'',getFrom:()=>'',getDate:()=>new Date(),getAttachments:()=>attachments};
+ const thread={getId:()=> 'retry-thread',getMessages:()=>[message],addLabel:l=>labels.add(l.name),removeLabel:l=>labels.delete(l.name),moveToArchive:()=>events.push('archive'),moveToInbox:()=>events.push('inbox')};
+ const context={Date,console:{error(){}},Logger:{log(){}},PropertiesService:{getScriptProperties:()=>props},Utilities:{base64Encode:bytes=>Buffer.from(bytes).toString('base64')},GmailApp:{search:q=>q.includes('in:inbox')||labels.has('Ingelezen')||labels.has('Foto controleren')?[]:[thread],getUserLabelByName:name=>({name})},UrlFetchApp:{fetch:(url,options)=>{calls.push({url,options}); const r=responses[index++];if(r instanceof Error)throw r;return {getResponseCode:()=>r.status,getContentText:()=>JSON.stringify(r.data)};}}};
+ vm.runInNewContext(fs.readFileSync('app/scripts/gmail-webshop-images-import.gs','utf8'),context);
+ return {context,properties,labels,events,calls,run(){properties.delete('webshop-image:last-run-started-at');context.importWebshopAfbeeldingen();},due(){const key='webshop-image:retry:retry-thread';const retry=JSON.parse(properties.get(key));properties.set(key,JSON.stringify({...retry,nextAttemptAt:0}));}};
+}
+test('temporary failures retry after a delay, succeed once and then archive',()=>{
+ const h=retryHarness([{status:503,data:{message:'tijdelijk'}},{status:200,data:completeResponse}]);
+ h.run();assert(h.labels.has('Fout'));assert(!h.labels.has('Foto controleren'));assert(!h.events.includes('archive'));
+ h.run();assert.equal(h.calls.length,1);h.due();h.run();assert.equal(h.calls.length,2);assert(h.labels.has('Ingelezen'));assert(!h.labels.has('Fout'));assert.equal(h.events.filter(x=>x==='archive').length,1);
+});
+test('three temporary failures stop retrying and stay visible for review',()=>{
+ const h=retryHarness(Array.from({length:3},()=>({status:503,data:{message:'tijdelijk'}})));
+ for(let i=0;i<3;i++){if(i)h.due();h.run();}h.run();assert.equal(h.calls.length,3);assert(h.labels.has('Foto controleren'));assert(!h.events.includes('archive'));
+});
+test('ambiguous/incomplete imports go straight to review without repeated requests',()=>{
+ const h=retryHarness([{status:422,data:{message:'oude bestelling'}}]);h.run();h.run();assert.equal(h.calls.length,1);assert(h.labels.has('Foto controleren'));assert(h.events.includes('inbox'));assert(!h.events.includes('archive'));
+});
+test('acknowledged imports can finish labelling without importing a second time',()=>{
+ const h=retryHarness([]);h.properties.set('webshop-image:multi-photo-v5:retry-mail','done');h.run();assert.equal(h.calls.length,0);assert(h.labels.has('Ingelezen'));assert(h.events.includes('archive'));
+});
+const attachment=(name,size)=>({getName:()=>name,getContentType:()=> 'image/png',getBytes:()=>Buffer.alloc(size,1)});
+test('a 3.2 MB attachment is prepared as binary and imported under its original reference',()=>{
+ const h=retryHarness([{status:200,data:{ok:true,contentType:'image/jpeg',size:3,dataBase64:'AQID'}},{status:200,data:completeResponse}],[attachment('image004.png',3_200_000)]);
+ h.run();assert.equal(h.calls.length,2);assert(h.calls[0].url.endsWith('/prepare'));assert.equal(h.calls[0].options.payload.length,3_200_000);
+ const payload=JSON.parse(h.calls[1].options.payload);assert.equal(payload.imageAttachments[0].fileName,'image004.png');assert.equal(payload.imageAttachments[0].contentType,'image/jpeg');assert(h.events.includes('archive'));
+});
+test('an oversized or fifth attachment is never silently skipped or archived',()=>{
+ for(const attachments of [[attachment('photo.png',4_000_001)],Array.from({length:5},(_,i)=>attachment(`photo${i}.png`,12))]) {
+  const h=retryHarness([],attachments);h.run();assert.equal(h.calls.length,0);assert(h.labels.has('Foto controleren'));assert(!h.events.includes('archive'));
+ }
+});
+test('preparation errors preserve the original message for retry',()=>{
+ const h=retryHarness([{status:503,data:{message:'tijdelijk'}}],[attachment('photo.png',600_000)]);h.run();assert.equal(h.calls.length,1);assert(h.labels.has('Fout'));assert(!h.labels.has('Foto controleren'));assert(!h.events.includes('archive'));
+});
+function prepareHarness(allowed=true) {
+ return load('app/api/bakkerij-logistiek/webshop-images/prepare/route.ts',{'sharp':{default:require('sharp')},'next/server':{NextResponse:Response},'@/app/lib/bakeryLogisticsAuth':{canAccessLogisticsRequest:async()=>allowed}});
+}
+const binaryRequest=(body,type='image/png')=>new Request('https://app.invalid/prepare',{method:'POST',headers:{'Content-Type':type},body});
+test('image preparation validates, bounds, rotates and compresses the actual image',async()=>{
+ const sharp=require('sharp');const source=await sharp({create:{width:2600,height:1700,channels:3,background:'#c09070'}}).png().toBuffer();
+ const response=await prepareHarness().POST(binaryRequest(source));const data=await response.json();assert.equal(response.status,200);assert(data.size<=500_000);
+ const meta=await sharp(Buffer.from(data.dataBase64,'base64')).metadata();assert.equal(meta.format,'jpeg');assert.equal(meta.width,2400);assert(meta.height<1700);
+ assert.equal((await prepareHarness(false).POST(binaryRequest(source))).status,403);
+ assert.equal((await prepareHarness().POST(binaryRequest(Buffer.alloc(4_000_001)))).status,413);
+ assert.equal((await prepareHarness().POST(binaryRequest(Buffer.from('not an image')))).status,422);
+ assert.equal((await prepareHarness().POST(binaryRequest(source,'image/svg+xml'))).status,415);
 });

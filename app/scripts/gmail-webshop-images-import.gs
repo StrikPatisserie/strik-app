@@ -6,17 +6,22 @@ const WEBSHOP_IMAGE_CONFIG = {
   SOURCE_LABEL: 'Afbeeldingen Webshop',
   PROCESSED_LABEL: 'Ingelezen',
   ERROR_LABEL: 'Fout',
+  REVIEW_LABEL: 'Foto controleren',
 
   QUERY:
-    'label:"Afbeeldingen Webshop" newer_than:7d -label:"Ingelezen" -label:"Fout"',
+    'label:"Afbeeldingen Webshop" newer_than:30d -label:"Ingelezen" -label:"Foto controleren"',
   RECOVERY_QUERY: 'label:"Afbeeldingen Webshop" newer_than:30d',
   MAX_THREADS: 4,
+  SCAN_THREADS: 30,
+  MAX_ATTEMPTS: 3,
+  RETRY_INTERVAL_HOURS: 2,
   RECOVERY_MAX_THREADS: 30,
   CLEANUP_MAX_THREADS: 25,
   MAX_IMAGE_ATTACHMENTS: 4,
-  MAX_IMAGE_ATTACHMENT_BYTES: 1500000,
+  MAX_IMAGE_ATTACHMENT_BYTES: 4000000,
+  MAX_PREPARED_IMAGE_BYTES: 500000,
   IMPORT_VERSION: 'multi-photo-v5',
-  SCRIPT_VERSION: 'gmail-window-v3-early-prognose',
+  SCRIPT_VERSION: 'photo-recovery-v6',
   MIN_RUN_INTERVAL_MINUTES: 30,
   CLEANUP_INTERVAL_HOURS: 24,
   GMAIL_QUOTA_BACKOFF_HOURS: 12,
@@ -64,11 +69,18 @@ function importWebshopAfbeeldingen(orderNumber) {
     threads = GmailApp.search(
       recovery ? `label:"${WEBSHOP_IMAGE_CONFIG.SOURCE_LABEL}" "${orderNumber}" newer_than:30d` : WEBSHOP_IMAGE_CONFIG.QUERY,
       0,
-      recovery ? WEBSHOP_IMAGE_CONFIG.RECOVERY_MAX_THREADS : WEBSHOP_IMAGE_CONFIG.MAX_THREADS
+      recovery ? WEBSHOP_IMAGE_CONFIG.RECOVERY_MAX_THREADS : WEBSHOP_IMAGE_CONFIG.SCAN_THREADS
     );
   } catch (error) {
     if (handleWebshopGmailQuotaError_(props, error)) return;
     throw error;
+  }
+
+  if (!recovery) {
+    threads = threads.filter((thread) => {
+      const retry = readWebshopRetry_(props, thread.getId());
+      return !retry || Date.now() >= retry.nextAttemptAt;
+    }).slice(0, WEBSHOP_IMAGE_CONFIG.MAX_THREADS);
   }
 
   if (!threads.length) {
@@ -78,11 +90,13 @@ function importWebshopAfbeeldingen(orderNumber) {
 
   let processedLabel;
   let errorLabel;
+  let reviewLabel;
   try {
     processedLabel = getOrCreateWebshopLabel_(
       WEBSHOP_IMAGE_CONFIG.PROCESSED_LABEL
     );
     errorLabel = getOrCreateWebshopLabel_(WEBSHOP_IMAGE_CONFIG.ERROR_LABEL);
+    reviewLabel = getOrCreateWebshopLabel_(WEBSHOP_IMAGE_CONFIG.REVIEW_LABEL);
   } catch (error) {
     if (handleWebshopGmailQuotaError_(props, error)) return;
     throw error;
@@ -94,6 +108,8 @@ function importWebshopAfbeeldingen(orderNumber) {
 
     let imported = false;
     let failed = false;
+    let needsReview = false;
+    let failureMessage = '';
     let messages = [];
 
     try {
@@ -112,7 +128,10 @@ function importWebshopAfbeeldingen(orderNumber) {
 
       try {
         const importId = `webshop-image:${WEBSHOP_IMAGE_CONFIG.IMPORT_VERSION}:${message.getId()}`;
-        if (!recovery && props.getProperty(importId)) return;
+        if (!recovery && props.getProperty(importId)) {
+          imported = true; // Recover a label/archive failure without importing twice.
+          return;
+        }
 
         const bodyHtml = message.getBody();
         const bodyText = message.getPlainBody();
@@ -145,11 +164,11 @@ function importWebshopAfbeeldingen(orderNumber) {
 
         const status = response.getResponseCode();
         let result;
-        try { result = JSON.parse(response.getContentText()); } catch { throw new Error('Geen geldige importbevestiging ontvangen; mail niet als verwerkt gemarkeerd.'); }
+        try { result = JSON.parse(response.getContentText()); } catch { throw webshopImportError_('Geen geldige importbevestiging ontvangen; mail niet als verwerkt gemarkeerd.', status); }
         if (status < 200 || status >= 300 || result.ok !== true || result.complete !== true ||
             !Array.isArray(result.images) || !result.images.length ||
             result.expectedPhotoCount !== result.importedPhotoCount || result.images.length !== result.importedPhotoCount) {
-          throw new Error(result.message || 'Foto-import niet compleet; mail niet als verwerkt gemarkeerd.');
+          throw webshopImportError_(result.message || 'Foto-import niet compleet; mail niet als verwerkt gemarkeerd.', status);
         }
 
         props.setProperty(importId, new Date().toISOString());
@@ -162,6 +181,8 @@ function importWebshopAfbeeldingen(orderNumber) {
 
         console.error(error);
         failed = true;
+        needsReview = needsReview || error.retryable === false;
+        failureMessage = String(error.message || error).slice(0, 500);
       }
     });
 
@@ -170,12 +191,25 @@ function importWebshopAfbeeldingen(orderNumber) {
     try {
       if (imported && !failed) {
         thread.removeLabel(errorLabel);
+        thread.removeLabel(reviewLabel);
         thread.addLabel(processedLabel);
         thread.moveToArchive();
+        props.deleteProperty(`webshop-image:retry:${thread.getId()}`);
       }
       if (failed) {
         thread.removeLabel(processedLabel);
         thread.addLabel(errorLabel);
+        thread.moveToInbox();
+        const previous = readWebshopRetry_(props, thread.getId());
+        const attempts = (previous ? previous.attempts : 0) + 1;
+        const exhausted = needsReview || attempts >= WEBSHOP_IMAGE_CONFIG.MAX_ATTEMPTS;
+        props.setProperty(`webshop-image:retry:${thread.getId()}`, JSON.stringify({
+          attempts,
+          nextAttemptAt: Date.now() + WEBSHOP_IMAGE_CONFIG.RETRY_INTERVAL_HOURS * 60 * 60 * 1000,
+          message: failureMessage,
+        }));
+        if (exhausted) thread.addLabel(reviewLabel);
+        Logger.log(exhausted ? 'Foto controleren: mail blijft in de inbox voor handmatige controle.' : `Tijdelijke fotofout: poging ${attempts}; opnieuw proberen in een volgend importvenster.`);
       }
     } catch (error) {
       if (handleWebshopGmailQuotaError_(props, error)) {
@@ -190,6 +224,17 @@ function importWebshopAfbeeldingen(orderNumber) {
   if (!quotaFailed) {
     verplaatsWebshopIngelezenThreads_(props, false);
   }
+}
+
+function readWebshopRetry_(props, threadId) {
+  try { return JSON.parse(props.getProperty(`webshop-image:retry:${threadId}`) || 'null'); }
+  catch { return null; }
+}
+
+function webshopImportError_(message, status) {
+  const error = new Error(message);
+  error.retryable = status >= 500 || status === 408 || status === 429;
+  return error;
 }
 
 function getOrCreateWebshopLabel_(name) {
@@ -318,25 +363,41 @@ function extractWebshopImageAttachments_(message) {
   const images = [];
 
   attachments.forEach((attachment) => {
-    if (images.length >= WEBSHOP_IMAGE_CONFIG.MAX_IMAGE_ATTACHMENTS) return;
-
     const contentType = String(attachment.getContentType() || '').toLowerCase();
     if (!/^image\/(jpeg|png|webp)$/.test(contentType)) return;
+    const fileName = attachment.getName() || 'webshop-foto.png';
+    if (/^(?:signature[_-]|outlook-)/i.test(fileName)) return;
+    if (images.length >= WEBSHOP_IMAGE_CONFIG.MAX_IMAGE_ATTACHMENTS) {
+      throw webshopImportError_('Meer dan vier afbeeldingsbijlagen. Controleer alle klantfoto’s in de app; er wordt niets stilzwijgend overgeslagen.', 422);
+    }
 
     const bytes = attachment.getBytes();
     if (
       bytes.length <= 0 ||
       bytes.length > WEBSHOP_IMAGE_CONFIG.MAX_IMAGE_ATTACHMENT_BYTES
     ) {
-      return;
+      throw webshopImportError_(`Bijlage ${fileName} is leeg of groter dan 4 MB. Gebruik Foto of logo vooruit opslaan in de app.`, 422);
     }
 
-    images.push({
-      fileName: attachment.getName() || 'webshop-foto.png',
-      contentType,
-      size: bytes.length,
-      dataBase64: Utilities.base64Encode(bytes),
-    });
+    let image = { fileName, contentType, size: bytes.length, dataBase64: Utilities.base64Encode(bytes) };
+    if (bytes.length > WEBSHOP_IMAGE_CONFIG.MAX_PREPARED_IMAGE_BYTES) {
+      const response = UrlFetchApp.fetch(WEBSHOP_IMAGE_CONFIG.IMPORT_URL.replace(/\/import$/, '/prepare'), {
+        method: 'post', contentType, payload: bytes, muteHttpExceptions: true,
+        headers: { 'x-strik-logistics-key': WEBSHOP_IMAGE_CONFIG.IMPORT_KEY },
+      });
+      const status = response.getResponseCode();
+      let result;
+      try { result = JSON.parse(response.getContentText()); }
+      catch { throw webshopImportError_('Foto voorbereiden gaf geen geldige bevestiging.', status); }
+      if (status !== 200 || result.ok !== true || result.contentType !== 'image/jpeg' ||
+          !result.dataBase64 || !result.size || result.size > WEBSHOP_IMAGE_CONFIG.MAX_PREPARED_IMAGE_BYTES) {
+        throw webshopImportError_(result.message || 'Foto voorbereiden is mislukt.', status);
+      }
+      // Preserve the original filename to resolve the upload metadata/CID reference.
+      image = { fileName, contentType: result.contentType, size: result.size, dataBase64: result.dataBase64 };
+    }
+
+    images.push(image);
   });
 
   return images;
@@ -362,4 +423,26 @@ function decodeWebshopHtml_(value) {
     .replace(/&#39;/g, "'")
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>');
+}
+
+// Veilige verbindingscontrole: synthetische foto, dryRun, geen bonnen of labels wijzigen.
+function controleerWebshopAfbeeldingenKoppeling() {
+  const base = WEBSHOP_IMAGE_CONFIG.IMPORT_URL;
+  const headers = { 'x-strik-logistics-key': WEBSHOP_IMAGE_CONFIG.IMPORT_KEY };
+  const preparedResponse = UrlFetchApp.fetch(base.replace(/\/import$/, '/prepare'), {
+    method: 'post', contentType: 'image/png', headers, muteHttpExceptions: true,
+    payload: Utilities.base64Decode('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADklEQVQImWP4DwYMEAoAU7oL9W/sIDEAAAAASUVORK5CYII='),
+  });
+  const prepared = JSON.parse(preparedResponse.getContentText());
+  if (preparedResponse.getResponseCode() !== 200 || prepared.ok !== true) throw new Error('Foto voorbereiden: ' + (prepared.message || preparedResponse.getResponseCode()));
+  const response = UrlFetchApp.fetch(base + '?dryRun=1', {
+    method: 'post', contentType: 'application/json', headers, muteHttpExceptions: true,
+    payload: JSON.stringify({ messageId: 'connection-check', orderNumber: 'CONTROLE',
+      deliveryDate: Utilities.formatDate(new Date(), 'Europe/Amsterdam', 'yyyy-MM-dd'),
+      receivedAt: new Date().toISOString(), customerName: 'Verbindingscontrole — niet opslaan',
+      photoUrl: 'data:image/jpeg;base64,' + prepared.dataBase64, fileName: 'controle.jpg' }),
+  });
+  const result = JSON.parse(response.getContentText());
+  if (response.getResponseCode() !== 200 || !result.complete) throw new Error('Foto-import: ' + (result.message || response.getResponseCode()));
+  Logger.log(WEBSHOP_IMAGE_CONFIG.SCRIPT_VERSION + ': foto voorbereiden en import controleren geslaagd. Geen bestelling opgeslagen en geen mail gewijzigd.');
 }

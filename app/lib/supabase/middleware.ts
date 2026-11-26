@@ -40,6 +40,7 @@ const PUBLIC_API_PATHS = new Set([
   "/api/bakkerij-logistiek",
   "/api/bakkerij-logistiek/import",
   "/api/bakkerij-logistiek/webshop-images/import",
+  "/api/bakkerij-logistiek/webshop-images/prepare",
   "/api/management-revenue/day-import",
   "/api/personnel-sheet-agenda",
   "/api/personnel-mail-orders/cron",

@@ -225,11 +225,8 @@ function extractDeliveryDate(input: WebshopImageInput, text: string) {
     if (parsed) return parsed;
   }
 
-  const firstDate = text.match(
-    /\b(\d{4}-\d{2}-\d{2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|\d{1,2}\s+[a-z]+\s+\d{4})\b/i
-  );
-
-  return firstDate ? parseDeliveryDate(firstDate[1]) : "";
+  // A forwarding header contains a mail date, not necessarily a delivery date.
+  return "";
 }
 
 function extractOrderNumber(input: WebshopImageInput, text: string) {
@@ -407,6 +404,13 @@ export async function POST(request: Request) {
     const customerName = extractCustomerName(input, text);
     const productSummary = extractProductSummary(input, text);
     const notes: string[] = [];
+
+    const receivedDay = Date.parse(input.receivedAt.slice(0, 10));
+    const deliveryDay = Date.parse(deliveryDate);
+    if (Number.isFinite(receivedDay) && Number.isFinite(deliveryDay) &&
+        deliveryDay < receivedDay - 7 * 24 * 60 * 60 * 1000) {
+      return jsonError("De leverdatum ligt vóór deze mail. Mogelijk staat er een oude bestelling in de doorgestuurde tekst. Controleer de juiste bon en foto in de app.", 422);
+    }
 
     if (!extracted.entries.length) notes.push("Geen duidelijke klantfoto gevonden.");
     if (!deliveryDate) notes.push("Geen leverdatum gevonden.");
