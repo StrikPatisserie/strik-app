@@ -7,6 +7,7 @@ export type OrderInput = {
   edition: string; orderNumber: string; lineNumber: string; name: string; product: string;
   quantity: number; store: StoreId | ''; pickupDate: string; reference: string; notes: string;
   unitPriceEx: number | null;
+  customerCode?: string; email?: string; orderDate?: string; pickupDateKind?: 'fixed' | 'from';
 };
 export type OrderEvent = { at: string; actor: string; action: string; detail?: string };
 export type PickupOrder = OrderInput & {
@@ -49,7 +50,8 @@ export function normalizeInput(raw: unknown): OrderInput {
   if (unitPriceEx !== null && (!Number.isFinite(unitPriceEx) || unitPriceEx < 0 || unitPriceEx > 100000)) throw Error('Controleer de stuksprijs exclusief btw.');
   const reference = text(v.reference);
   if (!reference) throw Error('Vul de bestelreferentie uit de mail in, bijvoorbeeld 07-01-2026.');
-  return { edition, orderNumber, lineNumber: text(v.lineNumber), name, product, quantity, store: store as StoreId | '', pickupDate: dateOnly(v.pickupDate), reference, notes: text(v.notes, 2000), unitPriceEx };
+  return { edition, orderNumber, lineNumber: text(v.lineNumber), name, product, quantity, store: store as StoreId | '', pickupDate: dateOnly(v.pickupDate), reference, notes: text(v.notes, 2000), unitPriceEx,
+    customerCode:text(v.customerCode),email:text(v.email,254),orderDate:dateOnly(v.orderDate),pickupDateKind:v.pickupDateKind==='from'?'from':'fixed' };
 }
 // A source line ID is preferred. Without one, require a unique product per order.
 export function identity(input: OrderInput) {
@@ -85,7 +87,7 @@ export function csvCell(value: unknown) {
   return `"${s.replace(/"/g, '""')}"`;
 }
 export function invoiceCsv(orders: PickupOrder[]) {
-  const rows: unknown[][] = [['Bestelreferentie', 'Bestelnummer', 'Regelnummer', 'Naam', 'Winkel', 'Product', 'Aantal opgehaald', 'Afgehaald op', 'Stuksprijs excl. btw', 'Totaal excl. btw', 'Factuurnummer']];
-  for (const o of orders.filter(o=>o.collectedAt && !o.cancelled)) rows.push([o.reference,o.orderNumber,o.lineNumber,o.name,storeLabel(o.store),o.product,o.quantity,localDate(o.collectedAt!),o.unitPriceEx?.toFixed(2).replace('.',',') ?? '',o.unitPriceEx === null ? '' : (o.quantity*o.unitPriceEx).toFixed(2).replace('.',','),o.invoiceNumber]);
+  const rows: unknown[][] = [['Bestelreferentie', 'Bestelnummer', 'Klantcode / regelnummer', 'Naam', 'Winkel', 'Product', 'Aantal opgehaald', 'Afgehaald op', 'Stuksprijs excl. btw', 'Totaal excl. btw', 'Factuurnummer']];
+  for (const o of orders.filter(o=>o.collectedAt && !o.cancelled)) rows.push([o.reference,o.orderNumber,o.customerCode||o.lineNumber,o.name,storeLabel(o.store),o.product,o.quantity,localDate(o.collectedAt!),o.unitPriceEx?.toFixed(2).replace('.',',') ?? '',o.unitPriceEx === null ? '' : (o.quantity*o.unitPriceEx).toFixed(2).replace('.',','),o.invoiceNumber]);
   return '\uFEFF' + rows.map(row=>row.map(csvCell).join(';')).join('\r\n');
 }

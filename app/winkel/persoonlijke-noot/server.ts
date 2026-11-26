@@ -24,10 +24,15 @@ export async function readOrders(profile: UserProfile, edition:string) {
 }
 export async function importOrders(profile: UserProfile, input:unknown, sourceName:string) {
   if(!canManageNo(profile)) throw new PickupError('Alleen management en logistiek kunnen importeren.',403);
+  return persistOrders(input,sourceName,profile.full_name||profile.email);
+}
+// Only called by the separately authenticated supplier-mail endpoint.
+export async function importMailOrders(input:unknown,sourceName:string) {return persistOrders(input,sourceName,'Persoonlijke Noot mailimport');}
+async function persistOrders(input:unknown,sourceName:string,actor:string) {
   if(!Array.isArray(input) || !input.length || input.length>1000) throw new PickupError('Importeer 1 tot maximaal 1.000 regels tegelijk.');
   const orders=input.map(normalizeInput), seen=new Set<string>();
   for(const order of orders) { const id=orderId(order); if(seen.has(id)) throw new PickupError('Er staan dubbele bestelregels in deze import. Koppel het regelnummer.');seen.add(id); }
-  const at=new Date().toISOString(),actor=profile.full_name || profile.email,db=createAdminClient();
+  const at=new Date().toISOString(),db=createAdminClient();
   const prepared=orders.map(order=>({id:orderId(order),edition:order.edition,store:order.store,revision:1,data:{...order,importedAt:at,sourceName:text(sourceName),collectedAt:null,collectedBy:'',cancelled:false,invoiceNumber:'',invoicedAt:null,events:[{at,actor,action:'import'}]} as Json}));
   const {data:inserted,error}=await db.from(table).upsert(prepared,{onConflict:'id',ignoreDuplicates:true}).select('id');
   if(error) throw new PickupError('Opslaan is mislukt. De import kan veilig opnieuw worden geprobeerd.',503);

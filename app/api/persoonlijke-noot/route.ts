@@ -3,13 +3,15 @@ import { hasFullAccess } from '../../lib/auth/access';
 import { canViewNo, canManageNo, allowedNoStores } from '../../winkel/persoonlijke-noot/access';
 import { localDate } from '../../winkel/persoonlijke-noot/model';
 import { importOrders, readOrders, updateOrder, markInvoice, PickupError } from '../../winkel/persoonlijke-noot/server';
+import { readImportStatus } from '../../winkel/persoonlijke-noot/importStatus';
+import { seasonForDate } from '../../winkel/persoonlijke-noot/supplierCsv';
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
 const headers={'Cache-Control':'private, no-store'};
 const json=(body:unknown,status=200)=>Response.json(body,{status,headers});
 export async function GET(request:Request) {
   const profile=await getCurrentProfile();if(!profile || !canViewNo(profile)) return json({message:'Geen toegang tot deze afhaallijst.'},403);
-  try {const edition=new URL(request.url).searchParams.get('year') || localDate().slice(0,4);return json({orders:await readOrders(profile,edition),stores:allowedNoStores(profile),canManage:canManageNo(profile),canInvoice:hasFullAccess(profile),edition,automaticImport:{enabled:false,status:'waiting-for-source'}});}
+  try {const edition=new URL(request.url).searchParams.get('year') || seasonForDate(localDate());const [orders,automaticImport]=await Promise.all([readOrders(profile,edition),canManageNo(profile)?readImportStatus():null]);return json({orders,stores:allowedNoStores(profile),canManage:canManageNo(profile),canInvoice:hasFullAccess(profile),edition,automaticImport});}
   catch(e) {return json({message:e instanceof Error?e.message:'Laden is mislukt.'},e instanceof PickupError?e.status:503);}
 }
 export async function POST(request:Request) {
