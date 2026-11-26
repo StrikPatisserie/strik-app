@@ -29,12 +29,18 @@ export function breakOptions(value: unknown): BreakOption[] {
     if (typeof row.Code !== "string" || !row.Code || row.Disabled !== false || row.OverridenByWageRateTypeConfig !== false || !Array.isArray(row.SubBreakConfigs) || row.SubBreakConfigs.length) continue;
     const hours = row.Hours === null || row.Hours === "" ? NaN : Number(row.Hours);
     const minimum = row.MinimumHours === null || row.MinimumHours === "" ? NaN : Number(row.MinimumHours);
-    if (!Number.isFinite(hours) || hours <= 0 || hours > 4 || !Number.isFinite(minimum) || minimum < 0) continue;
+    const explicitNoBreak = row.Code === "0" && hours === 0;
+    if (row.Code === "0" && !explicitNoBreak) continue;
+    if (!Number.isFinite(hours) || (!explicitNoBreak && hours <= 0) || hours > 4 || !Number.isFinite(minimum) || minimum < 0) continue;
     const minutes = hours * 60;
     if (options.some(option => option.code === row.Code)) throw new CorrectionError("Pauzecodes bevatten dubbele codes. Controleer dit in Tamigo.", 503);
-    options.push({ code: row.Code, minutes, minimumMinutes: minimum * 60, label: `${Number(minutes.toFixed(2))} min pauze${minimum ? ` · vanaf ${formatMinutes(minimum * 60)} bruto` : ""}` });
+    // Code 0 is an explicit no-break override. Its automatic assignment threshold
+    // does not restrict manual use (Tamigo support, 26 November 2026).
+    options.push({ code: row.Code, minutes, minimumMinutes: explicitNoBreak ? 0 : minimum * 60, label: explicitNoBreak ? "Geen pauze · 0 min" : `${Number(minutes.toFixed(2))} min pauze${minimum ? ` · vanaf ${formatMinutes(minimum * 60)} bruto` : ""}` });
   }
-  return options;
+  return options.some(option => option.code === "0" && option.minutes === 0)
+    ? options.filter(option => option.code !== "")
+    : options;
 }
 export function editableTime(iso: string | null | undefined) {
   if (!iso || !Number.isFinite(Date.parse(iso))) return "";
@@ -82,8 +88,10 @@ export function updatePayload(raw: Record<string, unknown>, shift: ReviewShift, 
     const suffix = `${sign}${String(Math.floor(Math.abs(offset) / 60)).padStart(2, "0")}${String(Math.abs(offset) % 60).padStart(2, "0")}`;
     return `/Date(${ms}${suffix})/`;
   }
-  // Keep the tested zero representation for audit/investigation; assessment and transport block it.
-  return { ShiftId: shift.id, EmployeeId: shift.employeeId!, DepartmentId:shift.departmentId!, PlanStatusCode:3, PlanStatus:"actual", StartTime: microsoftDate(after.start), EndTime: microsoftDate(after.end), BreakCode: after.breakCode || null, ...(after.breakMinutes === 0 ? { BreakCodeLength: 0 as const } : {}), Comment: shift.comments[0], IsAvailable: raw.IsAvailable as boolean, IsExchange: raw.IsExchange as boolean, ShiftActivityId: typeof raw.ShiftActivityId === "string" ? raw.ShiftActivityId : null };
+  // Only a validated explicit code preserves a chosen pause. Never request automatic
+  // recalculation with null, nor send the ineffective BreakCodeLength override.
+  if (!after.breakCode || (after.breakMinutes === 0 && after.breakCode !== "0") || (after.breakCode === "0" && after.breakMinutes !== 0)) throw new CorrectionError("Voor nul pauze is de gecontroleerde Tamigo-pauzecode 0 nodig.");
+  return { ShiftId: shift.id, EmployeeId: shift.employeeId!, DepartmentId:shift.departmentId!, PlanStatusCode:3, PlanStatus:"actual", StartTime: microsoftDate(after.start), EndTime: microsoftDate(after.end), BreakCode: after.breakCode, Comment: shift.comments[0], IsAvailable: raw.IsAvailable as boolean, IsExchange: raw.IsExchange as boolean, ShiftActivityId: typeof raw.ShiftActivityId === "string" ? raw.ShiftActivityId : null };
 }
 export function originalNet(shift: ReviewShift) {
   const gross = durationMinutes(shift.start, shift.end);

@@ -9,7 +9,7 @@ import styles from "./hoursReview.module.css";
 
 type Access = { enabled: boolean; storageReady: boolean; options: BreakOption[] | null; history: CorrectionHistory[]; historyAvailable: boolean; message: string };
 const DEMO_OPTIONS: BreakOption[] = [
-  { code: "", minutes: 0, minimumMinutes: 0, label: "Geen pauze · 0 min" },
+  { code: "0", minutes: 0, minimumMinutes: 0, label: "Geen pauze · 0 min" },
   { code: "1", minutes: 15, minimumMinutes: 360, label: "15 min pauze · vanaf 6u bruto" },
   { code: "2", minutes: 30, minimumMinutes: 480, label: "30 min pauze · vanaf 8u bruto" },
 ];

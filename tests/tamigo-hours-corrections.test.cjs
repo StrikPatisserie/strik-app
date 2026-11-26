@@ -23,14 +23,15 @@ const {createCorrectionService}=load(base+'correctionServer.ts');
 const employee='11111111-1111-4111-8111-111111111111',department='22222222-2222-4222-8222-222222222222',shiftId='33333333-3333-4333-8333-333333333333',actor='44444444-4444-4444-8444-444444444444',intentId='55555555-5555-4555-8555-555555555555';
 const clock='2026-11-02T12:00:00Z';
 const rawShift=(extra={})=>({ShiftId:shiftId,EmployeeId:employee,EmployeeName:'Fictieve collega',DepartmentId:department,DepartmentName:'Testwinkel',StartDateTime:'2026-10-05T07:50:00+02:00',EndDateTime:'2026-10-05T17:09:00+02:00',BreakCode:'',BreakCodeHours:0,ShiftHours:559/60,Comments:'  Oorspronkelijke notitie  ',Comments2:null,IsProductive:true,PlanStatusCodeId:3,IsAvailable:false,IsExchange:false,ShiftActivityId:null,ShiftActivities:[],Tasks:[],...extra});
-const rawBreaks=[{Code:'1',Hours:.25,MinimumHours:6,Disabled:false,OverridenByWageRateTypeConfig:false,SubBreakConfigs:[]},{Code:'2',Hours:.5,MinimumHours:8,Disabled:false,OverridenByWageRateTypeConfig:false,SubBreakConfigs:[]}];
+const rawZeroBreak={Code:'0',Hours:0,MinimumHours:999,Disabled:false,OverridenByWageRateTypeConfig:false,SubBreakConfigs:[]};
+const rawBreaks=[rawZeroBreak,{Code:'1',Hours:.25,MinimumHours:6,Disabled:false,OverridenByWageRateTypeConfig:false,SubBreakConfigs:[]},{Code:'2',Hours:.5,MinimumHours:8,Disabled:false,OverridenByWageRateTypeConfig:false,SubBreakConfigs:[]}];
 const options=rules.breakOptions(rawBreaks);
 function normalized(raw){const item=source.normalizeReviewShift(raw,department,0);item.sourceRevision=correctionRevision(raw);return item;}
 function fixture(settings={}){
  let raw=rawShift(settings.raw),enabled=true,storeReady=true;
  const attempts=[],records=new Map(),transitions=[];
  const planned=normalized(rawShift({ShiftId:'66666666-6666-4666-8666-666666666666',StartDateTime:'2026-10-05T08:00:00+02:00',EndDateTime:'2026-10-05T17:00:00+02:00',ShiftHours:9,Comments:'',PlanStatusCodeId:2}));
- const getContext=()=>{const before=normalized(raw);return {raw:structuredClone(raw),before,options,dataset:{month:'2026-10',generatedAt:clock,sourceVersion:'test',departments:[{id:department,name:'Testwinkel'}],actual:[before,...(settings.others||[])],planned:[planned],coverage:{actual:[department],planned:[department]},checks:[]},complete:settings.complete!==false};};
+ const getContext=()=>{const before=normalized(raw);return {raw:structuredClone(raw),before,options:settings.options||options,dataset:{month:'2026-10',generatedAt:clock,sourceVersion:'test',departments:[{id:department,name:'Testwinkel'}],actual:[before,...(settings.others||[])],planned:[planned],coverage:{actual:[department],planned:[department]},checks:[]},complete:settings.complete!==false};};
  const reference={shiftId,departmentId:department,date:'2026-10-05',reviewMonth:'2026-10',revision:normalized(raw).sourceRevision};
  const store={
   ready:async()=>storeReady,
@@ -125,7 +126,7 @@ test('server recomputes proposals instead of trusting amounts supplied by the br
 });
 test('explicit no-break comments remain unchanged and a proposal retains zero pause',async()=>{
  const f=fixture({raw:{Comments:'Geen pauze want druk'}});
- const result=await f.service.prepare(actor,f.reference,draft({mode:'proposal',breakCode:''}),types.DEFAULT_REVIEW_CONFIG);
+ const result=await f.service.prepare(actor,f.reference,draft({mode:'proposal',breakCode:'0'}),types.DEFAULT_REVIEW_CONFIG);
  assert.equal(result.after.breakMinutes,0);assert.equal(result.before.comments[0],'Geen pauze want druk');
 });
 test('extra comments, activities, absence, closed source and unknown fields cannot be silently lost',async()=>{
@@ -140,7 +141,7 @@ test('overlap across locations and incomplete neighbouring shifts block a correc
 });
 test('overnight edits keep both dates and check both open timesheet days',async()=>{
  const f=fixture({raw:{StartDateTime:'2026-10-05T22:00:00+02:00',EndDateTime:'2026-10-06T06:12:00+02:00',ShiftHours:8.2},closedDate:'2026-10-06'});
- const preview=await f.service.prepare(actor,f.reference,draft({start:'2026-10-05T22:00',end:'2026-10-06T06:00',breakCode:''}),types.DEFAULT_REVIEW_CONFIG);
+ const preview=await f.service.prepare(actor,f.reference,draft({start:'2026-10-05T22:00',end:'2026-10-06T06:00',breakCode:'0'}),types.DEFAULT_REVIEW_CONFIG);
  assert.equal(preview.after.netMinutes,480);assert.equal(preview.id,null);assert(preview.blockers.some(x=>x.includes('2026-10-06')));
 });
 test('manual missing-end correction keeps the unknown original end and original net',async()=>{
@@ -154,8 +155,8 @@ test('pause codes obey Tamigo thresholds and are deducted exactly once',()=>{
 });
 test('manual date errors, backwards times, other dates and ambiguous wintertime are rejected',()=>{
  const before=normalized(rawShift());for(const d of [{start:'2026-10-04T08:00'},{end:'2026-10-05T07:00'},{end:'2026-10-07T08:00'},{start:'2026-02-30T08:00'}])assert.throws(()=>rules.correctionValues(draft(d),before,options));
- const winter=normalized(rawShift({StartDateTime:'2026-10-25T00:00:00+02:00',EndDateTime:'2026-10-25T04:00:00+01:00'}));assert.throws(()=>rules.correctionValues(draft({start:'2026-10-25T02:15',end:'2026-10-25T04:00',breakCode:''}),winter,options),/dubbelzinnig/);
- const spring=normalized(rawShift({StartDateTime:'2026-03-29T00:00:00+01:00',EndDateTime:'2026-03-29T08:00:00+02:00'}));assert.equal(rules.correctionValues(draft({start:'2026-03-29T00:00',end:'2026-03-29T08:00',breakCode:''}),spring,options).netMinutes,420);
+ const winter=normalized(rawShift({StartDateTime:'2026-10-25T00:00:00+02:00',EndDateTime:'2026-10-25T04:00:00+01:00'}));assert.throws(()=>rules.correctionValues(draft({start:'2026-10-25T02:15',end:'2026-10-25T04:00',breakCode:'0'}),winter,options),/dubbelzinnig/);
+ const spring=normalized(rawShift({StartDateTime:'2026-03-29T00:00:00+01:00',EndDateTime:'2026-03-29T08:00:00+02:00'}));assert.equal(rules.correctionValues(draft({start:'2026-03-29T00:00',end:'2026-03-29T08:00',breakCode:'0'}),spring,options).netMinutes,420);
 });
 test('reference revisions cover operational changes, not employee names or payroll fields',()=>{
  const raw=rawShift();assert.equal(correctionRevision(raw),correctionRevision({...raw,EmployeeName:'Andere schrijfwijze',WageSystemKey:'not-for-the-app'}));assert.notEqual(correctionRevision(raw),correctionRevision({...raw,IsExchange:true}));assert.notEqual(correctionRevision(raw),correctionRevision({...raw,Comments2:'extra'}));
@@ -237,7 +238,7 @@ test('401 request rejection and 403 missing permission are only released after u
 });
 test('write timestamps include the Amsterdam offset for each side of a DST boundary',()=>{
  const raw=rawShift({StartDateTime:'2026-03-29T00:00:00+01:00',EndDateTime:'2026-03-29T08:00:00+02:00',ShiftHours:7});
- const before=normalized(raw),after=rules.correctionValues(draft({start:'2026-03-29T00:00',end:'2026-03-29T08:00',breakCode:''}),before,options);
+ const before=normalized(raw),after=rules.correctionValues(draft({start:'2026-03-29T00:00',end:'2026-03-29T08:00',breakCode:'0'}),before,options);
  const payload=rules.updatePayload(raw,before,after);assert(payload.StartTime.endsWith('+0100)/'));assert(payload.EndTime.endsWith('+0200)/'));
  assert.equal(load(base+'reviewTime.ts').parseTime(payload.StartTime).iso,after.start);assert.equal(load(base+'reviewTime.ts').parseTime(payload.EndTime).iso,after.end);
 });
@@ -245,12 +246,12 @@ test('JSONB key ordering does not create a false source-change conflict',async()
  const f=fixture({jsonbOrder:true});await f.service.prepare(actor,f.reference,draft(),types.DEFAULT_REVIEW_CONFIG);assert.equal((await f.service.commit(actor,intentId,true)).state,'applied');assert.equal(f.attempts.length,1);
 });
 test('v2 import cannot create a detached extra service or replace an ambiguous incomplete original',async()=>{
- const f=fixture();const preview=await f.service.prepare(actor,f.reference,draft({start:'2026-10-05T18:00',end:'2026-10-05T20:00',breakCode:''}),types.DEFAULT_REVIEW_CONFIG);assert.equal(preview.id,null);assert.match(preview.blockers.join(' '),/overlappen/);
+ const f=fixture();const preview=await f.service.prepare(actor,f.reference,draft({start:'2026-10-05T18:00',end:'2026-10-05T20:00',breakCode:'0'}),types.DEFAULT_REVIEW_CONFIG);assert.equal(preview.id,null);assert.match(preview.blockers.join(' '),/overlappen/);
  const missing=fixture({raw:{EndDateTime:null,ShiftHours:null}});assert.equal((await missing.service.prepare(actor,missing.reference,draft(),types.DEFAULT_REVIEW_CONFIG)).id,null);
 });
-test('no-break and no-activity use null while import always fixes the employee, department and actual/open status',()=>{
- const raw=rawShift({ShiftActivityId:undefined});const before=normalized(raw),after=rules.correctionValues(draft({start:'2026-10-05T08:00',end:'2026-10-05T10:00',breakCode:''}),before,options),payload=rules.updatePayload(raw,before,after);
- assert.equal(payload.BreakCode,null);assert.equal(payload.BreakCodeLength,0);assert.equal(payload.ShiftActivityId,null);assert.equal(payload.PlanStatusCode,3);assert.equal(payload.PlanStatus,'actual');assert.equal(payload.DepartmentId,department);assert.equal(payload.EmployeeId,employee);
+test('explicit code 0 without a length preserves no break while actual shift identity stays fixed',()=>{
+ const raw=rawShift({ShiftActivityId:undefined});const before=normalized(raw),after=rules.correctionValues(draft({start:'2026-10-05T08:00',end:'2026-10-05T10:00',breakCode:'0'}),before,options),payload=rules.updatePayload(raw,before,after);
+ assert.equal(payload.BreakCode,'0');assert.equal(Object.hasOwn(payload,'BreakCodeLength'),false);assert.equal(payload.ShiftActivityId,null);assert.equal(payload.PlanStatusCode,3);assert.equal(payload.PlanStatus,'actual');assert.equal(payload.DepartmentId,department);assert.equal(payload.EmployeeId,employee);
 });
 test('changed planning or sibling actual services block the commit before import',async()=>{
  for(const field of ['planned','actual']){
@@ -310,50 +311,64 @@ test('employee history keeps an older uncertain correction visible after the ser
  const denied=routeFixture({id:actor,active:true,role:'manager'});assert.equal((await denied.route.GET(new Request('https://example.test/api/tamigo-hours-review/corrections?shift='+shiftId+'&employee=bad-filter'))).status,400);
 });
 
-test('zero-pause corrections stay blocked even with the explicit zero representation',async()=>{
- const f=fixture();const p=await f.service.prepare(actor,f.reference,draft({breakCode:''}),types.DEFAULT_REVIEW_CONFIG);
- assert.equal(p.id,null);assert.equal(p.after.breakMinutes,0);assert.match(p.blockers.join(' '),/zonder pauze.*geblokkeerd/);assert.equal(f.records.size,0);assert.equal(f.attempts.length,0);
+test('zero pause requires the configured active zero-minute code',async()=>{
+ for(const extra of [{},{Code:'X'},{Hours:.5},{Disabled:true},{OverridenByWageRateTypeConfig:true},{SubBreakConfigs:[{}]}]){
+  const available=Object.keys(extra).length?rules.breakOptions([{...rawZeroBreak,...extra},...rawBreaks.slice(1)]):rules.breakOptions(rawBreaks.slice(1));
+  assert(!available.some(x=>x.code==='0'));
+  const f=fixture({options:available}),p=await f.service.prepare(actor,f.reference,draft({breakCode:''}),types.DEFAULT_REVIEW_CONFIG);
+  assert.equal(p.id,null);assert.match(p.blockers.join(' '),/pauzecode 0/);assert.equal(f.attempts.length,0);
+ }
+ assert.throws(()=>rules.breakOptions([rawZeroBreak,rawZeroBreak]),/dubbele/);
+ const zero=options.find(x=>x.code==='0');assert.equal(zero.minimumMinutes,0);assert.equal(zero.minutes,0);assert(!options.some(x=>x.code===''));
 });
-test('time-only corrections block zero pause and preserve fifteen and thirty minutes for start and end separately',async()=>{
- for(const [code,minutes] of [['',0],['1',15],['2',30]])for(const changed of ['start','end']){
+test('time-only corrections preserve zero, fifteen and thirty minutes for start and end separately',async()=>{
+ for(const [code,minutes] of [['',0],['0',0],['1',15],['2',30]])for(const changed of ['start','end']){
   const f=fixture({raw:{BreakCode:code,BreakCodeHours:minutes/60,ShiftHours:(559-minutes)/60}});
-  const values=draft({start:'2026-10-05T07:50',end:'2026-10-05T17:09',breakCode:code,[changed]:changed==='start'?'2026-10-05T08:00':'2026-10-05T17:00'});
+  const selected=code||'0';
+  const values=draft({start:'2026-10-05T07:50',end:'2026-10-05T17:09',breakCode:selected,[changed]:changed==='start'?'2026-10-05T08:00':'2026-10-05T17:00'});
   const preview=await f.service.prepare(actor,f.reference,values,types.DEFAULT_REVIEW_CONFIG);assert.equal(preview.after.breakMinutes,minutes);
-  if(minutes===0){assert.equal(preview.id,null);assert.match(preview.blockers.join(' '),/zonder pauze.*geblokkeerd/);assert.equal(f.attempts.length,0);assert.equal(f.records.size,0);continue;}
-  assert.equal(preview.id,intentId);
-  assert.equal((await f.service.commit(actor,intentId,true)).state,'applied');assert.equal(f.attempts.length,1);assert.equal(f.getContext().before.breakMinutes,minutes);assert.equal(f.attempts[0].BreakCode,code||null);
-  assert.equal(Object.hasOwn(f.attempts[0],'BreakCodeLength'),false);
+  assert.equal(preview.id,intentId);assert.equal((await f.service.commit(actor,intentId,true)).state,'applied');assert.equal(f.attempts.length,1);
+  assert.equal(f.getContext().before.breakMinutes,minutes);assert.equal(f.attempts[0].BreakCode,selected);assert.equal(Object.hasOwn(f.attempts[0],'BreakCodeLength'),false);
   const unchanged=changed==='start'?'end':'start';assert.equal(f.getContext().before[unchanged].iso,preview.before[unchanged].iso);
  }
 });
-test('an explicit change from thirty minutes to no pause cannot be submitted',async()=>{
+test('an explicitly selected change from thirty minutes to no pause sends code 0 and adds thirty net minutes',async()=>{
  const f=fixture({raw:{BreakCode:'2',BreakCodeHours:.5,ShiftHours:529/60}});
- const preview=await f.service.prepare(actor,f.reference,draft({start:'2026-10-05T07:50',end:'2026-10-05T17:09',breakCode:''}),types.DEFAULT_REVIEW_CONFIG);
- assert.equal(preview.id,null);assert.equal(preview.deltaMinutes,30);assert.match(preview.blockers.join(' '),/zonder pauze.*geblokkeerd/);assert.equal(f.attempts.length,0);assert.equal(f.getContext().before.breakMinutes,30);
+ const preview=await f.service.prepare(actor,f.reference,draft({start:'2026-10-05T07:50',end:'2026-10-05T17:09',breakCode:'0'}),types.DEFAULT_REVIEW_CONFIG);
+ assert.equal(preview.id,intentId);assert.equal(preview.deltaMinutes,30);assert.equal((await f.service.commit(actor,intentId,true)).state,'applied');assert.equal(f.attempts[0].BreakCode,'0');
 });
 test('an earlier uncertain zero-pause import stays locked when Tamigo added thirty minutes',async()=>{
  const f=fixture();await f.service.prepare(actor,f.reference,draft(),types.DEFAULT_REVIEW_CONFIG);
- const archived=f.records.get(intentId);archived.after=rules.correctionValues(draft({breakCode:''}),archived.before,options);archived.payload=rules.updatePayload(f.getContext().raw,archived.before,archived.after);archived.state='unknown';
+ const archived=f.records.get(intentId);archived.after=rules.correctionValues(draft({breakCode:'0'}),archived.before,options);archived.payload=rules.updatePayload(f.getContext().raw,archived.before,archived.after);archived.state='unknown';
  f.setRaw({StartDateTime:archived.after.start,EndDateTime:archived.after.end,BreakCode:'2',BreakCodeHours:.5,ShiftHours:8.5});
  assert.equal((await f.service.reconcile(actor,intentId)).state,'unknown');assert.equal((await f.service.commit(actor,intentId,true)).state,'unknown');assert.equal(f.records.get(intentId).state,'unknown');assert.equal(f.attempts.length,0);
 });
-test('previously prepared zero-pause proposals are rejected even if they include explicit zero',async()=>{
+test('legacy null and length payloads cannot be committed after the explicit-code update',async()=>{
  for(const explicitZero of [true,false]){
-  const f=fixture();await f.service.prepare(actor,f.reference,draft(),types.DEFAULT_REVIEW_CONFIG);
-  const archived=f.records.get(intentId);archived.after=rules.correctionValues(draft({breakCode:''}),archived.before,options);archived.payload=rules.updatePayload(f.getContext().raw,archived.before,archived.after);if(!explicitZero)delete archived.payload.BreakCodeLength;
-  const result=await f.service.commit(actor,intentId,true);assert.equal(result.state,'rejected');assert.match(result.message,/zonder pauze.*geblokkeerd/);assert.equal(f.attempts.length,0);
+  const f=fixture();await f.service.prepare(actor,f.reference,draft({breakCode:'0'}),types.DEFAULT_REVIEW_CONFIG);
+  const archived=f.records.get(intentId);archived.payload.BreakCode=null;if(explicitZero)archived.payload.BreakCodeLength=0;
+  const result=await f.service.commit(actor,intentId,true);assert.equal(result.state,'rejected');assert.equal(f.attempts.length,0);
  }
 });
-test('write transport rejects all zero-pause imports before any request, while existing pause codes remain allowed',async()=>{
+test('zero code configuration is revalidated before committing',async()=>{
+ const settings={},f=fixture(settings);await f.service.prepare(actor,f.reference,draft({breakCode:'0'}),types.DEFAULT_REVIEW_CONFIG);
+ settings.options=rules.breakOptions(rawBreaks.slice(1));assert.equal((await f.service.commit(actor,intentId,true)).state,'rejected');assert.equal(f.attempts.length,0);
+});
+test('write transport accepts string codes 0, 1 and 2 but rejects automatic calculation and length overrides',async()=>{
  const calls=[],env={TAMIGO_API_KEY:'fixture-token',TAMIGO_HOURS_WRITE_ENABLED:'1'};
  const api=loader({}, {process:{env},fetch:async(url,options)=>{calls.push({url:String(url),...options});return Response.json([{Success:true}]);}})('app/tamigoApi.ts');
- const before=normalized(rawShift()),payload=rules.updatePayload(rawShift(),before,rules.correctionValues(draft({breakCode:''}),before,options));
- for(const length of [undefined,null,'0',-1,0,30])await assert.rejects(()=>api.updateTamigoActualShift({...payload,BreakCodeLength:length}),/pauze/);
- await assert.rejects(()=>api.updateTamigoActualShift({...payload,BreakCode:''}),/pauze/);
- for(const length of [null,'0',-1,0,30])await assert.rejects(()=>api.updateTamigoActualShift({...payload,BreakCode:'2',BreakCodeLength:length}),/pauze/);
- env.TAMIGO_APPLICATION_NAME='fixture-application';await assert.rejects(()=>api.updateTamigoActualShift(payload),/pauze/);assert.equal(calls.length,0);delete env.TAMIGO_APPLICATION_NAME;
- const allowed=rules.updatePayload(rawShift(),before,rules.correctionValues(draft(),before,options));
- await api.updateTamigoActualShift(allowed);assert.equal(calls.length,1);const sent=JSON.parse(calls[0].body);assert.equal(Object.hasOwn(sent[0],'BreakCodeLength'),false);assert.equal(sent[0].BreakCode,'2');assert.equal(sent[0].PlanStatus,'actual');
+ const before=normalized(rawShift()),payload=rules.updatePayload(rawShift(),before,rules.correctionValues(draft({breakCode:'0'}),before,options));
+ for(const code of [null,undefined,'',' ',0])await assert.rejects(()=>api.updateTamigoActualShift({...payload,BreakCode:code}),/pauze/);
+ for(const code of ['0','1','2'])for(const length of [null,'0',-1,0,30])await assert.rejects(()=>api.updateTamigoActualShift({...payload,BreakCode:code,BreakCodeLength:length}),/pauze/);
+ assert.equal(calls.length,0);
+ for(const code of ['0','1','2'])await api.updateTamigoActualShift({...payload,BreakCode:code});
+ assert.equal(calls.length,3);assert.deepEqual(calls.map(x=>JSON.parse(x.body)[0].BreakCode),['0','1','2']);
+ for(const call of calls){const sent=JSON.parse(call.body);assert.equal(Object.hasOwn(sent[0],'BreakCodeLength'),false);assert.equal(sent[0].PlanStatus,'actual');}
+});
+test('an automatic break added after code 0 is uncertain and cannot be resent',async()=>{
+ const f=fixture();await f.service.prepare(actor,f.reference,draft({breakCode:'0'}),types.DEFAULT_REVIEW_CONFIG);
+ const write=f.deps.write;f.deps.write=async p=>{const result=await write(p);f.setRaw({BreakCode:'2',BreakCodeHours:.5,ShiftHours:8.5});return result;};
+ assert.equal((await f.service.commit(actor,intentId,true)).state,'unknown');assert.equal((await f.service.commit(actor,intentId,true)).state,'unknown');assert.equal(f.attempts.length,1);
 });
  test('legacy numeric-only import intent is rejected before transport',async()=>{
  const f=fixture();await f.service.prepare(actor,f.reference,draft(),types.DEFAULT_REVIEW_CONFIG);delete f.records.get(intentId).payload.PlanStatus;assert.equal((await f.service.commit(actor,intentId,true)).state,'rejected');assert.equal(f.attempts.length,0);

@@ -1,5 +1,17 @@
 # Tamigo-correcties
 
+## Actuele stand — expliciete pauzecode 0, 26 november 2026
+
+Tamigo-support heeft een afdeling **Test** en een actieve pauzecode `"0"` van nul minuten toegevoegd. De nulcode mag handmatig worden gebruikt, ook wanneer de ingestelde drempel voor automatische toekenning hoog is. `null` laat Tamigo de pauze herberekenen en is daarom geen geldige keuze voor een correctie die nul pauze moet behouden.
+
+Nieuwe correcties sturen uitsluitend een expliciete, opnieuw gecontroleerde pauzecode: `"0"` voor nul minuten, of de bestaande positieve code om die pauze te behouden. `BreakCodeLength` wordt niet meer verstuurd. Een ontbrekende, uitgeschakelde, samengestelde of anders geconfigureerde nulcode blokkeert de correctie. Oude voorstellen met `null`/`BreakCodeLength:0` blijven onbruikbaar; historische registraties blijven leesbaar. Alle controles van dagstatus, bronversie, overlap, onveranderlijke historie, planning en onafhankelijke teruglezing blijven gelden.
+
+De algemene productieschakelaar is op 26 november gecontroleerd als `TAMIGO_HOURS_WRITE_ENABLED=0` en blijft uit. De afdeling Test is via de online urencontrole zichtbaar, maar bevat op dit moment geen diensten in november. Feline is gevraagd één werkelijke testdienst aan te maken. Er is nog geen praktijkimport met code `"0"` uitgevoerd; de nieuwe code is dus nog niet live bewezen. De eerdere proeven hieronder gebruikten een andere nulrepresentatie en zijn historische context.
+
+Validatie: 129 gerichte tests, lint op de gewijzigde code en de productiebuild slagen. De tests dekken nul/15/30 minuten bij tijdswijzigingen, verlies van de nulcode tussen voorbereiden en bevestigen, oude null-payloads en een afwijkende automatische pauze na import zonder herhaalactie.
+
+## Historische inrichting
+
 De controlepagina en afgeschermde correctieflow zijn op 23 oktober 2026 gepubliceerd. De productiemigratie voor correctiehistorie is op 28 oktober 2026 uitgevoerd en gecontroleerd. De eerste door Feline gekozen en bevestigde praktijkcorrectie is afgewezen met HTTP 401; de oorspronkelijke dienst is daarna ongewijzigd teruggelezen. Terugschrijven is daarom opnieuw uitgeschakeld. Nieuwe diensten, verlof, ziekte, salarisexports en het openen/sluiten van dagen vallen buiten deze functie.
 
 ## Praktijkproef 6 november — expliciete nul bewaart de pauze niet
