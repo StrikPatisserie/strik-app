@@ -4,6 +4,8 @@ import { ProductionAppIcon, strikIcons } from "./StrikUI";
 import { filterVisibleMainNavigationItems } from "./featureVisibility";
 import { getFeatureVisibilitySettings } from "./lib/appSettings";
 import { filterAllowedItems, canViewHomeDayRevenue } from "./lib/auth/access";
+import LentEmballageNotice from "./winkel/LentEmballageNotice";
+import { canReceiveLentEmballage } from "./winkel/lentEmballage";
 import HomeDayRevenue from "./HomeDayRevenue";
 import { getCurrentProfile } from "./lib/auth/session";
 import type { UserProfile } from "./lib/supabase/types";
@@ -133,6 +135,7 @@ export default async function Home() {
             <p className="mt-6 max-w-lg text-sm font-bold leading-relaxed text-[#49342d]/75 sm:text-base xl:mt-7">
               Fijn dat je er bent. Alles wat je vandaag nodig hebt, vind je vanuit hier.
             </p>
+            {canReceiveLentEmballage(profile) && <LentEmballageNotice />}
             {canViewHomeDayRevenue(profile) && <HomeDayRevenue />}
           </div>
 

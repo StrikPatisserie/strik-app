@@ -1,3 +1,5 @@
+import LentEmballageNotice from "./LentEmballageNotice";
+import { canReceiveLentEmballage } from "./lentEmballage";
 import Link from "next/link";
 import LokaalVerhaalAccess from "./LokaalVerhaalAccess";
 import PersoonlijkeNootLink from "./PersoonlijkeNootLink";
@@ -56,6 +58,7 @@ export default async function WinkelPage() {
       description="Alles voor de werkdag in de winkel, rustig bij elkaar."
       icon={strikIcons.winkel}
       items={visibleItems}
+      toolbar={canReceiveLentEmballage(profile) ? <LentEmballageNotice /> : undefined}
     >
       <div className="mt-1 px-1">
         <Link

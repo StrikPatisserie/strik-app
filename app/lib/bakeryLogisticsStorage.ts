@@ -1857,7 +1857,7 @@ export async function readLogisticsDayFeedbackState() {
   return normalizeLogisticsDayFeedbackState(data.value);
 }
 
-export async function readLogisticsRouteDraftsState() {
+export async function readLogisticsRouteDraftsState(strict = false) {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("app_settings")
@@ -1865,6 +1865,7 @@ export async function readLogisticsRouteDraftsState() {
     .eq("key", LOGISTICS_ROUTE_DRAFTS_SETTING_KEY)
     .maybeSingle();
 
+  if (error && strict) throw new Error(error.message);
   if (error || !data) return emptyLogisticsRouteDraftsState();
 
   return normalizeLogisticsRouteDraftsState(data.value);
@@ -2012,8 +2013,8 @@ export async function getRecentLogisticsDayFeedback(
     .slice(0, Math.max(1, Math.min(30, limit)));
 }
 
-export async function getLogisticsRouteDraftForDate(date: string) {
-  const state = await readLogisticsRouteDraftsState();
+export async function getLogisticsRouteDraftForDate(date: string, strict = false) {
+  const state = await readLogisticsRouteDraftsState(strict);
 
   return (
     sortRouteDrafts(state.drafts).find((draft) => draft.date === date) || null

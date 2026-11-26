@@ -32,6 +32,10 @@
     {
       "path": "/api/productie/weekarchief/cron",
       "schedule": "0 5,6 * * *"
+    },
+    {
+      "path": "/api/winkel/lent-emballage/cron",
+      "schedule": "0 6,7 * * *"
     }
   ]
 }
