@@ -515,6 +515,10 @@ export function canAccessPath(
     return canAccessWeddingCakes(profile);
   }
 
+  if (pathname === "/winkel/persoonlijke-noot" || pathname.startsWith("/winkel/persoonlijke-noot/")) {
+    return canAccessLogistiek(profile) || role === "winkel" || hasPermission(profile, "winkel.view");
+  }
+
   if (isWinkelPath(pathname)) {
     return role === "winkel" || hasPermission(profile, "winkel.view");
   }

@@ -88,6 +88,12 @@ export const PERMISSION_OPTIONS = [
 export type Database = {
   public: {
     Tables: {
+      persoonlijke_noot_orders: {
+        Row: { id:string; edition:string; store:string; revision:number; data:Json; updated_at:string };
+        Insert: { id:string; edition:string; store?:string; revision?:number; data:Json; updated_at?:string };
+        Update: { store?:string; revision?:number; data?:Json; updated_at?:string };
+        Relationships: [];
+      };
       personal_workspace_owners: {
         Row: { owner_id:string; enabled:boolean; created_at:string };
         Insert: { owner_id:string; enabled?:boolean; created_at?:string };
@@ -149,7 +155,12 @@ export type Database = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      persoonlijke_noot_mark_invoice: {
+        Args: { p_items:Json; p_number:string; p_actor:string };
+        Returns: number;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };
