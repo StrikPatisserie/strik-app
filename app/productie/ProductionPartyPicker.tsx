@@ -25,7 +25,7 @@ export default function ProductionPartyPicker({ state, item, route, index, date,
       <span><strong>{dateLabel(task.date, true)} · {task.operation}</strong><small>{number(remainingParty(state, task))} {unit} vrij · {task.status === "done" ? "gemaakt" : "nog gepland"}</small></span>
       <input aria-label={`Gebruiken uit partij ${task.id}`} type="number" min="0" max={remainingParty(state, task)} step="any" inputMode="decimal" disabled={disabled} value={quantities[task.id] || ""} placeholder="Aantal" onChange={event => onChange({ ...quantities, [task.id]: event.target.value })}/>
     </label>)}</div>
-    {!parties.length && <p>Plan eerst ‘{previous}’ voor dit product.</p>}
+    {!parties.length && <p>Geen eerdere partij voor ‘{previous}’ in de planning gevonden.</p>}
     <p className={s.total}>Inplannen · {number(total)} {unit}</p>
   </section>;
 }

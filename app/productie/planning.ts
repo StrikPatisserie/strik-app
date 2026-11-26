@@ -36,7 +36,7 @@ export type Task = {
   weddingCode?: string; weddingDeliveryDate?: string; completedQuantity?:number;
   stockFulfillmentId?:string;
   sortOrder?: number;
-  productionStage?: { stepId: string; steps?: string[]; sources: { taskId: string; quantity: number }[] };
+  productionStage?: { stepId: string; steps?: string[]; sources: { taskId: string; quantity: number }[]; availableQuantity?: number };
 };
 export type PreparationChoice = { include?: boolean; date?: string; daysBefore?: number; departmentId?: DepartmentId; operation?: string; minutes?: number | null; sourceTaskId?: string };
 export type RecipePlanSettings = {
@@ -531,11 +531,13 @@ export function validProductionStages(state: PreviewState): boolean {
     const index = route.steps.indexOf(stage.stepId);
     if (index < 0 || task.operation !== stage.stepId || task.recordsOutput !== (index === route.stockStep)) return false;
     if (index === 0) {
-      if (stage.sources.length || task.dependsOn) return false;
+      if (stage.sources.length || task.dependsOn || stage.availableQuantity !== undefined) return false;
       continue;
     }
     const seen = new Set<string>();
-    let allocated = 0;
+    const available = stage.availableQuantity;
+    if (available !== undefined && (!Number.isFinite(available) || available <= 0 || available > 1000000 || stage.sources.length)) return false;
+    let allocated = available ?? 0;
     for (const link of stage.sources) {
       const source = state.tasks.find(row => row.id === link.taskId);
       if (!source || !source.productionStage || seen.has(link.taskId) || source.itemId !== task.itemId || source.date > task.date || source.stockFulfillmentId
@@ -547,7 +549,7 @@ export function validProductionStages(state: PreviewState): boolean {
       seen.add(link.taskId);
       allocated += link.quantity;
     }
-    if (!stage.sources.length || Math.abs(allocated - task.quantity) > 1e-6 || task.dependsOn
+    if ((!stage.sources.length && available === undefined) || Math.abs(allocated - task.quantity) > 1e-6 || task.dependsOn
       || task.requires?.length !== seen.size || Object.keys(task.materialNeeds || {}).length !== seen.size) return false;
     if (task.status === "done" && (task.completedQuantity ?? task.quantity) > allocated + 1e-6) return false;
   }
@@ -556,8 +558,8 @@ export function validProductionStages(state: PreviewState): boolean {
 export function buildProductionStage(state: PreviewState, draft: Task): PreviewState {
   const item = state.items.find(row => row.id === draft.itemId);
   const stage = draft.productionStage;
-  if (!stage || !Array.isArray(stage.sources) || !stage.sources.length) throw Error("Kies de eerder gemaakte partij voor deze vervolgstap.");
-  const source = state.tasks.find(task => task.id === stage.sources[0].taskId);
+  if (!stage || !Array.isArray(stage.sources) || !stage.sources.length && stage.availableQuantity === undefined) throw Error("Kies de eerder gemaakte partij of geef aan dat de vorige stap al gedaan is.");
+  const source = state.tasks.find(task => task.id === stage.sources[0]?.taskId);
   const route = productionRoute(item, source);
   const index = route?.steps.indexOf(stage.stepId) ?? -1;
   if (!route || index <= 0) throw Error("Kies een geldige vervolgstap.");
@@ -569,9 +571,11 @@ export function buildProductionStage(state: PreviewState, draft: Task): PreviewS
     ...(draft.dueDate ? { dueDate: draft.dueDate } : {}),
     productionStage: {
       stepId: stage.stepId,
-      ...(source?.productionStage?.steps ? { steps: [...route.steps] } : {}),
+      ...(!source || source.productionStage?.steps ? { steps: [...route.steps] } : {}),
+      ...(stage.availableQuantity !== undefined ? { availableQuantity: stage.availableQuantity } : {}),
       sources: stage.sources.map(row => ({ taskId: row.taskId, quantity: row.quantity })),
     },
+    ...(draft.recipePlan ? { recipePlan: draft.recipePlan } : {}),
     status: "planned", batchId: `stage:${draft.id}`, recordsOutput: index === route.stockStep,
     operation: stage.stepId, requires: stage.sources.map(source => source.taskId),
     materialNeeds: Object.fromEntries(stage.sources.map(source => [source.taskId, source.quantity])),

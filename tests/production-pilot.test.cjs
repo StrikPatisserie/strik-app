@@ -396,3 +396,46 @@ test('planned time and crew survive saving, refreshing and follow-up production 
   assert(workspace.validWorkspace(legacy, catalog));
   assert.equal(task(legacy, 'legacy-team').plannedCrewSize, undefined);
 });
+
+
+test('pour one raspberry recipe with existing interiors, then unmould without inventing earlier work', () => {
+  const catalog = [recipe(ids.raspberry, 480, 'stuks', [{recipeId: 'mousse', quantity: 17805, unit: 'gram'}]), recipe('mousse', 17.805, 'kg', [], 'semiFinished')];
+  const input = command('pour-existing', ids.raspberry, 1, 'Storten', [], '2026-11-26');
+  input.amountMode = 'batches';
+  input.stage.availableQuantity = 480;
+  let state = recipes.buildRecipePlan(stateFor(catalog), catalog, input);
+  assert.equal(state.tasks.length, 1, 'no new interiors or duplicate mousse tasks');
+  const pour = task(state, 'pour-existing');
+  assert.equal(pour.quantity, 480);
+  assert.equal(pour.operation, 'Storten');
+  assert.equal(pour.recordsOutput, false, 'unfinished pastries are not finished output');
+  assert.equal(pour.recipePlan.amountMode, 'batches');
+  assert.equal(pour.productionStage.availableQuantity, 480);
+  assert.deepEqual(Array.from(pour.requires), []);
+  assert(workspace.validWorkspace(state, catalog));
+  const work = load('app/productie/workCommands.ts');
+  state = work.applyWorkCommand(state, catalog, {kind:'complete',taskId:pour.id,quantity:480,productionDate:'2026-11-26',unmeasured:true}, ['dessert'], 'actor', 'completion-existing', '2026-11-26T12:00:00Z');
+  assert.equal(state.productionWork.completions[pour.id].who, undefined);
+  assert.equal(state.productionWork.work.length, 0, 'no invented baker or measured time');
+  assert(workspace.validWorkspace(state, catalog));
+  state = recipes.buildRecipePlan(state, catalog, command('unmould-existing', ids.raspberry, 480, 'Lossen', [{taskId:pour.id,quantity:480}], '2026-11-27'));
+  assert.equal(planning.remainingParty(state, pour), 0);
+  assert.throws(() => recipes.buildRecipePlan(state, catalog, command('over-existing', ids.raspberry, 1, 'Lossen', [{taskId:pour.id,quantity:1}], '2026-11-27')), /al meer ingepland/);
+  assert(workspace.validWorkspace(state, catalog));
+});
+
+test('existing intermediate work requires an explicit valid matching quantity and cannot hide reservations', () => {
+  const catalog = [recipe(ids.raspberry, 480)];
+  for (const available of [0, -1, NaN, Infinity, '480', 479, 481]) {
+    const input = command('invalid-existing', ids.raspberry, 480, 'Storten');
+    input.stage.availableQuantity = available;
+    assert.throws(() => recipes.buildRecipePlan(stateFor(catalog), catalog, input));
+  }
+  const first = command('invalid-first', ids.raspberry, 480, 'Interieur vullen');
+  first.stage.availableQuantity = 480;
+  assert.throws(() => recipes.buildRecipePlan(stateFor(catalog), catalog, first));
+  let state = recipes.buildRecipePlan(stateFor(catalog), catalog, command('interior', ids.raspberry, 480, 'Interieur vullen'));
+  const mixed = command('mixed', ids.raspberry, 480, 'Storten', [{taskId:'interior',quantity:480}]);
+  mixed.stage.availableQuantity = 480;
+  assert.throws(() => recipes.buildRecipePlan(state, catalog, mixed));
+});

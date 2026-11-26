@@ -801,6 +801,7 @@ function TaskForm({ week, showSunday=false, combineDefault=false, state, initial
   const [butter,setButter]=useState("");
   const [stageId,setStageId]=useState("");
   const [sourceQuantities,setSourceQuantities]=useState<Record<string,string>>({});
+  const [useAvailable,setUseAvailable]=useState(false);
   const dayOptions=Array.from({length:showSunday||selectedDates.includes(addDays(selectedWeek,6))?7:6},(_,index)=>addDays(selectedWeek,index));
   function toggleDay(value:string) {
     const next=(selectedDates.includes(value)?selectedDates.filter(day=>day!==value):[...selectedDates,value]).sort();
@@ -846,16 +847,18 @@ function TaskForm({ week, showSunday=false, combineDefault=false, state, initial
   const stageIndex=route ? Math.max(0,route.steps.indexOf(stageId || route.steps[0])) : 0;
   const followingStage=!!route && !refreshing && stageIndex>0;
   const parties=item && route && followingStage ? stageParties(state,item,route,stageIndex,date) : [];
-  const stageSources=selectedPartySources(parties,sourceQuantities);
+  const stageSources=useAvailable ? [] : selectedPartySources(parties,sourceQuantities);
   const stageQuantity=stageSources.reduce((sum,source)=>sum+source.quantity,0);
+  const enterAmount=!followingStage || useAvailable;
+  const availableQuantity=Number(amount)*(amountMode==="batches" ? recipe?.yield || 0 : 1);
   const repeats=chooseDays && !followingStage && selectedDates.length>1;
   const bakerySteps=!route && (departmentId==="bak" || departmentId==="brood") && !!item && item.kind!=="activity";
-  const stage=refreshing?.productionStage || (!refreshing && !prior && route ? {stepId:route.steps[stageIndex],sources:stageSources} : undefined);
+  const stage=refreshing?.productionStage || (!refreshing && !prior && route ? {stepId:route.steps[stageIndex],sources:stageSources,...(followingStage && useAvailable ? {availableQuantity} : {})} : undefined);
   const operation=refreshing?.operation || stage?.stepId || (bakerySteps ? bakeryAction : plannedOperation(item?.kind,hasPreparation,!!prior));
   const bakeOff=operation==="Afbakken";
   const recordsOutput=refreshing ? refreshing.recordsOutput : item?.kind!=="activity" && !bakeOff && !(prior && state.tasks.some(task=>task.batchId===prior.batchId && task.recordsOutput));
   const priorId=prior?.id;
-  const preview:PlanCommand={task:{id:refreshing?.id || "preview-plan",itemId,departmentId,date,operation,status:"planned",note:"",source:"manual",batchId:"preview-batch",recordsOutput,...(refreshing?.productionStage?{productionStage:refreshing.productionStage}:{}),...(estimatedMinutes!==""?{minutes:Number(estimatedMinutes)}:{}),plannedCrewSize:Number(plannedCrewSize),...(priorId?{dependsOn:priorId}:{})},amount:followingStage?stageQuantity:Number(amount),amountMode:followingStage?"quantity":amountMode,...(stage?{stage}:{}),...(repeats?{dates:[...selectedDates]}:{}),
+  const preview:PlanCommand={task:{id:refreshing?.id || "preview-plan",itemId,departmentId,date,operation,status:"planned",note:"",source:"manual",batchId:"preview-batch",recordsOutput,...(refreshing?.productionStage?{productionStage:refreshing.productionStage}:{}),...(estimatedMinutes!==""?{minutes:Number(estimatedMinutes)}:{}),plannedCrewSize:Number(plannedCrewSize),...(priorId?{dependsOn:priorId}:{})},amount:enterAmount?Number(amount):stageQuantity,amountMode:enterAmount?amountMode:"quantity",...(stage?{stage}:{}),...(repeats?{dates:[...selectedDates]}:{}),
     ...(includePreparation && hasPreparation && !bakeOff && !followingStage?{preparation:{daysBefore,choices,...(combineDefault||settings?.preparation?.combine!==undefined?{combine}: {})}}:{})};
   const availableParties={...state,tasks:state.tasks.filter(task=>task.id!==refreshing?.id && (!refreshing || task.generatedFor!==refreshing.id))};
   const proposal=preparationProposal(state,recipeList,preview);
@@ -891,7 +894,7 @@ function TaskForm({ week, showSunday=false, combineDefault=false, state, initial
   }
   function chooseItem(id:string) {
     const selected=state.items.find(i=>i.id===id),recipe=recipeList.find(r=>r.id===selected?.recipeId);
-    setItemId(id);setButter("");setStageId("");setSourceQuantities({});
+    setItemId(id);setButter("");setStageId("");setSourceQuantities({});setUseAvailable(false);
     setDayInputs({});
     setAmount(String(recipe?.yield || 1));
     setAmountMode("quantity");
@@ -922,13 +925,14 @@ function TaskForm({ week, showSunday=false, combineDefault=false, state, initial
           {item && item.kind!=="activity" && <button type="button" className={s.textLink} disabled={saving} onClick={()=>editRecipe(item.id)}><Icon name="book" size={14}/>{item.recipeId?"Recept aanpassen":"Recept snel invoeren"}</button>}
           {!prior&&!refreshing&&<button type="button" className={s.textLink} onClick={onNewItem}><Icon name="plus" size={14}/>Zonder recept toevoegen</button>}
         </div>
-        {route && !refreshing && <fieldset className={s.planOperation}><legend>Productiestap</legend><div>{route.steps.map((step,index)=><button type="button" key={step} aria-pressed={index===stageIndex} disabled={saving} onClick={()=>{setStageId(step);setSourceQuantities({});setSelectedDates([date]);setError("");}}>{step}</button>)}</div><small>Voorraad telt mee na afronden van {route.steps[route.stockStep]}.</small></fieldset>}
+        {route && !refreshing && <fieldset className={s.planOperation}><legend>Productiestap</legend><div>{route.steps.map((step,index)=><button type="button" key={step} aria-pressed={index===stageIndex} disabled={saving} onClick={()=>{setStageId(step);setSourceQuantities({});setUseAvailable(false);setSelectedDates([date]);setError("");}}>{step}</button>)}</div><small>Voorraad telt mee na afronden van {route.steps[route.stockStep]}.</small></fieldset>}
         {route?.packSize && <p className={s.calculatedAmount}>1 doosje = {route.packSize} truffels</p>}
-        {item && route && followingStage && <ProductionPartyPicker state={state} item={item} route={route} index={stageIndex} date={date} today={today} quantities={sourceQuantities} onChange={setSourceQuantities} disabled={saving}/> }
+        {route && followingStage && <label className={s.checkboxRow}><input type="checkbox" checked={useAvailable} disabled={saving} onChange={event=>{setUseAvailable(event.target.checked);setSourceQuantities({});setError("");}}/><span>Vorige stap is al gedaan, maar staat niet in de planning<small>Alleen ‘{route.steps[stageIndex]}’ inplannen. De eerdere stappen worden niet opnieuw als gemaakt geboekt.</small></span></label>}
+        {item && route && followingStage && !useAvailable && <ProductionPartyPicker state={state} item={item} route={route} index={stageIndex} date={date} today={today} quantities={sourceQuantities} onChange={setSourceQuantities} disabled={saving}/> }
         {bakerySteps && !refreshing && <fieldset className={s.planOperation}><legend>Wat ga je doen?</legend><div>{(["Produceren","Afbakken"] as const).map(action=><button type="button" key={action} aria-pressed={bakeryAction===action} onClick={()=>{setBakeryAction(action);setError("");if(action==="Afbakken"){setAmountMode("quantity");setAmount("1");}}}>{action}</button>)}</div>{bakeOff && <small>Van eerder gemaakte voorraad.</small>}</fieldset>}
-        {recipe && !followingStage && <fieldset className={s.planOperation}><legend>Hoeveelheid invoeren</legend><div>{(["quantity","batches"] as const).map(mode=><button type="button" key={mode} aria-pressed={amountMode===mode} disabled={mode==="batches"&&!(recipe.yield>0)} onClick={()=>{setAmountMode(mode);setAmount(mode==="batches"?"1":String(recipe.yield||1));}}>{mode==="quantity"?`Aantal ${productionUnit(item)}`:"× basisrecept"}</button>)}</div></fieldset>}
+        {recipe && enterAmount && <fieldset className={s.planOperation}><legend>Hoeveelheid invoeren</legend><div>{(["quantity","batches"] as const).map(mode=><button type="button" key={mode} aria-pressed={amountMode===mode} disabled={mode==="batches"&&!(recipe.yield>0)} onClick={()=>{setAmountMode(mode);setAmount(mode==="batches"?"1":String(recipe.yield||1));}}>{mode==="quantity"?`Aantal ${productionUnit(item)}`:"× basisrecept"}</button>)}</div></fieldset>}
         <div className={s.formGrid}>
-          {!followingStage && <label className={s.field}>{amountMode==="batches"?`Basisrecept ×${repeats?" per dag":""}`:`Aantal${repeats?" per dag":""} (${productionUnit(item) || "eenheid"})`}<input type="number" min="0.000001" max="1000000" step="any" required value={amount} onChange={e=>setAmount(e.target.value)}/></label>}
+          {enterAmount && <label className={s.field}>{amountMode==="batches"?`Basisrecept ×${repeats?" per dag":""}`:`Aantal${repeats?" per dag":""} (${productionUnit(item) || "eenheid"})`}<input type="number" min="0.000001" max="1000000" step="any" required value={amount} onChange={e=>setAmount(e.target.value)}/></label>}
           <label className={s.field}>Afdeling<select value={departmentId} onChange={e=>setDepartmentId(e.target.value as DepartmentId)}>{DEPARTMENTS.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
           {item&&<><label className={s.field}>Tijd (minuten)<input name="minutes" type="number" min="0" max="1440" step="any" value={estimatedMinutes} onChange={event=>setEstimatedMinutes(event.target.value)} placeholder="Geschatte duur"/></label><label className={s.field}>Aantal personen<input name="plannedCrewSize" type="number" required min="1" max="20" step="1" value={plannedCrewSize} onChange={event=>setPlannedCrewSize(event.target.value)}/></label></>}
           {(!fromCell&&!chooseDays || followingStage&&!fixedDay)&&dateField}
@@ -936,7 +940,7 @@ function TaskForm({ week, showSunday=false, combineDefault=false, state, initial
         {route?.packSize && recipe && !followingStage && <label className={s.field}>Of rekenen vanuit kg boter<input inputMode="decimal" type="number" min="0" step="any" value={butter} placeholder="Bijv. 10" onChange={event=>{const value=event.target.value;setButter(value);const ingredient=recipe.ingredients.find(row=>/^(roomboter|boter)$/i.test(row.name.trim()));const kg=ingredient?.unit==="gram"?ingredient.quantity/1000:ingredient?.unit==="kg"?ingredient.quantity:0;if(kg>0 && Number(value)>0){setAmountMode("batches");setAmount(String(Number(value)/kg));}}}/></label>}
         {chooseDays&&!followingStage&&<details className={s.planDetails} open={!fixedDay||undefined}><summary>{selectedDates.length===1?dateLabel(date,true):`${selectedDates.length} dagen`} · dagen kiezen</summary><fieldset className={s.planDays}><legend>Dagen</legend><div>{dayOptions.map(value=><label key={value} className={selectedDates.includes(value)?s.planDaySelected:undefined}><input type="checkbox" checked={selectedDates.includes(value)} onChange={()=>toggleDay(value)}/><span>{dateLabel(value)}</span></label>)}</div></fieldset></details>}
         {repeats&&<p className={s.planRepeatNotice} role="status"><Icon name="warning" size={14}/>Let op, je plant dit recept {selectedDates.length} keer in, met dezelfde hoeveelheid per dag.</p>}
-        {item && !followingStage && amountMode==="batches" && proposal.quantity>0 && !proposal.errors.length && <p className={s.calculatedAmount} role="status">{Number(amount).toLocaleString("nl-NL",{maximumFractionDigits:2})}× basisrecept = <strong>{quantity(proposal.quantity)} {productionUnit(item)}</strong></p>}
+        {item && enterAmount && amountMode==="batches" && proposal.quantity>0 && !proposal.errors.length && <p className={s.calculatedAmount} role="status">{Number(amount).toLocaleString("nl-NL",{maximumFractionDigits:2})}× basisrecept = <strong>{quantity(proposal.quantity)} {productionUnit(item)}</strong></p>}
         {hasPreparation && !bakeOff && !followingStage && <details className={s.planDetails} open={proposal.rows.some(row=>row.included&&row.date>row.latestDate)||undefined}><summary>Halffabricaten · {includePreparation?`${proposal.rows.filter(row=>row.included).length} meeplannen`:"niet meeplannen"}</summary><section className={s.preparationSection}>
           <label className={s.checkboxRow}><input type="checkbox" checked={includePreparation} disabled={!(recipe!.yield>0)} onChange={e=>setIncludePreparation(e.target.checked)}/><span>Halffabricaten apart meenemen</span></label>
           {includePreparation && <>
@@ -970,7 +974,7 @@ function TaskForm({ week, showSunday=false, combineDefault=false, state, initial
           <label className={s.field}>Notitie<textarea name="note" rows={2} maxLength={1000} value={note} onChange={event=>setNote(event.target.value)}/></label>
         </details>
         {review&&<PlanChanges changes={review.changes}/>}
-        {(error||!!item&&proposal.errors.length>0)&&<div className={s.formError} role="alert"><p>{error||proposal.errors[0]}</p>{repairTargets.length>0&&<div className={s.recipeRepairLinks}>{repairTargets.map(target=><button type="button" key={target.id} disabled={saving} onClick={()=>editRecipe(target.id)}><Icon name="book" size={14}/>{target.name}</button>)}</div>}</div>}
+        {(error||!!item&&proposal.errors.length>0)&&<div className={s.formError} role="alert"><p>{error || (followingStage && !useAvailable && stageQuantity<=0 ? "Kies een hoeveelheid uit een eerdere partij, of vink aan dat de vorige stap al gedaan is." : proposal.errors[0])}</p>{repairTargets.length>0&&<div className={s.recipeRepairLinks}>{repairTargets.map(target=><button type="button" key={target.id} disabled={saving} onClick={()=>editRecipe(target.id)}><Icon name="book" size={14}/>{target.name}</button>)}</div>}</div>}
       </div>}
       <footer className={s.dialogFooter}><button type="button" className={s.secondaryButton} disabled={saving} onClick={()=>repeatReview?setRepeatReview(null):onClose()}>{repeatReview?"Terug":"Annuleren"}</button><button type="submit" className={s.primaryButton} disabled={saving||!item||chooseDays&&!selectedDates.length||proposal.errors.length>0}>{saving?"Opslaan…":repeatReview?`Ja, ${selectedDates.length} dagen inplannen`:refreshing?"Planning bijwerken":repeats?`${selectedDates.length} dagen inplannen`:"Inplannen"}</button></footer>
     </form>

@@ -4,7 +4,7 @@ import { productionRoute, buildProductionStage, validProductionStages, remaining
 export type { PreparationChoice } from "./planning";
 export type PlanCommand = {
   task: Omit<Task,"quantity"|"requires"|"generatedFor">;
-  stage?: { stepId: string; sources: { taskId: string; quantity: number }[] };
+  stage?: { stepId: string; sources: { taskId: string; quantity: number }[]; availableQuantity?: number };
   amount: number; amountMode: "quantity" | "batches";
   /** Repeat a new recipe production on selected days of the same week. */
   dates?: string[];
@@ -158,9 +158,9 @@ function buildPlan(state:PreviewState,recipes:DemoRecipe[],command:PlanCommand,o
     if (!route || !(route.steps as readonly string[]).includes(command.stage.stepId)) throw Error("Kies een geldige productiestap.");
     if (command.stage.stepId !== route.steps[0]) {
       if (command.preparation || command.task.dependsOn) throw Error("Koppel de voorgaande partijen bij deze vervolgstap.");
-      return buildProductionStage(state, { ...command.task, quantity: proposal.quantity, productionStage: command.stage });
+      return buildProductionStage(state, { ...command.task, quantity: proposal.quantity, productionStage: command.stage, recipePlan: {amount: command.amount, amountMode: command.amountMode} });
     }
-    if (!Array.isArray(command.stage.sources) || command.stage.sources.length || command.task.dependsOn) throw Error("Een nieuwe partij heeft geen voorgaande partijen.");
+    if (!Array.isArray(command.stage.sources) || command.stage.sources.length || command.task.dependsOn || command.stage.availableQuantity !== undefined) throw Error("Een nieuwe partij heeft geen voorgaande partijen.");
   }
   const included=proposal.rows.filter(r=>r.included);
   const taskIds=new Map(included.map((row,index)=>[row.recipeId,row.sourceTaskId || `${command.task.id}:prep:${index}`]));
@@ -276,7 +276,7 @@ export function recipePlanChanges(state:PreviewState,recipes:DemoRecipe[],task:T
 }
 export function recipePlanUpdateBlock(state:PreviewState,task:Task):string|undefined {
   const group=state.tasks.filter(t=>t.id===task.id || t.generatedFor===task.id),ids=new Set(group.map(t=>t.id));
-  if(task.productionStage?.sources.length)return "Een vervolgstap gebruikt gereserveerde partijen. Plan een nieuwe vervolgstap met de gewenste hoeveelheid.";
+  if(task.productionStage && (task.productionStage.sources.length || task.productionStage.availableQuantity !== undefined))return "Een vervolgstap gebruikt gereserveerde partijen. Plan een nieuwe vervolgstap met de gewenste hoeveelheid.";
   if(task.generatedFor || task.dependsOn)return "Werk de eerste productiestap bij; deze taak hoort bij een andere productiestap.";
   if(group.some(t=>t.status!=="planned"))return "Deze productie of een halffabricaat is al gestart, afgerond of geblokkeerd. De bestaande registratie blijft behouden; beoordeel de wijziging handmatig.";
   if(state.tasks.some(t=>!ids.has(t.id) && requiredTaskIds(t).some(id=>id!==task.id && ids.has(id))))return "Een halffabricaat wordt ook door een andere productie gebruikt. Controleer die koppeling eerst.";
