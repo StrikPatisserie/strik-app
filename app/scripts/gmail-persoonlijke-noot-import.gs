@@ -71,7 +71,7 @@ function importPersoonlijkeNoot() {
           for(const file of files) {
             const result=pnPost_({csv:pnCsvText_(file),sourceName:file.getName(),orderDate:pnOrderDate_(message)});
             if(!result.complete)throw new Error('Bestaande bestelling wijkt af: controleer de mail en de afhaallijst.');
-            sample ||=result.sample===true;
+            sample=sample||result.sample===true;
             Logger.log(`Persoonlijke Noot: ${result.sample?'voorbeeld gecontroleerd, niets opgeslagen':result.added+' nieuw, '+result.unchanged+' al aanwezig'}.`);
           }
           props.setProperty(key,sample?'test':'done');imported=true;handled++;
