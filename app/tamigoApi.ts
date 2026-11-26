@@ -2206,11 +2206,14 @@ export async function fetchTamigoProductionRosterSource(input:
 }
 
 // Corrections have their own explicit gate; never call from the read-only adapter.
-export function tamigoHoursWritesEnabled() {
-  return process.env.TAMIGO_HOURS_WRITE_ENABLED === "1";
+export function tamigoHoursWritesEnabled(shiftId?: string) {
+  if (process.env.TAMIGO_HOURS_WRITE_ENABLED === "1") return true;
+  const testShift = process.env.TAMIGO_HOURS_TEST_SHIFT_ID?.trim();
+  return !!testShift && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(testShift)
+    && typeof shiftId === "string" && shiftId.toLowerCase() === testShift.toLowerCase();
 }
 export async function updateTamigoActualShift(payload: import("./management/urencontrole/correctionTypes").TamigoShiftUpdate): Promise<unknown> {
-  if (!tamigoHoursWritesEnabled()) throw new TamigoConfigurationError("Terugschrijven van uren is nog niet ingeschakeld.");
+  if (!tamigoHoursWritesEnabled(payload.ShiftId)) throw new TamigoConfigurationError("Terugschrijven is voor deze dienst nog niet ingeschakeld.");
   if(payload.PlanStatusCode!==3 || payload.PlanStatus!=="actual" || !payload.DepartmentId || !payload.EmployeeId || !payload.ShiftId) throw new TamigoConfigurationError("Alleen een gecontroleerde open werkelijke dienst kan worden geïmporteerd.");
   if (typeof payload.BreakCode !== "string" || !payload.BreakCode.trim() || payload.BreakCodeLength !== undefined) throw new TamigoConfigurationError("Gebruik een gecontroleerde pauzecode: code 0 voor geen pauze, of de bestaande pauzecode om de pauze te behouden. Een lege code of losse pauzelengte is niet toegestaan.");
   const response = await fetch(createTamigoUrl("/v2/Shifts/Import",{validateConfiguredWarnings:"true",runInBackground:"false"}), {

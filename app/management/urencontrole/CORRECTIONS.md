@@ -6,9 +6,11 @@ Tamigo-support heeft een afdeling **Test** en een actieve pauzecode `"0"` van nu
 
 Nieuwe correcties sturen uitsluitend een expliciete, opnieuw gecontroleerde pauzecode: `"0"` voor nul minuten, of de bestaande positieve code om die pauze te behouden. `BreakCodeLength` wordt niet meer verstuurd. Een ontbrekende, uitgeschakelde, samengestelde of anders geconfigureerde nulcode blokkeert de correctie. Oude voorstellen met `null`/`BreakCodeLength:0` blijven onbruikbaar; historische registraties blijven leesbaar. Alle controles van dagstatus, bronversie, overlap, onveranderlijke historie, planning en onafhankelijke teruglezing blijven gelden.
 
-De algemene productieschakelaar is op 26 november gecontroleerd als `TAMIGO_HOURS_WRITE_ENABLED=0` en blijft uit. De afdeling Test is via de online urencontrole zichtbaar, maar bevat op dit moment geen diensten in november. Feline is gevraagd één werkelijke testdienst aan te maken. Er is nog geen praktijkimport met code `"0"` uitgevoerd; de nieuwe code is dus nog niet live bewezen. De eerdere proeven hieronder gebruikten een andere nulrepresentatie en zijn historische context.
+De algemene productieschakelaar is op 26 november gecontroleerd als `TAMIGO_HOURS_WRITE_ENABLED=0` en blijft uit. Voor een afzonderlijke praktijkproef kan `TAMIGO_HOURS_TEST_SHIFT_ID` precies één geldige, gekozen dienst-ID vrijgeven. De server controleert die tegen de opgehaalde bron en het bewaarde origineel; ook de transportlaag weigert elke andere dienst vóór login/import. Zonder deze instelling blijft alles geblokkeerd. Na de proef moet de testinstelling weer leeg worden gemaakt.
 
-Validatie: 129 gerichte tests, lint op de gewijzigde code en de productiebuild slagen. De tests dekken nul/15/30 minuten bij tijdswijzigingen, verlies van de nulcode tussen voorbereiden en bevestigen, oude null-payloads en een afwijkende automatische pauze na import zonder herhaalactie.
+Op afdeling Test is via Tamigo één werkelijke testdienst onder Feline aangemaakt voor 25 november, 07:30–15:00 met code 0, onafhankelijk teruggelezen als 450 minuten netto. Er is nog geen praktijkimport met code `"0"` uitgevoerd; de nieuwe import is dus nog niet live bewezen. De eerdere proeven hieronder gebruikten een andere nulrepresentatie en zijn historische context.
+
+Validatie: 131 gerichte tests, TypeScript, lint op de gewijzigde code en de productiebuild slagen. De tests dekken nul/15/30 minuten bij tijdswijzigingen, verlies van de nulcode tussen voorbereiden en bevestigen, oude null-payloads, de begrenzing tot één testdienst en een afwijkende automatische pauze na import zonder herhaalactie.
 
 ## Historische inrichting
 

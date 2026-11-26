@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     fetchTamigoHoursReviewSource({ kind: "breakcodes" }).then(breakOptions),
     correctionStore.ready(), correctionStore.history(shift.toLowerCase(),employee?.toLowerCase()||undefined),
   ]);
-  return json({ enabled: tamigoHoursWritesEnabled(), storageReady: ready.status === "fulfilled" && ready.value,
+  return json({ enabled: tamigoHoursWritesEnabled(shift), storageReady: ready.status === "fulfilled" && ready.value,
     options: codes.status === "fulfilled" ? codes.value : null,
     history: history.status === "fulfilled" ? history.value : [], historyAvailable: history.status === "fulfilled",
     message: codes.status === "rejected" ? "Pauzecodes zijn niet beschikbaar. Er kan niets worden opgeslagen." : "Dagstatus en bronversie worden vóór opslaan opnieuw gecontroleerd.",

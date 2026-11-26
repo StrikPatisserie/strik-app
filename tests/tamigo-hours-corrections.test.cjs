@@ -201,6 +201,21 @@ test('an uncertain unchanged result stays locked, including when a different cor
 test('disabling the gate after preview still prevents a write',async()=>{
  const f=fixture();await f.service.prepare(actor,f.reference,draft(),types.DEFAULT_REVIEW_CONFIG);f.disable();await assert.rejects(()=>f.service.commit(actor,intentId,true),/ingeschakeld/);assert.equal(f.attempts.length,0);
 });
+test('single-shift test release blocks every other shift before login or import',async()=>{
+ const calls=[],env={TAMIGO_API_KEY:'fixture-token',TAMIGO_HOURS_WRITE_ENABLED:'0',TAMIGO_HOURS_TEST_SHIFT_ID:shiftId};
+ const api=loader({}, {process:{env},fetch:async(url,options)=>{calls.push({url:String(url),...options});return Response.json([{Success:true}]);}})('app/tamigoApi.ts');
+ const payload=rules.updatePayload(rawShift(),normalized(rawShift()),rules.correctionValues(draft({breakCode:'0'}),normalized(rawShift()),options));
+ assert.equal(api.tamigoHoursWritesEnabled(),false);assert.equal(api.tamigoHoursWritesEnabled(shiftId),true);assert.equal(api.tamigoHoursWritesEnabled(actor),false);
+ await assert.rejects(()=>api.updateTamigoActualShift({...payload,ShiftId:actor}),/niet ingeschakeld/);assert.equal(calls.length,0);
+ await api.updateTamigoActualShift(payload);assert.equal(calls.length,1);
+ for(const invalid of ['', '*', 'undefined', '00000000-0000-0000-0000-000000000000']){env.TAMIGO_HOURS_TEST_SHIFT_ID=invalid;assert.equal(api.tamigoHoursWritesEnabled(invalid),false);}
+});
+test('the test gate uses the source shift and is rechecked against the saved original at confirmation',async()=>{
+ const f=fixture(),checked=[];f.deps.enabled=id=>{checked.push(id);return id===shiftId;};
+ const preview=await f.service.prepare(actor,f.reference,draft({breakCode:'0'}),types.DEFAULT_REVIEW_CONFIG);assert.equal(preview.id,intentId);
+ assert.equal((await f.service.commit(actor,intentId,true)).state,'applied');assert(checked.length>=3);assert(checked.every(id=>id===shiftId));
+ const denied=fixture();denied.deps.enabled=id=>id===actor;assert.equal((await denied.service.prepare(actor,denied.reference,draft(),types.DEFAULT_REVIEW_CONFIG)).id,null);assert.equal(denied.attempts.length,0);
+});
 function contextReader(settings={}){
  const calls=[],raw=rawShift(settings.raw),other='77777777-7777-4777-8777-777777777777';
  const reader=loader({'../../tamigoApi':{fetchTamigoHoursReviewSource:async input=>{

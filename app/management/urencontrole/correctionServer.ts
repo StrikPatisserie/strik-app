@@ -15,7 +15,7 @@ type Dependencies = {
   read(reference: CorrectionReadReference): Promise<CorrectionContext>;
   day(department: string, date: string): Promise<DayStatus>;
   write(payload: TamigoShiftUpdate): Promise<unknown>;
-  store: CorrectionStore; enabled(): boolean; now(): number; id(): string;
+  store: CorrectionStore; enabled(shiftId?: string): boolean; now(): number; id(): string;
 };
 function datesFor(start: string, end: string) {
   return [localDate(Date.parse(start)), localDate(Date.parse(end) - 1)];
@@ -41,7 +41,7 @@ export function createCorrectionService(deps: Dependencies) {
     const blockers = sourceWriteBlockers(context.raw, before);
     if (after.breakMinutes === 0 && after.breakCode !== "0") blockers.push("Een dienst zonder pauze is geblokkeerd zolang de actieve Tamigo-pauzecode 0 van nul minuten niet is bevestigd. Pas deze dienst rechtstreeks in Tamigo aan.");
     if(before.start.ms!==null&&before.end.ms!==null&&!(Date.parse(after.start)<before.end.ms&&Date.parse(after.end)>before.start.ms))blockers.push("De nieuwe tijden overlappen de oorspronkelijke dienst niet. De import zou een extra dienst kunnen maken; pas dit rechtstreeks in Tamigo aan.");
-    if (!deps.enabled()) blockers.push("Terugschrijven is nog niet ingeschakeld. De koppeling moet eerst worden vrijgegeven.");
+    if (!deps.enabled(before.id)) blockers.push("Terugschrijven is voor deze dienst nog niet ingeschakeld. De koppeling moet eerst worden vrijgegeven.");
     if (!context.complete) blockers.push("Niet alle afdelingen zijn volledig gelezen. Overlap kan niet betrouwbaar worden uitgesloten.");
     if (Date.parse(after.end) > deps.now()) blockers.push("Werkelijke uren in de toekomst kunnen niet worden opgeslagen.");
     if (before.start.iso === after.start && before.end.iso === after.end && (before.breakCode || "") === after.breakCode && before.breakMinutes === after.breakMinutes) blockers.push("Er is niets veranderd aan deze dienst.");
@@ -84,9 +84,9 @@ export function createCorrectionService(deps: Dependencies) {
   }
   async function commit(actorId: string, id: string, confirmed: boolean): Promise<CorrectionResult> {
     if (confirmed !== true) throw new CorrectionError("Bevestig eerst de wijziging van deze dienst.");
-    if (!deps.enabled()) throw new CorrectionError("Terugschrijven is niet ingeschakeld. Er is niets gewijzigd.", 503);
     const existing = await deps.store.get(id);
     if (!existing || existing.actorId !== actorId) throw new CorrectionError("Deze correctie is niet van deze controlesessie.", 403);
+    if (!deps.enabled(existing.before.id)) throw new CorrectionError("Terugschrijven is voor deze dienst niet ingeschakeld. Er is niets gewijzigd.", 503);
     if (existing.state !== "prepared") return correctionResult(existing);
     if (Date.parse(existing.expiresAt) <= deps.now()) throw new CorrectionError("De bevestiging is verlopen. Controleer de dienst opnieuw.", 409);
     const claimed = await deps.store.claim(id, actorId);
