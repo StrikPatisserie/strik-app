@@ -1,6 +1,16 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { emballageLocalTime, type LentEmballageNotice as Notice, type LentEmballageResponse } from './lentEmballage';
+import { emballageLocalTime, type LentEmballageNotice as Notice, type LentEmballageNoPickup, type LentEmballageResponse } from './lentEmballage';
+
+export function LentNoEmballageCard({ notice, now }: { notice: LentEmballageNoPickup; now: Date }) {
+  const local = emballageLocalTime(now);
+  if (local.date !== notice.date || local.minute < 480) return null;
+  return <section role="status" aria-label="Emballage Lent" className="my-4 max-w-2xl rounded-2xl border border-[#c6cec2] bg-[#f6f7f3] px-5 py-4 text-[#495747] shadow-sm">
+    <h2 className="text-base font-bold">Geen emballage vandaag</h2>
+    <p className="mt-1 text-sm">Er staat vandaag geen emballagestop voor Lent op de route.</p>
+    {notice.provisional && <p className="mt-1 text-xs">De route wordt nog bijgewerkt.</p>}
+  </section>;
+}
 
 export function LentEmballageCard({ notice, now }: { notice: Notice; now: Date }) {
   const local = emballageLocalTime(now);
@@ -24,7 +34,7 @@ export function LentEmballageCard({ notice, now }: { notice: Notice; now: Date }
 }
 
 export default function LentEmballageNotice() {
-  const [view, setView] = useState<{ notice: Notice; now: Date } | null>(null);
+  const [view, setView] = useState<{ notice: Notice | null; noPickup: LentEmballageNoPickup | null; now: Date } | null>(null);
   useEffect(() => {
     let disposed = false, busy = false;
     let controller: AbortController | undefined;
@@ -48,7 +58,8 @@ export default function LentEmballageNotice() {
         if (!response.ok) throw new Error('Route niet beschikbaar');
         const data: LentEmballageResponse = await response.json();
         const receivedAt = new Date();
-        if (!disposed) setView(data.notice && data.date === emballageLocalTime(receivedAt).date ? { notice: data.notice, now: receivedAt } : null);
+        if (!disposed) setView((data.notice || data.noPickup) && data.date === emballageLocalTime(receivedAt).date
+          ? { notice: data.notice, noPickup: data.noPickup, now: receivedAt } : null);
       } catch {
         // Never leave an old route promise on screen after a failed refresh.
         if (!disposed) setView(null);
@@ -61,5 +72,7 @@ export default function LentEmballageNotice() {
     document.addEventListener('visibilitychange', onVisible);
     return () => { disposed = true; controller?.abort(); clearTimeout(timer); window.removeEventListener('focus', onVisible); window.removeEventListener('online', onVisible); document.removeEventListener('visibilitychange', onVisible); };
   }, []);
-  return view ? <LentEmballageCard {...view} /> : null;
+  if (view?.notice) return <LentEmballageCard notice={view.notice} now={view.now} />;
+  if (view?.noPickup) return <LentNoEmballageCard notice={view.noPickup} now={view.now} />;
+  return null;
 }

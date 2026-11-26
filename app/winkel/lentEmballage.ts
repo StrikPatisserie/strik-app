@@ -9,7 +9,13 @@ export type LentEmballageNotice = {
   provisional: boolean;
   routeUpdatedAt: string;
 };
-export type LentEmballageResponse = { date: string; checkedAt: string; notice: LentEmballageNotice | null };
+export type LentEmballageNoPickup = Pick<LentEmballageNotice, 'date' | 'provisional'>;
+export type LentEmballageResponse = {
+  date: string;
+  checkedAt: string;
+  notice: LentEmballageNotice | null;
+  noPickup: LentEmballageNoPickup | null;
+};
 
 // Access is deliberately narrower than management access to all stores.
 export function canReceiveLentEmballage(profile: UserProfile | null | undefined) {

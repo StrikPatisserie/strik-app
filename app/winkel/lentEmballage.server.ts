@@ -7,7 +7,12 @@ import { buildLentEmballageNotice, emballageLocalTime, type LentEmballageRespons
 export async function checkLentEmballage(now = new Date()): Promise<LentEmballageResponse> {
   const local = emballageLocalTime(now);
   const draft = local.minute >= 480 ? await getLogisticsRouteDraftForDate(local.date, true) : null;
-  return { date: local.date, checkedAt: now.toISOString(), notice: buildLentEmballageNotice(draft, now) };
+  const notice = buildLentEmballageNotice(draft, now);
+  // Missing/stale routes are unknown, not confirmation that there is no pickup.
+  // Keep this separate from notice so older clients cannot mistake it for a pickup.
+  const noPickup = !notice && draft?.date === local.date
+    ? { date: local.date, provisional: draft.isFinal !== true } : null;
+  return { date: local.date, checkedAt: now.toISOString(), notice, noPickup };
 }
 
 export async function recordLentMorningCheck(now = new Date()) {

@@ -90,6 +90,32 @@ test('store API blocks other stores before reading logistics data and reports re
  profile={active:true,store:'lent',email:''};const response=await api.GET();assert.equal(response.status,200);assert.equal(response.headers.get('Cache-Control'),'private, no-store');
  assert.equal((await response.json()).notice.expectedTime,'08:50');fail=true;assert.equal((await api.GET()).status,503);
 });
+test('no-pickup status requires a current successfully read route and follows added/removed stops',async()=>{
+ let current=draft([round('b1',[delivery],[20,20])]),reads=0,fail=false;
+ const server=load('app/winkel/lentEmballage.server.ts',{
+  './lentEmballage':model,
+  '../lib/bakeryLogisticsStorage':{getLogisticsRouteDraftForDate:async(date,strict)=>{reads++;assert.equal(strict,true);if(fail)throw Error('offline');return current;}},
+ });
+ assert.equal((await server.checkLentEmballage(at('07:59'))).noPickup,null);assert.equal(reads,0);
+ const absent=await server.checkLentEmballage(at('08:00'));
+ assert.equal(absent.notice,null);assert.deepEqual(plain(absent.noPickup),{date:'2026-11-26',provisional:false});
+ current={...current,isFinal:false};assert.equal((await server.checkLentEmballage(at('08:01'))).noPickup.provisional,true);
+ current=plan;const added=await server.checkLentEmballage(at('08:02'));assert.equal(added.noPickup,null);assert.equal(added.notice.expectedTime,'08:50');
+ current={...plan,excludedSourceIds:['shop:lent:emballage']};assert.ok((await server.checkLentEmballage(at('08:03'))).noPickup);
+ current={...plan,date:'2026-11-25'};assert.equal((await server.checkLentEmballage(at('08:04'))).noPickup,null);
+ current=null;assert.equal((await server.checkLentEmballage(at('08:05'))).noPickup,null);
+ fail=true;await assert.rejects(server.checkLentEmballage(at('08:06')),/offline/);
+});
+test('no-pickup card shows the date-safe message without an arrival time or pickup instructions',()=>{
+ const {renderToStaticMarkup}=require('react-dom/server');
+ const cards=load('app/winkel/LentEmballageNotice.tsx',{'./lentEmballage':model,'react/jsx-runtime':require('react/jsx-runtime')});
+ const props={notice:{date:'2026-11-26',provisional:false},now:at('08:00')};
+ const html=renderToStaticMarkup(cards.LentNoEmballageCard(props));
+ assert.match(html,/Geen emballage vandaag/);assert.doesNotMatch(html,/Verwacht rond|Zet de emballage klaar|nog bijgewerkt/);
+ assert.match(renderToStaticMarkup(cards.LentNoEmballageCard({...props,notice:{...props.notice,provisional:true}})),/De route wordt nog bijgewerkt/);
+ assert.equal(cards.LentNoEmballageCard({...props,now:at('07:59')}),null);
+ assert.equal(cards.LentNoEmballageCard({...props,now:new Date('2026-11-27T08:00:00+01:00')}),null);
+});
 test('morning job uses strict reads, stores only store-safe data and skips the wrong DST hour',async()=>{
  const writes=[];let reads=0;
  const server=load('app/winkel/lentEmballage.server.ts',{
