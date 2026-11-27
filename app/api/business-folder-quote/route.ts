@@ -3,6 +3,9 @@ import { NextResponse } from "next/server";
 import { buildBusinessFolderQuote } from "@/app/lib/businessFolderQuote";
 import { assertBusinessFolderDelivery } from "@/app/lib/businessFolderDelivery";
 
+import { FolderUploadTooLarge, readBusinessFolderRequest, type FolderLogoUpload } from "@/app/lib/businessFolderUpload";
+
+export const maxDuration = 60;
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -10,20 +13,21 @@ export async function POST(request: Request) {
   const origin = request.headers.get("origin");
   if (origin && origin !== new URL(request.url).origin) return NextResponse.json({ message: "Ongeldige aanvraag." }, { status: 403 });
   let quote: ReturnType<typeof buildBusinessFolderQuote>;
+  let logo: FolderLogoUpload | undefined;
   try {
-    if (Number(request.headers.get("content-length") || 0) > 64_000) return NextResponse.json({ message: "De aanvraag is te groot." }, { status: 413 });
-    const body = await request.text();
-    if (Buffer.byteLength(body) > 64_000) return NextResponse.json({ message: "De aanvraag is te groot." }, { status: 413 });
-    const input = JSON.parse(body);
+    const parsed = await readBusinessFolderRequest(request);
+    if (!parsed.input || typeof parsed.input !== "object" || Array.isArray(parsed.input)) throw Error("Controleer de aanvraaggegevens.");
+    const input = parsed.input as Record<string, unknown>;
+    logo = parsed.logo;
     if (input?.website) return NextResponse.json({ message: "Je aanvraag is nog niet verstuurd. Vernieuw de pagina en vul de aanvraag opnieuw in zonder automatisch ingevulde velden." }, { status: 400 });
     if(input.season!=="sint"&&input.season!=="kerst")throw Error("Kies een geldige folder.");
     const edition=await getActiveSeason(input.season);
     if(!edition?.config.business)throw Error("Dit seizoen is momenteel gesloten voor aanvragen.");
-    quote = buildBusinessFolderQuote(input,edition.year);
+    quote = buildBusinessFolderQuote(input,edition.year,logo);
     assertBusinessFolderDelivery(quote.order.deliveryDate);
     if(quote.order.deliveryDate&&(quote.order.deliveryDate<edition.config.startDate||quote.order.deliveryDate>edition.config.endDate))throw Error("Kies een levermoment binnen het geopende seizoen.");
   } catch (error) {
-    return NextResponse.json({ message: error instanceof SyntaxError ? "De aanvraag kon niet worden gelezen." : error instanceof Error ? error.message : "Controleer de aanvraaggegevens." }, { status: 400 });
+    return NextResponse.json({ message: error instanceof SyntaxError ? "De aanvraag kon niet worden gelezen." : error instanceof Error ? error.message : "Controleer de aanvraaggegevens." }, { status: error instanceof FolderUploadTooLarge ? 413 : 400 });
   }
   try {
     const url = new URL(`${process.env.WORDPRESS_SINTERKLAAS_API_BASE || "https://strik-patisserie.nl/wp-json/strik/v1"}/business-folder-quote`);
@@ -32,6 +36,15 @@ export async function POST(request: Request) {
     const result = await response.json();
     // Log only the reference and outcome, never contact details, content or the backend URL/key.
     const outcome = { reference: quote.reference, backendStatus: response.status, saved: result.saved === true, mailSent: result.mailSent === true };
+    if (response.ok && result.saved === true && result.reference === quote.reference && logo) {
+      try {
+        const { saveBusinessFolderLogo } = await import("@/app/lib/businessFolderLogo.server");
+        await saveBusinessFolderLogo(quote.order, logo);
+      } catch {
+        console.warn("business_quote_logo_pending", outcome);
+        return NextResponse.json({ saved: true, reference: quote.reference, message: "Je aanvraag is opgeslagen, maar je logo nog niet. Klik op ‘Opnieuw proberen’ met hetzelfde bestand; je aanvraag wordt niet dubbel opgeslagen." }, { status: 503 });
+      }
+    }
     if (response.ok && result.ok === true && result.saved === true && result.mailSent === true && result.reference === quote.reference) {
       console.info("business_quote_received", outcome);
       return NextResponse.json({ ok: true, reference: result.reference });

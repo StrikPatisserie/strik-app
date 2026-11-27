@@ -1,0 +1,18 @@
+.panel { min-width: 0; margin: 1rem 0; padding: 1rem; border: 1px solid #ccd5c6; border-radius: 12px; background: #f5f7f1; color: #304739; font-size: .875rem; }
+.panel legend { padding: 0 .35rem; font-weight: 750; }
+.panel p { margin: 0 0 .7rem; line-height: 1.5; }
+.choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
+.panel .option { display: flex; flex-direction: row; align-items: flex-start; gap: .5rem; border: 1px solid #ccd5c6; border-radius: 8px; padding: .75rem; cursor: pointer; background: white; }
+.panel .option:has(input:checked) { border-color: #456451; box-shadow: inset 0 0 0 1px #456451; }
+.panel .option input { width: 16px; height: 16px; margin: 3px 0 0; flex: 0 0 16px; accent-color: #456451; }
+.panel .option strong, .panel small { display: block; }
+.panel small { font-size: .75rem; font-weight: 400; margin-top: .25rem; line-height: 1.45; }
+.upload { margin-top: .9rem; }
+.upload label { display: block; font-weight: 650; }
+.upload input { display: block; width: 100%; min-width: 0; height: auto; margin-top: .4rem; padding: .6rem; background: white; font-size: .8rem; }
+.panel .file { display: flex; align-items: center; gap: .6rem; justify-content: space-between; margin-top: .65rem; overflow-wrap: anywhere; }
+.file button { text-decoration: underline; font-size: .75rem; flex-shrink: 0; cursor: pointer; }
+.panel .note { margin: .8rem 0 0; font-size: .8rem; }
+.note a { text-decoration: underline; overflow-wrap: anywhere; }
+.panel .error { margin-top: .6rem; color: #a12c25; }
+@media (max-width: 500px) { .choices { grid-template-columns: 1fr; } }

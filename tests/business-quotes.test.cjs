@@ -17,6 +17,110 @@ function load(file, overrides = {}, globals = {}) {
   return exports;
 }
 const { buildBusinessFolderQuote: build } = load('app/lib/businessFolderQuote.ts');
+const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aXioAAAAASUVORK5CYII=', 'base64');
+function logoFixture(season = 'kerst') {
+  const input = fixture(season);
+  input.logoRequested = true;
+  if (season === 'sint') input.selection = { lines: [{ productId: 'chocoladeletter', quantity: 25, withLogo: true, letter: { letter: 'S', size: 'groot', chocolate: 'melk', exceptions: [] } }] };
+  return input;
+}
+function logoRequest(input, bytes = png, name = 'logo.png', origin = 'https://app.example.invalid') {
+  const form = new FormData();
+  form.set('quote', JSON.stringify(input));
+  if (bytes) form.set('logo', new File([bytes], name));
+  return new Request('https://app.example.invalid/api/business-folder-quote', { method: 'POST', headers: { origin }, body: form });
+}
+
+test('logo choices are required for both folders; verified uploads and email promises survive in order and year snapshot', () => {
+  for (const season of ['sint', 'kerst']) {
+    const input = logoFixture(season);
+    assert.throws(() => build(input), /Kies of je het logo/);
+    input.logoDelivery = 'upload';
+    input.uploadedLogo = { name: 'forged.png', sha256: 'fake' };
+    assert.throws(() => build(input), /Voeg je logobestand/);
+    input.logoDelivery = 'email';
+    const later = build(input, 2027);
+    assert.equal(later.order.year, '2027');
+    assert.match(later.order.logo, /later per mail/);
+    assert.match(later.quoteText, /LOGO\nEigen logo.*later per mail/);
+    assert.equal(later.snapshot.logoDelivery.method, 'email');
+    input.logoDelivery = 'upload';
+    const uploaded = { name: 'voorbeeld.png', size: png.length, sha256: 'a'.repeat(64) };
+    const quote = build(input, 2027, uploaded);
+    assert.match(quote.order.logo, /voorbeeld.png/);
+    assert.match(quote.reference, /27-/);
+    assert.equal(quote.snapshot.logoDelivery.file.sha256, uploaded.sha256);
+    assert.notEqual(quote.payloadHash, later.payloadHash);
+    assert.notEqual(quote.payloadHash, build(input, 2027, { ...uploaded, sha256: 'b'.repeat(64) }).payloadHash, 'different bytes cannot reuse an accepted receipt');
+    assert.equal(quote.order.totalExVat, later.order.totalExVat, 'upload method never changes the product price');
+  }
+  assert.throws(() => build(fixture(), 2026, { name: 'extra.png' }), /aanvraag met logo/);
+});
+
+test('public multipart uploads validate files before saving and do not confirm receipt until the logo is saved', async () => {
+  const saved = [], backendCalls = [];
+  let storageFails = false, backendStatus = 200, mismatch = false, backendSaved = true;
+  const api = load('app/api/business-folder-quote/route.ts', {
+    '@/app/feestdagen/server': { getActiveSeason: async () => ({ year: 2027, config: { business: true, startDate: '2027-01-01', endDate: '2027-12-31' } }) },
+    'next/server': { NextResponse: Response },
+    '@/app/lib/businessFolderQuote': { buildBusinessFolderQuote: build },
+    '@/app/lib/businessFolderLogo.server': { saveBusinessFolderLogo: async (order, logo) => { if (storageFails) throw Error('test'); saved.push({ order, logo }); } },
+  }, { fetch: async (_url, options) => {
+    const quote = JSON.parse(options.body); backendCalls.push(quote);
+    return Response.json({ ok: true, saved: backendSaved, mailSent: true, reference: mismatch ? 'wrong' : quote.reference }, { status: backendStatus });
+  } });
+  const input = { ...logoFixture(), logoDelivery: 'upload' }; input.delivery.date = '2027-12-18';
+  for (const [bytes, name, status] of [[null, 'logo.png', 400], [Buffer.from('<svg>test</svg>'), 'logo.png', 400], [png, 'logo.svg', 400], [Buffer.alloc(4 * 1024 * 1024 + 1), 'logo.png', 413]]) {
+    assert.equal((await api.POST(logoRequest(input, bytes, name))).status, status);
+  }
+  assert.equal((await api.POST(logoRequest(input, png, 'logo.png', 'https://other.invalid'))).status, 403);
+  assert.equal(backendCalls.length, 0);
+  assert.equal((await api.POST(logoRequest(input))).status, 200);
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0].order.id, `folder-${input.requestId}`);
+  assert.equal(saved[0].order.year, '2027');
+  assert.equal(saved[0].logo.contentType, 'image/png');
+  assert.equal(saved[0].logo.bytes.toString('base64'), png.toString('base64'));
+  assert.equal(backendCalls[0].snapshot.logoDelivery.file.sha256, saved[0].logo.sha256);
+  assert.ok(!JSON.stringify(backendCalls[0]).includes(png.toString('base64')), 'file bytes stay out of email/order metadata');
+  storageFails = true;
+  const failed = await api.POST(logoRequest(input));
+  assert.equal(failed.status, 503); assert.match((await failed.json()).message, /logo nog niet/);
+  storageFails = false;
+  assert.equal((await api.POST(logoRequest(input))).status, 200);
+  assert.equal(backendCalls[0].payloadHash, backendCalls[2].payloadHash);
+  const count = saved.length;
+  mismatch = true;
+  assert.notEqual((await api.POST(logoRequest(input))).status, 200);
+  mismatch = false; backendStatus = 409;
+  assert.notEqual((await api.POST(logoRequest(input))).status, 200);
+  backendStatus = 200; backendSaved = false;
+  assert.notEqual((await api.POST(logoRequest(input))).status, 200);
+  assert.equal(saved.length, count, 'no upload on conflicting, unconfirmed or mismatched request');
+});
+
+test('logo storage retries never overwrite staff edits or print status, and retain the exact order and edition', async () => {
+  const rows = new Map();
+  const db = { from(table) {
+    assert.equal(table, 'b2b_order_logos');
+    return { upsert(row, options) {
+      assert.equal(options.onConflict, 'id'); assert.equal(options.ignoreDuplicates, true);
+      if (!rows.has(row.id)) rows.set(row.id, row);
+      return { abortSignal: async () => ({ error: null }) };
+    } };
+  } };
+  const storage = load('app/lib/businessFolderLogo.server.ts', { 'server-only': {}, './supabase/admin': { createAdminClient: () => db } });
+  const logo = { name: 'logo.png', bytes: png, size: png.length, sha256: 'a'.repeat(64), contentType: 'image/png' };
+  await storage.saveBusinessFolderLogo({ id: 'folder-test', year: '2027' }, logo);
+  const first = [...rows.values()][0];
+  assert.equal(first.order_id, 'folder-test'); assert.equal(first.season, 2027); assert.equal(first.quantity, 0);
+  assert.equal(first.bytes_base64, png.toString('base64'));
+  first.quantity = 125; first.width_cm = 5; first.printed_at = '2027-11-10';
+  await storage.saveBusinessFolderLogo({ id: 'folder-test', year: '2027' }, logo);
+  assert.equal(rows.size, 1); assert.equal(first.quantity, 125); assert.equal(first.printed_at, '2027-11-10');
+  await storage.saveBusinessFolderLogo({ id: 'folder-test', year: '2028' }, logo);
+  assert.equal(rows.size, 2);
+});
 function fixture(season = 'kerst') {
   return { requestId: 'f1234567-1234-4567-8123-123456789abc', season, company: 'Voorbeeld & Co', contactName: 'Testpersoon', email: 'TEST@example.invalid', phone: '0612345678', wishes: 'Een kaartje per pakket', consent: false,
     delivery: { method: 'delivery', address: 'Voorbeeldstraat 1', momentType: 'date', date: '2026-12-18' },
@@ -40,6 +144,7 @@ test('full Christmas requests preserve package contents and server-calculated in
 });
 test('Sint letter prices share the quantity tier and retain logo, gift wrap, exceptions and requested week', () => {
   const input = fixture('sint');
+  input.logoDelivery = 'email';
   input.delivery = { method: 'pickup', momentType: 'week', weekStart: '2026-11-23' };
   input.selection = { lines: [
     { productId: 'chocoladeletter', quantity: 10, withLogo: true, withGiftWrap: true, letter: { letter: 'A', size: 'klein', chocolate: 'melk', exceptions: [] } },
@@ -134,6 +239,7 @@ test('real folder requests convert both Christmas singles and complete packages 
 });
 test('folder conversion preserves letter charges, logo, dietary requirements, wrapping and custom product details', () => {
   const input = fixture('sint');
+  input.logoDelivery = 'email';
   input.selection = { lines: [
     { productId: 'chocoladeletter', quantity: 25, withLogo: true, withGiftWrap: true, letter: { letter: 'M', size: 'groot', chocolate: 'puur', exceptions: ['vegan','notenvrij'] } },
     { productId: 'speculaasbrok-met-letter', quantity: 60 },

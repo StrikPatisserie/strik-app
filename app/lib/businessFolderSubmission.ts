@@ -10,13 +10,19 @@ export function createQuoteRequestId(): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-export async function sendBusinessFolderQuote(payload: unknown): Promise<string> {
+export async function sendBusinessFolderQuote(payload: unknown, logo?: File): Promise<string> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 35_000);
+  const timeout = setTimeout(() => controller.abort(), 45_000);
   try {
+    let body: string | FormData = JSON.stringify(payload);
+    if (logo) {
+      body = new FormData();
+      body.set("quote", JSON.stringify(payload));
+      body.set("logo", logo);
+    }
     const response = await fetch("/api/business-folder-quote", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload), signal: controller.signal,
+      method: "POST", ...(logo ? {} : { headers: { "Content-Type": "application/json" } }),
+      body, signal: controller.signal,
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || data.ok !== true || typeof data.reference !== "string" || !/^(SINT|KERST)\d{2}-[A-F0-9]{12}$/.test(data.reference)) {

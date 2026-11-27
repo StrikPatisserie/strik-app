@@ -5,6 +5,8 @@ import { useBusinessFolderDelivery } from "@/app/lib/useBusinessFolderDelivery";
 
 import {BUSINESS_PICKUP_LOCATIONS,businessPickupLabel} from "../lib/businessPickupLocations";
 import Image from "next/image";
+import BusinessFolderLogo from "@/app/BusinessFolderLogo";
+import { folderLogoError, folderLogoSummary, type FolderLogoChoice } from "@/app/lib/businessFolderLogo";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BusinessFolderSeasonIntro,
@@ -166,6 +168,7 @@ export default function SintB2BConcept({seasonYear = new Date().getFullYear()}: 
   const [quoteSavedSignature, setQuoteSavedSignature] = useState("");
   const [quoteSaveError, setQuoteSaveError] = useState("");
   const [quoteReference, setQuoteReference] = useState("");
+  const [logoChoice, setLogoChoice] = useState<FolderLogoChoice>({ method: "" });
   const pendingQuoteRequest = useRef<{ signature: string; id: string } | null>(null);
   const [website, setWebsite] = useState("");
   const [phone, setPhone] = useState("");
@@ -263,14 +266,15 @@ export default function SintB2BConcept({seasonYear = new Date().getFullYear()}: 
   const hasValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const hasPickupLocation=delivery!=="pickup"||BUSINESS_PICKUP_LOCATIONS.some(location=>location.id===pickupLocation);
   const canSubmitQuote = Boolean(company.trim() && hasValidEmail && hasRequestedDeliveryMoment && hasPickupLocation);
-  const quotePayload = { season: "sint", company, contactName: contact, email, phone, wishes, consent: newsletterConsent, website,
+  const hasLogo = selected.some(line => line.withLogo);
+  const quotePayload = { season: "sint", company, contactName: contact, email, phone, wishes, consent: newsletterConsent, website, ...(hasLogo ? { logoDelivery: logoChoice.method } : {}),
     delivery: { method: delivery, pickupLocation, address: deliveryAddress, momentType: deliveryMomentType, date: requestedDeliveryDate, weekStart: requestedDeliveryWeek },
     selection: { lines: selected.map(line => {
       const letter = letterLines.find(letter => letter.id === line.key);
       return { productId: line.product.id, quantity: line.quantity, choice: choices[line.product.id] || defaultProductChoice(line.product), customColors: customColors[line.product.id] || "", withLogo: line.withLogo, withGiftWrap: line.withGiftWrap, ...(letter ? { letter: { letter: letter.letter, size: letter.size, chocolate: letter.chocolate, exceptions: letter.specialRequests } } : {}) };
     }) },
   };
-  const quoteSignature = JSON.stringify(quotePayload);
+  const quoteSignature = JSON.stringify([quotePayload, hasLogo && logoChoice.method === "upload" ? logoChoice.fileKey : null]);
   const quoteSubmitted = quoteSavedSignature === quoteSignature;
   const quoteFeedback = useRef<HTMLParagraphElement>(null);
   useEffect(() => {
@@ -284,10 +288,12 @@ export default function SintB2BConcept({seasonYear = new Date().getFullYear()}: 
     }
     try { assertBusinessFolderDelivery(deliveryMomentType === "date" ? requestedDeliveryDate : requestedDeliveryWeek); }
     catch (error) { setQuoteSaveError(error instanceof Error ? error.message : "Controleer het levermoment."); return; }
+    const logoError = folderLogoError(hasLogo, logoChoice);
+    if (logoError) { setQuoteSaveError(logoError); return; }
     setQuoteSaving(true); setQuoteSaveError("");
     try {
       if (pendingQuoteRequest.current?.signature !== quoteSignature) pendingQuoteRequest.current = { signature: quoteSignature, id: createQuoteRequestId() };
-      const reference = await sendBusinessFolderQuote({ ...quotePayload, requestId: pendingQuoteRequest.current.id });
+      const reference = await sendBusinessFolderQuote({ ...quotePayload, requestId: pendingQuoteRequest.current.id }, hasLogo && logoChoice.method === "upload" ? logoChoice.file : undefined);
       setQuoteReference(reference);
       setQuoteSavedSignature(quoteSignature);
     } catch (err) { setQuoteSaveError(err instanceof Error && !(err instanceof TypeError) ? err.message : "De ontvangst van je aanvraag is nog niet bevestigd. Probeer opnieuw."); }
@@ -330,6 +336,7 @@ export default function SintB2BConcept({seasonYear = new Date().getFullYear()}: 
     "PRIJSINDICATIE",
     `Producttotaal: ${money(totalEx)} excl. btw / ${money(totalIncl)} incl. btw`,
     ...(delivery === "nijmegen" ? [`Bezorgkosten: ${NIJMEGEN_DELIVERY_FEE_LABEL}, afhankelijk van het afleveradres`] : delivery === "custom" ? ["Bezorgkosten: op aanvraag"] : []),
+    ...(hasLogo ? ["", "LOGO", folderLogoSummary(logoChoice)] : []),
     ...(wishes.trim() ? ["", "OVERIGE WENSEN", wishes.trim()] : []),
     "",
     "Dit is een aanvraag, nog geen bestelling. Graag ontvang ik jullie bevestiging van de definitieve prijzen, beschikbaarheid en leverdatum.",
@@ -498,6 +505,7 @@ export default function SintB2BConcept({seasonYear = new Date().getFullYear()}: 
       {quoteOpen && <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#391008]/55 p-0 sm:items-center sm:p-5"><section role="dialog" aria-modal="true" aria-labelledby="quote-title" className="max-h-[92dvh] w-full max-w-2xl overflow-auto rounded-t-[2rem] bg-[#fffaf0] p-5 shadow-2xl sm:rounded-[2rem] sm:p-8"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#d62d1d]">Live prijsindicatie</p><h2 id="quote-title" className="mt-1 text-3xl font-black text-[#60190f]">Jouw offerteaanvraag</h2></div><button type="button" aria-label="Sluiten" onClick={() => setQuoteOpen(false)} className="h-10 w-10 rounded-full bg-white text-lg font-black">×</button></div>
         <div className="mt-6 divide-y divide-[#eadbc3]">{selected.map(({key,product,quantity,tier,choiceLabel,withLogo,logoPriceEx,logoPriceIncl,withGiftWrap,wrapPriceEx,wrapPriceIncl,totalEx:lineTotalEx,totalIncl:lineTotalIncl})=><div key={key} className="grid grid-cols-[1fr_auto] gap-3 py-3 text-sm"><div><strong>{quantity}× {product.name}</strong><p className="text-[#7e493c]">{choiceLabel} · {money(productUnitPrice(product,tier,includeVat))} p.s. · {productPricingDescription(product,tier)}</p>{withLogo && <p className="mt-1 font-bold text-[#d62d1d]">Eigen logo: +{money(includeVat ? logoPriceIncl : logoPriceEx)} p.s. ({money(quantity * (includeVat ? logoPriceIncl : logoPriceEx))} totaal)</p>}{withGiftWrap && <p className="mt-1 font-bold text-[#547762]">Cadeaupapier: +{money(includeVat ? wrapPriceIncl : wrapPriceEx)} per letter ({money(roundCents(quantity * (includeVat ? wrapPriceIncl : wrapPriceEx)))} totaal)</p>}</div><strong>{money(includeVat ? lineTotalIncl : lineTotalEx)}</strong></div>)}</div>
         <form noValidate onSubmit={(event) => { event.preventDefault(); return submitQuote(); }}>
+        {hasLogo && <BusinessFolderLogo choice={logoChoice} onChange={setLogoChoice} disabled={quoteSaving} />}
         <fieldset className="mt-5 rounded-xl border border-[#eadbc3] bg-white p-4"><legend className="px-1 text-sm font-black text-[#60190f]">Gewenst levermoment <span className="text-[#d62d1d]">*</span></legend><div className="grid gap-2 sm:grid-cols-2">{([{value:"date",label:"Specifieke dag"},{value:"week",label:"Leverweek"}] as const).map((option)=><label key={option.value} className={`cursor-pointer rounded-xl border px-3 py-2 text-sm font-black ${deliveryMomentType===option.value?"border-[#d62d1d] bg-[#fff0e8]":"border-[#dfd0b7] bg-[#fffaf0]"}`}><input type="radio" name="deliveryMomentType" value={option.value} checked={deliveryMomentType===option.value} onChange={()=>setDeliveryMomentType(option.value)} className="mr-2 accent-[#d62d1d]"/>{option.label}</label>)}</div>{deliveryMomentType==="date"?<label className="mt-3 block text-xs font-black text-[#60190f]">Kies je gewenste leverdag<input required aria-label="Gewenste leverdag" type="date" min={minimumDeliveryDate} value={requestedDeliveryDate} onChange={(event)=>setRequestedDeliveryDate(event.target.value)} className="mt-1.5 h-11 w-full rounded-xl border border-[#dfd0b7] bg-white px-3 text-sm font-bold"/></label>:<label className="mt-3 block text-xs font-black text-[#60190f]">Kies je gewenste leverweek<select required aria-label="Gewenste leverweek" value={requestedDeliveryWeek} onChange={(event)=>setRequestedDeliveryWeek(event.target.value)} className="mt-1.5 h-11 w-full rounded-xl border border-[#dfd0b7] bg-white px-3 text-sm font-bold"><option value="">Kies een week</option>{DELIVERY_WEEK_OPTIONS.map((option)=><option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}<p className="mt-3 rounded-lg bg-[#fff0e8] px-3 py-2 text-[.68rem] font-bold leading-snug text-[#8a3928]">{businessFolderDeliveryNotice(minimumDeliveryDate)}<br/>Dit is een voorkeur. Het levermoment is pas definitief nadat Strik Patisserie je aanvraag heeft goedgekeurd.</p></fieldset>
         <fieldset className="mt-5"><legend className="text-sm font-black text-[#60190f]">Hoe wil je jouw cadeaus ontvangen?</legend><div className="mt-2 grid gap-2 sm:grid-cols-3">{([{value:"pickup", label:"Ophalen", detail:"Gratis"},{value:"nijmegen", label:"Bezorgen Nijmegen e.o.", detail:`+ ${NIJMEGEN_DELIVERY_FEE_LABEL} · afhankelijk van adres`},{value:"custom", label:"Overig adres", detail:"Prijs op aanvraag"}] as const).map((option) => <label key={option.value} className={`cursor-pointer rounded-xl border p-3 text-sm ${delivery === option.value ? "border-[#d62d1d] bg-[#fff0e8]" : "border-[#dfd0b7] bg-white"}`}><input type="radio" name="delivery" value={option.value} checked={delivery === option.value} onChange={() => setDelivery(option.value)} className="mr-2 accent-[#d62d1d]"/><strong>{option.label}</strong><span className="mt-1 block pl-5 text-xs text-[#7e493c]">{option.detail}</span></label>)}</div></fieldset>
         {delivery === "pickup" && <label className="mt-3 block text-sm font-bold text-[#60190f]">Gewenste afhaalvestiging<select required aria-label="Gewenste afhaalvestiging" value={pickupLocation} onChange={event=>setPickupLocation(event.target.value)} className="mt-2 h-12 w-full rounded-xl border border-[#dfd0b7] bg-white px-4"><option value="">Kies een vestiging</option>{BUSINESS_PICKUP_LOCATIONS.map(location=><option key={location.id} value={location.id}>{location.label}</option>)}</select></label>}

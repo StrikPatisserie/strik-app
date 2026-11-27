@@ -5,6 +5,8 @@ import { useBusinessFolderDelivery } from "@/app/lib/useBusinessFolderDelivery";
 
 import {BUSINESS_PICKUP_LOCATIONS,businessPickupLabel} from "../lib/businessPickupLocations";
 import Image from "next/image";
+import BusinessFolderLogo from "@/app/BusinessFolderLogo";
+import { folderLogoError, folderLogoSummary, type FolderLogoChoice } from "@/app/lib/businessFolderLogo";
 import { createQuoteRequestId, sendBusinessFolderQuote } from "@/app/lib/businessFolderSubmission";
 import { useEffect, useRef, useState, type ReactNode, type FormEvent } from "react";
 import { BusinessFolderSeasonIntro, BusinessFolderSeasonNav, BusinessGiftFinderButton } from "@/app/BusinessFolderSeasonControls";
@@ -62,6 +64,8 @@ export default function KerstB2BConcept({seasonYear = new Date().getFullYear()}:
   const [savedSignature, setSavedSignature] = useState("");
   const [saveError, setSaveError] = useState("");
   const [reference, setReference] = useState("");
+  const [logoRequested, setLogoRequested] = useState(false);
+  const [logoChoice, setLogoChoice] = useState<FolderLogoChoice>({ method: "" });
   const pendingRequest = useRef<{ signature: string; id: string } | null>(null);
   const vatLabel = includeVat ? "incl. btw" : "excl. btw";
   const packagePrice = christmasPackage(contents, packageCount, includeVat);
@@ -76,8 +80,8 @@ export default function KerstB2BConcept({seasonYear = new Date().getFullYear()}:
   const totalExcl = roundMoney(singleTotal(false) + packageExcl.total);
   const total = includeVat ? totalIncl : totalExcl;
   const hasSelection = selectedSingles.length > 0 || packagePrice.lines.length > 0;
-  const quotePayload = { season: "kerst", company: contact.company, contactName: contact.contactName, email: contact.email, phone: contact.phone, wishes: contact.wishes, consent: contact.consent, website: contact.website, delivery: { method: contact.delivery, pickupLocation:contact.pickupLocation, address: contact.address, momentType: "date", date: contact.date }, selection: { singles, contents, packageCount, vegan } };
-  const quoteSignature = JSON.stringify(quotePayload);
+  const quotePayload = { season: "kerst", ...(logoRequested ? { logoRequested: true, logoDelivery: logoChoice.method } : {}), company: contact.company, contactName: contact.contactName, email: contact.email, phone: contact.phone, wishes: contact.wishes, consent: contact.consent, website: contact.website, delivery: { method: contact.delivery, pickupLocation:contact.pickupLocation, address: contact.address, momentType: "date", date: contact.date }, selection: { singles, contents, packageCount, vegan } };
+  const quoteSignature = JSON.stringify([quotePayload, logoRequested && logoChoice.method === "upload" ? logoChoice.fileKey : null]);
   const quoteSubmitted = savedSignature === quoteSignature;
   const suggestions = christmasProducts.filter((product) => christmasUnitPrice(product, recipientCount, includeVat) <= budget);
   const examplePackages: { name: string; contents: Record<string, number> }[] = [
@@ -108,6 +112,7 @@ export default function KerstB2BConcept({seasonYear = new Date().getFullYear()}:
     "Eventuele extra verpakking en bezorging zijn nog af te stemmen en niet inbegrepen.", "",
     "LEVERING", contact.delivery === "pickup" ? businessPickupLabel(contact.pickupLocation) : `Bezorgen op aanvraag: ${contact.address.trim() || "adres nog af te stemmen"}`,
     `Gewenste datum: ${contact.date ? new Intl.DateTimeFormat("nl-NL", { dateStyle: "long", timeZone: "UTC" }).format(new Date(`${contact.date}T12:00:00Z`)) : "in overleg"}`,
+    ...(logoRequested ? ["", "LOGO", folderLogoSummary(logoChoice), "Uitvoering en eventuele logokosten in overleg."] : []),
     ...(contact.wishes.trim() ? ["", "WENSEN / LOGO / KAARTJE", contact.wishes.trim()] : []), "",
     "Graag ontvang ik jullie bevestiging van beschikbaarheid, verpakking, definitieve prijs en levermoment. Dit is een aanvraag, nog geen bestelling.", "",
     "Met vriendelijke groet,", contact.contactName.trim() || contact.company.trim(),
@@ -123,10 +128,12 @@ export default function KerstB2BConcept({seasonYear = new Date().getFullYear()}:
     if(contact.delivery==="pickup"&&!BUSINESS_PICKUP_LOCATIONS.some(location=>location.id===contact.pickupLocation)){setSaveError("Kies een afhaalvestiging.");return;}
     try { assertBusinessFolderDelivery(contact.date); }
     catch (error) { setSaveError(error instanceof Error ? error.message : "Controleer de leverdatum."); return; }
+    const logoError = folderLogoError(logoRequested, logoChoice);
+    if (logoError) { setSaveError(logoError); return; }
     setSaving(true); setSaveError("");
     try {
       if (pendingRequest.current?.signature !== quoteSignature) pendingRequest.current = { signature: quoteSignature, id: createQuoteRequestId() };
-      const reference = await sendBusinessFolderQuote({ ...quotePayload, requestId: pendingRequest.current.id });
+      const reference = await sendBusinessFolderQuote({ ...quotePayload, requestId: pendingRequest.current.id }, logoRequested && logoChoice.method === "upload" ? logoChoice.file : undefined);
       setReference(reference);
       setSavedSignature(quoteSignature);
     } catch (error) { setSaveError(error instanceof Error && !(error instanceof TypeError) ? error.message : "De ontvangst van je aanvraag is nog niet bevestigd. Probeer opnieuw."); }
@@ -230,11 +237,13 @@ export default function KerstB2BConcept({seasonYear = new Date().getFullYear()}:
         {packagePrice.lines.length > 0 && <div><span><strong>{packageCount} × kerstpakket op maat</strong>{packagePrice.lines.map(({ product, quantity: amount }) => <small key={product.id}>Per pakket: {amount} × {productName(product.id, product.name)}{product.id === "kerstchocolade" ? ` (${amount * 100} g)` : ""}</small>)}<small>{money(packagePrice.perPackage)} per pakket · verpakking in overleg</small></span><strong>{money(packagePrice.total)}</strong></div>}
       </div>
       <div className={styles.quoteTotal}><span>Producttotaal · {vatLabel}</span><strong>{money(total)}</strong></div><p className={styles.smallNote}>{money(totalIncl)} incl. btw / {money(totalExcl)} excl. btw. Eventuele extra verpakking en bezorging apart af te stemmen.</p>
-      {!hasSelection ? <p role="status" className={styles.empty}>Je aanvraag is leeg. Kies eerst een cadeau of stel een pakket samen.</p> : <form onSubmit={submitQuote} className={styles.quoteForm}>
+      {!hasSelection ? <p role="status" className={styles.empty}>Je aanvraag is leeg. Kies eerst een cadeau of stel een pakket samen.</p> : <form noValidate onSubmit={submitQuote} className={styles.quoteForm}>
         <div className={styles.formGrid}><label>Bedrijf<input required autoComplete="organization" maxLength={180} value={contact.company} onChange={(event) => setContact({ ...contact, company: event.target.value })} /></label><label>Contactpersoon<input required autoComplete="name" maxLength={160} value={contact.contactName} onChange={(event) => setContact({ ...contact, contactName: event.target.value })} /></label><label>E-mailadres<input required type="email" autoComplete="email" maxLength={254} value={contact.email} onChange={(event) => setContact({ ...contact, email: event.target.value })} /></label><label>Telefoon · optioneel<input type="tel" autoComplete="tel" value={contact.phone} onChange={(event) => setContact({ ...contact, phone: event.target.value })} /></label><label>Gewenste datum · of in overleg<input type="date" min={minimumDeliveryDate} value={contact.date} onChange={(event) => setContact({ ...contact, date: event.target.value })} /></label><label>Afhalen of bezorgen<select value={contact.delivery} onChange={(event) => setContact({ ...contact, delivery: event.target.value })}><option value="pickup">Afhalen bij Strik</option><option value="delivery">Bezorgen · prijs op aanvraag</option></select></label></div>
         <p>{businessFolderDeliveryNotice(minimumDeliveryDate)}</p>
         {contact.delivery === "pickup" && <label>Gewenste afhaalvestiging<select required aria-label="Gewenste afhaalvestiging" value={contact.pickupLocation} onChange={event=>setContact({...contact,pickupLocation:event.target.value})}><option value="">Kies een vestiging</option>{BUSINESS_PICKUP_LOCATIONS.map(location=><option key={location.id} value={location.id}>{location.label}</option>)}</select></label>}
         {contact.delivery === "delivery" && <label>Afleveradres<input autoComplete="street-address" value={contact.address} onChange={(event) => setContact({ ...contact, address: event.target.value })} /></label>}
+        <label className={styles.consent}><input type="checkbox" checked={logoRequested} disabled={saving} onChange={event => setLogoRequested(event.target.checked)} /><span>Ik wil een eigen logo · uitvoering en eventuele logokosten in overleg</span></label>
+        {logoRequested && <BusinessFolderLogo choice={logoChoice} onChange={setLogoChoice} disabled={saving} />}
         <label>Wensen · verpakking, logo of kaartje<textarea rows={3} maxLength={2000} value={contact.wishes} onChange={(event) => setContact({ ...contact, wishes: event.target.value })} placeholder="Vertel ons wat jullie cadeau bijzonder maakt." /></label>
         <label className={styles.honeypot} aria-hidden="true">Laat dit veld leeg<input name="quote-check" type="text" tabIndex={-1} autoComplete="off" value={contact.website} onChange={(event) => setContact({ ...contact, website: event.target.value })} /></label>
         <label className={styles.consent}><input type="checkbox" checked={contact.consent} onChange={(event) => setContact({ ...contact, consent: event.target.checked })} /><span>Houd mij ook op de hoogte van de zakelijke Sint- en kerstfolders. Optioneel; afmelden kan altijd.</span></label>

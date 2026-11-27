@@ -5,6 +5,7 @@ import { defaultProductChoice, pricedProduct, productChoiceCandidates, productCh
 import { letterGiftWrapPrice } from "@/app/lib/letter-pricing";
 import { formatBusinessDeliveryMoment } from "@/app/lib/businessDeliveryMoment";
 import type { B2BLetterLine } from "@/app/sinterklaas/types";
+import type { UploadedFolderLogo } from "./businessFolderLogo";
 
 type RecordValue = Record<string, unknown>;
 function record(value: unknown): RecordValue {
@@ -39,7 +40,7 @@ function quantities(value: unknown, maximum: number) {
 
 // Build the complete, immutable submission using the same catalog and prices
 // as the folders. Publicly supplied names, prices and totals are never used.
-export function buildBusinessFolderQuote(value: unknown, seasonYear = Number(new Intl.DateTimeFormat("en",{timeZone:"Europe/Amsterdam",year:"numeric"}).format(new Date()))) {
+export function buildBusinessFolderQuote(value: unknown, seasonYear = Number(new Intl.DateTimeFormat("en",{timeZone:"Europe/Amsterdam",year:"numeric"}).format(new Date())), uploadedLogo?: UploadedFolderLogo) {
   const input = record(value);
   const requestId = text(input.requestId, 36, true).toLowerCase();
   if (!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(requestId)) throw new Error("Vernieuw de pagina en verstuur de aanvraag opnieuw.");
@@ -76,6 +77,7 @@ export function buildBusinessFolderQuote(value: unknown, seasonYear = Number(new
   let department = "bakkerij";
 
   if (season === "kerst") {
+    hasLogo = input.logoRequested === true;
     const singles = quantities(selection.singles, 9999);
     const contents = quantities(selection.contents, 99);
     const packageCount = Object.keys(contents).length ? count(selection.packageCount) : 1;
@@ -137,14 +139,19 @@ export function buildBusinessFolderQuote(value: unknown, seasonYear = Number(new
     }
     snapshotSelection = lines.map(({ product, ...line }) => ({ productId: product.id, ...line }));
   }
+  if (hasLogo && input.logoDelivery !== "upload" && input.logoDelivery !== "email") throw new Error("Kies of je het logo nu uploadt of later per mail nastuurt.");
+  if (hasLogo && input.logoDelivery === "upload" && !uploadedLogo) throw new Error("Voeg je logobestand toe, of kies voor later per mail nasturen.");
+  if (uploadedLogo && (!hasLogo || input.logoDelivery !== "upload")) throw new Error("Kies een aanvraag met logo en ‘Nu uploaden’ om dit bestand mee te sturen.");
+  const logoDelivery = hasLogo ? { method: input.logoDelivery, ...(uploadedLogo ? { file: { name: uploadedLogo.name, size: uploadedLogo.size, sha256: uploadedLogo.sha256 } } : {}) } : undefined;
+  const logoNote = hasLogo ? input.logoDelivery === "upload" ? `Eigen logo · bestand bij aanvraag: ${uploadedLogo!.name}` : "Eigen logo · klant stuurt later per mail na." : "";
   totalEx = roundMoney(totalEx); totalIncl = roundMoney(totalIncl);
   const reference = `${season.toUpperCase()}${String(seasonYear).slice(-2)}-${requestId.replaceAll("-", "").slice(0, 12).toUpperCase()}`;
-  const quoteText = ["BEDRIJF EN CONTACT", `Bedrijf: ${company}`, ...(contactName ? [`Contactpersoon: ${contactName}`] : []), `E-mail: ${email}`, ...(phone ? [`Telefoon: ${phone}`] : []), "", ...rows, "", "PRIJSINDICATIE", `${money(totalEx)} excl. btw / ${money(totalIncl)} incl. btw`, "Extra verpakking en bezorging in overleg.", "", "GEWENSTE LEVERING", momentLabel, deliveryLabel, ...(address ? [`Afleveradres: ${address}`] : []), ...(wishes ? ["", "WENSEN", wishes] : [])].join("\n");
+  const quoteText = ["BEDRIJF EN CONTACT", `Bedrijf: ${company}`, ...(contactName ? [`Contactpersoon: ${contactName}`] : []), `E-mail: ${email}`, ...(phone ? [`Telefoon: ${phone}`] : []), "", ...rows, "", "PRIJSINDICATIE", `${money(totalEx)} excl. btw / ${money(totalIncl)} incl. btw`, "Extra verpakking en bezorging in overleg.", "", "GEWENSTE LEVERING", momentLabel, deliveryLabel, ...(address ? [`Afleveradres: ${address}`] : []), ...(hasLogo ? ["", "LOGO", logoNote, ...(season === "kerst" ? ["Uitvoering en eventuele logokosten in overleg."] : [])] : []), ...(wishes ? ["", "WENSEN", wishes] : [])].join("\n");
   if (Buffer.byteLength(quoteText, "utf8") > 45000) throw new Error("Deze aanvraag is te uitgebreid. Verdeel de producten over twee aanvragen.");
-  const snapshot = { ...(seasonYear === 2026 ? {} : { year: seasonYear }), season, company, contactName, email, phone, wishes, consent, delivery: { method, address, momentType, date: deliveryDate, ...(pickupLocation?{pickupLocation}:{}) }, selection: snapshotSelection };
+  const snapshot = { ...(seasonYear === 2026 ? {} : { year: seasonYear }), season, company, contactName, email, phone, wishes, consent, delivery: { method, address, momentType, date: deliveryDate, ...(pickupLocation?{pickupLocation}:{}) }, selection: snapshotSelection, ...(logoDelivery ? { logoDelivery } : {}) };
   const payloadHash = createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");
   return {
     requestId, reference, payloadHash, snapshot, quoteText, consent,
-    order: { id: `folder-${requestId}`, year: String(seasonYear), season, status: "aanvraag", customerName: company, contactName, customerEmail: email, phone, deliveryWindowType: momentType === "week" ? "range" : "date", deliveryDate, deliveryDateEnd, department, orderText: quoteText, letterLines, totalExVat: totalEx.toFixed(2), priceAgreement: `Prijsindicatie: ${money(totalEx)} excl. btw / ${money(totalIncl)} incl. btw. Extra verpakking en bezorging in overleg.`, deliveryMethod: deliveryLabel, deliveryAddress: address, importantNotes: wishes, logo: hasLogo ? "Eigen logo aangevraagd; bestand en uitvoering nog afstemmen." : "", packaging: hasPackaging ? "Verpakking aangevraagd; zie aanvraag voor inhoud en cadeaupapier." : "", source: "handmatig", sourceSheet: `Website ${season === "kerst" ? "Kerst" : "Sint"} · ${reference}` },
+    order: { id: `folder-${requestId}`, year: String(seasonYear), season, status: "aanvraag", customerName: company, contactName, customerEmail: email, phone, deliveryWindowType: momentType === "week" ? "range" : "date", deliveryDate, deliveryDateEnd, department, orderText: quoteText, letterLines, totalExVat: totalEx.toFixed(2), priceAgreement: `Prijsindicatie: ${money(totalEx)} excl. btw / ${money(totalIncl)} incl. btw. Extra verpakking en bezorging in overleg.`, deliveryMethod: deliveryLabel, deliveryAddress: address, importantNotes: wishes, logo: logoNote, packaging: hasPackaging ? "Verpakking aangevraagd; zie aanvraag voor inhoud en cadeaupapier." : "", source: "handmatig", sourceSheet: `Website ${season === "kerst" ? "Kerst" : "Sint"} · ${reference}` },
   };
 }

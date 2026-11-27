@@ -11,8 +11,9 @@ function load(file, imports = {}, globals = {}) {
   const source = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: {
     module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX,
   } }).outputText;
-  vm.runInNewContext(source, { exports, Error, TypeError, AbortController, setTimeout, clearTimeout, Uint8Array, Date: FixedDate, ...globals, require(name) {
+  vm.runInNewContext(source, { exports, Error, TypeError, FormData, File, AbortController, setTimeout, clearTimeout, Uint8Array, Date: FixedDate, ...globals, require(name) {
     if (name in imports) return imports[name];
+    if (name === '@/app/lib/businessFolderLogo') return load('app/lib/businessFolderLogo.ts');
     if (name === '@/app/lib/useBusinessFolderDelivery') return {useBusinessFolderDelivery: () => '2026-11-30'};
     if (name === '@/app/lib/businessFolderDelivery') return load('app/lib/businessFolderDelivery.ts');
     if (name === '../lib/businessPickupLocations') return load('app/lib/businessPickupLocations.ts', {'../lettershop/shops':load('app/lettershop/shops.ts')});
@@ -70,7 +71,7 @@ function christmasQuote(response = { ok: true, json: async () => ({ ok: true, re
   const calls = [];
   const ui = component('app/kerst-voor-bedrijven/KerstB2BConcept.tsx', {
     './christmasProducts': catalog, '@/app/lib/business-folder-pricing': pricing,
-  }, { fetch: async (url, options) => { calls.push({ url, body: JSON.parse(options.body) }); return response; } });
+  }, { fetch: async (url, options) => { calls.push({ url, body: JSON.parse(typeof options.body === 'string' ? options.body : options.body.get('quote')), file: typeof options.body === 'string' ? undefined : options.body.get('logo'), headers: options.headers }); return response; } });
   function counter(label, value) { find(ui.render(), node => node.props?.label === label && node.props?.onChange).props.onChange(value); }
   function field(label, value) {
     const input = find(find(ui.render(), node => node.type === 'label' && Array.isArray(node.props.children) && node.props.children[0] === label), node => node.type === 'input' || node.type === 'textarea' || node.type === 'select');
@@ -186,7 +187,7 @@ function sintQuote(response = { ok: true, json: async () => ({ ok: true, referen
   const ui = component('app/sint-voor-bedrijven/SintB2BConcept.tsx', {
     '@/app/lib/business-folder-pricing': pricing, '@/app/lib/letter-pricing': wrapping,
     './B2BChocolateLetters': { default: 'Letters', describeB2BLetter: line => `spuitletter ${line.letter} ${line.size}` },
-  }, { fetch: async (url, options) => { calls.push({ url, body: JSON.parse(options.body) }); return response; } });
+  }, { fetch: async (url, options) => { calls.push({ url, body: JSON.parse(typeof options.body === 'string' ? options.body : options.body.get('quote')), file: typeof options.body === 'string' ? undefined : options.body.get('logo'), headers: options.headers }); return response; } });
   find(ui.render(), node => node.type === 'Letters' && node.props.style === 'spuit').props.onChange([{ id: 'test', style: 'spuit', chocolate: 'melk', letter: 'S', size: 'groot', quantity: 25, specialRequests: [] }]);
   find(ui.render(), node => node.type === 'button' && node.props.children === 'Bekijk offerteaanvraag').props.onClick();
   return { ...ui, calls,
@@ -194,6 +195,45 @@ function sintQuote(response = { ok: true, json: async () => ({ ok: true, referen
     submit: () => find(ui.render(), node => node.type === 'form').props.onSubmit({ preventDefault() {} }),
   };
 }
+
+test('both checkout forms require a logo choice, retain the file on retry and allow explicit later email', async () => {
+  for (const season of ['sint', 'kerst']) {
+    const response = { ok: false, json: async () => ({ saved: true, message: 'Logo nog niet opgeslagen; probeer opnieuw.' }) };
+    const quote = season === 'sint' ? sintQuote(response) : christmasQuote(response);
+    if (season === 'sint') {
+      quote.field('Bedrijfsnaam', 'Voorbeeld BV'); quote.field('E-mailadres', 'test@example.invalid');
+      quote.field('Gewenste leverdag', '2026-11-30'); quote.field('Gewenste afhaalvestiging', 'lent');
+      find(quote.render(), node => node.type === 'Letters' && node.props.style === 'spuit').props.onLogoChange(true);
+    } else {
+      const label = find(quote.render(), node => node.type === 'label' && find(node.props.children, child => child.type === 'span' && String(child.props.children).startsWith('Ik wil een eigen logo')));
+      find(label, node => node.type === 'input').props.onChange({ target: { checked: true } });
+    }
+    const logo = () => find(quote.render(), node => node.type === '@/app/BusinessFolderLogo');
+    assert.ok(logo());
+    await quote.submit();
+    assert.equal(quote.calls.length, 0); assert.match(find(quote.render(), node => node.props?.role === 'alert').props.children, /Kies of je het logo/);
+    logo().props.onChange({ method: 'upload' });
+    await quote.submit(); assert.equal(quote.calls.length, 0);
+    assert.match(find(quote.render(), node => node.props?.role === 'alert').props.children, /Voeg je logobestand/);
+    const file = new File(['example'], 'voorbeeld.png', { type: 'image/png' });
+    logo().props.onChange({ method: 'upload', file, fileKey: 'one' });
+    await quote.submit(); await quote.submit();
+    assert.equal(quote.calls.length, 2);
+    assert.equal(quote.calls[0].body.logoDelivery, 'upload');
+    assert.equal(await quote.calls[0].file.text(), 'example');
+    assert.equal(quote.calls[0].headers, undefined, 'browser supplies multipart boundary');
+    assert.equal(quote.calls[0].body.requestId, quote.calls[1].body.requestId);
+    assert.equal(logo().props.choice.file, file);
+    logo().props.onChange({ method: 'upload', file, fileKey: 'two' });
+    await quote.submit();
+    assert.notEqual(quote.calls[1].body.requestId, quote.calls[2].body.requestId);
+    logo().props.onChange({ method: 'email', file, fileKey: 'two' });
+    await quote.submit();
+    assert.equal(quote.calls[3].body.logoDelivery, 'email');
+    assert.equal(quote.calls[3].file, undefined, 'a retained file is not sent when email was selected');
+    assert.match(find(quote.render(), node => node.type === 'pre').props.children, /later per mail/);
+  }
+});
 
 test('Sint submit explains missing delivery/contact details instead of silently disabling the button', async () => {
   const quote = sintQuote();
