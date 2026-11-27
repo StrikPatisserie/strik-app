@@ -26,7 +26,7 @@ export function productionVariant(label: string) {
   };
 }
 
-const PRODUCTION_STYLE_ORDER: Record<string, number> = { spuit: 0, vorm: 1, staf: 2 };
+const PRODUCTION_STYLE_ORDER: Record<string, number> = { spuit: 0, vorm: 1, staf: 2, krans: 3 };
 const PRODUCTION_FLAVOUR_ORDER: Record<string, number> = { melk: 0, puur: 1, wit: 2, "vegan-puur": 3 };
 const PRODUCTION_SIZE_ORDER: Record<string, number> = { groot: 0, klein: 1 };
 
@@ -57,7 +57,7 @@ export function productionSections(rows: WorkingRow[]) {
   });
   return [...sections.entries()].map(([style, groups]) => ({
     key: style,
-    label: style === "spuit" ? "Spuitletters" : style === "vorm" ? "Vormletters" : style === "staf" ? "Chocoladestafjes · Stafwerk" : "Overige letters",
+    label: style === "spuit" ? "Spuitletters" : style === "vorm" ? "Vormletters" : style === "staf" ? "Chocoladestafjes · Stafwerk" : style === "krans" ? "Chocolade kerstkransen" : "Overige letters",
     groups: [...groups.entries()].map(([key, groupRows]) => {
       const variant = productionVariant(groupRows[0]?.label || "");
       return {

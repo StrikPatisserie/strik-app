@@ -4,9 +4,9 @@ import type { B2BLetterLine, SinterklaasB2BOrder } from "./types";
 
 export type CombinationLetterChoice = { chocolate: B2BLetterLine["chocolate"] | ""; letter: string };
 export type ProductionB2BLetter = Omit<B2BLetterLine, "chocolate" | "size" | "style"> & {
-  chocolate: B2BLetterLine["chocolate"] | "roomchocolade";
-  size: B2BLetterLine["size"] | "standaard";
-  style: B2BLetterLine["style"] | "staf";
+  chocolate: B2BLetterLine["chocolate"] | "roomchocolade" | "smaak nog bepalen";
+  size: B2BLetterLine["size"] | "standaard" | `${number} gram`;
+  style: B2BLetterLine["style"] | "staf" | "krans";
   combinationProduct?: string;
 };
 export type CombinationLetterIssue = { product: string; quantity: number; message: string };
@@ -28,11 +28,20 @@ export function b2bProductionLetters(order: Pick<SinterklaasB2BOrder, "id" | "or
   const converted = editableFolderOrderText(order.orderText || "") || (order.orderText || "").replace(/\r\n?/g, "\n");
   const productPart = converted.split("\nOVERIGE ORDERAFSPRAKEN")[0];
   let packageQuantity = 0;
+  let wreathQuantity = 0;
   productPart.split("\n").forEach((row, index) => {
     const match = row.trim().match(/^(\d+)\s*[×x]\s*(.+?)(?: · €\s*[\d.,]+ p\.s\. ex btw.*)?$/);
     if (!match) return;
     const quantity = Number(match[1]), description = match[2];
     if (!Number.isSafeInteger(quantity) || quantity < 1) return;
+    // Chocolate wreaths share the piping day, without creating a second sale.
+    // Keep unspecified chocolate explicit; never infer milk from a product name.
+    const wreath = description.match(/^Chocolade kerstkrans · (\d+) gram(?: per stuk)?(?: · chocolade (melk|puur|wit))?$/i);
+    if (wreath) {
+      wreathQuantity += quantity;
+      lines.push({ id: `wreath:${order.id}:${index}`, letter: "Chocolade kerstkrans", chocolate: (wreath[2]?.toLowerCase() || "smaak nog bepalen") as ProductionB2BLetter["chocolate"], style: "krans", size: `${Number(wreath[1])} gram`, quantity, withLogo: b2bLetterHasLogo(order, {}), exceptions: [] });
+      return;
+    }
     // One piped chocolate staff per Stafwerk package; the other two staffs
     // are marzipan and speculaas. A package logo belongs to the marzipan.
     if (/^Stafwerk(?: pakket)?(?: · |$)/i.test(description)) {
@@ -53,5 +62,5 @@ export function b2bProductionLetters(order: Pick<SinterklaasB2BOrder, "id" | "or
     if (missing.length) { issues.push({ product, quantity, message: `${missing.join(", ")} nog invullen bij het combinatieproduct.` }); return; }
     lines.push({ id: `combination:${order.id}:${index}`, letter: letter.toUpperCase(), chocolate: choice.chocolate as B2BLetterLine["chocolate"], style: "spuit", size: brok?.[2].toLowerCase() === "grote" ? "groot" : "klein", quantity, withLogo: / · eigen logo$/i.test(description), exceptions: [], combinationProduct: product });
   });
-  return { lines, issues, packageQuantity, requiredQuantity: order.letterLines.reduce((sum, line) => sum + line.quantity, 0) + packageQuantity };
+  return { lines, issues, packageQuantity, wreathQuantity, requiredQuantity: order.letterLines.reduce((sum, line) => sum + line.quantity, 0) + packageQuantity + wreathQuantity };
 }

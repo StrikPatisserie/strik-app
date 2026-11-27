@@ -127,3 +127,17 @@ test('fulfilled Stafwerk without a production history does not create retrospect
  const result=helper.combineProductionOrders([batch()],[],[{...o,delivered:true}],[],[{batch_id:batch().id,locked_at:null,rows,supplements:[]}]);
  assert.equal(result.b2bPlanning.length,0);assert.equal(result.batches[0].rows[0].orders,10);
 });
+
+test('chocolate wreaths join the requested piping day with their own weight and keep almond wreaths out',()=>{
+ const original=order({id:'wreaths',season:'kerst',department:'bakkerij',deliveryDate:'2026-12-03',productionDate:'2026-11-30',orderText:'PRODUCTEN EN PRIJS\n125 × Chocolade kerstkrans · 300 gram per stuk · € 15,22 p.s. ex btw · € 1.902,50\nOVERIGE ORDERAFSPRAKEN\nLevering 3 december.'});
+ const before=JSON.stringify(original),round={...batch(),id:'nov30',date:'2026-11-30',startDate:'2026-11-30',pickupFrom:'2026-12-03'};
+ const data=combinations.b2bProductionLetters(original);
+ assert.equal(data.requiredQuantity,125);assert.equal(data.packageQuantity,0);assert.equal(data.wreathQuantity,125);assert.equal(data.lines[0].size,'300 gram');assert.equal(data.lines[0].chocolate,'smaak nog bepalen');
+ const result=helper.combineProductionOrders([batch(),round],[],[original]);
+ assert.equal(result.batches[0].rows.length,0);assert.equal(result.batches[1].rows[0].orders,125);assert.equal(result.batches[1].rows[0].recipients[0].date,'2026-12-03');assert.equal(result.b2bPlanning[0].batchId,'nov30');assert.equal(result.b2bPlanning[0].wreathQuantity,125);
+ const presentation=load('app/sinterklaas/letters/productie/productionPresentation.ts');assert.equal(presentation.productionSections(result.batches[1].rows)[0].label,'Chocolade kerstkransen');
+ const sheet=text(ProductionDistributionSheet({batch:result.batches[1]}));assert.match(sheet,/Chocolade kerstkrans/);assert.match(sheet,/300 gram/);assert.match(sheet,/125/);
+ assert.equal(combinations.b2bProductionLetters({...original,orderText:'160 × Kerstkrans · Gevuld met amandelspijs · € 11,70 p.s. ex btw · € 1.872,00'}).requiredQuantity,0);
+ for(const flags of [{packed:true},{delivered:true},{letterProductionDone:true}])assert.equal(helper.combineProductionOrders([round],[],[{...original,...flags}]).batches[0].rows.length,0);
+ const specified={...original,orderText:original.orderText.replace('300 gram per stuk','300 gram per stuk · chocolade puur')};assert.equal(combinations.b2bProductionLetters(specified).lines[0].chocolate,'puur');assert.notEqual(planning.b2bProductionPlan(original,[round]).version,planning.b2bProductionPlan(specified,[round]).version);assert.equal(JSON.stringify(original),before);
+});

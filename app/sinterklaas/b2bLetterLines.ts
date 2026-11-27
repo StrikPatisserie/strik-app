@@ -27,6 +27,7 @@ export function b2bLetterDecoration(line: Pick<B2BLetterLine, "decoration">) {
 }
 
 export function b2bLetterLineLabel(line: Omit<B2BLetterLine, "chocolate" | "style" | "size"> & { chocolate: string; style: string; size: string }) {
+  if (line.style === "krans") return `${line.quantity}× chocolade kerstkrans · ${line.size} · ${line.chocolate}`;
   if (line.style === "staf") return `${line.quantity}× chocoladestafje · ${line.chocolate} · spuiten`;
   const decoration = b2bLetterDecoration(line);
   return `${line.quantity}× ${line.letter} · ${line.chocolate} ${line.style} · ${line.size}${line.withLogo ? " · eigen logo" : ""}${line.exceptions.length ? ` · ${line.exceptions.join(", ")}` : ""}${decoration ? ` · decoratie: ${decoration}` : ""}`;
