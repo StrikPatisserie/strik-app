@@ -11,6 +11,7 @@ import { sinterklaasAcquisitionEndDate } from "./sinterklaasAcquisitionCampaign"
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
 import { getRoutePrintBlockedReason, openRoutePrintWindow } from "./routePrintWindow";
 import { routePrintPaginationScript } from "./routePrintPagination";
+import { photoPrintEditorScript } from "./photoPrintEditor";
 import { normalizeReceiptDelivery } from "./receiptDelivery";
 import BusinessDeliveries from "./BusinessDeliveries";
 import styles from "./Dagstart.module.css";
@@ -3567,6 +3568,8 @@ function diagonalRoundLayoutFor(
     firstSize + labelHeight,
     secondTop + secondSize + labelHeight
   );
+  // A4 minus the repeated 10 mm top and 8 mm bottom printer margins.
+  if (height > 27.9) return null;
 
   return {
     className: "diagonal",
@@ -3668,9 +3671,9 @@ function createMarzipanPhotoPrintHtml(input: {
     const proCollegeLogo = isProCollegeLogoPrintItem(item);
 
     return `
-      <article class="print-item ${item.shape} ${preserveRectangle ? "keep-rectangular" : ""} ${proCollegeLogo ? "pro-college-logo" : ""} ${includeLabel ? "" : "no-label"} ${item.needsCheck ? "needs-check" : ""}" style="--item-size:${printSizeCm}cm;${layoutStyle}">
+      <article class="print-item ${item.shape} ${preserveRectangle ? "keep-rectangular" : ""} ${proCollegeLogo ? "pro-college-logo" : ""} ${includeLabel ? "" : "no-label"} ${item.needsCheck ? "needs-check" : ""}" data-photo-fit="cover" data-photo-fit-key="${escapeAttribute(labelKeyFor(item))}" style="--item-size:${printSizeCm}cm;${layoutStyle}">
         <div class="photo-frame">
-          <img src="${escapeAttribute(item.photoUrl)}" alt="${escapeAttribute(item.customerName)}" onload="marzipanImageStateChanged()" onerror="this.parentElement.classList.add('photo-load-error'); marzipanImageStateChanged()">
+          <img src="${escapeAttribute(item.photoUrl)}" alt="${escapeAttribute(item.customerName)}" onload="fitMarzipanPhoto(this); marzipanImageStateChanged()" onerror="this.parentElement.classList.add('photo-load-error'); marzipanImageStateChanged()">
           <span class="photo-error">Foto niet beschikbaar bij de webshop. Open de bronmail en voeg de originele foto opnieuw toe.</span>
         </div>
         ${
@@ -3680,9 +3683,26 @@ function createMarzipanPhotoPrintHtml(input: {
                 <span>${escapeHtml(item.product)}</span>
                 <small>${escapeHtml(marzipanPrintSizeLabel(item, printSizeCm))}${escapeHtml(copyLabel)}</small>
                 ${sourceLabel ? `<small>${escapeHtml(sourceLabel)}</small>` : ""}
+                <small class="background-note">Achtergrond aangevuld met egale kleur · controleer de uitsnede</small>
               </div>`
             : ""
         }
+        ${item.shape === "round" && !preserveRectangle ? `<div class="photo-fit-control">
+          <label>Uitsnede voor ${escapeHtml(item.customerLastName || item.customerName)}
+            <select data-control="mode" onchange="setMarzipanPhotoFit(this)"><option value="cover">Origineel rond uitsnijden</option><option value="extend">Uitbreiden en achtergrond aanvullen</option></select>
+          </label>
+          <p class="crop-warning">Controleer of hoofden en tekst binnen de cirkel blijven. Verschuif of vergroot de foto hieronder.</p>
+          <div class="fill-controls">
+            <p><strong>Achtergrond aangevuld.</strong> De originele foto blijft behouden; de ruimte eromheen krijgt een egale kleur. Geen AI-bewerking. Bij een drukke achtergrond kan de overgang zichtbaar blijven.</p>
+            <label>Achtergrondkleur <input type="color" data-control="color" value="#ffffff" oninput="adjustMarzipanPhoto(this)"></label>
+            <button type="button" data-control="suggest" onclick="suggestMarzipanColor(this)">Kleur uit foto</button>
+            <small class="color-status" role="status"></small>
+          </div>
+          <label>Grootte <output data-control="zoom-value">100%</output><input data-control="zoom" type="range" min="100" max="200" value="100" oninput="adjustMarzipanPhoto(this)"></label>
+          <label>Links / rechts<input data-control="x" type="range" min="-100" max="100" value="0" oninput="adjustMarzipanPhoto(this)"></label>
+          <label>Omhoog / omlaag<input data-control="y" type="range" min="-100" max="100" value="0" oninput="adjustMarzipanPhoto(this)"></label>
+          <button type="button" onclick="resetMarzipanPhoto(this)">Uitsnede herstellen</button>
+        </div>` : ""}
       </article>
     `;
   };
@@ -3739,7 +3759,7 @@ function createMarzipanPhotoPrintHtml(input: {
     <meta charset="utf-8">
     <title>${escapeHtml(title)}</title>
     <style>
-      @page { margin: 0; size: A4 portrait; }
+      @page { margin: 10mm 5mm 8mm; size: A4 portrait; }
       * { box-sizing: border-box; }
       :root {
         --petit-four-size: 37.8mm;
@@ -3886,6 +3906,7 @@ function createMarzipanPhotoPrintHtml(input: {
         border: 0.25mm dashed #888;
         height: var(--item-size);
         overflow: hidden;
+        position: relative;
         width: var(--item-size);
       }
       .square .photo-frame {
@@ -3928,6 +3949,39 @@ function createMarzipanPhotoPrintHtml(input: {
       .square .photo-frame img {
         object-fit: contain;
       }
+      .round:not(.keep-rectangular) .photo-frame img {
+        position: absolute;
+        left: var(--photo-left, 50%);
+        top: var(--photo-top, 50%);
+        transform: translate(-50%, -50%);
+        width: var(--photo-width, 100%);
+        height: var(--photo-height, 100%);
+        object-fit: cover;
+      }
+      .photo-fit-control { display: block; margin: 8px 0 18px; padding: 12px; background: #f5f7f3; border: 1px solid #d6ded2; border-radius: 8px; font-size: 12px; }
+      .photo-fit-control label { display: block; margin: 7px 0; font-weight: 700; }
+      .photo-fit-control select { display: block; width: 100%; margin-top: 4px; padding: 8px; border: 1px solid #aaa; border-radius: 6px; background: white; }
+      .photo-fit-control input[type="range"] { display: block; width: 100%; }
+      .photo-fit-control input[type="color"] { vertical-align: middle; margin-left: 8px; }
+      .photo-fit-control output { float: right; }
+      .photo-fit-control button { padding: 6px 10px; background: white; border: 1px solid #9ba894; border-radius: 5px; cursor: pointer; }
+      .photo-fit-control p { font-size: 12px; line-height: 1.4; }
+      .color-status { display: block; margin-top: 6px; color: #6b4516; }
+      .fill-controls, .label .background-note { display: none; }
+      [data-photo-fit="extend"] .fill-controls, [data-photo-fit="extend"] .label .background-note { display: block; }
+      [data-photo-fit="extend"] .crop-warning { display: none; }
+      .label .background-note { font-weight: bold; }
+      @media screen {
+        .round-grid.diagonal { height: auto !important; display: flex; width: 100%; }
+        .round-grid.diagonal .round { position: static; }
+      }
+      @media screen and (min-width: 1000px) {
+        main { max-width: 1100px; }
+        .round-grid .round { display: grid; grid-template-columns: var(--item-size) minmax(240px, 1fr); gap: 0 24px; width: 100%; margin-bottom: 24px; }
+        .round .photo-frame { grid-column: 1; grid-row: 1; }
+        .round .label { grid-column: 1; grid-row: 2; }
+        .round .photo-fit-control { grid-column: 2; grid-row: 1 / span 2; margin-top: 0; }
+      }
       .label {
         font-size: 7.5px;
         line-height: 1.18;
@@ -3968,20 +4022,20 @@ function createMarzipanPhotoPrintHtml(input: {
           height: auto;
           margin: 0;
           padding: 0;
-          width: 210mm;
+          width: 200mm;
         }
-        .screen-actions { display: none; }
+        .screen-actions, .photo-fit-control { display: none; }
         main {
           max-width: none;
           margin: 0;
-          padding: 5mm;
-          width: 210mm;
+          padding: 0;
+          width: 200mm;
         }
         .sheet-header {
           display: none;
         }
         .round-grid {
-          margin-top: 1mm;
+          margin-top: 0;
           row-gap: 1mm;
         }
         .round-grid.diagonal {
@@ -4014,21 +4068,23 @@ function createMarzipanPhotoPrintHtml(input: {
       }
     </style>
     <script>
+      ${photoPrintEditorScript}
       function marzipanImageStateChanged() {
         var images = Array.from(document.querySelectorAll("main img"));
+        images.forEach(fitMarzipanPhoto);
         var status = document.getElementById("print-registration-note");
         var button = document.getElementById("print-sheet");
         if (!status || !button || !images.length) return;
         var broken = images.filter(function(image) { return image.complete && image.naturalWidth === 0; }).length;
-        var loading = images.some(function(image) { return !image.complete; });
+        var loading = images.some(function(image) { return !image.complete; }) || document.querySelectorAll('[data-color-loading="true"]').length > 0;
         button.disabled = broken > 0 || loading;
-        status.textContent = broken ? broken + " foto('s) niet geladen. Controleer de bronmail; dit vel kan zo niet worden afgedrukt." : loading ? "Foto’s laden…" : "Foto’s geladen · bekijken telt niet als print";
+        status.textContent = broken ? broken + " foto('s) niet geladen. Controleer de bronmail; dit vel kan zo niet worden afgedrukt." : loading ? "Foto’s en achtergrondkleur laden…" : "Foto’s geladen · bekijken telt niet als print";
       }
       if (document.addEventListener) document.addEventListener("DOMContentLoaded", marzipanImageStateChanged);
       function printMarzipanSheet() {
         var status = document.getElementById("print-registration-note");
         var images = Array.from(document.querySelectorAll("main img"));
-        if (images.some(function (image) { return !image.complete || image.naturalWidth === 0; })) {
+        if (images.some(function (image) { return !image.complete || image.naturalWidth === 0; }) || document.querySelectorAll('[data-color-loading="true"]').length > 0) {
           status.textContent = "Wacht tot alle foto’s geladen zijn. Ontbreekt er een foto? Open het vel opnieuw.";
           return;
         }
@@ -4059,7 +4115,8 @@ function createMarzipanPhotoPrintHtml(input: {
     <div class="screen-actions">
       <div>
         <h1>${escapeHtml(title)} · ${input.items.length} printstukken</h1>
-        <p class="scale-note">Print op A4 met schaal 100% / ware grootte. Extra foto's komen op extra vellen.</p>
+        <p class="scale-note">Print op A4 met schaal 100% / ware grootte. Ieder vel heeft 10 mm bovenmarge. Extra foto's komen op extra vellen.</p>
+        ${roundItems.some(item => !item.photoUrl.includes("douglas-60716")) ? `<p class="scale-note">Foto’s blijven standaard rond uitgesneden. Pas de uitsnede aan, of kies bewust ‘Uitbreiden en achtergrond aanvullen’. Aanvullen krijgt altijd een melding, ook onder de print. De taartmaat blijft gelijk; aanpassingen gelden voor dit printvel.</p>` : ""}
       </div>
       <div class="action-buttons">
         <span id="print-registration-note" class="print-registration-note">Bekijken telt niet als print</span>

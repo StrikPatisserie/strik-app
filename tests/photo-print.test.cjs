@@ -11,7 +11,7 @@ function load(file, imports = {}, globals = {}, expose = '') {
   const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
-  vm.runInNewContext(code + '\n' + expose, { exports, require: name => name.endsWith('.module.css') ? {default:{}} : name === 'next/dynamic' ? {default:()=>()=>null} : name === './useRoadRouteTimes' ? {} : ['./roadRouting','./routeSaveQueue','./sinterklaasAcquisitionCampaign','./routeHistory'].includes(name) ? load('app/bakkerij/logistiek/'+name.slice(2)+'.ts') : imports[name] || (name === 'server-only' ? {} : require(name)), URL, Date, console, ...globals });
+  vm.runInNewContext(code + '\n' + expose, { exports, require: name => name === './photoPrintEditor' ? load('app/bakkerij/logistiek/photoPrintEditor.ts') : name === '../../lib/photoBackgroundColor' ? load('app/lib/photoBackgroundColor.ts') : name.endsWith('.module.css') ? {default:{}} : name === 'next/dynamic' ? {default:()=>()=>null} : name === './useRoadRouteTimes' ? {} : ['./roadRouting','./routeSaveQueue','./sinterklaasAcquisitionCampaign','./routeHistory'].includes(name) ? load('app/bakkerij/logistiek/'+name.slice(2)+'.ts') : imports[name] || (name === 'server-only' ? {} : require(name)), URL, Date, console, ...globals });
   return exports;
 }
 const tracking = load('app/bakkerij/logistiek/photoPrintTracking.ts');
@@ -98,6 +98,105 @@ test('mixed cake sizes and petit fours retain their own dimensions on a busy pri
   assert.match(html, /8 cm rond/);
 });
 
+function editorItem(key, width = 1200, height = 800) {
+  const attrs = { 'data-photo-fit-key': key, 'data-photo-fit': 'cover' };
+  const controls = {};
+  const styles = {};
+  const image = { src: 'https://webshop.strik-patisserie.nl/Media/userupload/13340.jpg', complete: true, naturalWidth: width, naturalHeight: height,
+    style: { setProperty: (key, value) => styles[key] = value }, closest: () => item };
+  const item = { attrs, controls, styles, image,
+    getAttribute: name => attrs[name] ?? null,
+    setAttribute: (name, value) => attrs[name] = value,
+    removeAttribute: name => delete attrs[name],
+    querySelector: selector => selector === 'img' ? image : controls[selector] ||= { style: {} },
+  };
+  return item;
+}
+function editorContext(items, extra = {}) {
+  const html = dashboard.sheet({ items: copies(1, { shape: 'round', sizeCm: 12 }), plan: { date: '2026-11-28' } });
+  const nodes = { 'confirm-print': { disabled: false }, 'print-sheet': {}, 'print-registration-note': {} };
+  const context = { AbortSignal, document: {
+    querySelectorAll: selector => selector === 'main img' ? items.map(item => item.image) : selector.includes('data-color-loading') ? items.filter(item => item.attrs['data-color-loading'] === 'true') : items,
+    getElementById: id => nodes[id],
+  }, ...extra };
+  vm.createContext(context); vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1], context);
+  return { context, nodes, html };
+}
+
+test('round crop remains default; optional extension keeps every source corner and aspect ratio', () => {
+  const {context, html} = editorContext([]);
+  for (const [width, height] of [[1200, 800], [800, 1200], [1000, 1000], [3000, 100], [100, 3000]]) {
+    const item = editorItem('a', width, height);
+    context.fitMarzipanPhoto(item.image);
+    assert(Math.min(parseFloat(item.styles['--photo-width']), parseFloat(item.styles['--photo-height'])) >= 100, 'default fills circle');
+    item.setAttribute('data-photo-fit', 'extend');
+    context.fitMarzipanPhoto(item.image);
+    const w = parseFloat(item.styles['--photo-width']), h = parseFloat(item.styles['--photo-height']);
+    assert(Math.hypot(w / 2, h / 2) <= 49.000001, 'default extension protects every source corner');
+    assert(Math.abs(w / h - width / height) < 1e-9);
+  }
+  assert.match(html, /data-photo-fit="cover"/);
+  assert.match(html, /Origineel rond uitsnijden/);
+  assert.match(html, /<small class="background-note">Achtergrond aangevuld/);
+  assert.match(html, /@page \{ margin: 10mm 5mm 8mm;/);
+  assert.match(html, /\.screen-actions, \.photo-fit-control \{ display: none; \}/);
+});
+
+test('crop, zoom, position and reset synchronize only copies of the same order', () => {
+  const a = editorItem('a'), a2 = editorItem('a'), b = editorItem('b');
+  const { context, nodes } = editorContext([a, a2, b]);
+  a.attrs['data-photo-color'] = '#ffe200'; // already selected; no network lookup
+  context.setMarzipanPhotoFit({ closest: () => a, value: 'extend' });
+  assert.deepEqual([a, a2, b].map(i => i.attrs['data-photo-fit']), ['extend', 'extend', 'cover']);
+  assert.equal(nodes['confirm-print'].disabled, true);
+  context.setMarzipanPhotoFit({ closest: () => a, value: 'cover' });
+  for (const [name,value] of [['zoom','150'],['x','100'],['y','-100']]) context.adjustMarzipanPhoto({closest:()=>a, getAttribute:()=>name,value});
+  assert.equal(a2.attrs['data-photo-zoom'], '150');
+  assert.equal(b.attrs['data-photo-zoom'], undefined);
+  // At maximum movement, no uncovered strip can appear in crop mode.
+  const w = parseFloat(a.styles['--photo-width']), left = parseFloat(a.styles['--photo-left']);
+  assert(Math.abs(left - w / 2) < 1e-8);
+  context.adjustMarzipanPhoto({closest:()=>a, getAttribute:()=> 'x', value:'0'});
+  assert.equal(a.styles['--photo-left'], '50%', 'slider zero really centres the photo');
+  context.resetMarzipanPhoto({closest:()=>a});
+  assert.equal(a2.attrs['data-photo-zoom'], '100');
+  assert.equal(a2.attrs['data-photo-x'], '0');
+});
+
+test('colour lookup blocks printing while pending and never overrides a later manual colour', async () => {
+  const a=editorItem('a'), a2=editorItem('a');
+  let resolve;
+  const pending=new Promise(done=>resolve=done);
+  const {context,nodes}=editorContext([a,a2], {fetch:()=>pending});
+  const work=context.suggestMarzipanColor({closest:()=>a});
+  assert.equal(nodes['print-sheet'].disabled,true);
+  context.adjustMarzipanPhoto({closest:()=>a,getAttribute:()=> 'color',value:'#aabbcc'});
+  resolve({ok:true,json:async()=>({color:'#ffee00',uniform:true})});
+  await work;
+  assert.equal(a.attrs['data-photo-color'],'#aabbcc');
+  assert.equal(a2.attrs['data-photo-color'],'#aabbcc');
+  assert.equal(nodes['print-sheet'].disabled,false);
+  assert.equal(nodes['confirm-print'].disabled,true);
+});
+
+test('failed colour lookup leaves original image usable with an actionable message', async () => {
+  const a=editorItem('a');
+  const {context,nodes}=editorContext([a], {fetch:async()=>{throw Error('offline')}});
+  await context.suggestMarzipanColor({closest:()=>a});
+  assert.match(a.controls['.color-status'].textContent,/Kies zelf een kleur/);
+  assert.equal(nodes['print-sheet'].disabled,false);
+  assert.equal(a.image.src,'https://webshop.strik-patisserie.nl/Media/userupload/13340.jpg');
+});
+
+test('rectangular and petit-four prints have no round crop control; oversized pairs use separate sheets', () => {
+  const items = [...copies(1), ...copies(1, { shape: 'round', sizeCm: 12, photoUrl: 'https://example.com/douglas-60716.jpg' })];
+  const html = dashboard.sheet({ items, plan: { date: '2026-11-28' } });
+  assert.doesNotMatch(html, /<div class="photo-fit-control"/);
+  const large = dashboard.sheet({ items: copies(2, { shape: 'round', sizeCm: 18 }), plan: { date: '2026-11-28' } });
+  assert.doesNotMatch(large, /class="round-grid diagonal/);
+  assert.equal((large.match(/--item-size:18cm/g) || []).length, 2);
+});
+
 test('confirming the same sheet twice registers one job, while a failed save can be retried', async () => {
   const sheet = { document: { open() {}, write() {}, close() {} }, focus() {} };
   const { open } = load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx', {
@@ -132,7 +231,7 @@ test('a print sheet contains only selected copies and opening/printing never reg
   let printed = 0, confirmed = 0;
   const nodes = { 'print-registration-note': { classList: { add() {} } }, 'confirm-print': { disabled: true } };
   const window = { print: () => printed++, confirmMarzipanPrint: async () => confirmed++ };
-  const context = { window, document: { getElementById: id => nodes[id], querySelectorAll: () => [{ complete: true, naturalWidth: 100 }] } };
+  const context = { window, document: { getElementById: id => nodes[id], querySelectorAll: selector => selector === 'main img' ? [{ complete: true, naturalWidth: 100 }] : [] } };
   vm.createContext(context); vm.runInContext(script, context);
   assert.equal(confirmed, 0);
   context.printMarzipanSheet();
@@ -147,7 +246,7 @@ test('incomplete/broken images block printing and failed registration can be ret
   const html = dashboard.sheet({ items: copies(1), plan: { date: '2026-10-22' } });
   let printed = 0;
   const nodes = { 'print-registration-note': { classList: { add() {} } }, 'confirm-print': { disabled: true } };
-  const context = { window: { print: () => printed++, confirmMarzipanPrint: async () => { throw Error('offline'); } }, document: { getElementById: id => nodes[id], querySelectorAll: () => [{ complete: true, naturalWidth: 0 }] } };
+  const context = { window: { print: () => printed++, confirmMarzipanPrint: async () => { throw Error('offline'); } }, document: { getElementById: id => nodes[id], querySelectorAll: selector => selector === 'main img' ? [{ complete: true, naturalWidth: 0 }] : [] } };
   vm.createContext(context); vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1], context);
   context.printMarzipanSheet();
   assert.equal(printed, 0);
@@ -278,7 +377,7 @@ test('a missing source photo is visible as an error and printing enables only af
  assert.match(html,/photo-load-error/);assert.match(html,/Open de bronmail/);
  const nodes={'print-registration-note':{},'print-sheet':{disabled:true}};
  const images=[{complete:true,naturalWidth:0},{complete:true,naturalWidth:100}];
- const context={document:{getElementById:id=>nodes[id],querySelectorAll:()=>images},window:{}};
+ const context={document:{getElementById:id=>nodes[id],querySelectorAll:selector=>selector==='main img'?images:[]},window:{}};
  vm.createContext(context);vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1],context);
  context.marzipanImageStateChanged();assert.equal(nodes['print-sheet'].disabled,true);assert.match(nodes['print-registration-note'].textContent,/1 foto/);
  images[0]={complete:false,naturalWidth:0};context.marzipanImageStateChanged();assert.equal(nodes['print-sheet'].disabled,true);assert.match(nodes['print-registration-note'].textContent,/laden/);
