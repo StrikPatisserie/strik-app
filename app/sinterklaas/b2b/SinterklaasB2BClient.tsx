@@ -15,6 +15,7 @@ import B2BConfirmationDialog, { canMailQuotation, customerConfirmationSent, cust
 import B2BApprovalDialog from "./B2BApprovalDialog";
 import B2BProductionTotals from "./B2BProductionTotals";
 import B2BWorkOverview from "./B2BWorkOverview";
+import B2BDistributionList from "./B2BDistributionList";
 import type { WorkOverviewEntry } from "./workOverview";
 import { buildProductionTotals } from "./productionTotals";
 import { b2bProductionLetters, combinationProduct, readCombinationChoice, stripCombinationChocolate } from "../b2bCombinationLetters";
@@ -2008,6 +2009,7 @@ export default function SinterklaasB2BClient({ season = "sint", canViewProductio
   const [deleteReasonNote, setDeleteReasonNote] = useState("");
   const [productionTotalsOpen, setProductionTotalsOpen] = useState(false);
   const [workOverviewOpen, setWorkOverviewOpen] = useState(false);
+  const [distributionOpen, setDistributionOpen] = useState(false);
 
   useEffect(() => {
     if (!formOpen) return;
@@ -2307,6 +2309,7 @@ export default function SinterklaasB2BClient({ season = "sint", canViewProductio
             <button type="button" className={styles.overviewIconButton} aria-label="Bestellingen verversen" title="Verversen" data-loading={loading||undefined} disabled={loading} onClick={() => void loadOrders(year)}><OverviewIcon kind="refresh"/></button>
             <button type="button" className={styles.overviewIconButton} aria-label="Excel importeren" title="Excel importeren" disabled={importing} onClick={()=>excelInput.current?.click()}><OverviewIcon kind="upload"/></button>
             <button type="button" className={styles.productionTotalsButton} onClick={() => setWorkOverviewOpen(true)}>Werkoverzicht (PDF)</button>
+            <button type="button" className={styles.productionTotalsButton} onClick={() => setDistributionOpen(true)}>Print verdeellijst</button>
             {canViewProduction && <button type="button" className={styles.productionTotalsButton} disabled={loading} onClick={() => setProductionTotalsOpen(true)}>Productie opteller</button>}
             <input ref={excelInput} type="file" accept=".xlsx,.xls" hidden aria-label="Excelbestand kiezen" onChange={event => {void handleExcelFile(event.target.files?.[0]);event.target.value="";}} />
           </div>
@@ -2338,6 +2341,7 @@ export default function SinterklaasB2BClient({ season = "sint", canViewProductio
       </>}
       </div>
       {workOverviewOpen && <B2BWorkOverview key={year} year={year} buildEntry={workOverviewEntry} onClose={() => setWorkOverviewOpen(false)} />}
+      {distributionOpen && <B2BDistributionList key={year} year={year} buildEntry={workOverviewEntry} onClose={() => setDistributionOpen(false)} />}
       {canViewProduction && productionTotalsOpen && <B2BProductionTotals key={`${season}:${year}`} onRefresh={() => void loadOrders(year)} totals={productionTotals} season={season} year={year} loading={loading} onClose={() => setProductionTotalsOpen(false)} />}
       {confirmationTarget && <B2BConfirmationDialog key={confirmationTarget.id} order={confirmationTarget} updatedOrder={confirmationIsUpdate} onClose={() => setConfirmationTarget(null)} onEdit={nextOrder => { setConfirmationTarget(null); openEditOrderDialog(nextOrder); }} onUpdated={nextOrder => { setOrders(current => updateOrderList(current, nextOrder)); setSaveNotice(customerConfirmationSent(nextOrder) ? `Klantbevestiging voor ${nextOrder.customerName} verstuurd.` : `Mailstatus voor ${nextOrder.customerName} bijgewerkt.`); }}/>}
       {quotationTarget && <B2BConfirmationDialog key={`quotation-${quotationTarget.id}`} mode="quotation" order={quotationTarget} onClose={() => setQuotationTarget(null)} onEdit={nextOrder => { setQuotationTarget(null); openEditOrderDialog(nextOrder); }} onUpdated={nextOrder => { setOrders(current => updateOrderList(current, nextOrder)); setSaveNotice(customerQuotationSent(nextOrder) ? `${nextOrder.status === "offerte" ? "Offerte" : "Aanvraag"} voor ${nextOrder.customerName} verstuurd.` : `Mailstatus voor ${nextOrder.customerName} bijgewerkt.`); }}/>}
