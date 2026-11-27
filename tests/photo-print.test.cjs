@@ -11,7 +11,7 @@ function load(file, imports = {}, globals = {}, expose = '') {
   const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
-  vm.runInNewContext(code + '\n' + expose, { exports, require: name => name.endsWith('.module.css') ? {default:{}} : name === 'next/dynamic' ? {default:()=>()=>null} : name === './useRoadRouteTimes' ? {} : ['./roadRouting','./routeSaveQueue','./sinterklaasAcquisitionCampaign'].includes(name) ? load('app/bakkerij/logistiek/'+name.slice(2)+'.ts') : imports[name] || (name === 'server-only' ? {} : require(name)), URL, Date, console, ...globals });
+  vm.runInNewContext(code + '\n' + expose, { exports, require: name => name.endsWith('.module.css') ? {default:{}} : name === 'next/dynamic' ? {default:()=>()=>null} : name === './useRoadRouteTimes' ? {} : ['./roadRouting','./routeSaveQueue','./sinterklaasAcquisitionCampaign','./routeHistory'].includes(name) ? load('app/bakkerij/logistiek/'+name.slice(2)+'.ts') : imports[name] || (name === 'server-only' ? {} : require(name)), URL, Date, console, ...globals });
   return exports;
 }
 const tracking = load('app/bakkerij/logistiek/photoPrintTracking.ts');
@@ -72,6 +72,31 @@ const dashboard = load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx', 
   "../../productie/ProductionRequests":{}, react: React, '../../StrikUI': {}, './BusinessDeliveries': {}, './routePrintPagination': load('app/bakkerij/logistiek/routePrintPagination.ts'), './routePrintWindow': {}, './receiptDelivery': {}, './arendPrintSession': {}, './webshopPhotoIdentity': photoIdentity,
   './specialSchoolDelivery': {}, './specialProCollegeDelivery': {}, './PhotoPrintChoiceModal': {}, './usePhotoPrintHistory': {}, './photoPrintTracking': tracking,
 }, {}, 'exports.sheet = createMarzipanPhotoPrintHtml; exports.pushCopies = pushMarzipanPrintCopies; exports.open = openMarzipanPhotoSheet; exports.buildItems = buildMarzipanPrintItems; exports.photoBlock = WebshopImageBlock;');
+
+test('cake photos keep their physical size whether printed alone, together or as a reprint', () => {
+  for (const count of [1, 2, 3, 5, 7, 20]) {
+    const items = copies(count, { shape: 'round', product: 'Slagroomtaart 10-12p', sizeCm: 12, minimumSizeCm: 6 });
+    const html = dashboard.sheet({ items, plan: { date: '2026-11-28' } });
+    const sizes = [...html.matchAll(/--item-size:([\d.]+)cm/g)].map(match => Number(match[1]));
+    assert.deepEqual(sizes, Array(count).fill(12), `${count} photos must all stay 12 cm`);
+    assert.doesNotMatch(html, /geschaald vanaf/);
+  }
+});
+
+test('mixed cake sizes and petit fours retain their own dimensions on a busy print day', () => {
+  const items = [
+    ...copies(7, { shape: 'round', sizeCm: 12, minimumSizeCm: 6 }),
+    ...copies(2, { shape: 'round', sizeCm: 8, minimumSizeCm: 8, id: 'small-cake' }),
+    ...copies(25),
+  ];
+  const html = dashboard.sheet({ items, plan: { date: '2026-11-28' } });
+  assert.equal((html.match(/--item-size:12cm/g) || []).length, 7);
+  assert.equal((html.match(/--item-size:8cm/g) || []).length, 2);
+  assert.equal((html.match(/--item-size:3.78cm/g) || []).length, 25);
+  assert.equal((html.match(/<img /g) || []).length, items.length);
+  assert.match(html, /12 cm rond/);
+  assert.match(html, /8 cm rond/);
+});
 
 test('confirming the same sheet twice registers one job, while a failed save can be retried', async () => {
   const sheet = { document: { open() {}, write() {}, close() {} }, focus() {} };

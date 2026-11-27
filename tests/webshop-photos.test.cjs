@@ -64,7 +64,7 @@ test('duplicate identity compares the whole image, preserves URL case and separa
 function storageHarness(initial = []) {
   let stored = {images:initial}, writes = 0;
   const client = {from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{value:stored}})})}),upsert:async row=>{stored=JSON.parse(JSON.stringify(row.value));writes++;return {};}})};
-  const storage = load('app/lib/bakeryLogisticsStorage.ts', {'./supabase/admin':{createAdminClient:()=>client},'@/app/bakkerij/logistiek/webshopPhotoIdentity':identity,'@/app/bakkerij/logistiek/sinterklaasAcquisitionCampaign':{} });
+  const storage = load('app/lib/bakeryLogisticsStorage.ts', {'./supabase/admin':{createAdminClient:()=>client},'@/app/bakkerij/logistiek/webshopPhotoIdentity':identity,'@/app/bakkerij/logistiek/routeHistory':load('app/bakkerij/logistiek/routeHistory.ts'),'@/app/bakkerij/logistiek/sinterklaasAcquisitionCampaign':{} });
   return {storage,get stored(){return stored;},get writes(){return writes;}};
 }
 test('one mail stores all photos in one write; retries preserve both without duplicates', async()=>{

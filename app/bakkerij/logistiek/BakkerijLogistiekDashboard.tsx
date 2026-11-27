@@ -3530,22 +3530,6 @@ function formatPrintCm(value: number) {
     : String(Number(value.toFixed(1))).replace(".", ",");
 }
 
-function roundPrintSizeCmForItem(
-  item: MarzipanPrintItem,
-  roundItems: MarzipanPrintItem[]
-) {
-  if (item.shape !== "round") return item.sizeCm;
-  if (item.minimumSizeCm >= item.sizeCm) return item.sizeCm;
-
-  const scalableRoundCount = roundItems.filter(
-    (roundItem) => roundItem.minimumSizeCm < roundItem.sizeCm
-  ).length;
-  if (scalableRoundCount >= 5) return Math.max(item.minimumSizeCm, 6);
-  if (scalableRoundCount >= 3) return Math.max(item.minimumSizeCm, 10);
-
-  return item.sizeCm;
-}
-
 function formatCssCm(value: number) {
   return `${Number(value.toFixed(2))}cm`;
 }
@@ -3606,12 +3590,7 @@ function marzipanPrintSizeLabel(
     return `${formatPrintCm(printSizeCm)} cm rechthoekig`;
   }
 
-  const printLabel = `${formatPrintCm(printSizeCm)} cm rond`;
-  if (printSizeCm < item.sizeCm) {
-    return `${printLabel} · geschaald vanaf ${formatPrintCm(item.sizeCm)} cm`;
-  }
-
-  return printLabel;
+  return `${formatPrintCm(printSizeCm)} cm rond`;
 }
 
 function createMarzipanPhotoPrintHtml(input: {
@@ -3664,8 +3643,10 @@ function createMarzipanPhotoPrintHtml(input: {
       .filter(Boolean)
       .join(" · ");
 
+  // The cake determines the physical size. A busier day requires more sheets,
+  // never smaller photos; partial prints and reprints must keep the same size.
   const roundPrintSizeCmById = new Map(
-    roundItems.map((item) => [item.id, roundPrintSizeCmForItem(item, roundItems)])
+    roundItems.map((item) => [item.id, item.sizeCm])
   );
   const diagonalRoundLayout = diagonalRoundLayoutFor(
     roundItems,
@@ -3745,7 +3726,9 @@ function createMarzipanPhotoPrintHtml(input: {
     )
       ? "petit four/gateau ca. 3,8 cm"
       : "",
-    roundItems.length > 0 ? "taart 6-12 cm rond" : "",
+    roundItems.length > 0
+      ? `taart ${[...new Set(roundItems.map(item => item.sizeCm))].sort((a, b) => a - b).map(formatPrintCm).join(" / ")} cm rond`
+      : "",
   ]
     .filter(Boolean)
     .join(" · ");
@@ -3780,6 +3763,10 @@ function createMarzipanPhotoPrintHtml(input: {
       .screen-actions h1 {
         font-size: 15px;
         margin: 0;
+      }
+      .screen-actions .scale-note {
+        font-size: 12px;
+        margin: 4px 0 0;
       }
       .screen-actions button {
         background: #111;
@@ -4070,7 +4057,10 @@ function createMarzipanPhotoPrintHtml(input: {
   </head>
   <body>
     <div class="screen-actions">
-      <h1>${escapeHtml(title)} · ${input.items.length} printstukken</h1>
+      <div>
+        <h1>${escapeHtml(title)} · ${input.items.length} printstukken</h1>
+        <p class="scale-note">Print op A4 met schaal 100% / ware grootte. Extra foto's komen op extra vellen.</p>
+      </div>
       <div class="action-buttons">
         <span id="print-registration-note" class="print-registration-note">Bekijken telt niet als print</span>
         <button type="button" class="secondary" onclick="if (window.opener) window.close(); else window.history.back();">Terug</button>
