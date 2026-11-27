@@ -1,3 +1,4 @@
+import type { RouteHistoryDay } from "./routeHistory";
 import type {AddressLocation,RoadRoute} from "./roadRouting";
 export type LogisticsBatchStatus =
   | "wacht"
@@ -180,7 +181,12 @@ export type LogisticsRouteLearningObservationStop = {
   badges: string[];
 };
 
+export type LogisticsRouteLoadContext = {
+  deliveryReceipts: number; deliveryStops: number; largeReceipts: number; pastryUnits: number; criticalReceipts: number;
+};
+
 export type LogisticsRouteLearningObservation = {
+  load?: LogisticsRouteLoadContext;
   id: string;
   date: string;
   stops: LogisticsRouteLearningObservationStop[];
@@ -210,6 +216,7 @@ export type LogisticsRouteLearningPair = {
 };
 
 export type LogisticsRouteLearning = {
+  history?: RouteHistoryDay[];
   id: "system";
   stops: LogisticsRouteLearningStop[];
   pairs: LogisticsRouteLearningPair[];

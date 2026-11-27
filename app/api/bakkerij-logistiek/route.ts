@@ -56,7 +56,7 @@ export async function GET(request: Request) {
         getLogisticsDayFeedbackForDate(date),
         getRecentLogisticsDayFeedback(date),
         getLogisticsRouteDraftForDate(date),
-        getLogisticsRouteLearning(),
+        getLogisticsRouteLearning(date),
         getLogisticsFixedCustomers(),
         getLogisticsPreparationProducts(),
         getLogisticsAcquisitionCampaign(),

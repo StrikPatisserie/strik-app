@@ -97,7 +97,7 @@ test('postcode and exact house number resolve a misspelled street, without choos
 });
 
 test('Lent route instructions cannot move a Winssen delivery into Lent',()=>{
- const imports=new Proxy({'./roadRouting':road,'next/dynamic':{default:()=>()=>null}},{get:(target,key)=>target[key]||{}});
+ const imports=new Proxy({'./routeHistory':load('app/bakkerij/logistiek/routeHistory.ts'),'./roadRouting':road,'next/dynamic':{default:()=>()=>null}},{get:(target,key)=>target[key]||{}});
  const dashboard=load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx',imports,'exports.timing=buildRouteTiming;exports.point=receiptRoutePoint;exports.packaging=shopEmballageStop;');
  const address='Notaris Stefanus Roesstr 28, 6645 AJ WINSSEN';
  const arend={id:'arend',sourceId:'receipt:arend',label:'Gasterij de Arend',learningTarget:address,detail:`voor 14:00 · ${address} · vast: Wordt altijd na winkel Lent bezorgd`,badges:[]};

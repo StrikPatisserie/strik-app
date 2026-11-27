@@ -1,3 +1,4 @@
+import { compactRouteHistory } from "@/app/bakkerij/logistiek/routeHistory";
 import {cleanLocation,cleanRoad} from "@/app/bakkerij/logistiek/roadRouting";
 import "server-only";
 import { webshopPhotoDuplicateKey } from "@/app/bakkerij/logistiek/webshopPhotoIdentity";
@@ -1567,7 +1568,7 @@ function routeLearningKindForDraftStop(
 function routeLearningCorrectionWeight(
   stop: LogisticsRouteLearningObservationStop
 ) {
-  return stop.moved ? 4 : 1;
+  return stop.moved && stop.originalVehicle && stop.originalVehicle !== stop.vehicle ? 2 : 1;
 }
 
 function routeLearningObservationFromStoredDraft(
@@ -2053,7 +2054,7 @@ export async function getLogisticsRouteDraftForDate(date: string, strict = false
   );
 }
 
-export async function getLogisticsRouteLearning() {
+export async function getLogisticsRouteLearning(beforeDate = new Date().toISOString().slice(0, 10)) {
   const [state, routeDraftsState] = await Promise.all([
     readLogisticsRouteLearningState(),
     readLogisticsRouteDraftsState(),
@@ -2066,9 +2067,11 @@ export async function getLogisticsRouteLearning() {
     .map(routeLearningObservationFromStoredDraft)
     .filter((observation) => observation.stops.length > 0);
 
-  return summarizeLogisticsRouteLearning({
-    observations: [...state.observations, ...draftObservations],
-  });
+  const observations = [...state.observations, ...draftObservations].filter(item => item.date < beforeDate);
+  return {
+    ...summarizeLogisticsRouteLearning({ observations }),
+    history: compactRouteHistory(observations, beforeDate),
+  };
 }
 
 export async function getLogisticsFixedCustomers() {

@@ -1,3 +1,4 @@
+import { cleanRouteLoadContext } from "@/app/bakkerij/logistiek/routeHistory";
 import {cleanLocation,cleanRoad} from "@/app/bakkerij/logistiek/roadRouting";
 import { NextResponse } from "next/server";
 import type {
@@ -5,6 +6,7 @@ import type {
   LogisticsRouteDraftRound,
   LogisticsRouteDraftStop,
   LogisticsRouteLearningObservation,
+  LogisticsRouteLoadContext,
   LogisticsRouteLearningObservationStop,
 } from "@/app/bakkerij/logistiek/logisticsTypes";
 import { canAccessLogisticsRequest } from "@/app/lib/bakeryLogisticsAuth";
@@ -180,7 +182,8 @@ function routeLearningObservationFromDraft(
   date: string,
   draft: LogisticsRouteDraft,
   updatedAt: string,
-  baselineRoutes: LogisticsRouteDraftRound[] = []
+  baselineRoutes: LogisticsRouteDraftRound[] = [],
+  load?: LogisticsRouteLoadContext
 ): LogisticsRouteLearningObservation {
   const baseline = buildRouteLearningBaseline(baselineRoutes);
   const stops = draft.routes.flatMap((route, routeIndex) =>
@@ -232,6 +235,7 @@ function routeLearningObservationFromDraft(
     id: date,
     date,
     stops,
+    load,
     updatedAt,
   };
 }
@@ -254,7 +258,7 @@ export async function POST(request: Request) {
       if (body.forgetLearning === true) {
         await deleteLogisticsRouteLearningObservation(date);
       }
-      const routeLearning = await getLogisticsRouteLearning();
+      const routeLearning = await getLogisticsRouteLearning(date);
 
       return NextResponse.json({
         ok: true,
@@ -292,11 +296,12 @@ export async function POST(request: Request) {
           date,
           draft,
           draft.updatedAt,
-          baselineRoutes as LogisticsRouteDraftRound[]
+          baselineRoutes as LogisticsRouteDraftRound[],
+          cleanRouteLoadContext(body.load)
         )
       );
     }
-    const routeLearning = shouldLearn ? await getLogisticsRouteLearning() : undefined;
+    const routeLearning = shouldLearn ? await getLogisticsRouteLearning(date) : undefined;
 
     return NextResponse.json({
       ok: true,

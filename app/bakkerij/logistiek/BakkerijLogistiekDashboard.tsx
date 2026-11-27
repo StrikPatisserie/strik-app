@@ -6,6 +6,7 @@ import {roadLegMinutes,roadStopAddress,renameRoadPoint,routeFingerprint,DEPOT_ID
 import { useRoadRouteTimes } from "./useRoadRouteTimes";
 const AddRouteStopDialog=dynamic(()=>import("./AddRouteStopDialog"));
 import { createRouteSaveQueue } from "./routeSaveQueue";
+import { buildRouteHistoryModel, deliveryWindow, isPackagingOnlyRound, type RouteHistoryModel } from "./routeHistory";
 import { sinterklaasAcquisitionEndDate } from "./sinterklaasAcquisitionCampaign";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
 import { getRoutePrintBlockedReason, openRoutePrintWindow } from "./routePrintWindow";
@@ -6056,24 +6057,12 @@ function shopLabelForKey(key: string) {
 }
 
 function routeDeadlineMinutes(receipt: ReceiptSummary) {
-  const time = receiptOperationalTime(receipt);
-  const matches = [...time.matchAll(/\b(\d{1,2}):(\d{2})\b/g)];
-  const deadline = matches.at(-1);
-  if (!deadline) return 9999;
-
-  return Number(deadline[1]) * 60 + Number(deadline[2]);
+  return deliveryWindow(receiptOperationalTime(receipt)).latest ?? 9999;
 }
 
 function routeTimeLabel(receipt: ReceiptSummary) {
   const time = receiptOperationalTime(receipt);
   if (!time) return "tijd check";
-
-  const matches = [...time.matchAll(/\b(\d{1,2}):(\d{2})\b/g)];
-  if (matches.length >= 2) {
-    const deadline = matches.at(-1);
-
-    return deadline ? `voor ${deadline[1].padStart(2, "0")}:${deadline[2]}` : time;
-  }
 
   return time;
 }
@@ -6205,22 +6194,8 @@ function routeLearningStopForReceipt(
     routeLearning,
     routeLearningKeyForReceipt(receipt, kind)
   );
-  if (exactStop || !routeLearning) return exactStop;
-
-  const customer = routeLearningKeyPart(receipt.customer);
-  const receiptKind =
-    kind === "ice" || isIceReceiptSummary(receipt) ? "ice" : "receipt";
-  const customerPrefix = `${receiptKind}:${customer || "klant"}:`;
-  const matches = routeLearning.stops
-    .filter((stop) => stop.key.startsWith(customerPrefix))
-    .sort((first, second) => {
-      const samplesCompare = second.samples - first.samples;
-      if (samplesCompare !== 0) return samplesCompare;
-
-      return second.lastSeenAt.localeCompare(first.lastSeenAt);
-    });
-
-  return matches[0] || null;
+  // A customer's other delivery address is not evidence for this destination.
+  return exactStop;
 }
 
 function busIdFromVehicleName(vehicle: string): BusId | "" {
@@ -7048,7 +7023,7 @@ function buildRouteTiming(route: RouteRound, departureMinute: number): RouteTimi
     const roadMinutes=roadLegMinutes(route.road,previousStop?.id||DEPOT_ID,stop.id,previousStop?.location,stop.location);
     const estimate=estimatedTravelMinutes(currentPoint,nextPoint);
     const travelMinutes = roadMinutes ?? (stop.location&&stop.location.id!==previousStop?.location?.id?Math.max(4,estimate):estimate);
-    const arrivalMinute = currentMinute + travelMinutes;
+    const arrivalMinute = Math.max(currentMinute + travelMinutes, deliveryWindow(routeStopDeliveryTime(stop)).earliest ?? 0);
     const currentShopVisitKey = shopVisitKey(stop);
     const combinedWithPrevious = Boolean(
       currentShopVisitKey &&
@@ -8075,11 +8050,7 @@ function routePrintTimeParts(stop: RouteStop) {
 }
 
 function routePrintTimeMinutes(value: string) {
-  const matches = [...value.matchAll(/\b(\d{1,2}):(\d{2})\b/g)];
-  const match = matches.at(-1);
-  if (!match) return 9999;
-
-  return Number(match[1]) * 60 + Number(match[2]);
+  return deliveryWindow(value).latest ?? 9999;
 }
 
 function routeStopMissesDeadline(
@@ -8453,6 +8424,128 @@ function buildWeekdayFixedRouteRounds(
   ];
 }
 
+function historyOrderPenalty(stops: RouteStop[], model: RouteHistoryModel) {
+  let penalty = 0;
+  for (let i = 0; i < stops.length; i++) for (let j = i + 1; j < stops.length; j++) {
+    penalty += model.before.get(`${stops[j].learningKey}\n${stops[i].learningKey}`) || 0;
+  }
+  return penalty;
+}
+
+function routeProposalAssessment(rounds: RouteRound[], model: RouteHistoryModel) {
+  const late = new Map<string, number>();
+  const arrivals = new Map<string, number>();
+  let minutes = 0;
+  let orderPenalty = 0;
+  for (const group of routeGroupsFor(rounds)) {
+    const timings = buildRouteGroupTimings(group.routes);
+    for (const route of group.routes) {
+      const timing = timings.get(route.id)!;
+      if (route.stops.length) minutes += timing.returnMinute - timing.departureMinute;
+      orderPenalty += historyOrderPenalty(route.stops, model);
+      route.stops.forEach((stop, i) => {
+        arrivals.set(stop.sourceId, timing.stops[i].arrivalMinute);
+        late.set(stop.sourceId, Math.max(0, timing.stops[i].arrivalMinute - (deliveryWindow(routeStopDeliveryTime(stop)).latest ?? 9999)));
+      });
+    }
+  }
+  const earlyPackaging = new Map<string, number>();
+  for (const [key, arrival] of arrivals) {
+    if (!key.endsWith(":emballage")) continue;
+    const delivery = arrivals.get(key.replace(/:emballage$/, ""));
+    if (delivery !== undefined) earlyPackaging.set(key, Math.max(0, delivery + 15 - arrival));
+  }
+  return { late, earlyPackaging, arrivals, minutes, score: minutes + orderPenalty * 8 };
+}
+
+/** Learn reviewed choices, then check them against today's quantities and time windows. */
+function applyRouteHistory(
+  initial: RouteRound[], date: string, load: DayLoadProfile,
+  learning: RouteLearningSummary | null
+): RouteRound[] {
+  const weekday = dayOfWeekForDate(date);
+  // Saturday's shop/frozen-goods rounds and exceptional school runs keep their own rules.
+  if (weekday === 0 || weekday === 6 || initial.some(route => !/^Bus [AB]$/.test(route.vehicle))) return initial;
+  const model = buildRouteHistoryModel(learning?.history || [], date,
+    initial.flatMap(route => route.stops.map(stop => stop.learningKey || "")), load);
+  if (model.days < 3) return initial;
+  let rounds = initial;
+  const original = routeProposalAssessment(initial, model);
+  const changedRoutes = new Set<string>();
+
+  function considerMove(sourceId: string, destinationId: string, mustImprove: boolean) {
+    const source = rounds.find(route => route.stops.some(stop => stop.sourceId === sourceId));
+    const target = rounds.find(route => route.id === destinationId);
+    const stop = source?.stops.find(stop => stop.sourceId === sourceId);
+    if (!source || !target || !stop) return;
+    const crossingRound = source.id !== target.id;
+    const receiving = target.stops.filter(item => item.sourceId !== sourceId);
+    if (crossingRound && routeRoundNumber(target) === 1) {
+      const bus = busIdFromVehicleName(target.vehicle);
+      if (!bus) return;
+      const capacity = model.firstRound[bus];
+      const deliveries = [...receiving, stop].filter(item => item.learningKind === "receipt");
+      if (capacity.days < 3 || deliveries.length > capacity.maxStops + 1 ||
+          deliveries.filter(item => item.badges.includes("groot")).length > capacity.maxLarge + 1) return;
+    }
+    const baseline = routeProposalAssessment(rounds, model);
+    let best: RouteRound[] | null = null;
+    let bestScore = Infinity;
+    const firstIsShop = routeRoundNumber(target) === 1 && target.stops[0]?.learningKind === "shop" && !target.stops[0].sourceId.endsWith(":emballage");
+    for (let index = firstIsShop ? 1 : 0; index <= receiving.length; index++) {
+      const stops = receiving.slice();
+      stops.splice(index, 0, stop);
+      const candidate = rounds.map(route => route.id === target.id ? { ...route, road: undefined, stops }
+        : route.id === source.id ? { ...route, road: undefined, stops: route.stops.filter(item => item.sourceId !== sourceId) } : route);
+      const assessment = routeProposalAssessment(candidate, model);
+      // Never trade a new late customer for a more familiar order or a shorter total route.
+      if ([...assessment.late].some(([key, value]) => value > (baseline.late.get(key) || 0))) continue;
+      if ([...assessment.earlyPackaging].some(([key, value]) => value > (baseline.earlyPackaging.get(key) || 0))) continue;
+      if (stop.sourceId.endsWith(":emballage")) {
+        const delivery = assessment.arrivals.get(stop.sourceId.replace(/:emballage$/, ""));
+        // Collection must follow the shop delivery, also when the other van collects.
+        if (delivery === undefined || (assessment.arrivals.get(stop.sourceId) || 0) < delivery + 15) continue;
+      }
+      if (assessment.minutes > baseline.minutes + (mustImprove ? 0 : 15) || assessment.minutes > original.minutes + 20) continue;
+      if ((mustImprove || !crossingRound) && assessment.score >= baseline.score - 0.5) continue;
+      if (assessment.score < bestScore) { bestScore = assessment.score; best = candidate; }
+    }
+    if (best) {
+      rounds = best;
+      changedRoutes.add(source.id);
+      changedRoutes.add(target.id);
+    }
+  }
+
+  // Strong recurring choices first. Similar-day load can also keep a new, small stop in round one.
+  for (const stop of initial.flatMap(route => route.stops).filter(stop => stop.learningKind === "receipt")) {
+    const choice = model.choices.get(stop.learningKey || "");
+    const source = rounds.find(route => route.stops.some(item => item.sourceId === stop.sourceId))!;
+    if (choice) {
+      const target = rounds.find(route => route.vehicle === `Bus ${choice.bus}` && routeRoundNumber(route) === choice.round);
+      if (target) considerMove(stop.sourceId, target.id, false);
+    } else if (routeRoundNumber(source) === 2 && !stop.badges.includes("groot")) {
+      const bus = busIdFromVehicleName(source.vehicle);
+      const pattern = bus && model.firstRound[bus];
+      const first = rounds.find(route => route.vehicle === source.vehicle && routeRoundNumber(route) === 1);
+      if (pattern && first && pattern.days >= 5 && pattern.singleShare >= 0.7) considerMove(stop.sourceId, first.id, true);
+    }
+  }
+  for (const stop of initial.flatMap(route => route.stops).filter(stop => stop.sourceId.endsWith(":emballage"))) {
+    const choice = model.choices.get(stop.learningKey || "");
+    if (!choice || choice.days < 5 || choice.confidence < 0.8) continue;
+    const target = rounds.find(route => route.vehicle === `Bus ${choice.bus}` && routeRoundNumber(route) === choice.round);
+    if (target) considerMove(stop.sourceId, target.id, true);
+  }
+  // A second pass recovers established relative order after customers moved between buses.
+  for (const route of rounds.slice()) for (const stop of route.stops) {
+    if (stop.learningKind === "receipt") considerMove(stop.sourceId, route.id, true);
+  }
+  return rounds.map(route => changedRoutes.has(route.id)
+    ? { ...refreshRouteRoundAfterManualMove(route, load), reason: `Voorstel op basis van ${model.days} eerdere werkdagen, met controle op bonnen en levertijden.` }
+    : route);
+}
+
 function buildRouteRounds(
   plan: DayPlan, receipts: ReceiptSummary[], loadProfile: DayLoadProfile,
   routeLearning: RouteLearningSummary | null
@@ -8467,9 +8560,10 @@ function buildRouteRounds(
     const target = rounds.find(route => route.vehicle === delivery.vehicle && routeRoundNumber(route) === 2) || delivery;
     packagingByRoute.set(target.id, [...(packagingByRoute.get(target.id) || []), shopEmballageStop(shopKey)]);
   }
-  return rounds.map(route => ({ ...refreshRouteRoundAfterManualMove({ ...route,
+  const complete = rounds.map(route => ({ ...refreshRouteRoundAfterManualMove({ ...route,
     stops: placeLentEmballageAfterLastAreaStop([...route.stops, ...(packagingByRoute.get(route.id) || [])]),
   }, loadProfile), reason: route.reason }));
+  return applyRouteHistory(complete, plan.date, loadProfile, routeLearning);
 }
 
 function buildBaseRouteRounds(
@@ -9837,6 +9931,9 @@ export default function BakkerijLogistiekDashboard() {
     () => buildStats(operationalPlan, productionTotals),
     [operationalPlan, productionTotals]
   );
+  const routeHistoryDays = useMemo(() => buildRouteHistoryModel(routeLearning?.history || [], operationalPlan.date,
+    logisticsReceiptSummaries.filter(isRouteDelivery).map(receipt => routeLearningKeyForReceipt(receipt)), loadProfile).days,
+    [routeLearning, operationalPlan.date, logisticsReceiptSummaries, loadProfile]);
   const automaticRouteRounds = useMemo(
     () =>
       buildRouteRounds(
@@ -10308,7 +10405,7 @@ export default function BakkerijLogistiekDashboard() {
     setRouteSaveState("saving");
     setRouteSaveMessage(learn ? "route opslaan en routegeheugen bijwerken..." : "routeconcept opslaan...");
     const payload = JSON.stringify({ date, routes: serializeRouteRounds(routeRoundsForPersistence(routeRoundsToSave)),
-      baselineRoutes: learn ? serializeRouteRounds(automaticRouteRounds) : undefined, excludedSourceIds, learn });
+      baselineRoutes: learn ? serializeRouteRounds(automaticRouteRounds) : undefined, load: learn ? loadProfile : undefined, excludedSourceIds, learn });
     const job = routeSaveQueueRef.current!.enqueue(async () => {
       const response = await fetch("/api/bakkerij-logistiek/route-draft", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: payload,
@@ -11801,6 +11898,7 @@ export default function BakkerijLogistiekDashboard() {
             routePrintBlockedReason={getRoutePrintBlockedReason(batchLoadState, isImporting, loadedBatchDate === selectedPlan.date)}
             routeRounds={routeRounds}
             roadTimingMessage={roadTimingMessage}
+            routeHistoryDays={routeHistoryDays}
             routeSaveMessage={routeSaveMessage}
             routeSaveState={routeSaveState}
             routesEdited={routesEdited}
@@ -12693,6 +12791,7 @@ function RoutesPanel({
   routePrintBlockedReason,
   routeRounds,
   roadTimingMessage,
+  routeHistoryDays,
   routeSaveMessage,
   routeSaveState,
   routesEdited,
@@ -12717,6 +12816,7 @@ function RoutesPanel({
   routePrintBlockedReason: string;
   routeRounds: RouteRound[];
   roadTimingMessage: string;
+  routeHistoryDays: number;
   routeSaveMessage: string;
   routeSaveState: RouteSaveState;
   routesEdited: boolean;
@@ -12887,6 +12987,13 @@ function RoutesPanel({
         )}
       </div>
 
+      {routeHistoryDays >= 3 && dayOfWeekForDate(selectedPlan.date) >= 1 && dayOfWeekForDate(selectedPlan.date) <= 5 && (
+        <details className="text-xs text-[#536c53]">
+          <summary className="w-fit cursor-pointer">Routegeheugen · {routeHistoryDays} eerdere werkdagen</summary>
+          <p className="mt-1 max-w-2xl">Het ochtendvoorstel gebruikt terugkerende buskeuzes, stopvolgorde en rondes op vergelijkbare dagen. De bonnen, hoeveelheden en levertijden van deze dag bepalen wat past. Jullie opgeslagen indeling blijft staan; definitief opslaan leert de volgende dagen bij.</p>
+        </details>
+      )}
+
       {acquisitionCampaign && isAcquisitionCampaignDate(selectedPlan.date, acquisitionCampaign) && (
         <section className="overflow-hidden rounded-xl border border-[#edc7a8] bg-[#fffaf2]">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#edc7a8] px-3 py-2 text-[#713519]">
@@ -12951,7 +13058,8 @@ function RoutesPanel({
           const printableRouteCount = group.routes.filter(
             (route) => route.stops.length > 0
           ).length;
-          const visibleRouteCount = group.routes.length;
+          const deliveryRoundCount = group.routes.filter(route => route.stops.length > 0 && !isPackagingOnlyRound(route)).length;
+          const packagingRoundCount = group.routes.filter(isPackagingOnlyRound).length;
           const isElectricBus = group.vehicle === "Bus A";
           const isSchoolRoute =
             group.vehicle === specialSchoolDeliveryVehicle;
@@ -12982,8 +13090,8 @@ function RoutesPanel({
                   <p className="min-w-0 truncate text-[0.96rem] font-black leading-none tracking-normal text-[#1a1815]">
                     {routeGroupDisplayTitle(group.vehicle)}
                     <span className="ml-1 text-[0.82rem] font-medium italic text-[#7b746c]">
-                      · {visibleRouteCount} ronde
-                      {visibleRouteCount === 1 ? "" : "s"}
+                      · {deliveryRoundCount} bezorgronde{deliveryRoundCount === 1 ? "" : "s"}
+                      {packagingRoundCount > 0 ? " + emballage" : ""}
                     </span>
                   </p>
                 </div>
@@ -13050,7 +13158,7 @@ function RoutesPanel({
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="text-[0.68rem] font-bold italic leading-none tracking-normal text-[#4a4540]">
-                          {route.title}
+                          {isPackagingOnlyRound(route) ? "Emballage · alleen indien tijd" : route.title}
                         </p>
                         {routeTiming && route.stops.length > 0 && (
                           <p className="mt-1 flex flex-wrap items-center gap-x-1 text-[0.62rem] font-black tracking-normal text-[#426145]">

@@ -10,7 +10,7 @@ function load(file, imports = {}, expose = '') {
  return exports;
 }
 const {createRouteSaveQueue}=load('app/bakkerij/logistiek/routeSaveQueue.ts');
-const dashboard=load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx',{'./roadRouting':load('app/bakkerij/logistiek/roadRouting.ts')},'exports.plan=buildRouteRounds;exports.move=moveRouteStopInRounds;exports.reconcile=reconcileRouteDraftRounds;exports.serialize=serializeRouteRounds;exports.shops=shopRouteMeta;exports.group=groupShopStops;exports.packaging=shopEmballageStop;');
+const dashboard=load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx',{'./roadRouting':load('app/bakkerij/logistiek/roadRouting.ts'),'./routeHistory':load('app/bakkerij/logistiek/routeHistory.ts')},'exports.plan=buildRouteRounds;exports.move=moveRouteStopInRounds;exports.reconcile=reconcileRouteDraftRounds;exports.serialize=serializeRouteRounds;exports.shops=shopRouteMeta;exports.group=groupShopStops;exports.packaging=shopEmballageStop;');
 const plain=value=>JSON.parse(JSON.stringify(value));
 const profile={pressure:'normaal'};
 const round=(id,stops)=>({id,title:'Ronde 1',vehicle:'Bus B',departure:'08:05',stops,badge:'',tone:'',load:'',reason:''});
@@ -90,7 +90,7 @@ function saveHarness() {
  function visit(n){if(ts.isFunctionDeclaration(n)&&n.name?.text==='saveRouteDraft')node=n;ts.forEachChild(n,visit);}visit(ast);
  const code=ts.transpileModule(source.slice(node.pos,node.end),{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
  const calls=[],changes=[],requests=[],dateRef={current:{selectedDate:'2026-11-04'}},pending={current:''};
- const context={selectedPlan:{date:'2026-11-04'},dateStateRef:dateRef,pendingRouteDateRef:pending,routeSaveQueueRef:{current:createRouteSaveQueue()},excludedRouteStopSourceIds:[],automaticRouteRounds:automatic,
+ const context={loadProfile:{deliveryReceipts:1,deliveryStops:1,largeReceipts:0,pastryUnits:0,criticalReceipts:0},selectedPlan:{date:'2026-11-04'},dateStateRef:dateRef,pendingRouteDateRef:pending,routeSaveQueueRef:{current:createRouteSaveQueue()},excludedRouteStopSourceIds:[],automaticRouteRounds:automatic,
  serializeRouteRounds:dashboard.serialize,routeRoundsForPersistence:routes=>routes,getUploadTime:()=> '09:00',
  fetch:async(url,options)=>{const gate=deferred();requests.push({url,payload:JSON.parse(options.body),gate});return gate.promise;},
  setRouteSaveState:value=>calls.push(['state',value]),setRouteSaveMessage:value=>calls.push(['message',value]),setRouteDraft:value=>changes.push(value),setRouteLearning:value=>calls.push(['learning',value]),setRouteHasUnsavedChanges:value=>calls.push(['dirty',value]),};
@@ -118,6 +118,7 @@ test('a response for yesterday cannot overwrite the currently selected day',asyn
 function apiHarness(allowed=true) {
  const writes=[],observations=[];let learningReads=0;
  const api=load('app/api/bakkerij-logistiek/route-draft/route.ts',{
+ '@/app/bakkerij/logistiek/routeHistory':load('app/bakkerij/logistiek/routeHistory.ts'),
  '@/app/bakkerij/logistiek/roadRouting':load('app/bakkerij/logistiek/roadRouting.ts'),
  'next/server':{NextResponse:{json:(data,init)=>Response.json(data,init)}},
  '@/app/lib/bakeryLogisticsAuth':{canAccessLogisticsRequest:async()=>allowed},
@@ -225,4 +226,12 @@ test('route action buttons are icon-only, retain accessible labels, and show suc
  assert.match(reset,/aria-label="Herbereken automatisch"/);
  assert.doesNotMatch(reset,/>Herbereken</);
  assert.doesNotMatch(render('idle'),/>Route opslaan</);
+});
+
+test('final saves retain validated order-volume context for future comparable mornings',async()=>{
+ const h=apiHarness();const volume={deliveryReceipts:8,deliveryStops:7,largeReceipts:2,pastryUnits:240,criticalReceipts:3};
+ await h.post({date:'2026-11-26',routes:automatic,learn:true,load:volume});
+ assert.deepEqual(plain(h.observations[0].load),volume);
+ await h.post({date:'2026-11-26',routes:automatic,learn:true,load:{...volume,largeReceipts:-1}});
+ assert.equal(h.observations[1].load,undefined);
 });
