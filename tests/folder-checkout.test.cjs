@@ -217,6 +217,7 @@ test('both checkout forms require a logo choice, retain the file on retry and al
     assert.match(find(quote.render(), node => node.props?.role === 'alert').props.children, /Voeg je logobestand/);
     const file = new File(['example'], 'voorbeeld.png', { type: 'image/png' });
     logo().props.onChange({ method: 'upload', file, fileKey: 'one' });
+    assert.equal(find(quote.render(), node => node.props?.role === 'alert'), undefined, 'old missing-file error clears when a file is chosen');
     await quote.submit(); await quote.submit();
     assert.equal(quote.calls.length, 2);
     assert.equal(quote.calls[0].body.logoDelivery, 'upload');
