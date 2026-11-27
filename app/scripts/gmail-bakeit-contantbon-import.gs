@@ -30,7 +30,7 @@ const BAKEIT_CONTANTBON_CONFIG = {
   DEFINITIVE_MAIL_START_HOUR: 20,
   DEFINITIVE_MAIL_START_MINUTE: 15,
   IMPORT_VERSION: 'split-mails-v1',
-  SCRIPT_VERSION: 'gmail-archive-v10-early-prognose',
+  SCRIPT_VERSION: 'gmail-archive-v11-failed-part-visible',
 };
 
 function importBakeItContantbonnen() {
@@ -69,6 +69,7 @@ function importBakeItContantbonnenUitvoeren_() {
     let hasImported = false;
     let successThisRun = false;
     let failed = false;
+    let pending = false;
 
     data.messages.forEach((message) => {
       if (!isBakeItContantbonCandidate_(message)) return;
@@ -82,6 +83,7 @@ function importBakeItContantbonnenUitvoeren_() {
       try {
         const groupKey = buildBakeItImportGroupKey_(message);
         if (waitingGroups[groupKey]) {
+          pending = true;
           logBakeIt_(
             `Bericht is net binnen, wacht op eventuele deelmail: ${message.getSubject()}`
           );
@@ -90,6 +92,7 @@ function importBakeItContantbonnenUitvoeren_() {
 
         const attachments = extractBakeItPdfAttachments_(message);
         if (!attachments.length) {
+          pending = true;
           logBakeIt_(
             `Geen PDF-bijlagen gevonden, bericht overgeslagen: ${message.getSubject()}`
           );
@@ -117,18 +120,19 @@ function importBakeItContantbonnenUitvoeren_() {
       }
     });
 
-    if (successThisRun) {
-      markBakeItThreadProcessed_(thread, labelCache);
-    } else if (hasImported) {
-      markBakeItThreadProcessed_(thread, labelCache);
-    } else if (failed) {
-      const errorLabel = getBakeItLabelForRun_(
-        labelCache,
-        BAKEIT_CONTANTBON_CONFIG.ERROR_LABEL,
-        true
-      );
-
+    // A thread can contain an older successful mail and a new failed part.
+    // Never let that older success hide the failure of the latest attachment.
+    if (failed) {
+      const errorLabel = getBakeItLabelForRun_(labelCache, BAKEIT_CONTANTBON_CONFIG.ERROR_LABEL, true);
+      const processedLabel = getBakeItLabelForRun_(labelCache, BAKEIT_CONTANTBON_CONFIG.PROCESSED_LABEL, false);
       thread.addLabel(errorLabel);
+      if (processedLabel) thread.removeLabel(processedLabel);
+      thread.moveToInbox();
+    } else if (pending) {
+      const processedLabel = getBakeItLabelForRun_(labelCache, BAKEIT_CONTANTBON_CONFIG.PROCESSED_LABEL, false);
+      if (processedLabel) thread.removeLabel(processedLabel);
+    } else if (successThisRun || hasImported) {
+      markBakeItThreadProcessed_(thread, labelCache);
     }
   });
 

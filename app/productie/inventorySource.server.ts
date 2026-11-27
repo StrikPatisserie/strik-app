@@ -1,4 +1,5 @@
 import "server-only";
+import {readLogisticsState} from "../lib/bakeryLogisticsStorage";
 import {createAdminClient} from "../lib/supabase/admin";
 import {readOperational,saveOperational} from "./operationalStore.server";
 import {dispatchDay,dispatchDaysFromBatches,mergeDispatchDays,DISPATCH_PREFIX,type DispatchDay} from "./inventory";
@@ -9,7 +10,7 @@ type DispatchArchive={revision:number;days:DispatchDay[]};
 export async function inventoryDispatchDays(){
  const [archive,recent]=await Promise.all([
   createAdminClient().from("app_settings").select("value").like("key",`${DISPATCH_PREFIX}%`),
-  readOperational<{batches:LogisticsBatch[]}>("bakery_logistics_batches",{batches:[]}),
+  readLogisticsState(),
  ]);
  if(archive.error)throw new ProductionStoreError("De uitgiftehistorie is niet bereikbaar.");
  const days=(archive.data||[]).flatMap(row=>(row.value as unknown as DispatchArchive).days);

@@ -33,6 +33,7 @@ import { createAdminClient } from "./supabase/admin";
 import type { Json } from "./supabase/types";
 
 const LOGISTICS_BATCHES_SETTING_KEY = "bakery_logistics_batches";
+const LOGISTICS_BATCH_SETTING_PREFIX = "bakery_logistics_batch:";
 const LOGISTICS_WEBSHOP_IMAGES_SETTING_KEY = "bakery_logistics_webshop_images";
 const LOGISTICS_RECEIPT_OVERRIDES_SETTING_KEY =
   "bakery_logistics_receipt_overrides";
@@ -1128,6 +1129,7 @@ function normalizeLogisticsPreparationProductsState(
 function toJson(
   value:
     | LogisticsState
+    | LogisticsBatch
     | LogisticsWebshopImagesState
     | LogisticsReceiptOverridesState
     | LogisticsDayFeedbackState
@@ -1764,17 +1766,40 @@ function summarizeLogisticsRouteLearning(
   };
 }
 
-export async function readLogisticsState() {
-  const supabase = createAdminClient();
-  const { data, error } = await supabase
-    .from("app_settings")
+// Legacy history stays readable; new imports only write one date/status document.
+// Rewriting the entire multi-megabyte history caused PostgREST timeouts.
+async function readLegacyLogisticsState() {
+  const { data, error } = await createAdminClient()
+    .from("app_settings").select("value")
+    .eq("key", LOGISTICS_BATCHES_SETTING_KEY).maybeSingle();
+  if (error) throw new Error("De opgeslagen bonnen konden niet worden gelezen. Probeer opnieuw; er is niets overschreven.");
+  if (!data) return emptyLogisticsState();
+  const value = data.value as unknown as LogisticsState;
+  if (!value || !Array.isArray(value.batches) || !value.batches.every(isLogisticsBatch)) {
+    throw new Error("De opgeslagen bonnen zijn onvolledig. Import gestopt om eerdere bonnen te behouden.");
+  }
+  return normalizeLogisticsState(value);
+}
+
+async function readSeparateLogisticsBatches(date?: string) {
+  const { data, error } = await createAdminClient().from("app_settings")
     .select("value")
-    .eq("key", LOGISTICS_BATCHES_SETTING_KEY)
-    .maybeSingle();
+    .like("key", `${LOGISTICS_BATCH_SETTING_PREFIX}${date ? `${date}:` : ""}%`)
+    .order("key", { ascending: false }).limit(MAX_STORED_BATCHES);
+  if (error) throw new Error("De opgeslagen bonnen konden niet worden gelezen. Probeer opnieuw.");
+  const batches = (data || []).map(row => row.value);
+  if (!batches.every(isLogisticsBatch)) throw new Error("De opgeslagen bonnen zijn onvolledig. Controleer de import.");
+  return batches as unknown as LogisticsBatch[];
+}
 
-  if (error || !data) return emptyLogisticsState();
-
-  return normalizeLogisticsState(data.value);
+export async function readLogisticsState() {
+  const [legacy, separate] = await Promise.all([
+    readLegacyLogisticsState(), readSeparateLogisticsBatches(),
+  ]);
+  const replaced = new Set(separate.map(batch => `${batch.date}:${batch.status}`));
+  return { batches: sortBatches([
+    ...separate, ...legacy.batches.filter(batch => !replaced.has(`${batch.date}:${batch.status}`)),
+  ]).slice(0, MAX_STORED_BATCHES) };
 }
 
 async function writeLogisticsWebshopImagesState(
@@ -1972,9 +1997,16 @@ export async function readLogisticsPreparationProductsState() {
 }
 
 export async function getLogisticsBatchForDate(date: string) {
-  const state = await readLogisticsState();
-
-  return selectLogisticsBatchForDate(state.batches, date);
+  const separate = await readSeparateLogisticsBatches(date);
+  // A new forecast must not hide a definitive batch from the legacy history.
+  if (separate.some(batch => batch.status === "definitief")) {
+    return selectLogisticsBatchForDate(separate, date);
+  }
+  const legacy = await readLegacyLogisticsState();
+  const replaced = new Set(separate.map(batch => batch.status));
+  return selectLogisticsBatchForDate([
+    ...separate, ...legacy.batches.filter(batch => batch.date === date && !replaced.has(batch.status)),
+  ], date);
 }
 
 export async function getLogisticsWebshopImagesForDate(date: string) {
@@ -2130,41 +2162,33 @@ export async function replaceLogisticsPreparationProducts(
 }
 
 export async function upsertLogisticsBatch(batch: LogisticsBatch) {
-  const state = await readLogisticsState();
-  const compatibleBatches = state.batches.filter(
-    (item) => item.date === batch.date && item.status === batch.status
-  );
-  const sameWaveCandidates = batch.importWaveId
-    ? compatibleBatches.filter(
-        (item) => item.importWaveId === batch.importWaveId
-      )
-    : [];
-  const mergeCandidates =
-    batch.importWaveId && sameWaveCandidates.length > 0
-      ? sameWaveCandidates
-      : compatibleBatches;
-  const nextBatch = mergeCompatibleBatches(mergeCandidates, batch);
-  const batches = sortBatches([
-    nextBatch,
-    ...state.batches.filter(
-      (item) => !(item.date === batch.date && item.status === batch.status)
-    ),
-  ]).slice(0, MAX_STORED_BATCHES);
-
-  const nextState = { batches };
+  if (!isLogisticsBatch(batch) || !/^\d{4}-\d{2}-\d{2}$/.test(batch.date)) {
+    throw new Error("Geen geldige bonnen ontvangen.");
+  }
+  const key = `${LOGISTICS_BATCH_SETTING_PREFIX}${batch.date}:${batch.status}`;
   const supabase = createAdminClient();
-  const { error } = await supabase.from("app_settings").upsert(
-    {
-      key: LOGISTICS_BATCHES_SETTING_KEY,
-      value: toJson(nextState),
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "key" }
-  );
-
-  if (error) throw new Error(error.message);
-
-  return nextBatch;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const { data: previous, error: readError } = await supabase.from("app_settings")
+      .select("value,updated_at").eq("key", key).maybeSingle();
+    if (readError) throw new Error("Eerdere bonnen konden niet worden gelezen. Import is niet opgeslagen; probeer opnieuw.");
+    if (previous && !isLogisticsBatch(previous.value)) throw new Error("Eerdere bonnen zijn onvolledig. Import gestopt.");
+    const existing = previous
+      ? [previous.value as unknown as LogisticsBatch]
+      : (await readLegacyLogisticsState()).batches.filter(item => item.date === batch.date && item.status === batch.status);
+    const nextBatch = mergeCompatibleBatches(existing, batch);
+    const updatedAt = new Date(Math.max(Date.now(), previous ? Date.parse(previous.updated_at) + 1 : 0)).toISOString();
+    const row = { key, value: toJson(nextBatch), updated_at: updatedAt };
+    // Compare-and-swap: a concurrent PDF part must be re-read and merged, never overwritten.
+    const result = previous
+      ? await supabase.from("app_settings").update({ value: row.value, updated_at: row.updated_at })
+          .eq("key", key).eq("updated_at", previous.updated_at).select("key").maybeSingle()
+      : await supabase.from("app_settings").insert(row).select("key").maybeSingle();
+    if (!result.error && result.data) return nextBatch;
+    if (result.error && !["23505", "57014"].includes(result.error.code)) {
+      throw new Error("Bonnen opslaan is niet bevestigd. Lees dit bestand opnieuw in; eerdere bonnen blijven behouden.");
+    }
+  }
+  throw new Error("Bonnen opslaan is niet bevestigd. Lees dit bestand opnieuw in; eerdere bonnen blijven behouden.");
 }
 
 export async function upsertLogisticsWebshopImage(

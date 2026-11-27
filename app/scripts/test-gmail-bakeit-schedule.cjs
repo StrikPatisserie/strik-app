@@ -82,3 +82,23 @@ test('instelfunctie vervangt alleen Bake-it-triggers door één vijfminutentrigg
   assert.deepEqual(run.deleted, oldNames.slice(0, 4));
   assert.deepEqual(run.created, [{ name: 'importBakeItContantbonnenTijdvensters', minutes: 5 }]);
 });
+
+test('een oude geslaagde mail maskeert geen mislukte nieuwe PDF in dezelfde thread', () => {
+  const {context}=makeContext(20,[],20);
+  context.console.error=()=>{};
+  const actions=[];
+  const old={getId:()=> 'old',getSubject:()=> 'contantbon',getDate:()=>new Date('2026-11-26T19:15:00Z')};
+  const latest={...old,getId:()=> 'new'};
+  const thread={getMessages:()=>[old,latest],addLabel:l=>actions.push('add:'+l),removeLabel:l=>actions.push('remove:'+l),moveToInbox:()=>actions.push('inbox'),moveToArchive:()=>actions.push('archive')};
+  context.PropertiesService={getScriptProperties:()=>({getProperty:k=>k.endsWith(':old')?'done':null,setProperty:()=>assert.fail('failed mail marked imported')})};
+  context.Utilities.getUuid=()=> 'run';
+  context.searchBakeItThreads_=()=>[thread];
+  context.findBakeItWaitingGroups_=()=>({});
+  context.buildBakeItImportWaveIds_=()=>({});
+  context.extractBakeItPdfAttachments_=()=>[{}];
+  context.sendBakeItPdfAttachment_=()=>{throw Error('timeout');};
+  context.getBakeItLabelForRun_=(_cache,name)=>name;
+  context.verplaatsBakeItIngelezenThreads_=()=>{};
+  context.importBakeItContantbonnenUitvoeren_();
+  assert.deepEqual(actions,['add:Fout','remove:Ingelezen','inbox']);
+});
