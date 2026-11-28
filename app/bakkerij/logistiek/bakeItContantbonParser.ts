@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import { PDFParse } from "pdf-parse";
-import { normalizeReceiptDelivery } from "./receiptDelivery";
+import { isInternalShopCustomer, normalizeReceiptDelivery } from "./receiptDelivery";
 import type {
   LogisticsBatch,
   LogisticsFulfillment,
@@ -58,7 +58,6 @@ const dutchMonths: Record<string, string> = {
   december: "12",
 };
 
-const storeNames = ["heyendaalseweg", "daalseweg", "ziekerstraat", "lent"];
 const pickupLocations = [
   { label: "Heyendaalseweg", key: "heyendaalseweg" },
   { label: "Daalseweg", key: "daalseweg" },
@@ -435,11 +434,6 @@ function isLikelyAddressOrContactLine(line: string) {
     isLikelyAddressLine(clean) ||
     (withoutQuantity !== clean && isLikelyAddressLine(withoutQuantity))
   );
-}
-
-function isInternalReceipt(customer: string) {
-  const normalized = customer.toLowerCase();
-  return storeNames.some((store) => normalized.includes(store));
 }
 
 function inferRoute(customer: string, address: string, deliveryAddress: string) {
@@ -1823,7 +1817,7 @@ function inferTags(draft: ReceiptDraft) {
     .toLowerCase();
   const tags = new Set<string>();
 
-  if (isInternalReceipt(draft.customer)) {
+  if (isInternalShopCustomer(draft.customer)) {
     tags.add("winkel");
     tags.add("intern");
   }

@@ -137,7 +137,7 @@ const dashboard = load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx', 
   '../../StrikUI': {}, './routePrintWindow': {}, './routePrintPagination': {}, './arendPrintSession': {},
   './specialSchoolDelivery': {}, './specialProCollegeDelivery': {}, './receiptDelivery': delivery,
   './webshopPhotoIdentity': load('app/bakkerij/logistiek/webshopPhotoIdentity.ts'), './BusinessDeliveries': {}, './PhotoPrintChoiceModal': {}, './usePhotoPrintHistory': {}, './photoPrintTracking': {},
-}, 'exports.normalize = normalizeImportedReceipt; exports.notes = visibleReceiptNotes; exports.print = createReceiptPrintHtml; exports.Row = ReceiptRow; exports.fulfillment = receiptFulfillment; exports.filter = receiptMatchesFilter; exports.overrides = applyReceiptOverrides; exports.defaults = applyFixedCustomerDefaults; exports.stop = routeStopForReceipt; exports.timing = buildRouteTiming; exports.listTime = receiptListTimeLabel; exports.serialize = serializeRouteRounds; exports.reconcile = reconcileRouteDraftRounds;');
+}, 'exports.normalize = normalizeImportedReceipt; exports.notes = visibleReceiptNotes; exports.print = createReceiptPrintHtml; exports.Row = ReceiptRow; exports.fulfillment = receiptFulfillment; exports.filter = receiptMatchesFilter; exports.overrides = applyReceiptOverrides; exports.defaults = applyFixedCustomerDefaults; exports.stop = routeStopForReceipt; exports.timing = buildRouteTiming; exports.listTime = receiptListTimeLabel; exports.serialize = serializeRouteRounds; exports.reconcile = reconcileRouteDraftRounds; exports.isShop = isShopReceipt; exports.isDelivery = isRouteDelivery; exports.plan = buildRouteRounds; exports.profile = buildDayLoadProfile; exports.day = dayPlanWithReceiptTotals;');
 
 test('screen and print retain original note lines and show the delivery warning in the delivery list', () => {
   const originalNotes = 'Kostenplaats 661250\nReferentie 20261021, kamer 233/234\ncontact@example.com\n<script>geen HTML</script>';
@@ -219,4 +219,72 @@ test('fixed customer times remain visible guidelines without delaying the route;
  assert.equal(manual.time,'10:30–12:00');
  assert.equal(dashboard.timing({stops:[dashboard.stop(manual)]},480).stops[0].serviceStartMinute,630);
  assert.equal(JSON.stringify(receipt),original);
+});
+
+
+test('only complete Strik shop names are internal; external customers named after Lent or a shop street stay deliveries', () => {
+  for (const customer of ['Lent', 'Winkel Ziekerstraat', 'Heyendaalseweg', 'Daalseweg', 'Strik Lent', 'Strik Patisserie Lent', 'Strik ijs Lent', 'Strik ijs Daalseweg']) {
+    const page = parser.page(`${header.replace('Voorbeeld ziekenhuis', customer)}\n${firstTable}\n${totals}\n${footer.replace('Voorbeeld ziekenhuis', customer)}`);
+    const receipt = parser.receipt({ ...page, pageCount: 1 }, 0);
+    assert(receipt.tags.includes('intern'), customer);
+    assert(receipt.tags.includes('winkel'), customer);
+  }
+  for (const customer of ['Café de Zon Lent', 'Restaurant Lent', 'Brasserie Daalseweg', 'Praktijk Heyendaalseweg', 'Salon Ziekerstraat', 'Talent', 'Winkel De Zon Lent']) {
+    const page = parser.page(`${header.replace('Voorbeeld ziekenhuis', customer)}\n${firstTable}\n${totals}\n${footer.replace('Voorbeeld ziekenhuis', customer)}`);
+    const receipt = parser.receipt({ ...page, pageCount: 1 }, 0);
+    assert(!receipt.tags.includes('intern'), customer);
+    assert(!receipt.tags.includes('winkel'), customer);
+    assert.equal(dashboard.isShop(receipt), false, customer);
+    assert.equal(dashboard.isDelivery(receipt), true, customer);
+  }
+});
+
+test('an already imported Café de Zon receipt returns to deliveries and totals, without changing its order or saved stop order', () => {
+  const raw = { ...parsedReceipt(), id: '63030', receiptNumber: '63030', customer: 'Café de Zon Lent',
+    address: 'Oosterhoutsedijk 16, 6663 KS, NIJMEGEN', deliveryAddress: 'Oosterhoutsedijk 16, 6663 KS, NIJMEGEN',
+    alternativeAddress: undefined, time: 'Geen tijd', tags: ['winkel', 'intern', 'gebak', 'bezorgen'],
+    note: 'Interne winkelbon: niet meetellen in externe waarde.', internalNote: 'bezorgen · winkel · intern · gebak · bezorgen',
+    value: 101.05, originalNotes: '', customerNote: 'Geen aparte opmerking.',
+    lines: [{ quantity: '1', description: 'Slagroomtaart 10-12p feestelijke taart' }, { quantity: '1', description: 'Ja, foto: zie mail 26/11' }, { quantity: '1', description: 'Kersenvlaai 10-12 pers.' }, { quantity: '1', description: 'Herfstvlaai Caramel-Hazelnoot 10-12 pers.' }] };
+  const receipt = dashboard.normalize(raw);
+  assert.deepEqual(receipt.tags, ['gebak', 'bezorgen']);
+  assert.equal(receipt.fulfillment, 'bezorgen');
+  assert.equal(receipt.deliveryAddress, raw.deliveryAddress);
+  assert.deepEqual(receipt.lines, raw.lines);
+  assert.equal(receipt.originalNotes, raw.originalNotes);
+  assert.equal(receipt.value, raw.value);
+  assert.equal(dashboard.isShop(receipt), false);
+  assert.equal(dashboard.isDelivery(receipt), true);
+  assert.equal(dashboard.normalize(receipt), receipt, 'Existing corrections are stable');
+  assert(raw.tags.includes('intern'), 'Raw source is not mutated');
+  assert(!receipt.internalNote.includes('intern'));
+  const day = dashboard.day({ date: '2026-11-28', iceTubs: 0, isFuture: false }, [receipt]);
+  assert.equal(day.orderValue, 101.05);
+  const profile = dashboard.profile(day, [receipt], '');
+  const routes = dashboard.plan(day, [receipt], profile, null);
+  assert.equal(routes.flatMap(route => route.stops).filter(stop => stop.sourceId === 'receipt:63030').length, 1);
+  const saved = { date: day.date, excludedSourceIds: [], routes: routes.map(route => ({ ...route,
+    stops: route.stops.filter(stop => stop.sourceId !== 'receipt:63030').reverse() })) };
+  const restored = dashboard.reconcile(saved, routes, profile);
+  assert.equal(restored.flatMap(route => route.stops).filter(stop => stop.sourceId === 'receipt:63030').length, 1);
+  for (const route of saved.routes) {
+    assert.deepEqual(restored.find(item => item.id === route.id).stops.filter(stop => stop.sourceId !== 'receipt:63030').map(stop => stop.sourceId), route.stops.map(stop => stop.sourceId));
+  }
+  const excluded = dashboard.reconcile({ ...saved, excludedSourceIds: ['receipt:63030'] }, routes, profile);
+  assert(!excluded.flatMap(route => route.stops).some(stop => stop.sourceId === 'receipt:63030'));
+});
+
+test('legacy shop correction keeps real shop/ice receipts, unrelated internal records and customer instructions', () => {
+  const base = { ...parsedReceipt(), tags: ['winkel', 'intern', 'ijs'], note: 'Apart verpakken', internalNote: 'bezorgen · winkel · intern · instructie behouden' };
+  for (const customer of ['Lent', 'Winkel Ziekerstraat', 'Strik ijs Lent', 'Strik ijs Daalseweg']) {
+    const receipt = { ...base, customer };
+    assert.equal(delivery.normalizeReceiptDelivery(receipt), receipt);
+  }
+  const internal = { ...base, customer: 'Interne administratie', tags: ['intern'] };
+  assert.equal(delivery.normalizeReceiptDelivery(internal), internal);
+  const corrected = delivery.normalizeReceiptDelivery({ ...base, customer: 'Café de Zon Lent', fulfillment: 'afhalen', lines: [], originalNotes: '' });
+  assert.equal(corrected.fulfillment, 'afhalen', 'Pickup is not changed by the shop correction');
+  assert.deepEqual(corrected.tags, ['ijs']);
+  assert.equal(corrected.note, 'Apart verpakken');
+  assert.equal(corrected.internalNote, 'bezorgen · instructie behouden');
 });

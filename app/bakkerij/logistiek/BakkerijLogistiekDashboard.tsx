@@ -12,7 +12,7 @@ import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
 import { getRoutePrintBlockedReason, openRoutePrintWindow } from "./routePrintWindow";
 import { routePrintPaginationScript } from "./routePrintPagination";
 import { photoPrintEditorScript } from "./photoPrintEditor";
-import { normalizeReceiptDelivery } from "./receiptDelivery";
+import { isInternalShopCustomer, normalizeReceiptDelivery } from "./receiptDelivery";
 import BusinessDeliveries from "./BusinessDeliveries";
 import styles from "./Dagstart.module.css";
 import { hasIncompleteWebshopPhotos, webshopPhotoDuplicateKey } from "./webshopPhotoIdentity";
@@ -6092,7 +6092,7 @@ function isIceReceiptSummary(receipt: ReceiptSummary) {
 }
 
 function isShopReceipt(receipt: ReceiptSummary) {
-  return receipt.tags.includes("winkel") || /^winkel\b/i.test(receipt.customer);
+  return receipt.tags.includes("winkel") || isInternalShopCustomer(receipt.customer);
 }
 
 function shopKeyForText(value: string): ShopKey | "" {
