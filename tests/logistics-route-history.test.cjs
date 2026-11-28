@@ -172,3 +172,15 @@ test('no time, a latest-only deadline and an already-open window do not add wait
  const from=d.timing(route('A',1,[stop(key,'vanaf 11:00 · Nijmegen')]),480).stops[0];
  assert.equal(from.serviceStartMinute,660);assert(from.waitingMinutes>0);
 });
+
+test('guidelines impose neither waiting nor a hard deadline, while explicit order windows do',()=>{
+ assert.deepEqual(plain(h.deliveryWindow('Richttijd 10:00 - 13:00')),{});
+ assert.deepEqual(plain(h.deliveryWindow('Richttijd voor 09:00')),{});
+ const early=d.timing(route('A',1,[stop(key,'Richttijd 10:00 - 13:00 · Nijmegen')]),480).stops[0];
+ assert.equal(early.waitingMinutes,0);
+ const lateRoute=route('A',1,[stop(key,'Richttijd 10:00 - 13:00 · Nijmegen')],'14:00');
+ const model=h.buildRouteHistoryModel([],date,[],profile);
+ assert.equal(d.assess([lateRoute],model).late.get(stop().sourceId),0);
+ const strict={...lateRoute,stops:[stop(key,'10:00 - 13:00 · Nijmegen')]};
+ assert(d.assess([strict],model).late.get(stop().sourceId)>0);
+});

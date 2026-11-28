@@ -157,6 +157,9 @@ export function buildRouteHistoryModel(history: RouteHistoryDay[], date: string,
 
 /** Bounds stay separate: 'vanaf 11:00' is not a deadline; '10:00–12:00' has both. */
 export function deliveryWindow(time: string): { earliest?: number; latest?: number } {
+  // The profile supplies a preferred time, not a binding appointment. Keeping the
+  // marker in the time segment also preserves this meaning in saved routes/prints.
+  if (/^\s*richttijd\b/i.test(time)) return {};
   const times = [...time.matchAll(/\b([01]?\d|2[0-3]):([0-5]\d)\b/g)].map(match => Number(match[1]) * 60 + Number(match[2]));
   if (!times.length) return {};
   if (times.length >= 2) return times[0] <= times[1] ? { earliest: times[0], latest: times[1] } : {};

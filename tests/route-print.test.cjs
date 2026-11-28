@@ -145,3 +145,12 @@ test('driver print and screen expose waiting separately from arrival and road tr
  assert.match(screen,/±08:\d{2} aankomst/);
  assert.match(screen,/vertrek ±10:05/);
 });
+
+test('print keeps customer guidelines visible without invented waiting',()=>{
+ const input=routeInput();
+ input.routeGroup.routes=[{...input.routeGroup.routes[0],departure:'08:00',stops:[{...stop('Richttijdklant','preferred'),detail:'Richttijd 10:00 - 13:00 · Voorbeeldstraat 1, Nijmegen'}]}];
+ const html=render(input);
+ assert.match(html,/Richttijd 10:00 - 13:00/);
+ assert.match(html,/AANKOMST ±08:/);
+ assert.doesNotMatch(html,/class="waiting-time">|inclusief .* wachttijd/);
+});

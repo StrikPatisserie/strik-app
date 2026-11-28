@@ -1095,7 +1095,7 @@ function applyFixedCustomerDefaults(
     const hasBonTime = Boolean(bonTime);
     const fixedDeliveryNote =
       !hasBonTime && fixedCustomer.deliveryWindow
-        ? `Vaste levertijd ${fixedCustomer.deliveryWindow}`
+        ? `Richttijd klant ${fixedCustomer.deliveryWindow}`
         : "";
     const fixedRouteNote = fixedCustomer.routeNote
       ? `Vaste route: ${fixedCustomer.routeNote}`
@@ -1110,7 +1110,7 @@ function applyFixedCustomerDefaults(
       time:
         hasBonTime || !fixedCustomer.deliveryWindow
           ? bonTime || receipt.time
-          : fixedCustomer.deliveryWindow,
+          : `Richttijd ${fixedCustomer.deliveryWindow}`,
       address: fieldLooksMissing(receipt.address)
         ? fixedCustomer.address || receipt.address
         : receipt.address,
@@ -1508,6 +1508,12 @@ function extractOperationalTimeFromFreeText(value: string) {
     return start && end ? `${start}-${end}` : "";
   }
 
+  const earliest = text.match(/\b(?:vanaf|niet\s+v[oó]or)\s+(\d{1,2}[:.]\d{2})\s*(?:uur)?\b/i);
+  if (earliest) {
+    const time = normalizeReceiptClockTime(earliest[1]);
+    return time ? `vanaf ${time}` : "";
+  }
+
   const preferred = text.match(
     /\b(?:graag\s+)?(?:v[oó]or|uiterlijk|om|vanaf|bezorgen|bezorging|leveren|levering|tijd|bezorgtijd)\b[^.?!;\n]{0,80}?(\d{1,2}[:.]\d{2})\s*(?:uur)?\b/i
   );
@@ -1550,12 +1556,15 @@ function receiptNoteOperationalTime(receipt: ReceiptSummary) {
 }
 
 function receiptBonOperationalTime(receipt: ReceiptSummary) {
-  return receiptNoteOperationalTime(receipt) || receiptOperationalTime(receipt);
+  // A customer-profile guideline is not an appointment on the order itself.
+  const time = receiptOperationalTime(receipt);
+  return receiptNoteOperationalTime(receipt) || (/^richttijd\b/i.test(time) ? "" : time);
 }
 
 function receiptListTimeLabel(receipt: ReceiptSummary) {
-  const time = receiptBonOperationalTime(receipt);
+  const time = receiptBonOperationalTime(receipt) || receiptOperationalTime(receipt);
   if (!time) return "";
+  if (/^richttijd\b/i.test(time)) return time;
 
   const matches = [...time.matchAll(/\b(\d{1,2}):(\d{2})\b/g)];
   if (matches.length >= 2) {

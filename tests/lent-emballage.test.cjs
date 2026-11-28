@@ -149,3 +149,9 @@ test('shop ETA includes a preceding customer wait, matching screen and print arr
  assert.deepEqual(plain(model.savedRouteArrivals(routes).get('b1')),plain(expected.stops.map(s=>s.arrivalMinute)));
  assert.equal(model.buildLentEmballageNotice(draft(routes),at('08:00')).expectedTime,'10:15');
 });
+
+test('saved guideline times never postpone the Lent pickup ETA',()=>{
+ const preferred=stop('preferred','receipt:preferred',{detail:'Richttijd 10:00 - 13:00 · Nijmegen',learningKind:'receipt'});
+ const rounds=[round('b1',[preferred,lent],[10,10,10])];
+ assert.equal(model.buildLentEmballageNotice(draft(rounds),at('08:00')).expectedTime,'08:30');
+});

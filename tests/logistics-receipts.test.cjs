@@ -137,7 +137,7 @@ const dashboard = load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx', 
   '../../StrikUI': {}, './routePrintWindow': {}, './routePrintPagination': {}, './arendPrintSession': {},
   './specialSchoolDelivery': {}, './specialProCollegeDelivery': {}, './receiptDelivery': delivery,
   './webshopPhotoIdentity': load('app/bakkerij/logistiek/webshopPhotoIdentity.ts'), './BusinessDeliveries': {}, './PhotoPrintChoiceModal': {}, './usePhotoPrintHistory': {}, './photoPrintTracking': {},
-}, 'exports.normalize = normalizeImportedReceipt; exports.notes = visibleReceiptNotes; exports.print = createReceiptPrintHtml; exports.Row = ReceiptRow; exports.fulfillment = receiptFulfillment; exports.filter = receiptMatchesFilter; exports.overrides = applyReceiptOverrides;');
+}, 'exports.normalize = normalizeImportedReceipt; exports.notes = visibleReceiptNotes; exports.print = createReceiptPrintHtml; exports.Row = ReceiptRow; exports.fulfillment = receiptFulfillment; exports.filter = receiptMatchesFilter; exports.overrides = applyReceiptOverrides; exports.defaults = applyFixedCustomerDefaults; exports.stop = routeStopForReceipt; exports.timing = buildRouteTiming; exports.listTime = receiptListTimeLabel; exports.serialize = serializeRouteRounds; exports.reconcile = reconcileRouteDraftRounds;');
 
 test('screen and print retain original note lines and show the delivery warning in the delivery list', () => {
   const originalNotes = 'Kostenplaats 661250\nReferentie 20261021, kamer 233/234\ncontact@example.com\n<script>geen HTML</script>';
@@ -192,4 +192,31 @@ test('two equal cake rows with different photos stay two cakes while the repeate
   parser.merge(draft,page);const receipt=parser.receipt(draft,0);
   assert.equal(receipt.lines.filter(line=>line.description.startsWith('Cremetaart')).length,2);assert.equal(receipt.lines.filter(line=>line.description.startsWith('VULLING')).length,2);assert.equal(receipt.lines.filter(line=>line.description.startsWith('FOTO')).length,2);
  }
+});
+
+test('fixed customer times remain visible guidelines without delaying the route; bon and manual times stay binding',()=>{
+ const fixed={id:'fixed:61654',customerNumbers:['61654'],customerName:'De Ontdekking',deliveryWindow:'10:00 - 13:00',address:'Oude Kleefsebaan 425, Berg en Dal',routeNote:'',updatedAt:''};
+ const receipt={...dashboard.normalize(parsedReceipt()),id:'61654',receiptNumber:'61654',customer:'De Ontdekking',time:'Geen tijd',note:'',customerNote:'',internalNote:'',lines:[]};
+ const original=JSON.stringify(receipt);
+ const apply=r=>dashboard.defaults([r],[fixed])[0];
+ const guideline=apply(receipt);
+ assert.equal(guideline.time,'Richttijd 10:00 - 13:00');
+ assert.equal(dashboard.listTime(guideline),'Richttijd 10:00 - 13:00');
+ assert.deepEqual(apply(guideline),guideline,'reapplying profiles cannot turn a guideline into an appointment');
+ const planned={id:'test',stops:[dashboard.stop(guideline)]};
+ const timing=dashboard.timing(planned,480).stops[0];
+ assert.equal(timing.waitingMinutes,0);
+ assert.equal(timing.departureMinute,timing.arrivalMinute+timing.serviceMinutes);
+ assert.match(dashboard.serialize([planned])[0].stops[0].detail,/^Richttijd 10:00 - 13:00/);
+ for(const specified of [{time:'10:00–13:00'},{customerNote:'Graag leveren vanaf 10:00'},{note:'Graag bezorgen vanaf 10:00'}]){
+  const explicit=apply({...receipt,...specified});
+  assert.doesNotMatch(explicit.time,/Richttijd/);
+  const real=dashboard.timing({stops:[dashboard.stop(explicit)]},480).stops[0];
+  assert.equal(real.serviceStartMinute,600);assert(real.waitingMinutes>0);
+ }
+ const override={id:'2026-11-28:61654',receiptId:'61654',receiptNumber:'61654',time:'10:30–12:00',date:'2026-11-28',removed:false,routeNote:''};
+ const manual=apply(dashboard.overrides([receipt],[override],'2026-11-28')[0]);
+ assert.equal(manual.time,'10:30–12:00');
+ assert.equal(dashboard.timing({stops:[dashboard.stop(manual)]},480).stops[0].serviceStartMinute,630);
+ assert.equal(JSON.stringify(receipt),original);
 });
