@@ -7,7 +7,7 @@ export type HistoryStop = {
   position: number;
   large: boolean;
 };
-export type RouteHistoryDay = { date: string; stops: HistoryStop[]; load?: LogisticsRouteLoadContext };
+export type RouteHistoryDay = { date: string; stops: HistoryStop[]; load?: LogisticsRouteLoadContext; otherRounds?: { bus: "A" | "B"; round: number }[] };
 export type RouteHistoryChoice = { bus: "A" | "B"; round: number; confidence: number; days: number };
 export type RouteHistoryModel = {
   days: number;
@@ -37,7 +37,7 @@ export function compactRouteHistory(observations: LogisticsRouteLearningObservat
     const previous = days.get(observation.date);
     if (!previous || observation.updatedAt > previous.updatedAt) days.set(observation.date, observation);
   }
-  return [...days.values()].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 120).map(day => ({
+  return [...days.values()].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 180).map(day => ({
     date: day.date,
     load: cleanRouteLoadContext(day.load),
     stops: day.stops.flatMap((stop): HistoryStop[] => {
@@ -46,6 +46,12 @@ export function compactRouteHistory(observations: LogisticsRouteLearningObservat
       // Promotions, checks and the old separate shelf-stock visit are not deliveries.
       if (!bus || round < 1 || round > 3 || !/^(?:receipt|shop):/.test(stop.key) || /:shelf$/.test(stop.key)) return [];
       return [{ key: stop.key, bus, round, position: stop.position, large: stop.badges.includes("groot") }];
+    }),
+    // Unknown/manual stops and ice runs are work too: do not mistake them for an empty round.
+    otherRounds: day.stops.flatMap(stop => {
+      const bus = stop.vehicle === "Bus A" ? "A" as const : stop.vehicle === "Bus B" ? "B" as const : null;
+      const round = historyRoundNumber(stop.routeId, stop.routeTitle);
+      return bus && round > 0 && !/^(?:receipt|shop):/.test(stop.key) ? [{ bus, round }] : [];
     }),
   })).filter(day => day.stops.length > 0);
 }
@@ -62,18 +68,26 @@ function percentile(values: number[], fraction: number) {
 export function buildRouteHistoryModel(history: RouteHistoryDay[], date: string, keys: string[], load?: LogisticsRouteLoadContext): RouteHistoryModel {
   const current = new Set(keys.filter(key => key.startsWith("receipt:")));
   const currentDay = new Date(`${date}T12:00:00Z`);
-  const weightedDays = history.flatMap(day => {
+  // Start from individual reviewed dates, then prefer the same weekday. Saturdays
+  // never borrow weekday patterns, even when their history is still small.
+  const eligible = history.filter(day => {
     const age = (currentDay.getTime() - new Date(`${day.date}T12:00:00Z`).getTime()) / 86400000;
-    if (!Number.isFinite(age) || age <= 0 || age > 120 || dayType(day.date) !== dayType(date)) return [];
-    const deliveries = new Set(day.stops.filter(stop => stop.key.startsWith("receipt:")).map(stop => stop.key));
-    const overlap = [...deliveries].filter(key => current.has(key)).length;
+    return Number.isFinite(age) && age > 0 && age <= 180 && dayType(day.date) === dayType(date);
+  });
+  const weightedDays = eligible.map(day => {
+    const age = (currentDay.getTime() - new Date(`${day.date}T12:00:00Z`).getTime()) / 86400000;
+    const deliveries = new Map(day.stops.filter(stop => stop.key.startsWith("receipt:")).map(stop => [stop.key, stop]));
+    const overlap = [...deliveries.keys()].filter(key => current.has(key)).length;
     const countSimilarity = 1 / (1 + Math.abs(deliveries.size - current.size) / 4);
-    const sameWeekday = new Date(`${day.date}T12:00:00Z`).getUTCDay() === currentDay.getUTCDay();
     const volumeSimilarity = load && day.load
-      ? 1 / (1 + Math.abs(load.largeReceipts - day.load.largeReceipts) / 2 + Math.abs(load.pastryUnits - day.load.pastryUnits) / 200)
+      ? 1 / (1 + Math.abs(load.deliveryReceipts - day.load.deliveryReceipts) / 5
+        + Math.abs(load.largeReceipts - day.load.largeReceipts) / 2
+        + Math.abs(load.criticalReceipts - day.load.criticalReceipts) / 3
+        + Math.abs(load.pastryUnits - day.load.pastryUnits) / 200)
       : 1;
-    const weight = Math.pow(0.5, age / 21) * (sameWeekday ? 1.5 : 1) * countSimilarity * volumeSimilarity * (1 + overlap / Math.max(1, current.size));
-    return [{ day, weight, comparable: countSimilarity >= 0.5 && volumeSimilarity >= 0.5 }];
+    const sameWeekday = new Date(`${day.date}T12:00:00Z`).getUTCDay() === currentDay.getUTCDay();
+    const weight = Math.pow(0.5, age / 21) * (sameWeekday ? 3 : 1) * countSimilarity * volumeSimilarity * (1 + overlap / Math.max(1, current.size));
+    return { day, weight, comparable: countSimilarity >= 0.5 && volumeSimilarity >= 0.5 };
   });
   const votes = new Map<string, Map<string, { weight: number; dates: Set<string> }>>();
   const pairVotes = new Map<string, { forward: number; total: number; days: number }>();
@@ -130,10 +144,10 @@ export function buildRouteHistoryModel(history: RouteHistoryDay[], date: string,
     const relevant = weightedDays.filter(item => item.comparable && item.day.stops.some(stop => stop.bus === bus))
       .sort((a, b) => b.weight - a.weight).slice(0, 12);
     const totalWeight = relevant.reduce((sum, item) => sum + item.weight, 0);
-    const firsts = relevant.map(({ day }) => day.stops.filter(stop => stop.bus === bus && stop.round === 1 && stop.key.startsWith("receipt:")));
+    const firsts = relevant.map(({ day }) => [...new Map(day.stops.filter(stop => stop.bus === bus && stop.round === 1 && stop.key.startsWith("receipt:")).map(stop => [stop.key, stop])).values()]);
     firstRound[bus] = {
       days: relevant.length,
-      singleShare: relevant.reduce((sum, item) => sum + (item.day.stops.some(stop => stop.bus === bus && stop.round > 1 && stop.key.startsWith("receipt:")) ? 0 : item.weight), 0) / (totalWeight || 1),
+      singleShare: relevant.reduce((sum, item) => sum + ((item.day.stops.some(stop => stop.bus === bus && stop.round > 1 && stop.key.startsWith("receipt:")) || item.day.otherRounds?.some(stop => stop.bus === bus && stop.round > 1)) ? 0 : item.weight), 0) / (totalWeight || 1),
       maxStops: Math.min(14, percentile(firsts.map(stops => stops.length), 0.85)),
       maxLarge: percentile(firsts.map(stops => stops.filter(stop => stop.large).length), 0.85),
     };

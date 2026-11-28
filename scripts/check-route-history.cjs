@@ -1,23 +1,23 @@
 const fs=require('node:fs'),vm=require('node:vm'),{createRequire}=require('node:module');
 // Offline replay only: never reads credentials or writes live route plans.
-// Usage: node scripts/check-route-history.cjs <history.json> <batches.json>
+// Usage: node scripts/check-route-history.cjs <history.json> <batches.json> [before-date]
 // history.json: {observations: [...]}; batches.json: LogisticsBatch[]. Keep these private.
-const root=process.cwd(),req=createRequire(root+'/package.json'),ts=req('typescript');
+const root=process.env.ROUTE_REPLAY_ROOT||process.cwd(),req=createRequire(root+'/package.json'),ts=req('typescript');
 function load(file,imports={},expose=''){
  const exports={};const code=ts.transpileModule(fs.readFileSync(root+'/'+file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
  vm.runInNewContext(code+'\n'+expose,{exports,require:name=>name==='next/dynamic'?{default:()=>()=>null}:imports[name]||{},Date,Map,Set,URL,Intl});return exports;
 }
 const imports={};for(const name of ['roadRouting','routeHistory','specialSchoolDelivery','specialProCollegeDelivery','receiptDelivery']) imports['./'+name]=load('app/bakkerij/logistiek/'+name+'.ts');
 const h=imports['./routeHistory'];
-const d=load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx',imports,'exports.plan=buildRouteRounds;exports.profile=buildDayLoadProfile;exports.normalize=normalizeImportedReceipt;exports.assess=routeProposalAssessment;exports.receipts=buildReceiptSummaries;exports.day=dayPlanWithReceiptTotals;exports.reconcile=reconcileRouteDraftRounds;exports.serialize=serializeRouteRounds;');
+const d=load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx',imports,'exports.plan=buildRouteRounds;exports.profile=buildDayLoadProfile;exports.normalize=normalizeImportedReceipt;exports.assess=routeProposalAssessment;exports.receipts=buildReceiptSummaries;exports.day=dayPlanWithReceiptTotals;exports.reconcile=reconcileRouteDraftRounds;exports.serialize=serializeRouteRounds;exports.routeKey=routeLearningKeyForReceipt;');
 module.exports={h,d};
 if(require.main===module){
- const [historyPath,batchesPath]=process.argv.slice(2);
+ const [historyPath,batchesPath,beforeDate=new Date().toISOString().slice(0,10)]=process.argv.slice(2);
  if(!historyPath||!batchesPath)throw Error('Supply private history and batch JSON paths. No live data is changed.');
  const data=JSON.parse(fs.readFileSync(historyPath));const batches=JSON.parse(fs.readFileSync(batchesPath));
  const reports=[];
  for(const obs of data.observations.slice().sort((a,b)=>a.date.localeCompare(b.date))){
-  const dow=new Date(obs.date+'T12:00:00Z').getUTCDay();if(!dow||dow===6)continue;
+  if(obs.date>=beforeDate)continue;
   const batch=batches.filter(b=>b.date===obs.date&&b.status==='definitief').sort((a,b)=>b.importedAt.localeCompare(a.importedAt))[0];if(!batch)continue;
   const day=d.day({...batch,isFuture:false},batch.receipts);const receipts=d.receipts(day,batch);const profile=d.profile(day,receipts,'');const history=h.compactRouteHistory(data.observations,obs.date);
   const baseline=d.plan(day,receipts,profile,null);const learned=d.plan(day,receipts,profile,{stops:[],pairs:[],history});const model=h.buildRouteHistoryModel(history,obs.date,[],profile);

@@ -474,15 +474,15 @@ const saturdayRouteShopPlan: Record<
   }
 > = {
   A: {
-    firstShopKeys: ["heyendaalseweg"],
-    secondShopKeys: ["daalseweg", "ziekerstraat"],
-    firstShopLabel: "Heyendaal",
-    secondShopLabel: "Daalseweg + Ziekerstraat",
+    firstShopKeys: ["heyendaalseweg", "daalseweg"],
+    secondShopKeys: [],
+    firstShopLabel: "Heyendaal + Daalseweg",
+    secondShopLabel: "klantleveringen",
   },
   B: {
-    firstShopKeys: ["lent"],
+    firstShopKeys: ["lent", "ziekerstraat"],
     secondShopKeys: [],
-    firstShopLabel: "Lent",
+    firstShopLabel: "Lent + Ziekerstraat",
     secondShopLabel: "resterende stops",
   },
 };
@@ -7441,10 +7441,6 @@ function sortReceiptsForRoute(
   ];
 }
 
-function shouldRideAfterLentOnSaturday(receipt: ReceiptSummary) {
-  return outsideClusterKeyForReceipt(receipt) === "noord-buiten";
-}
-
 function sortDeliveryReceipts(receipts: ReceiptSummary[]) {
   return [...receipts].sort((first, second) => {
     const firstSchoolRouteIndex = specialSchoolDeliveryRouteIndex(first);
@@ -8511,8 +8507,8 @@ function applyRouteHistory(
   learning: RouteLearningSummary | null
 ): RouteRound[] {
   const weekday = dayOfWeekForDate(date);
-  // Saturday's shop/frozen-goods rounds and exceptional school runs keep their own rules.
-  if (weekday === 0 || weekday === 6 || initial.some(route => !/^Bus [AB]$/.test(route.vehicle))) return initial;
+  // Exceptional school runs retain their dedicated routing.
+  if (weekday === 0 || initial.some(route => !/^Bus [AB]$/.test(route.vehicle))) return initial;
   const model = buildRouteHistoryModel(learning?.history || [], date,
     initial.flatMap(route => route.stops.map(stop => stop.learningKey || "")), load);
   if (model.days < 3) return initial;
@@ -8589,7 +8585,7 @@ function applyRouteHistory(
     if (stop.learningKind === "receipt") considerMove(stop.sourceId, route.id, true);
   }
   return rounds.map(route => changedRoutes.has(route.id)
-    ? { ...refreshRouteRoundAfterManualMove(route, load), reason: `Voorstel op basis van ${model.days} eerdere werkdagen, met controle op bonnen en levertijden.` }
+    ? { ...refreshRouteRoundAfterManualMove(route, load), reason: `Voorstel op basis van ${model.days} eerdere ${weekday === 6 ? "zaterdagen" : "vergelijkbare dagen"}, met controle op bonnen en levertijden.` }
     : route);
 }
 
@@ -8798,25 +8794,39 @@ function buildSaturdayRouteRounds(
   loadProfile: DayLoadProfile,
   routeLearning: RouteLearningSummary | null
 ): RouteRound[] {
+  // The reviewed Saturday shop rounds have differed from weekdays since October.
+  // Learn shop placement only from Saturdays, with the recent pattern as fallback.
+  const model = buildRouteHistoryModel(routeLearning?.history || [], plan.date,
+    receipts.filter(isRouteDelivery).map(receipt => routeLearningKeyForReceipt(receipt)), loadProfile);
+  const shopPlan = { A: { first: [] as ShopKey[], second: [] as ShopKey[] }, B: { first: [] as ShopKey[], second: [] as ShopKey[] } };
+  for (const bus of ["A", "B"] as const) {
+    for (const key of saturdayRouteShopPlan[bus].firstShopKeys) {
+      const choice = model.choices.get(`shop:${key}`);
+      const useChoice = choice && choice.confidence >= 0.8 && choice.days >= 3 && choice.round <= 2;
+      shopPlan[useChoice ? choice.bus : bus][useChoice && choice.round === 2 ? "second" : "first"].push(key);
+    }
+  }
+  for (const bus of ["A", "B"] as const) for (const round of ["first", "second"] as const) {
+    shopPlan[bus][round].sort((a, b) => (model.before.get(`shop:${b}\nshop:${a}`) || 0) - (model.before.get(`shop:${a}\nshop:${b}`) || 0));
+  }
+  // Legacy aggregate choices mix weekdays and weekends. Saturday uses its dated history only.
+  const saturdayLearning = routeLearning ? { ...routeLearning, stops: [], pairs: [] } : null;
   const buses: Record<BusId, PlannedBus> = {
     A: createPlannedBus({
       id: "A",
       title: busRouteMeta.A.title,
       tone: busRouteMeta.A.tone,
-      shopKeys: ["heyendaalseweg", "daalseweg", "ziekerstraat"],
+      shopKeys: [...shopPlan.A.first, ...shopPlan.A.second],
     }),
     B: createPlannedBus({
       id: "B",
       title: busRouteMeta.B.title,
       tone: busRouteMeta.B.tone,
-      shopKeys: ["lent"],
+      shopKeys: [...shopPlan.B.first, ...shopPlan.B.second],
     }),
   };
   const clusterAssignments = new Map<string, BusId>();
   const deliveryReceipts = sortDeliveryReceipts(receipts.filter(isRouteDelivery));
-  const addLentEmballageStop = deliveryReceipts.some(
-    isLentEmballageAreaReceipt
-  );
   const iceReceipts = sortDeliveryReceipts(receipts.filter(isIceReceiptSummary));
   const rounds: RouteRound[] = [];
 
@@ -8829,18 +8839,12 @@ function buildSaturdayRouteRounds(
           clusterAssignments,
           date: plan.date,
           receipt,
-          routeLearning,
+          routeLearning: saturdayLearning,
           round: "second",
         });
-    const round =
-      isLentEmballageArea
-        ? "first"
-        : bus === "B" &&
-            (isPriorityEarlyDelivery(receipt) ||
-              shouldRideAfterLentOnSaturday(receipt) ||
-              !isFlexibleLateDelivery(receipt, plan.date))
-          ? "first"
-          : "second";
+    // At 06:30 the vans take the shop stock first. Customer orders normally
+    // leave after reloading; current deadlines are checked below.
+    const round = "second";
 
     addReceiptToBus(buses[bus], receipt, round);
   });
@@ -8851,7 +8855,7 @@ function buildSaturdayRouteRounds(
       clusterAssignments,
       date: plan.date,
       receipt,
-      routeLearning,
+      routeLearning: saturdayLearning,
       round: "second",
     });
 
@@ -8859,39 +8863,28 @@ function buildSaturdayRouteRounds(
   });
 
   ([buses.A, buses.B] as PlannedBus[]).forEach((bus) => {
-    const routePlan = saturdayRouteShopPlan[bus.id];
-    const firstRouteReceipts =
-      bus.id === "A" ? [] : [...bus.early, ...bus.first];
-    const secondRouteReceipts =
-      bus.id === "A"
-        ? [...bus.early, ...bus.first, ...bus.second]
-        : bus.second;
-    const firstStops = placeLentEmballageAfterLastAreaStop([
-      ...groupShopStops(receipts, routePlan.firstShopKeys, []),
-      ...sortReceiptsForRoute(
-        firstRouteReceipts,
-        bus.shopKeys,
-        plan.date,
-        routeLearning
-      ).map((receipt) => routeStopForReceipt(receipt, `${bus.id}-first-`)),
-      ...(addLentEmballageStop && bus.id === "B"
-        ? [shopEmballageStop("lent")]
-        : []),
-    ]);
+    const routePlan = {
+      firstShopKeys: shopPlan[bus.id].first,
+      secondShopKeys: shopPlan[bus.id].second,
+      firstShopLabel: shopPlan[bus.id].first.map(key => shopRouteMeta[key].shortLabel).join(" + "),
+      secondShopLabel: shopPlan[bus.id].second.map(key => shopRouteMeta[key].shortLabel).join(" + "),
+    };
+    const secondRouteReceipts = bus.second;
+    const firstStops = groupShopStops(receipts, routePlan.firstShopKeys, []);
     const secondStops = [
       ...groupShopStops(receipts, routePlan.secondShopKeys, []),
       ...sortReceiptsForRoute(
         secondRouteReceipts,
         bus.shopKeys,
         plan.date,
-        routeLearning
+        saturdayLearning
       ).map((receipt) => routeStopForReceipt(receipt, `${bus.id}-second-`)),
     ];
     const iceStops = sortReceiptsForRoute(
       bus.ice,
       bus.shopKeys,
       plan.date,
-      routeLearning
+      saturdayLearning
     ).map(iceStopForReceipt);
 
     rounds.push(
@@ -8899,13 +8892,10 @@ function buildSaturdayRouteRounds(
         id: `bus-${bus.id}-1-saturday`,
         title: "Ronde 1",
         vehicle: bus.title,
-        departure: plan.isFuture ? "advies 08:05" : "08:05",
+        departure: plan.isFuture ? "advies 06:30" : "06:30",
         tone: bus.tone,
         stops: firstStops,
-        reason:
-          bus.id === "B"
-            ? "Zaterdag: eerst Lent, daarna Gendt/noordkant als die erbij zit; start/eind Ambachtsweg 4."
-            : `Zaterdag: alleen ${routePlan.firstShopLabel}; geen externe adressen in deze ronde, daarna terug naar Ambachtsweg 4.`,
+        reason: `Zaterdag: eerst ${routePlan.firstShopLabel}; vertrekdoel 06:30, daarna terug naar Ambachtsweg 4 om opnieuw te laden.`,
         load: routeLoadLineWithFallback(
           routeLoadLineForStops(firstStops),
           "volle bus"
@@ -8922,10 +8912,7 @@ function buildSaturdayRouteRounds(
         departure: plan.isFuture ? "na ronde 1" : "na ronde 1",
         tone: "border-[#efc7b8] bg-[#fff3ed]",
         stops: secondStops,
-        reason:
-          bus.id === "A"
-            ? `Zaterdag: daarna ${routePlan.secondShopLabel}, daarna alle overige adressen.`
-            : `Zaterdag: daarna ${routePlan.secondShopLabel}; late deadlines blijven later.`,
+        reason: `Zaterdag: na de winkelronde ${routePlan.secondShopLabel ? routePlan.secondShopLabel + " en " : ""}de klantleveringen, met controle op levertijden.`,
         load: routeLoadLineWithFallback(
           routeLoadLineForStops(secondStops),
           "winkel + rest"
@@ -13034,10 +13021,10 @@ function RoutesPanel({
         )}
       </div>
 
-      {routeHistoryDays >= 3 && dayOfWeekForDate(selectedPlan.date) >= 1 && dayOfWeekForDate(selectedPlan.date) <= 5 && (
+      {routeHistoryDays >= 3 && dayOfWeekForDate(selectedPlan.date) >= 1 && (
         <details className="text-xs text-[#536c53]">
-          <summary className="w-fit cursor-pointer">Routegeheugen · {routeHistoryDays} eerdere werkdagen</summary>
-          <p className="mt-1 max-w-2xl">Het ochtendvoorstel gebruikt terugkerende buskeuzes, stopvolgorde en rondes op vergelijkbare dagen. De bonnen, hoeveelheden en levertijden van deze dag bepalen wat past. Jullie opgeslagen indeling blijft staan; definitief opslaan leert de volgende dagen bij.</p>
+          <summary className="w-fit cursor-pointer">Routegeheugen · {routeHistoryDays} eerdere {isSaturdayDate(selectedPlan.date) ? "zaterdagen" : "vergelijkbare dagen"}</summary>
+          <p className="mt-1 max-w-2xl">Het ochtendvoorstel vergelijkt afzonderlijke dagen, met voorrang voor dezelfde weekdag. Zaterdag gebruikt alleen eerdere zaterdagen en heeft 06:30 als vertrekdoel. De bonnen, hoeveelheden en levertijden van deze dag bepalen wat past. Jullie opgeslagen indeling blijft staan; definitief opslaan leert de volgende dagen bij.</p>
         </details>
       )}
 

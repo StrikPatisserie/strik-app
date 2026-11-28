@@ -77,3 +77,62 @@ test('Saturday rules do not get weekday history changes',()=>{
  const initial=[route('A',1,[stop()]),route('B',1)];
  assert.equal(d.improve(initial,'2026-11-28',profile,learning(history())),initial);
 });
+
+test('Saturday proposes 06:30 and the two shop rounds, also for a future day',()=>{
+ for(const isFuture of [false,true]){
+  const plan={date:'2026-12-05',isFuture,iceTubs:0,orderValue:0};
+  const routes=d.plan(plan,[],profile,null);
+  assert.equal(routes.find(r=>r.id==='bus-A-1-saturday').departure,isFuture?'advies 06:30':'06:30');
+  assert.deepEqual(plain(routes.find(r=>r.id==='bus-A-1-saturday').stops.map(s=>s.sourceId)),['shop:heyendaalseweg','shop:daalseweg']);
+  assert.deepEqual(plain(routes.find(r=>r.id==='bus-B-1-saturday').stops.map(s=>s.sourceId)),['shop:lent','shop:ziekerstraat']);
+ }
+});
+test('Saturday learns a recurring customer bus from Saturdays, never from weekdays',()=>{
+ const saturdayDates=['2026-11-07','2026-11-14','2026-11-21'];
+ const days=saturdayDates.map(date=>({date,stops:[{key,bus:'B',round:2,position:1,large:false}]}));
+ const initial=[route('A',1,[],'06:30'),route('A',2,[stop()]),route('B',1,[],'06:30'),route('B',2)];
+ const result=d.improve(initial,'2026-11-28',profile,learning([...history('A',1),...days]));
+ assert.equal(result.find(r=>r.id==='bus-B-2').stops[0]?.sourceId,stop().sourceId);
+ assert.equal(h.buildRouteHistoryModel([...history('A',1),...days],'2026-11-28',[key],profile).days,3);
+});
+test('Saturday shop grouping can learn a different reviewed pattern',()=>{
+ const days=['2026-11-07','2026-11-14','2026-11-21'].map(date=>({date,stops:[
+  {key:'shop:daalseweg',bus:'B',round:1,position:1,large:false},
+  {key:'shop:ziekerstraat',bus:'A',round:1,position:1,large:false},
+ ]}));
+ const result=d.plan({date:'2026-11-28',iceTubs:0},[],profile,learning(days));
+ assert(result.find(r=>r.id==='bus-A-1-saturday').stops.some(s=>s.sourceId==='shop:ziekerstraat'));
+ assert(result.find(r=>r.id==='bus-B-1-saturday').stops.some(s=>s.sourceId==='shop:daalseweg'));
+});
+test('same weekday counts more than equally recent other weekdays',()=>{
+ const days=['2026-11-05','2026-11-12','2026-11-19'].map(date=>({date,stops:[{key,bus:'A',round:1,position:0,large:false}]}));
+ for(const date of ['2026-11-06','2026-11-13','2026-11-20'])days.push({date,stops:[{key,bus:'B',round:1,position:0,large:false}]});
+ assert.equal(h.buildRouteHistoryModel(days,'2026-11-26',[key],profile).choices.get(key)?.bus,'A');
+});
+test('older reviewed days within six months remain available; ice/manual rounds prevent a false single-round pattern',()=>{
+ const observation={date:'2026-06-15',updatedAt:'2026-06-15',stops:[{key,vehicle:'Bus A',routeId:'bus-A-1',position:0,badges:[]},{key:'manual:extra delivery',vehicle:'Bus A',routeId:'bus-A-2',position:1,badges:[]}]};
+ const compact=h.compactRouteHistory([observation],'2026-11-26');
+ const model=h.buildRouteHistoryModel(compact,'2026-11-26',[key],profile);
+ assert.equal(model.days,1);assert.equal(model.firstRound.A.singleShare,0);
+});
+test('comparable quantities and time-sensitive orders outweigh an unlike historical load',()=>{
+ const light={...profile,deliveryReceipts:1,largeReceipts:0,pastryUnits:20,criticalReceipts:0};
+ const heavy={...profile,deliveryReceipts:20,largeReceipts:10,pastryUnits:1500,criticalReceipts:10};
+ const days=['2026-11-05','2026-11-12','2026-11-19'].flatMap(date=>[
+  {date,load:heavy,stops:[{key,bus:'B',round:2,position:1,large:true}]},
+  {date:date.replace(/05|12|19$/,m=>String(Number(m)+1).padStart(2,'0')),load:light,stops:[{key,bus:'A',round:1,position:1,large:false}]}
+ ]);
+ assert.equal(h.buildRouteHistoryModel(days,'2026-11-26',[key],heavy).choices.get(key)?.bus,'B');
+ assert.equal(h.buildRouteHistoryModel(days,'2026-11-26',[key],light).choices.get(key)?.bus,'A');
+});
+test('saved Saturday departure, customer placement, and removed packaging survive new proposals',()=>{
+ const initial=[route('A',1,[stop()],'vertrek 06:40'),route('A',2),route('B',1,[],'vertrek 06:20'),route('B',2)];
+ const automatic=d.plan({date:'2026-11-28',iceTubs:0},[],profile,null);
+ // Keep a currently imported receipt in the candidate set, but on the other bus.
+ automatic.find(r=>r.vehicle==='Bus B'&&h.historyRoundNumber(r.id)===2).stops.push(stop());
+ const saved={date:'2026-11-28',routes:initial,excludedSourceIds:['shop:lent:emballage']};
+ const restored=d.reconcile(saved,automatic,profile);
+ assert.equal(restored[0].departure,'vertrek 06:40');
+ assert.equal(restored[0].stops[0].sourceId,stop().sourceId);
+ assert(!restored.flatMap(r=>r.stops).some(s=>s.sourceId==='shop:lent:emballage'));
+});
