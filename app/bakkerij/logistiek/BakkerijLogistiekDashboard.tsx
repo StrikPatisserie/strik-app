@@ -5312,6 +5312,8 @@ function createBusRoutePrintHtml(input: {
         font-weight: 900;
       }
       .time-badge {
+        max-width: 40%;
+        overflow-wrap: anywhere;
         background: #111;
         border: 2px solid #111;
         border-radius: 2mm;
@@ -5321,7 +5323,8 @@ function createBusRoutePrintHtml(input: {
         font-weight: 900;
         line-height: 1;
         padding: 0.9mm 1.5mm;
-        white-space: nowrap;
+        white-space: normal;
+        text-align: right;
       }
       .time-badge.urgent {
         background: #fff;
@@ -13373,7 +13376,7 @@ function RoutesPanel({
                               Te laat · {routeStopDeliveryTime(stop)}
                             </span>
                           ) : (
-                            <span className="whitespace-nowrap text-right text-[0.68rem] font-black tabular-nums tracking-normal text-[#4a4540]">
+                            <span className="max-w-32 whitespace-normal text-right text-[0.68rem] font-black tabular-nums tracking-normal text-[#4a4540]">
                               {routeStopDeliveryTime(stop) || "—"}
                             </span>
                           )}
