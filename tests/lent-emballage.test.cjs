@@ -10,7 +10,8 @@ function load(file,imports={},extra='') {
  return exports;
 }
 const road=load('app/bakkerij/logistiek/roadRouting.ts');
-const model=load('app/winkel/lentEmballage.ts',{'../bakkerij/logistiek/roadRouting':road});
+const history=load('app/bakkerij/logistiek/routeHistory.ts');
+const model=load('app/winkel/lentEmballage.ts',{'../bakkerij/logistiek/roadRouting':road,'../bakkerij/logistiek/routeHistory':history});
 const at=time=>new Date(`2026-11-26T${time}:00+01:00`);
 const location=(id)=>({id,label:'Testlocatie',lat:51.8,lon:5.8});
 const stop=(id,sourceId,extra={})=>({id,sourceId,label:'Teststop',detail:'',badges:[],location:location(id),...extra});
@@ -72,7 +73,7 @@ test('manual Lent emballage stops work, cancellation wording and delivery notes 
  assert.equal(model.isLentEmballage({...delivery,detail:'Lent emballage besproken'}),false);
 });
 test('saved road ETA matches the existing driver print calculation, including service overrides',()=>{
- const dashboard=load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx',{'./roadRouting':road},'exports.timing=buildRouteGroupTimings;');
+ const dashboard=load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx',{'./roadRouting':road,'./routeHistory':history},'exports.timing=buildRouteGroupTimings;');
  const extra=stop('extra','manual:extra',{serviceMinutes:11});
  for(const routes of [[round('b1',[delivery,lent],[20,10,10])],[round('b1',[delivery,extra,lent],[12,5,4,15]),round('b2',[extra,lent],[12,6,10],'Bus B','na ronde 1')]]){
   const expected=dashboard.timing(routes),actual=model.savedRouteArrivals(routes);
@@ -135,4 +136,16 @@ test('cron requires the configured secret and middleware exempts only authentica
  assert.equal((await api.GET({})).status,403);assert.equal(calls,0);allowed=true;assert.equal((await api.GET({})).status,200);assert.equal(calls,1);
  const schedule=JSON.parse(fs.readFileSync('vercel.json')).crons.find(x=>x.path==='/api/winkel/lent-emballage/cron');assert.equal(schedule.schedule,'0 6,7 * * *');
  const middleware=fs.readFileSync('app/lib/supabase/middleware.ts','utf8');assert.match(middleware,/pathname === "\/api\/winkel\/lent-emballage\/cron"\) && request.method === "GET" && hasCronAuthorization\(request\)/);
+});
+
+test('shop ETA includes a preceding customer wait, matching screen and print arrival',()=>{
+ const dashboard=load('app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx',{'./roadRouting':road,'./routeHistory':history},'exports.timing=buildRouteGroupTimings;');
+ const timed=stop('timed','receipt:timed',{detail:'10:00–12:00 · Nijmegen',learningKind:'receipt'});
+ const routes=[round('b1',[timed,lent],[10,10,10])];
+ const expected=dashboard.timing(routes).get('b1');
+ assert.equal(expected.stops[0].arrivalMinute,495);
+ assert.equal(expected.stops[0].waitingMinutes,105);
+ assert.equal(expected.stops[1].arrivalMinute,615);
+ assert.deepEqual(plain(model.savedRouteArrivals(routes).get('b1')),plain(expected.stops.map(s=>s.arrivalMinute)));
+ assert.equal(model.buildLentEmballageNotice(draft(routes),at('08:00')).expectedTime,'10:15');
 });

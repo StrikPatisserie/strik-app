@@ -129,3 +129,19 @@ test('an oversized round breaks only between complete stops, repeating the round
 test('one exceptionally tall stop blocks printing explicitly instead of dropping or clipping any information', () => {
   assert.throws(() => paginateRoutePrint([measuredRoute([1200])], measuredLayout()), /past niet op één A4/);
 });
+
+test('driver print and screen expose waiting separately from arrival and road travel',()=>{
+ const input=routeInput();
+ input.routeGroup.routes=[{...input.routeGroup.routes[0],departure:'08:00',stops:[{...stop('Klant met levertijd','timed'),detail:'10:00–12:00 · Voorbeeldstraat 1, Nijmegen'}]}];
+ const html=render(input);
+ assert.match(html,/AANKOMST ±08:/);
+ assert.match(html,/class="waiting-time">Wachten .* tot levertijd 10:00/);
+ assert.match(html,/vertrek ±10:05/);
+ const React=require('react');
+ const {renderToStaticMarkup}=require('react-dom/server');
+ const {Panel}=load(dashboard,{react:React,'react/jsx-runtime':require('react/jsx-runtime')},{},'exports.Panel=RoutesPanel;');
+ const screen=renderToStaticMarkup(React.createElement(Panel,{routeRounds:input.routeGroup.routes,selectedPlan:input.plan,routeSaveState:'idle',acquisitionSuggestions:[]}));
+ assert.match(screen,/Wachten .* tot levertijd 10:00/);
+ assert.match(screen,/±08:\d{2} aankomst/);
+ assert.match(screen,/vertrek ±10:05/);
+});

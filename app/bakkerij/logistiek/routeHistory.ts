@@ -167,3 +167,9 @@ export function deliveryWindow(time: string): { earliest?: number; latest?: numb
 export function isPackagingOnlyRound(route: { stops: { sourceId: string }[] }) {
   return route.stops.length > 0 && route.stops.every(stop => /:emballage$/.test(stop.sourceId));
 }
+
+/** Read the same delivery-time segment on the driver screen, print and shop ETA. */
+export function routeStopDeliveryTime(stop: { detail: string }) {
+  return stop.detail.split(" · ").map(part => part.trim())
+    .find(part => /\b\d{1,2}:\d{2}\b/.test(part)) || "";
+}

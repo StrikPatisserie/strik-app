@@ -53,7 +53,10 @@ test('delivery windows preserve earliest and latest; a vanaf time is not a deadl
  assert.deepEqual(plain(h.deliveryWindow('voor 09:30')),{latest:570});
  assert.deepEqual(plain(h.deliveryWindow('niet voor 11:00')),{earliest:660});
  const timing=d.timing(route('A',1,[stop(key,'10:00-12:00 · Nijmegen')]),485);
- assert(timing.stops[0].arrivalMinute>=600);
+ assert(timing.stops[0].arrivalMinute<600);
+ assert.equal(timing.stops[0].serviceStartMinute,600);
+ assert.equal(timing.stops[0].waitingMinutes,600-timing.stops[0].arrivalMinute);
+ assert.equal(timing.stops[0].departureMinute,605);
 });
 test('packaging-only rounds are distinct; collection cannot be learned before the shop delivery',()=>{
  const packaging={...stop('shop:lent:emballage'),sourceId:'shop:lent:emballage',learningKind:'shop',label:'Winkel Lent · emballage'};
@@ -135,4 +138,37 @@ test('saved Saturday departure, customer placement, and removed packaging surviv
  assert.equal(restored[0].departure,'vertrek 06:40');
  assert.equal(restored[0].stops[0].sourceId,stop().sourceId);
  assert(!restored.flatMap(r=>r.stops).some(s=>s.sourceId==='shop:lent:emballage'));
+});
+
+test('actual arrival, waiting and subsequent departures stay distinct without changing stop order',()=>{
+ const stops=[{...stop('hey','Nijmegen'),learningKind:'shop',serviceMinutes:15},stop('ontdekking','10:00–13:00 · Nijmegen'),stop('next','voor 10:10 · Nijmegen')];
+ const road=imports['./roadRouting'];
+ const ids=['__depot',...stops.map(s=>s.id),'__depot'];
+ const matrix={provider:'OSRM',calculatedAt:date,locations:Object.fromEntries(ids.map(id=>[id,{id,lat:51.8,lon:5.8,label:id}])),seconds:Object.fromEntries([0,12,8,10].map((minutes,i)=>[road.roadPair(ids[i],ids[i+1]),minutes*60]))};
+ stops.forEach(s=>s.location=matrix.locations[s.id]);
+ const input={...route('A',2,stops,'08:00'),road:matrix};
+ const before=JSON.stringify(input);
+ const actual=d.timing(input,480);
+ assert.equal(actual.stops[0].arrivalMinute,480);
+ assert.equal(actual.stops[1].arrivalMinute,507);
+ assert.equal(actual.stops[1].travelMinutes,12);
+ assert.equal(actual.stops[1].waitingMinutes,93);
+ assert.equal(actual.stops[1].serviceStartMinute,600);
+ assert.equal(actual.stops[1].departureMinute,605);
+ assert.equal(actual.stops[2].arrivalMinute,613);
+ assert.equal(actual.stops[2].waitingMinutes,0);
+ assert.equal(actual.returnMinute,628);
+ assert.equal(JSON.stringify(input),before);
+ const assessed=d.assess([input],h.buildRouteHistoryModel([],date,[],profile));
+ assert(assessed.late.get(stops[2].sourceId)>0,'Waiting must not hide a downstream late delivery');
+});
+test('no time, a latest-only deadline and an already-open window do not add waiting',()=>{
+ for(const detail of ['Nijmegen','voor 12:00 · Nijmegen','07:00–12:00 · Nijmegen']){
+  const timing=d.timing(route('A',1,[stop(key,detail)]),480).stops[0];
+  assert.equal(timing.waitingMinutes,0);
+  assert.equal(timing.serviceStartMinute,timing.arrivalMinute);
+  assert.equal(timing.departureMinute,timing.arrivalMinute+timing.serviceMinutes);
+ }
+ const from=d.timing(route('A',1,[stop(key,'vanaf 11:00 · Nijmegen')]),480).stops[0];
+ assert.equal(from.serviceStartMinute,660);assert(from.waitingMinutes>0);
 });

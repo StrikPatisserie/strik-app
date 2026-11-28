@@ -1,5 +1,6 @@
 import type { UserProfile } from '../lib/supabase/types';
 import type { LogisticsRouteDraft, LogisticsRouteDraftRound, LogisticsRouteDraftStop } from '../bakkerij/logistiek/logisticsTypes';
+import { deliveryWindow, routeStopDeliveryTime } from '../bakkerij/logistiek/routeHistory';
 import { DEPOT_ID, roadLegMinutes } from '../bakkerij/logistiek/roadRouting';
 
 export type LentEmballageNotice = {
@@ -73,7 +74,7 @@ export function savedRouteArrivals(routes: LogisticsRouteDraftRound[]) {
       const travel = roadLegMinutes(route.road, previous?.id || DEPOT_ID, stop.id, previous?.location, stop.location);
       const arrival: number | null = minute === null || travel === null ? null : minute + travel;
       const combined = Boolean(shopVisit(stop) && shopVisit(stop) === shopVisit(previous) && travel === 0);
-      minute = arrival === null ? null : arrival + (combined ? 0 : serviceMinutes(stop));
+      minute = arrival === null ? null : Math.max(arrival, deliveryWindow(routeStopDeliveryTime(stop)).earliest ?? 0) + (combined ? 0 : serviceMinutes(stop));
       previous = stop;
       return arrival;
     });

@@ -6,7 +6,7 @@ import {roadLegMinutes,roadStopAddress,renameRoadPoint,routeFingerprint,DEPOT_ID
 import { useRoadRouteTimes } from "./useRoadRouteTimes";
 const AddRouteStopDialog=dynamic(()=>import("./AddRouteStopDialog"));
 import { createRouteSaveQueue } from "./routeSaveQueue";
-import { buildRouteHistoryModel, deliveryWindow, isPackagingOnlyRound, type RouteHistoryModel } from "./routeHistory";
+import { buildRouteHistoryModel, deliveryWindow, routeStopDeliveryTime, isPackagingOnlyRound, type RouteHistoryModel } from "./routeHistory";
 import { sinterklaasAcquisitionEndDate } from "./sinterklaasAcquisitionCampaign";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
 import { getRoutePrintBlockedReason, openRoutePrintWindow } from "./routePrintWindow";
@@ -167,6 +167,9 @@ type RouteStop = {
 type RouteStopTiming = {
   roadBased?:boolean;
   arrivalMinute: number;
+  serviceStartMinute: number;
+  waitingMinutes: number;
+  departureMinute: number;
   travelMinutes: number;
   serviceMinutes: number;
   combinedWithPrevious: boolean;
@@ -175,6 +178,7 @@ type RouteStopTiming = {
 type RouteTiming = {
   departureMinute: number;
   returnMinute: number;
+  waitingMinutes: number;
   stops: RouteStopTiming[];
 };
 
@@ -4965,13 +4969,17 @@ function createBusRoutePrintHtml(input: {
               const planningLine = stopTiming
                 ? `<p class="planned-time${missesDeadline ? " missed" : ""}"><b>${
                     missesDeadline ? "! TIJDCONFLICT · " : ""
-                  }RICHTTIJD ±${formatClockMinute(
+                  }AANKOMST ±${formatClockMinute(
                     stopTiming.arrivalMinute
                   )}</b> · ${stopTiming.travelMinutes} min rijden${stopTiming.roadBased ? "" : " · schatting"} · ${
                     stopTiming.combinedWithPrevious
                       ? "zelfde winkelbezoek, tijd inbegrepen"
                       : `${stopTiming.serviceMinutes} min stop`
-                  }</p>`
+                  } · vertrek ±${formatClockMinute(stopTiming.departureMinute)}</p>${
+                    stopTiming.waitingMinutes > 0
+                      ? `<p class="waiting-time">Wachten ${formatRouteDuration(stopTiming.waitingMinutes)} tot levertijd ${formatClockMinute(stopTiming.serviceStartMinute)}</p>`
+                      : ""
+                  }`
                 : "";
 
               return `
@@ -5012,7 +5020,7 @@ function createBusRoutePrintHtml(input: {
                     routeTiming
                       ? ` · richtlijn ${formatClockMinute(
                           routeTiming.departureMinute
-                        )}–${formatClockMinute(routeTiming.returnMinute)}`
+                        )}–${formatClockMinute(routeTiming.returnMinute)}${routeTiming.waitingMinutes > 0 ? ` · inclusief ${formatRouteDuration(routeTiming.waitingMinutes)} wachttijd` : ""}`
                       : ""
                   }</p>
                 </div>
@@ -5288,6 +5296,11 @@ function createBusRoutePrintHtml(input: {
       }
       .stop-content .planned-time.missed {
         color: #a92f20;
+      }
+      .stop-content .waiting-time {
+        color: #805500;
+        font-size: 10px;
+        font-weight: 900;
       }
       .time-badge {
         background: #111;
@@ -7070,7 +7083,10 @@ function buildRouteTiming(route: RouteRound, departureMinute: number): RouteTimi
     const roadMinutes=roadLegMinutes(route.road,previousStop?.id||DEPOT_ID,stop.id,previousStop?.location,stop.location);
     const estimate=estimatedTravelMinutes(currentPoint,nextPoint);
     const travelMinutes = roadMinutes ?? (stop.location&&stop.location.id!==previousStop?.location?.id?Math.max(4,estimate):estimate);
-    const arrivalMinute = Math.max(currentMinute + travelMinutes, deliveryWindow(routeStopDeliveryTime(stop)).earliest ?? 0);
+    // Arrival is the actual drive, not the start of the customer's time window.
+    const arrivalMinute = currentMinute + travelMinutes;
+    const serviceStartMinute = Math.max(arrivalMinute, deliveryWindow(routeStopDeliveryTime(stop)).earliest ?? 0);
+    const waitingMinutes = serviceStartMinute - arrivalMinute;
     const currentShopVisitKey = shopVisitKey(stop);
     const combinedWithPrevious = Boolean(
       currentShopVisitKey &&
@@ -7081,7 +7097,7 @@ function buildRouteTiming(route: RouteRound, departureMinute: number): RouteTimi
       ? 0
       : estimatedServiceMinutes(stop);
 
-    currentMinute = arrivalMinute + serviceMinutes;
+    currentMinute = serviceStartMinute + serviceMinutes;
     currentPoint = nextPoint;
     previousShopVisitKey = currentShopVisitKey;
     previousStop=stop;
@@ -7089,6 +7105,9 @@ function buildRouteTiming(route: RouteRound, departureMinute: number): RouteTimi
     return {
       roadBased:roadMinutes!==null,
       arrivalMinute,
+      serviceStartMinute,
+      waitingMinutes,
+      departureMinute: currentMinute,
       travelMinutes,
       serviceMinutes,
       combinedWithPrevious,
@@ -7099,6 +7118,7 @@ function buildRouteTiming(route: RouteRound, departureMinute: number): RouteTimi
   return {
     departureMinute,
     returnMinute,
+    waitingMinutes: stops.reduce((total, stop) => total + stop.waitingMinutes, 0),
     stops,
   };
 }
@@ -8106,7 +8126,7 @@ function routeStopMissesDeadline(
   if (!deliveryTime) return false;
 
   const deadlineMinute = routePrintTimeMinutes(deliveryTime);
-  return deadlineMinute < 9999 && timing.arrivalMinute > deadlineMinute;
+  return deadlineMinute < 9999 && timing.serviceStartMinute > deadlineMinute;
 }
 
 function routePrintTimeBadgeHtml(stop: RouteStop) {
@@ -8487,8 +8507,8 @@ function routeProposalAssessment(rounds: RouteRound[], model: RouteHistoryModel)
       if (route.stops.length) minutes += timing.returnMinute - timing.departureMinute;
       orderPenalty += historyOrderPenalty(route.stops, model);
       route.stops.forEach((stop, i) => {
-        arrivals.set(stop.sourceId, timing.stops[i].arrivalMinute);
-        late.set(stop.sourceId, Math.max(0, timing.stops[i].arrivalMinute - (deliveryWindow(routeStopDeliveryTime(stop)).latest ?? 9999)));
+        arrivals.set(stop.sourceId, timing.stops[i].serviceStartMinute);
+        late.set(stop.sourceId, Math.max(0, timing.stops[i].serviceStartMinute - (deliveryWindow(routeStopDeliveryTime(stop)).latest ?? 9999)));
       });
     }
   }
@@ -12717,13 +12737,6 @@ function routeGroupDisplayTitle(vehicle: string) {
   return vehicle;
 }
 
-function routeStopDeliveryTime(stop: RouteStop) {
-  return stop.detail
-    .split(" · ")
-    .map((part) => part.trim())
-    .find((part) => /\b\d{1,2}:\d{2}\b/.test(part)) || "";
-}
-
 function routeStopAddressLabel(stop: RouteStop) {
   return roadStopAddress(stop) || "Adres controleren";
 }
@@ -13205,6 +13218,11 @@ function RoutesPanel({
                                   routeTiming.departureMinute
                               )}
                             </span>
+                            {routeTiming.waitingMinutes > 0 && (
+                              <span className="text-[#805500]">
+                                · inclusief {formatRouteDuration(routeTiming.waitingMinutes)} wachttijd
+                              </span>
+                            )}
                             {missedDeadlineCount > 0 && (
                               <span
                                 title="Geschatte aankomst valt na de uiterlijke bontijd. Vertrek eerder of versleep de stop."
@@ -13301,17 +13319,25 @@ function RoutesPanel({
                               {routeStopAddressLabel(stop)}
                             </span>
                             {stopTiming && (
-                              <span className="mt-0.5 flex items-center gap-1 text-[0.59rem] font-bold leading-tight tracking-normal text-[#527057]">
-                                <ClockIcon />
-                                ±{formatClockMinute(stopTiming.arrivalMinute)} aankomst
-                                <span className="text-[#7b8277]">
-                                  · {stopTiming.travelMinutes
-                                    ? `${stopTiming.travelMinutes} min rijden${stopTiming.roadBased?"":" · schatting"}`
-                                    : "zelfde locatie"}
-                                  {stopTiming.combinedWithPrevious
-                                    ? " · zelfde winkelbezoek, tijd inbegrepen"
-                                    : ` · ${stopTiming.serviceMinutes} min stop`}
+                              <span className="mt-0.5 block text-[0.59rem] font-bold leading-tight tracking-normal text-[#527057]">
+                                <span className="flex flex-wrap items-center gap-1">
+                                  <ClockIcon />
+                                  ±{formatClockMinute(stopTiming.arrivalMinute)} aankomst
+                                  <span className="text-[#7b8277]">
+                                    · {stopTiming.travelMinutes
+                                      ? `${stopTiming.travelMinutes} min rijden${stopTiming.roadBased?"":" · schatting"}`
+                                      : "zelfde locatie"}
+                                    {stopTiming.combinedWithPrevious
+                                      ? " · zelfde winkelbezoek, tijd inbegrepen"
+                                      : ` · ${stopTiming.serviceMinutes} min stop`}
+                                    {` · vertrek ±${formatClockMinute(stopTiming.departureMinute)}`}
+                                  </span>
                                 </span>
+                                {stopTiming.waitingMinutes > 0 && (
+                                  <span className="mt-1 block font-black text-[#805500]">
+                                    Wachten {formatRouteDuration(stopTiming.waitingMinutes)} tot levertijd {formatClockMinute(stopTiming.serviceStartMinute)}
+                                  </span>
+                                )}
                               </span>
                             )}
                           </span>
